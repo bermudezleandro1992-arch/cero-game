@@ -610,11 +610,11 @@ async function findActiveMatchForUser(
   db: FirebaseFirestore.Firestore,
   uid: string,
 ): Promise<{ id: string; data: MatchDoc } | null> {
-  for (const status of ['waiting', 'playing'] as const) {
+  for (const status of ['playing', 'waiting'] as const) {
     const snap = await db.collection('matches')
       .where('status', '==', status)
       .where('playerIds', 'array-contains', uid)
-      .limit(1)
+      .limit(5)
       .get();
     if (!snap.empty) {
       const doc = snap.docs[0]!;
@@ -623,6 +623,90 @@ async function findActiveMatchForUser(
   }
   return null;
 }
+
+/** Cierra salas waiting huérfanas/colgadas del jugador (p. ej. quedó una waiting + una playing). */
+export async function cleanupOrphanRoomsForUser(
+  db: FirebaseFirestore.Firestore,
+  uid: string,
+): Promise<{ closedWaiting: number; clearedRejoin: boolean }> {
+  let closedWaiting = 0;
+  let clearedRejoin = false;
+
+  const userRef = db.doc(`users/${uid}`);
+  const userSnap = await userRef.get();
+  const activeRejoin = userSnap.data()?.activeRejoin as {
+    matchId?: string;
+    rejoinUntil?: FirebaseFirestore.Timestamp;
+  } | undefined;
+
+  if (activeRejoin?.matchId) {
+    const rejoinSnap = await db.doc(`matches/${activeRejoin.matchId}`).get();
+    const untilMs = activeRejoin.rejoinUntil?.toMillis?.() ?? 0;
+    const rejoinValid = rejoinSnap.exists
+      && untilMs > Date.now()
+      && canRejoinMatch(rejoinSnap.data() as MatchDoc, uid);
+    if (!rejoinValid) {
+      await userRef.set({ activeRejoin: FieldValue.delete() }, { merge: true });
+      clearedRejoin = true;
+    }
+  }
+
+  const [waitingSnap, playingSnap] = await Promise.all([
+    db.collection('matches')
+      .where('status', '==', 'waiting')
+      .where('playerIds', 'array-contains', uid)
+      .get(),
+    db.collection('matches')
+      .where('status', '==', 'playing')
+      .where('playerIds', 'array-contains', uid)
+      .limit(1)
+      .get(),
+  ]);
+
+  const hasPlaying = !playingSnap.empty;
+  const now = Date.now();
+
+  for (const docSnap of waitingSnap.docs) {
+    const match = docSnap.data() as MatchDoc;
+    const createdMs = matchCreatedMs(match.createdAt);
+    const stale = createdMs > 0 && now - createdMs >= CFG.WAITING_ROOM_MS;
+    const orphan = hasPlaying;
+
+    if (orphan || stale) {
+      await closeWaitingRoom(db, docSnap.ref, match, orphan ? 'orphan_waiting' : 'waiting_expired');
+      closedWaiting++;
+    }
+  }
+
+  return { closedWaiting, clearedRejoin };
+}
+
+export const cleanupMyRooms = onCall<Record<string, never>, Promise<{
+  ok: true;
+  closedWaiting: number;
+  clearedRejoin: boolean;
+  activeMatch: { matchId: string; status: string; stakeCC: number } | null;
+}>>(
+  { region: CFG.REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+
+    const uid = request.auth!.uid;
+    const db  = getFirestore();
+
+    const { closedWaiting, clearedRejoin } = await cleanupOrphanRoomsForUser(db, uid);
+    const active = await findActiveMatchForUser(db, uid);
+
+    return {
+      ok: true,
+      closedWaiting,
+      clearedRejoin,
+      activeMatch: active
+        ? { matchId: active.id, status: active.data.status, stakeCC: active.data.stakeCC ?? 0 }
+        : null,
+    };
+  },
+);
 
 /**
  * Verifica elegibilidad (partidas gratis o saldo), descuenta coins atÃ³micamente
@@ -641,6 +725,8 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
       : null;
     const forceCreate = request.data?.createNew === true;
     const db   = getFirestore();
+
+    await cleanupOrphanRoomsForUser(db, uid);
 
     const existingActive = await findActiveMatchForUser(db, uid);
 

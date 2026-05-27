@@ -24,6 +24,7 @@ exports.checkMatchRejoinExpiry = gameModule.checkMatchRejoinExpiry;
 exports.expireRejoinMatches   = gameModule.expireRejoinMatches;
 exports.expireStaleWaitingMatches = gameModule.expireStaleWaitingMatches;
 exports.ensureMatchStarted = gameModule.ensureMatchStarted;
+exports.cleanupMyRooms = gameModule.cleanupMyRooms;
 
 // ── Módulo: monetización + Mercado Pago ──────────────────────────────────────
 const monetModule = require('./compiled/monetization');
