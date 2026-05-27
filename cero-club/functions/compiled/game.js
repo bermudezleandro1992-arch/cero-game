@@ -222,6 +222,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
     const requestedMatchId = typeof request.data?.matchId === 'string' && request.data.matchId.length > 0
         ? request.data.matchId
         : null;
+    const forceCreate = request.data?.createNew === true;
     const db = (0, firestore_1.getFirestore)();
     const finishJoin = async (matchId, playerIndex, charged, coinsLeft, stakeCC) => {
         const matchSnap = await db.doc(`matches/${matchId}`).get();
@@ -249,7 +250,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
             }
         }
     }
-    else {
+    else if (!forceCreate) {
         const mine = await db.collection('matches')
             .where('status', '==', 'waiting')
             .where('playerIds', 'array-contains', uid)
@@ -259,8 +260,11 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
             const docSnap = mine.docs[0];
             const d = docSnap.data();
             const ids = uniquePlayerIds(d.playerIds);
-            const bal = (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0;
-            return finishJoin(docSnap.id, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
+            // Solo reingresar a sala propia incompleta (1 jugador). Si está llena, crear nueva.
+            if (ids.length < CFG.MAX_PLAYERS) {
+                const bal = (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0;
+                return finishJoin(docSnap.id, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
+            }
         }
     }
     const matchesRef = db.collection('matches');
@@ -450,9 +454,9 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
                 ? { id: data.cardId }
                 : null,
             color: action === 'pickColor' ? data.color : null,
-            count: 'drawn' in result
-                ? result.drawn.length
-                : undefined,
+            ...(action === 'draw' && 'drawn' in result
+                ? { count: result.drawn.length }
+                : {}),
         };
         const publicPatch = {
             ...buildPublicState(newSnap, match.playerIds),

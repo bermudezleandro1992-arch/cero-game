@@ -301,6 +301,7 @@ interface JoinMatchRequest {
   format?:  string;
   matchId?: string;   // si se provee, une directamente a esa sala
   stakeCC?: number;   // 0 = gratuita, 50 = sala con Cero Coins (solo al crear)
+  createNew?: boolean; // true = forzar sala nueva (no reutilizar waiting propia)
 }
 
 interface JoinMatchResponse {
@@ -379,6 +380,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
     const requestedMatchId = typeof request.data?.matchId === 'string' && request.data.matchId.length > 0
       ? request.data.matchId
       : null;
+    const forceCreate = request.data?.createNew === true;
     const db   = getFirestore();
 
     const finishJoin = async (
@@ -414,7 +416,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
           return finishJoin(requestedMatchId, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
         }
       }
-    } else {
+    } else if (!forceCreate) {
       const mine = await db.collection('matches')
         .where('status', '==', 'waiting')
         .where('playerIds', 'array-contains', uid)
@@ -424,8 +426,11 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
         const docSnap = mine.docs[0]!;
         const d = docSnap.data() as MatchDoc;
         const ids = uniquePlayerIds(d.playerIds);
-        const bal = (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0;
-        return finishJoin(docSnap.id, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
+        // Solo reingresar a sala propia incompleta (1 jugador). Si está llena, crear nueva.
+        if (ids.length < CFG.MAX_PLAYERS) {
+          const bal = (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0;
+          return finishJoin(docSnap.id, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
+        }
       }
     }
 
@@ -682,9 +687,9 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
                      ? { id: data.cardId }
                      : null,
         color:     action === 'pickColor' ? (data.color as CardColor) : null,
-        count:     'drawn' in result
-                     ? (result as { drawn: ReadonlyArray<Card> }).drawn.length
-                     : undefined,
+        ...(action === 'draw' && 'drawn' in result
+          ? { count: (result as { drawn: ReadonlyArray<Card> }).drawn.length }
+          : {}),
       };
 
       const publicPatch: Partial<MatchDoc> & Record<string, unknown> = {
