@@ -25,6 +25,7 @@ exports.getRejoinStatus     = gameModule.getRejoinStatus;
 const monetModule = require('./compiled/monetization');
 exports.purchaseCoins       = monetModule.purchaseCoins;
 exports.createCoinPayment   = monetModule.createCoinPayment;
+exports.getPaymentCatalog   = monetModule.getPaymentCatalog;
 exports.activateVIP         = monetModule.activateVIP;
 exports.mercadoPagoWebhook  = monetModule.mercadoPagoWebhook;
 exports.grantMonthlyVIPCoins = monetModule.grantMonthlyVIPCoins;
@@ -62,6 +63,15 @@ exports.updateRanking      = engModule.updateRanking;         // snapshot manual
 exports.resetWeeklyRanking = engModule.resetWeeklyRanking;
 exports.purchaseCosmetic   = engModule.purchaseCosmetic;
 exports.equipCosmetic      = engModule.equipCosmetic;
+
+// ── Módulo: billetera (P2P, referidos, apuestas, espectadores) ────────────────
+const walletModule = require('./compiled/wallet');
+exports.transferCeroCoins   = walletModule.transferCeroCoins;
+exports.getWalletHistory    = walletModule.getWalletHistory;
+exports.applyReferralCode   = walletModule.applyReferralCode;
+exports.placeMatchBet       = walletModule.placeMatchBet;
+exports.getMatchBettingInfo = walletModule.getMatchBettingInfo;
+exports.joinAsSpectator     = walletModule.joinAsSpectator;
 
 let _visionClient = null;
 function getVisionClient() {

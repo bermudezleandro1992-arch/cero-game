@@ -15,6 +15,7 @@ import { onCall, HttpsError }             from 'firebase-functions/v2/https';
 import { onSchedule }                     from 'firebase-functions/v2/scheduler';
 import { getFirestore, FieldValue }       from 'firebase-admin/firestore';
 import type { Transaction }               from 'firebase-admin/firestore';
+import * as crypto                        from 'crypto';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes
@@ -24,6 +25,10 @@ const REGION              = 'us-central1';
 const WELCOME_COINS       = 100;
 const DAILY_BONUS_COINS   = 10;
 const DAILY_COOLDOWN_MS   = 24 * 60 * 60 * 1000;    // 24 h en ms
+
+function referralCodeForUid(uid: string): string {
+  return crypto.createHash('sha256').update(uid).digest('hex').slice(0, 8).toUpperCase();
+}
 
 const WEEKLY_PRIZES: Record<number, number> = {  // posición → CC
   1:  500,
@@ -103,12 +108,17 @@ export const initUserProfile = onCall<Record<string, never>, Promise<InitProfile
 
       if (snap.exists) {
         ceroCoins = (snap.data()?.['ceroCoins'] as number | undefined) ?? 0;
-        return;   // perfil ya existe, no tocar
+        if (!snap.data()?.['referralCode']) {
+          tx.update(userRef, { referralCode: referralCodeForUid(uid) });
+        }
+        return;   // perfil ya existe, no tocar saldo
       }
 
       // Primer login: crear perfil con bonus de bienvenida
       created   = true;
       ceroCoins = WELCOME_COINS;
+
+      const referralCode = referralCodeForUid(uid);
 
       tx.set(userRef, {
         displayName:       name,
@@ -123,6 +133,10 @@ export const initUserProfile = onCall<Record<string, never>, Promise<InitProfile
         ownedCosmetics:    [] as string[],
         equippedSkin:      null as string | null,
         equippedFrame:     null as string | null,
+        referralCode,
+        referredBy:        null as string | null,
+        referralCount:     0,
+        referralBonusClaimed: false,
         createdAt:         FieldValue.serverTimestamp(),
       });
     });

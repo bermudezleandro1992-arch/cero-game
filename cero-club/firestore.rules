@@ -198,12 +198,24 @@ service cloud.firestore {
     // Los clientes NUNCA escriben. Solo leen para sincronizar la UI con onSnapshot.
     // Todo el estado del juego (deck, manos, reglas) se valida en el server.
     match /matches/{matchId} {
-      // Salas en espera: cualquier usuario autenticado puede leerlas (lobby).
-      // Partidas en curso o terminadas: solo los jugadores de esa partida.
+      // Salas en espera, en curso o terminadas: lectura para lobby y espectadores.
+      // Las manos siguen ocultas en subcollection hands/ (solo el dueño lee).
       allow read:  if request.auth != null
-                   && (resource.data.status == 'waiting'
-                       || _playerIdsInclude(resource.data.playerIds));
+                   && (resource.data.status in ['waiting', 'playing', 'finished']);
       allow write: if false;   // solo Cloud Functions (Admin SDK)
+
+      // Apuestas de espectadores — solo lectura propia; escritura solo servidor.
+      match /bets/{betUid} {
+        allow read:  if request.auth != null
+                     && (request.auth.uid == betUid || _isMatchPlayer(matchId));
+        allow write: if false;
+      }
+
+      // Espectadores registrados — lectura pública autenticada.
+      match /spectators/{specUid} {
+        allow read:  if request.auth != null;
+        allow write: if false;
+      }
 
       // Mano propia: solo el dueño puede leer. Nunca escribir desde el cliente.
       match /hands/{uid} {
@@ -272,9 +284,16 @@ service cloud.firestore {
   }
 
   function _userProfileUpdateOk() {
-    return (!_photoUrlTouched() || request.resource.data.photoURL == resource.data.photoURL || _clientAvatarUploadOk())
+    return !_walletFieldsTouched()
+      && (!_photoUrlTouched() || request.resource.data.photoURL == resource.data.photoURL || _clientAvatarUploadOk())
       && (!_avatarStatusTouched() || request.resource.data.avatarStatus in ['none', 'pending', 'rejected'] || _clientAvatarUploadOk() || _clientAvatarPendingOk())
       && (!_identityTouched() || _identityUpdateOk());
+  }
+
+  function _walletFieldsTouched() {
+    return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+      'ceroCoins', 'referralCode', 'referredBy', 'referralBonusClaimed', 'referralCount'
+    ]);
   }
 
   function _matchStatsUpdateOk() {

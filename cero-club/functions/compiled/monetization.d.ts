@@ -39,6 +39,31 @@ export declare const COIN_PACKAGES: {
         readonly label: "4000 + 600 bonus";
     };
 };
+type PackageId = keyof typeof COIN_PACKAGES;
+/** Regiones de pago soportadas (Fase 4 — multi-moneda) */
+export declare const PAYMENT_REGIONS: {
+    readonly AR: {
+        readonly currency: "ARS";
+        readonly label: "Argentina";
+        readonly symbol: "$";
+    };
+    readonly UY: {
+        readonly currency: "UYU";
+        readonly label: "Uruguay (Prex)";
+        readonly symbol: "$U";
+    };
+    readonly US: {
+        readonly currency: "USD";
+        readonly label: "Internacional";
+        readonly symbol: "US$";
+    };
+};
+type PaymentRegion = keyof typeof PAYMENT_REGIONS;
+/** Precios locales por región (1 CC ≈ 1 unidad de moneda local) */
+export declare const COIN_PACKAGES_BY_REGION: Record<PaymentRegion, Record<PackageId, {
+    price: number;
+    currency: string;
+}>>;
 export declare const VIP_PLANS: {
     readonly vip_monthly: {
         readonly priceARS: 5990;
@@ -65,14 +90,20 @@ interface PurchaseCoinsRequest {
 export declare const purchaseCoins: import("firebase-functions/v2/https").CallableFunction<PurchaseCoinsRequest, any>;
 interface CreatePaymentRequest {
     packageId: string;
+    region?: string;
 }
 interface CreatePaymentResponse {
     intentId: string;
     checkoutUrl: string;
     coins: number;
     bonusCoins: number;
-    priceARS: number;
+    price: number;
+    currency: string;
+    region: string;
 }
+export declare const getPaymentCatalog: import("firebase-functions/v2/https").CallableFunction<{
+    region?: string;
+}, any>;
 export declare const createCoinPayment: import("firebase-functions/v2/https").CallableFunction<CreatePaymentRequest, Promise<CreatePaymentResponse>>;
 interface ActivateVIPRequest {
     planId: string;

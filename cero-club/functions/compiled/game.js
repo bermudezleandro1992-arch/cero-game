@@ -124,13 +124,7 @@ async function expireAbsentPlayers(db, matchRef, match) {
         const batch = db.batch();
         _applyMatchEndUpdates((ref, data) => batch.update(ref, data), db, matchRef, match, winnerUid, 'timeout', { forfeit: { loserUid: uid, winnerUid, reason: 'rejoin_expired' } });
         await batch.commit();
-        try {
-            const { onTournamentMatchFinished } = await Promise.resolve().then(() => __importStar(require('./tournaments')));
-            await onTournamentMatchFinished(matchRef.id, winnerUid);
-        }
-        catch (err) {
-            console.error('[expireAbsent] tournament hook:', err);
-        }
+        await _onMatchFinishedHooks(matchRef.id, winnerUid);
         return winnerUid;
     }
     return null;
@@ -153,6 +147,23 @@ function handsFromStorage(raw, count) {
 function guard(cond, code, msg) {
     if (!cond)
         throw new https_1.HttpsError(code, msg);
+}
+/** Hooks post-partida: torneos + liquidación de apuestas de espectadores. */
+async function _onMatchFinishedHooks(matchId, winnerUid) {
+    try {
+        const { onTournamentMatchFinished } = await Promise.resolve().then(() => __importStar(require('./tournaments')));
+        await onTournamentMatchFinished(matchId, winnerUid);
+    }
+    catch (err) {
+        console.error('[onMatchFinished] tournament hook:', err);
+    }
+    try {
+        const { settleMatchBets } = await Promise.resolve().then(() => __importStar(require('./wallet')));
+        await settleMatchBets((0, firestore_1.getFirestore)(), matchId, winnerUid);
+    }
+    catch (err) {
+        console.error('[onMatchFinished] bet settlement:', err);
+    }
 }
 function requireString(data, key) {
     const v = data[key];
@@ -237,11 +248,16 @@ async function startMatch(db, matchRef, match) {
         const handRef = db.doc(`matches/${matchRef.id}/hands/${uid}`);
         batch.set(handRef, { cards: [...snap.hands[i]], updatedAt: firestore_1.FieldValue.serverTimestamp() });
     }
+    const { bettingOpenUntilTimestamp } = await Promise.resolve().then(() => __importStar(require('./wallet')));
     // Estado público de la partida
     batch.update(matchRef, {
         status: 'playing',
         turn: 1,
         startedAt: firestore_1.FieldValue.serverTimestamp(),
+        bettingOpenUntil: bettingOpenUntilTimestamp(),
+        betPoolTotal: 0,
+        betCount: 0,
+        spectatorCount: 0,
         playerIds: uniqueIds,
         playerCount: uniqueIds.length,
         ...buildPublicState(snap, uniqueIds),
@@ -575,13 +591,7 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
             finishedWinner = winnerUid;
     });
     if (finishedWinner) {
-        try {
-            const { onTournamentMatchFinished } = await Promise.resolve().then(() => __importStar(require('./tournaments')));
-            await onTournamentMatchFinished(matchId, finishedWinner);
-        }
-        catch (err) {
-            console.error('[playTurn] tournament hook:', err);
-        }
+        await _onMatchFinishedHooks(matchId, finishedWinner);
     }
     return { ok: true, publicState: resultPublic, myHand: resultHand, turn: resultTurn };
 });
@@ -693,13 +703,7 @@ exports.forfeitMatch = (0, https_1.onCall)({ region: CFG.REGION }, async (reques
     const batch = db.batch();
     _applyMatchEndUpdates((ref, data) => batch.update(ref, data), db, matchSnap.ref, match, winnerUid, 'forfeit', { forfeit: { loserUid: uid, winnerUid } });
     await batch.commit();
-    try {
-        const { onTournamentMatchFinished } = await Promise.resolve().then(() => __importStar(require('./tournaments')));
-        await onTournamentMatchFinished(matchId, winnerUid);
-    }
-    catch (err) {
-        console.error('[forfeitMatch] tournament hook:', err);
-    }
+    await _onMatchFinishedHooks(matchId, winnerUid);
     return { ok: true, winnerUid };
 });
 /**
@@ -746,13 +750,7 @@ exports.endMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
     const batch = db.batch();
     _applyMatchEndUpdates((ref, d) => batch.update(ref, d), db, matchSnap.ref, match, winnerUid, reason);
     await batch.commit();
-    try {
-        const { onTournamentMatchFinished } = await Promise.resolve().then(() => __importStar(require('./tournaments')));
-        await onTournamentMatchFinished(matchId, winnerUid);
-    }
-    catch (err) {
-        console.error('[endMatch] tournament hook:', err);
-    }
+    await _onMatchFinishedHooks(matchId, winnerUid);
     return { ok: true, winnerUid };
 });
 //# sourceMappingURL=game.js.map

@@ -181,12 +181,7 @@ async function expireAbsentPlayers(
     );
     await batch.commit();
 
-    try {
-      const { onTournamentMatchFinished } = await import('./tournaments');
-      await onTournamentMatchFinished(matchRef.id, winnerUid);
-    } catch (err) {
-      console.error('[expireAbsent] tournament hook:', err);
-    }
+    await _onMatchFinishedHooks(matchRef.id, winnerUid);
 
     return winnerUid;
   }
@@ -213,6 +208,22 @@ function handsFromStorage(raw: unknown, count: number): Card[][] {
 
 function guard(cond: unknown, code: ErrCode, msg: string): asserts cond {
   if (!cond) throw new HttpsError(code, msg);
+}
+
+/** Hooks post-partida: torneos + liquidación de apuestas de espectadores. */
+async function _onMatchFinishedHooks(matchId: string, winnerUid: string): Promise<void> {
+  try {
+    const { onTournamentMatchFinished } = await import('./tournaments');
+    await onTournamentMatchFinished(matchId, winnerUid);
+  } catch (err) {
+    console.error('[onMatchFinished] tournament hook:', err);
+  }
+  try {
+    const { settleMatchBets } = await import('./wallet');
+    await settleMatchBets(getFirestore(), matchId, winnerUid);
+  } catch (err) {
+    console.error('[onMatchFinished] bet settlement:', err);
+  }
 }
 
 function requireString(data: Record<string, unknown>, key: string): string {
@@ -333,13 +344,19 @@ export async function startMatch(
     batch.set(handRef, { cards: [...snap.hands[i]!], updatedAt: FieldValue.serverTimestamp() });
   }
 
+  const { bettingOpenUntilTimestamp } = await import('./wallet');
+
   // Estado público de la partida
   batch.update(matchRef, {
-    status:    'playing',
-    turn:      1,
-    startedAt: FieldValue.serverTimestamp(),
-    playerIds: uniqueIds,
-    playerCount: uniqueIds.length,
+    status:            'playing',
+    turn:              1,
+    startedAt:         FieldValue.serverTimestamp(),
+    bettingOpenUntil:  bettingOpenUntilTimestamp(),
+    betPoolTotal:      0,
+    betCount:          0,
+    spectatorCount:    0,
+    playerIds:         uniqueIds,
+    playerCount:       uniqueIds.length,
     ...buildPublicState(snap, uniqueIds),
   });
 
@@ -797,12 +814,7 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
     });
 
     if (finishedWinner) {
-      try {
-        const { onTournamentMatchFinished } = await import('./tournaments');
-        await onTournamentMatchFinished(matchId, finishedWinner);
-      } catch (err) {
-        console.error('[playTurn] tournament hook:', err);
-      }
+      await _onMatchFinishedHooks(matchId, finishedWinner);
     }
 
     return { ok: true, publicState: resultPublic, myHand: resultHand, turn: resultTurn };
@@ -975,12 +987,7 @@ export const forfeitMatch = onCall<{ matchId: string }, Promise<ForfeitResponse>
 
     await batch.commit();
 
-    try {
-      const { onTournamentMatchFinished } = await import('./tournaments');
-      await onTournamentMatchFinished(matchId, winnerUid);
-    } catch (err) {
-      console.error('[forfeitMatch] tournament hook:', err);
-    }
+    await _onMatchFinishedHooks(matchId, winnerUid);
 
     return { ok: true, winnerUid };
   },
@@ -1065,12 +1072,7 @@ export const endMatch = onCall<EndMatchRequest, Promise<ForfeitResponse>>(
 
     await batch.commit();
 
-    try {
-      const { onTournamentMatchFinished } = await import('./tournaments');
-      await onTournamentMatchFinished(matchId, winnerUid);
-    } catch (err) {
-      console.error('[endMatch] tournament hook:', err);
-    }
+    await _onMatchFinishedHooks(matchId, winnerUid);
 
     return { ok: true, winnerUid };
   },

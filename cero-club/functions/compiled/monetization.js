@@ -48,7 +48,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.grantMonthlyVIPCoins = exports.mercadoPagoWebhook = exports.activateVIP = exports.createCoinPayment = exports.purchaseCoins = exports.VIP_PLANS = exports.COIN_PACKAGES = void 0;
+exports.grantMonthlyVIPCoins = exports.mercadoPagoWebhook = exports.activateVIP = exports.createCoinPayment = exports.getPaymentCatalog = exports.purchaseCoins = exports.VIP_PLANS = exports.COIN_PACKAGES_BY_REGION = exports.PAYMENT_REGIONS = exports.COIN_PACKAGES = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-admin/firestore");
@@ -70,6 +70,33 @@ exports.COIN_PACKAGES = {
     pack_500: { coins: 500, bonusCoins: 50, priceARS: 5990, label: '500 + 50 bonus' },
     pack_1500: { coins: 1500, bonusCoins: 200, priceARS: 14990, label: '1500 + 200 bonus' },
     pack_4000: { coins: 4000, bonusCoins: 600, priceARS: 34990, label: '4000 + 600 bonus' },
+};
+/** Regiones de pago soportadas (Fase 4 — multi-moneda) */
+exports.PAYMENT_REGIONS = {
+    AR: { currency: 'ARS', label: 'Argentina', symbol: '$' },
+    UY: { currency: 'UYU', label: 'Uruguay (Prex)', symbol: '$U' },
+    US: { currency: 'USD', label: 'Internacional', symbol: 'US$' },
+};
+/** Precios locales por región (1 CC ≈ 1 unidad de moneda local) */
+exports.COIN_PACKAGES_BY_REGION = {
+    AR: {
+        pack_100: { price: 1490, currency: 'ARS' },
+        pack_500: { price: 5990, currency: 'ARS' },
+        pack_1500: { price: 14990, currency: 'ARS' },
+        pack_4000: { price: 34990, currency: 'ARS' },
+    },
+    UY: {
+        pack_100: { price: 120, currency: 'UYU' },
+        pack_500: { price: 480, currency: 'UYU' },
+        pack_1500: { price: 1200, currency: 'UYU' },
+        pack_4000: { price: 2800, currency: 'UYU' },
+    },
+    US: {
+        pack_100: { price: 149, currency: 'USD' },
+        pack_500: { price: 599, currency: 'USD' },
+        pack_1500: { price: 1499, currency: 'USD' },
+        pack_4000: { price: 3499, currency: 'USD' },
+    },
 };
 exports.VIP_PLANS = {
     vip_monthly: { priceARS: 5990, durationDays: 30, label: 'Pase VIP Mensual', monthlyCoins: 500 },
@@ -198,7 +225,7 @@ async function _createMPPreference(opts) {
                 title: opts.title,
                 quantity: 1,
                 unit_price: opts.unitPrice,
-                currency_id: 'ARS',
+                currency_id: opts.currency,
             }],
         payer: { email: opts.email },
         external_reference: opts.intentId,
@@ -240,13 +267,40 @@ exports.purchaseCoins = (0, https_1.onCall)({ region: REGION }, async (request) 
     });
     return { ok: true, uid, amount };
 });
+exports.getPaymentCatalog = (0, https_1.onCall)({ region: REGION }, async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+    const region = (request.data?.region ?? 'AR');
+    guard(Object.prototype.hasOwnProperty.call(exports.PAYMENT_REGIONS, region), 'invalid-argument', `Región inválida: "${region}"`);
+    const regionMeta = exports.PAYMENT_REGIONS[region];
+    const prices = exports.COIN_PACKAGES_BY_REGION[region];
+    const packages = Object.keys(exports.COIN_PACKAGES).map(id => {
+        const pkg = exports.COIN_PACKAGES[id];
+        const local = prices[id];
+        return {
+            id,
+            coins: pkg.coins,
+            bonusCoins: pkg.bonusCoins,
+            label: pkg.label,
+            price: local.price,
+            currency: local.currency,
+        };
+    });
+    const vipPlans = Object.keys(exports.VIP_PLANS).map(id => {
+        const plan = exports.VIP_PLANS[id];
+        return { id, label: plan.label, priceARS: plan.priceARS, durationDays: plan.durationDays };
+    });
+    return { ok: true, region, regionMeta, packages, vipPlans };
+});
 exports.createCoinPayment = (0, https_1.onCall)({ region: REGION, timeoutSeconds: 30 }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
     const uid = request.auth.uid;
     const email = request.auth.token.email ?? 'user@cero.club';
     const pkgId = request.data.packageId;
+    const region = (request.data.region ?? 'AR');
     guard(Object.prototype.hasOwnProperty.call(exports.COIN_PACKAGES, pkgId), 'invalid-argument', `Paquete inválido: "${pkgId}"`);
+    guard(Object.prototype.hasOwnProperty.call(exports.PAYMENT_REGIONS, region), 'invalid-argument', `Región inválida: "${region}"`);
     const pkg = exports.COIN_PACKAGES[pkgId];
+    const localPrice = exports.COIN_PACKAGES_BY_REGION[region][pkgId];
     const totalCoins = pkg.coins + pkg.bonusCoins;
     const db = (0, firestore_1.getFirestore)();
     // Crear intención de pago antes de contactar MP (idempotencia)
@@ -267,17 +321,20 @@ exports.createCoinPayment = (0, https_1.onCall)({ region: REGION, timeoutSeconds
     const { prefId, checkoutUrl } = await _createMPPreference({
         intentId: intentRef.id,
         title: pkg.label,
-        unitPrice: pkg.priceARS,
+        unitPrice: localPrice.price,
+        currency: localPrice.currency,
         uid,
         email,
     });
-    await intentRef.update({ mpPrefId: prefId });
+    await intentRef.update({ mpPrefId: prefId, region, currency: localPrice.currency });
     return {
         intentId: intentRef.id,
         checkoutUrl,
         coins: pkg.coins,
         bonusCoins: pkg.bonusCoins,
-        priceARS: pkg.priceARS,
+        price: localPrice.price,
+        currency: localPrice.currency,
+        region,
     };
 });
 exports.activateVIP = (0, https_1.onCall)({ region: REGION, timeoutSeconds: 30 }, async (request) => {
@@ -305,6 +362,7 @@ exports.activateVIP = (0, https_1.onCall)({ region: REGION, timeoutSeconds: 30 }
         intentId: intentRef.id,
         title: plan.label,
         unitPrice: plan.priceARS,
+        currency: 'ARS',
         uid,
         email,
     });

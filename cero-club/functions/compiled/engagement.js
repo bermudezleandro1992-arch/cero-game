@@ -11,11 +11,45 @@
  *
  * Regla de oro: ningún saldo se modifica desde el cliente — solo Cloud Functions.
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateRanking = exports.claimDailyReward = exports.equipCosmetic = exports.purchaseCosmetic = exports.resetWeeklyRanking = exports.claimDailyBonus = exports.initUserProfile = exports.COSMETIC_CATALOG = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-admin/firestore");
+const crypto = __importStar(require("crypto"));
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,6 +57,9 @@ const REGION = 'us-central1';
 const WELCOME_COINS = 100;
 const DAILY_BONUS_COINS = 10;
 const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 h en ms
+function referralCodeForUid(uid) {
+    return crypto.createHash('sha256').update(uid).digest('hex').slice(0, 8).toUpperCase();
+}
 const WEEKLY_PRIZES = {
     1: 500,
     2: 300,
@@ -66,11 +103,15 @@ exports.initUserProfile = (0, https_1.onCall)({ region: REGION }, async (request
         const snap = await tx.get(userRef);
         if (snap.exists) {
             ceroCoins = snap.data()?.['ceroCoins'] ?? 0;
-            return; // perfil ya existe, no tocar
+            if (!snap.data()?.['referralCode']) {
+                tx.update(userRef, { referralCode: referralCodeForUid(uid) });
+            }
+            return; // perfil ya existe, no tocar saldo
         }
         // Primer login: crear perfil con bonus de bienvenida
         created = true;
         ceroCoins = WELCOME_COINS;
+        const referralCode = referralCodeForUid(uid);
         tx.set(userRef, {
             displayName: name,
             email,
@@ -84,6 +125,10 @@ exports.initUserProfile = (0, https_1.onCall)({ region: REGION }, async (request
             ownedCosmetics: [],
             equippedSkin: null,
             equippedFrame: null,
+            referralCode,
+            referredBy: null,
+            referralCount: 0,
+            referralBonusClaimed: false,
             createdAt: firestore_1.FieldValue.serverTimestamp(),
         });
     });

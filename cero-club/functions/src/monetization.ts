@@ -48,12 +48,44 @@ export const COIN_PACKAGES = {
   pack_4000: { coins: 4000, bonusCoins: 600, priceARS: 34990, label: '4000 + 600 bonus' },
 } as const satisfies Record<string, { coins: number; bonusCoins: number; priceARS: number; label: string }>;
 
+type PackageId = keyof typeof COIN_PACKAGES;
+
+/** Regiones de pago soportadas (Fase 4 — multi-moneda) */
+export const PAYMENT_REGIONS = {
+  AR: { currency: 'ARS', label: 'Argentina',       symbol: '$' },
+  UY: { currency: 'UYU', label: 'Uruguay (Prex)',  symbol: '$U' },
+  US: { currency: 'USD', label: 'Internacional',   symbol: 'US$' },
+} as const;
+
+type PaymentRegion = keyof typeof PAYMENT_REGIONS;
+
+/** Precios locales por región (1 CC ≈ 1 unidad de moneda local) */
+export const COIN_PACKAGES_BY_REGION: Record<PaymentRegion, Record<PackageId, { price: number; currency: string }>> = {
+  AR: {
+    pack_100:  { price: 1490,  currency: 'ARS' },
+    pack_500:  { price: 5990,  currency: 'ARS' },
+    pack_1500: { price: 14990, currency: 'ARS' },
+    pack_4000: { price: 34990, currency: 'ARS' },
+  },
+  UY: {
+    pack_100:  { price: 120,   currency: 'UYU' },
+    pack_500:  { price: 480,   currency: 'UYU' },
+    pack_1500: { price: 1200,  currency: 'UYU' },
+    pack_4000: { price: 2800,  currency: 'UYU' },
+  },
+  US: {
+    pack_100:  { price: 149,  currency: 'USD' },
+    pack_500:  { price: 599,  currency: 'USD' },
+    pack_1500: { price: 1499, currency: 'USD' },
+    pack_4000: { price: 3499, currency: 'USD' },
+  },
+};
+
 export const VIP_PLANS = {
   vip_monthly: { priceARS: 5990,  durationDays: 30,  label: 'Pase VIP Mensual', monthlyCoins: 500 },
   vip_annual:  { priceARS: 49990, durationDays: 365, label: 'Pase VIP Anual',   monthlyCoins: 500 },
 } as const satisfies Record<string, { priceARS: number; durationDays: number; label: string; monthlyCoins: number }>;
 
-type PackageId = keyof typeof COIN_PACKAGES;
 type VIPPlanId = keyof typeof VIP_PLANS;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -220,6 +252,7 @@ async function _createMPPreference(opts: {
   intentId:  string;
   title:     string;
   unitPrice: number;
+  currency:  string;
   uid:       string;
   email:     string;
 }): Promise<{ prefId: string; checkoutUrl: string }> {
@@ -237,7 +270,7 @@ async function _createMPPreference(opts: {
       title:      opts.title,
       quantity:   1,
       unit_price: opts.unitPrice,
-      currency_id: 'ARS',
+      currency_id: opts.currency,
     }],
     payer: { email: opts.email },
     external_reference: opts.intentId,
@@ -304,14 +337,50 @@ export const purchaseCoins = onCall<PurchaseCoinsRequest>(
 // createCoinPayment — inicia un pago de Coins via Mercado Pago
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface CreatePaymentRequest { packageId: string }
+interface CreatePaymentRequest { packageId: string; region?: string }
 interface CreatePaymentResponse {
   intentId:    string;
   checkoutUrl: string;
   coins:       number;
   bonusCoins:  number;
-  priceARS:    number;
+  price:       number;
+  currency:    string;
+  region:      string;
 }
+
+export const getPaymentCatalog = onCall<{ region?: string }>(
+  { region: REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+
+    const region = (request.data?.region ?? 'AR') as PaymentRegion;
+    guard(Object.prototype.hasOwnProperty.call(PAYMENT_REGIONS, region),
+      'invalid-argument', `Región inválida: "${region}"`);
+
+    const regionMeta = PAYMENT_REGIONS[region];
+    const prices     = COIN_PACKAGES_BY_REGION[region];
+
+    const packages = (Object.keys(COIN_PACKAGES) as PackageId[]).map(id => {
+      const pkg   = COIN_PACKAGES[id];
+      const local = prices[id];
+      return {
+        id,
+        coins:      pkg.coins,
+        bonusCoins: pkg.bonusCoins,
+        label:      pkg.label,
+        price:      local.price,
+        currency:   local.currency,
+      };
+    });
+
+    const vipPlans = (Object.keys(VIP_PLANS) as VIPPlanId[]).map(id => {
+      const plan = VIP_PLANS[id];
+      return { id, label: plan.label, priceARS: plan.priceARS, durationDays: plan.durationDays };
+    });
+
+    return { ok: true, region, regionMeta, packages, vipPlans };
+  },
+);
 
 export const createCoinPayment = onCall<CreatePaymentRequest, Promise<CreatePaymentResponse>>(
   { region: REGION, timeoutSeconds: 30 },
@@ -321,14 +390,21 @@ export const createCoinPayment = onCall<CreatePaymentRequest, Promise<CreatePaym
     const uid      = request.auth!.uid;
     const email    = request.auth!.token.email ?? 'user@cero.club';
     const pkgId    = request.data.packageId as PackageId;
+    const region   = (request.data.region ?? 'AR') as PaymentRegion;
 
     guard(
       Object.prototype.hasOwnProperty.call(COIN_PACKAGES, pkgId),
       'invalid-argument',
       `Paquete inválido: "${pkgId}"`,
     );
+    guard(
+      Object.prototype.hasOwnProperty.call(PAYMENT_REGIONS, region),
+      'invalid-argument',
+      `Región inválida: "${region}"`,
+    );
 
     const pkg        = COIN_PACKAGES[pkgId];
+    const localPrice = COIN_PACKAGES_BY_REGION[region][pkgId];
     const totalCoins = pkg.coins + pkg.bonusCoins;
     const db         = getFirestore();
 
@@ -351,19 +427,22 @@ export const createCoinPayment = onCall<CreatePaymentRequest, Promise<CreatePaym
     const { prefId, checkoutUrl } = await _createMPPreference({
       intentId:  intentRef.id,
       title:     pkg.label,
-      unitPrice: pkg.priceARS,
+      unitPrice: localPrice.price,
+      currency:  localPrice.currency,
       uid,
       email,
     });
 
-    await intentRef.update({ mpPrefId: prefId });
+    await intentRef.update({ mpPrefId: prefId, region, currency: localPrice.currency });
 
     return {
       intentId:    intentRef.id,
       checkoutUrl,
       coins:       pkg.coins,
       bonusCoins:  pkg.bonusCoins,
-      priceARS:    pkg.priceARS,
+      price:       localPrice.price,
+      currency:    localPrice.currency,
+      region,
     };
   },
 );
@@ -411,6 +490,7 @@ export const activateVIP = onCall<ActivateVIPRequest, Promise<ActivateVIPRespons
       intentId:  intentRef.id,
       title:     plan.label,
       unitPrice: plan.priceARS,
+      currency:  'ARS',
       uid,
       email,
     });
