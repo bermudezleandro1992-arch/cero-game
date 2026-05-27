@@ -261,7 +261,7 @@ export const adminCleanupStaleRooms = onCall<AdminCleanupStaleRequest>(
     guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
     await assertAdmin(request.auth!.uid);
 
-    const minAgeMinutes = Math.min(Math.max(request.data?.minAgeMinutes ?? 4, 1), 60);
+    const minAgeMinutes = Math.min(Math.max(request.data?.minAgeMinutes ?? 4, 0), 60);
     const limit         = Math.min(request.data?.limit ?? 100, 200);
     const cutoff        = Date.now() - minAgeMinutes * 60 * 1000;
 
@@ -277,7 +277,7 @@ export const adminCleanupStaleRooms = onCall<AdminCleanupStaleRequest>(
     for (const docSnap of snap.docs) {
       const match = docSnap.data() as import('./game').MatchDoc;
       const createdMs = matchCreatedMs(match.createdAt);
-      if (createdMs > 0 && createdMs <= cutoff) {
+      if (createdMs === 0 || createdMs <= cutoff) {
         await closeWaitingRoom(
           db,
           docSnap.ref,
