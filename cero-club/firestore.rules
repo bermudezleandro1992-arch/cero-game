@@ -1,0 +1,408 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // ── Panel admin (lista de operadores) ─────────────────────────────────────
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // ── Cola central wallet (compras / retiros) ───────────────────────────────
+    match /wallet_queue/{queueId} {
+      allow read, update: if isAdmin();
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.uid
+                    && _walletQueueCreateOk();
+      allow delete: if false;
+    }
+
+    // ── User profiles ──────────────────────────────────────────────────────────
+    // Cualquier usuario autenticado puede leer perfiles (ranking, espectador).
+    // Solo el dueño puede modificar su propio perfil.
+    match /users/{uid} {
+      allow read:  if request.auth != null;
+      // El dueño edita nick/color; photoURL solo lo asigna el backend al aprobar avatar.
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update: if (request.auth != null && request.auth.uid == uid
+                        && (_userProfileUpdateOk() || _matchStatsUpdateOk()))
+                    || (isAdmin() && _adminUserCoinsOk());
+      allow delete: if false;
+
+      match /friends/{friendUid} {
+        allow read:  if request.auth != null && request.auth.uid == uid;
+        allow create: if request.auth != null &&
+                         (request.auth.uid == uid || request.auth.uid == friendUid);
+        allow update, delete: if request.auth != null && request.auth.uid == uid;
+      }
+
+      match /notifications/{notifId} {
+        allow read:  if request.auth != null && request.auth.uid == uid;
+        allow update: if request.auth != null && request.auth.uid == uid;
+        allow delete: if request.auth != null && request.auth.uid == uid;
+        allow create: if request.auth != null;
+      }
+
+      match /coin_requests/{reqId} {
+        allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+        allow create: if request.auth != null && request.auth.uid == uid
+                      && _coinRequestCreateOk();
+        allow update: if isAdmin() && _adminCoinRequestUpdateOk();
+        allow delete: if false;
+      }
+
+      match /security_sessions/{sessionId} {
+        allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+        allow create: if request.auth != null && request.auth.uid == uid
+                      && _securitySessionCreateOk();
+        allow update, delete: if false;
+      }
+    }
+
+    match /friend_requests/{requestId} {
+      // getDoc en doc inexistente: resource es null — hay que permitirlo para crear solicitudes.
+      allow read:   if request.auth != null && (
+                       !exists(/databases/$(database)/documents/friend_requests/$(requestId))
+                       || request.auth.uid == resource.data.fromUid
+                       || request.auth.uid == resource.data.toUid
+                     );
+      allow create: if request.auth != null &&
+                       request.auth.uid == request.resource.data.fromUid &&
+                       request.resource.data.status == 'pending';
+      allow update: if request.auth != null && (
+                       (request.auth.uid == resource.data.toUid &&
+                        request.resource.data.status in ['accepted', 'declined']) ||
+                       (request.auth.uid == resource.data.fromUid &&
+                        resource.data.status in ['declined', 'accepted'] &&
+                        request.resource.data.status == 'pending')
+                     );
+      allow delete: if request.auth != null &&
+                       request.auth.uid == resource.data.fromUid;
+    }
+
+    // ── Online presence ────────────────────────────────────────────────────────
+    // LECTURA PÚBLICA — solo contiene displayName y lastSeen (no es info sensible).
+    // Permite mostrar el contador de jugadores en línea a usuarios no logueados.
+    // Solo el dueño puede actualizar su presencia.
+    match /presence/{uid} {
+      allow read:  if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ── Promo codes ────────────────────────────────────────────────────────────
+    // Solo usuarios autenticados pueden leer códigos (para canjearlos).
+    // Solo se puede actualizar usedBy/usedCount en doc existente (no crear ni borrar).
+    match /codes/{code} {
+      allow read:   if request.auth != null;
+      allow create: if false;
+      allow delete: if false;
+      allow update: if request.auth != null
+                    && request.resource.data.keys().hasOnly(['usedBy','usedCount'])
+                    && request.resource.data.usedCount == resource.data.usedCount + 1;
+    }
+
+    // ── Matchmaking queue ──────────────────────────────────────────────────────
+    // Jugadores escriben su propia entrada; pueden leer la cola para encontrar rival.
+    match /matchmaking/{game}/queue/{uid} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null;   // host updates partner entry with roomId
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ── Game rooms ─────────────────────────────────────────────────────────────
+    // Cualquier usuario autenticado puede leer salas (spectating).
+    // Usuarios autenticados pueden crear salas y actualizar las suyas.
+    match /rooms/{roomId} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;   // players update game state during match
+      allow delete: if request.auth != null &&
+                       request.auth.uid == resource.data.hostId;
+
+      // ── Private player hands (solo el dueño puede leer/escribir) ─────────────
+      match /hands/{uid} {
+        allow read:  if request.auth != null && request.auth.uid == uid;
+        allow write: if request.auth != null;   // host deals; player updates own hand
+      }
+
+      // ── Mazo legacy (_server/deck) — cualquier jugador autenticado en la sala ─
+      match /_server/{doc} {
+        allow read, write: if request.auth != null;
+      }
+
+      match /messages/{msgId} {
+        allow read:  if request.auth != null;
+        allow create: if request.auth != null;
+      }
+    }
+
+    // ── Ranking (agregado, escrito por Cloud Functions en el futuro) ──────────
+    match /ranking/{docId} {
+      allow read:  if request.auth != null;
+      allow write: if false;
+    }
+
+    // ── Intenciones de pago (payment_intents) — solo lectura propia ────────
+    // El cliente puede leer su propio intent (para polling de estado).
+    // Nunca puede crear ni modificar (solo Cloud Functions).
+    match /payment_intents/{intentId} {
+      allow read:  if request.auth != null
+                   && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // ── Ledger de Coins (solo lectura propia, escritura solo servidor) ──────
+    match /coin_ledger/{entryId} {
+      allow read:  if request.auth != null
+                   && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // ── Torneos ────────────────────────────────────────────────────────────
+    match /tournaments/{tournamentId} {
+      allow read:   if request.auth != null;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (request.auth != null && _tournamentRegistrationBumpOk());
+      match /registrations/{uid} {
+        allow read:  if request.auth != null;
+        allow create: if request.auth != null && request.auth.uid == uid
+                      && _tournamentRegistrationCreateOk();
+        allow update, delete: if isAdmin()
+                              || (request.auth != null && request.auth.uid == uid);
+      }
+    }
+
+    // ── Definiciones de misiones (inmutable por jugadores) ─────────────────
+    match /missions/{missionId} {
+      allow read:  if request.auth != null;
+      allow write: if false;
+    }
+
+    // ── Progreso de misiones por usuario ────────────────────────────────────
+    // Solo el dueño puede leer su propio progreso.
+    // Escritura exclusivamente por Cloud Functions (claimMissionReward, etc.).
+    match /users/{uid}/mission_progress/{missionId} {
+      allow read:  if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // ── Matches (partidas server-authoritative via Cloud Functions) ───────────
+    // Los clientes NUNCA escriben. Solo leen para sincronizar la UI con onSnapshot.
+    // Todo el estado del juego (deck, manos, reglas) se valida en el server.
+    match /matches/{matchId} {
+      // Salas en espera: cualquier usuario autenticado puede leerlas (lobby).
+      // Partidas en curso o terminadas: solo los jugadores de esa partida.
+      allow read:  if request.auth != null
+                   && (resource.data.status == 'waiting'
+                       || _playerIdsInclude(resource.data.playerIds));
+      allow write: if false;   // solo Cloud Functions (Admin SDK)
+
+      // Mano propia: solo el dueño puede leer. Nunca escribir desde el cliente.
+      match /hands/{uid} {
+        allow read:  if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+
+      // Estado privado del servidor (deck, discard, todas las manos): nadie lee.
+      match /private/{doc} {
+        allow read:  if false;
+        allow write: if false;
+      }
+
+      // Keep-alive de presencia por partida — solo el dueño escribe su propio doc.
+      match /presence/{uid} {
+        allow read:  if request.auth != null && _isMatchPlayer(matchId);
+        allow write: if request.auth != null && request.auth.uid == uid
+                     && request.resource.data.keys().hasOnly(['lastSeen', 'matchId', 'status']);
+      }
+
+      // Chat de partida — solo jugadores de la sala pueden leer/escribir.
+      // Mensajes inmutables (no se pueden editar ni borrar desde el cliente).
+      match /chat/{msgId} {
+        allow read: if request.auth != null && _isMatchPlayer(matchId);
+        allow create: if request.auth != null
+                      && _isMatchPlayer(matchId)
+                      && request.auth.uid == request.resource.data.uid
+                      && request.resource.data.type in ['text', 'reaction']
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() > 0
+                      && request.resource.data.text.size() <= 200;
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+
+    // ── Stats globales (contador online, etc.) — lectura pública ──────────────
+    match /meta/{docId} {
+      allow read:  if true;
+      allow write: if false;
+    }
+
+    match /lobby_messages/{msgId} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.text is string
+                    && request.resource.data.text.size() <= 200;
+    }
+
+    match /dm_messages/{msgId} {
+      allow read:   if request.auth != null
+                    && request.auth.uid in resource.data.participants;
+      allow create: if request.auth != null
+                    && request.resource.data.fromUid == request.auth.uid
+                    && request.auth.uid in request.resource.data.participants
+                    && request.resource.data.text is string
+                    && request.resource.data.text.size() <= 200;
+    }
+
+  }
+
+  function _playerIdsInclude(playerIds) {
+    return playerIds is list
+      && playerIds.hasAny([request.auth.uid]);
+  }
+
+  function _userProfileUpdateOk() {
+    return (!_photoUrlTouched() || request.resource.data.photoURL == resource.data.photoURL || _clientAvatarUploadOk())
+      && (!_avatarStatusTouched() || request.resource.data.avatarStatus in ['none', 'pending', 'rejected'] || _clientAvatarUploadOk() || _clientAvatarPendingOk())
+      && (!_identityTouched() || _identityUpdateOk());
+  }
+
+  function _matchStatsUpdateOk() {
+    return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      'wins', 'gamesPlayed', 'wins_cero', 'wins_truco', 'games_cero', 'games_truco',
+      'xp', 'rankPoints', 'rankPoints_cero', 'rankPoints_truco', 'lastSeen'
+    ]);
+  }
+
+  function _clientAvatarPendingOk() {
+    return request.resource.data.avatarStatus == 'pending'
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'avatarStatus', 'avatarRejectReason', 'avatarUploadedAt', 'lastSeen'
+      ]);
+  }
+
+  function _isRoomPlayer(roomId) {
+    let room = get(/databases/$(database)/documents/rooms/$(roomId)).data;
+    return request.auth.uid == room.hostId
+      || _playerIdsInclude(room.playerIds);
+  }
+
+  function _isMatchPlayer(matchId) {
+    let matchDoc = get(/databases/$(database)/documents/matches/$(matchId)).data;
+    return _playerIdsInclude(matchDoc.playerIds);
+  }
+
+  function _tournamentRegistrationBumpOk() {
+    return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registrations'])
+      && request.resource.data.registrations == resource.data.registrations + 1;
+  }
+
+  function _tournamentRegistrationCreateOk() {
+    return request.resource.data.uid == request.auth.uid
+      && request.resource.data.keys().hasAll(['uid', 'displayName', 'registeredAt']);
+  }
+
+  function _securitySessionCreateOk() {
+    return request.resource.data.uid == request.auth.uid
+      && request.resource.data.keys().hasAll(['uid', 'userAgent', 'platform', 'createdAt'])
+      && request.resource.data.userAgent is string
+      && request.resource.data.userAgent.size() <= 500;
+  }
+
+  function _identityTouched() {
+    return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+      'identityVerified', 'identityName', 'identityDni', 'identityDob', 'identityFaceURL', 'identityVerifiedAt'
+    ]);
+  }
+
+  function _identityUpdateOk() {
+    return request.resource.data.identityVerified == true
+      && request.resource.data.identityName is string
+      && request.resource.data.identityName.size() >= 3
+      && request.resource.data.identityDni is string
+      && request.resource.data.identityDni.size() >= 7
+      && request.resource.data.identityDob is string
+      && (!_faceUrlTouched() || _identityFaceOk());
+  }
+
+  function _faceUrlTouched() {
+    return request.resource.data.diff(resource.data).affectedKeys().hasAny(['identityFaceURL']);
+  }
+
+  function _identityFaceOk() {
+    return request.resource.data.identityFaceURL is string
+      && request.resource.data.identityFaceURL.matches('^data:image/(jpeg|png|webp);base64,')
+      && request.resource.data.identityFaceURL.size() < 120000;
+  }
+
+  // Foto propia: solo data-URL comprimida (máx ~120 KB), sin enlaces externos.
+  function _clientAvatarUploadOk() {
+    return request.resource.data.avatarStatus == 'approved'
+      && request.resource.data.photoURL is string
+      && request.resource.data.photoURL.matches('^data:image/(jpeg|png|webp);base64,')
+      && request.resource.data.photoURL.size() < 120000;
+  }
+
+  function _photoUrlTouched() {
+    return request.resource.data.diff(resource.data).affectedKeys().hasAny(['photoURL']);
+  }
+
+  function _avatarStatusTouched() {
+    return request.resource.data.diff(resource.data).affectedKeys().hasAny(['avatarStatus']);
+  }
+
+  function _coinRequestCreateOk() {
+    return request.resource.data.type in ['purchase', 'withdraw']
+      && request.resource.data.status == 'pending'
+      && request.resource.data.amount is int
+      && request.resource.data.amount >= 500
+      && request.resource.data.amount <= 100000
+      && (request.resource.data.type != 'purchase' || _purchaseReceiptOk())
+      && (request.resource.data.type != 'withdraw' || _withdrawRequestOk());
+  }
+
+  function _purchaseReceiptOk() {
+    return request.resource.data.receiptURL is string
+      && request.resource.data.receiptURL.size() > 100
+      && request.resource.data.receiptURL.size() < 900000
+      && (!('receiptName' in request.resource.data) || request.resource.data.receiptName is string);
+  }
+
+  function _withdrawRequestOk() {
+    return request.resource.data.payoutAlias is string
+      && request.resource.data.payoutAlias.size() >= 6
+      && request.resource.data.payoutAlias.size() <= 80;
+  }
+
+  function _walletQueueCreateOk() {
+    return request.resource.data.type in ['purchase', 'withdraw']
+      && request.resource.data.status == 'pending'
+      && request.resource.data.uid == request.auth.uid
+      && request.resource.data.amount is int
+      && request.resource.data.amount >= 500
+      && request.resource.data.amount <= 100000
+      && request.resource.data.requestId is string;
+  }
+
+  function _adminUserCoinsOk() {
+    return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coins'])
+      && request.resource.data.coins is int
+      && request.resource.data.coins >= 0
+      && request.resource.data.coins <= 5000000;
+  }
+
+  function _adminCoinRequestUpdateOk() {
+    return resource.data.status == 'pending'
+      && request.resource.data.status in ['approved', 'rejected', 'reviewing'];
+  }
+}
