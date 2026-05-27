@@ -17,14 +17,14 @@ function apply(name, from, to) {
   console.log(`OK: ${name}`);
 }
 
-// ── Callables extra ───────────────────────────────────────────────────────────
+// ── Callables extra (rejoin expiry — nombres únicos, después del bloque wallet) ─
 apply(
   'callable-rejoin-expiry',
-  'async function M0k(r){return Rc(M0f,{matchId:r})}',
-  `async function M0k(r){return Rc(M0f,{matchId:r})}
-let M0q=null;
-function M0r(){return M0q??(M0q=or(ur,"checkMatchRejoinExpiry"))}
-async function M0s(r){return Rc(M0r,{matchId:r})}`,
+  'async function M0N(r){return Rc(M0F(),r)}',
+  `async function M0N(r){return Rc(M0F(),r)}
+let M0rej=null;
+function M0rejG(){return M0rej??(M0rej=or(ur,"checkMatchRejoinExpiry"))}
+async function M0rejX(r){return Rc(M0rejG,{matchId:r})}`,
 );
 
 // ── Sonidos Web Audio ─────────────────────────────────────────────────────────

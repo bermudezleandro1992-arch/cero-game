@@ -79,7 +79,7 @@ apply(
 apply(
   'speed-rejoin-poll',
   'M0s(r).catch(()=>{})},15e3)',
-  'M0s(r).catch(()=>{})},12e3)',
+  'M0rejX(r).catch(()=>{})},12e3)',
 );
 
 fs.writeFileSync(bundlePath, s);
