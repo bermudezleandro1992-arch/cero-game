@@ -80,6 +80,11 @@ interface MatchDoc {
         rejoinUntil: FirebaseFirestore.Timestamp;
         leftAt: FirebaseFirestore.Timestamp;
     }>;
+    rejoinBanner?: {
+        absentUid: string;
+        absentName: string;
+        rejoinUntil: FirebaseFirestore.Timestamp;
+    } | null;
     tournamentId?: string | null;
     tournamentRound?: number | null;
     bracketSlot?: number | null;
@@ -142,6 +147,15 @@ export declare const temporaryLeaveMatch: import("firebase-functions/v2/https").
     ok: true;
     rejoinUntil: number;
 }>>;
+export declare const checkMatchRejoinExpiry: import("firebase-functions/v2/https").CallableFunction<{
+    matchId: string;
+}, Promise<{
+    ok: true;
+    expired: boolean;
+    winnerUid?: string;
+}>>;
+/** Escanea partidas en curso con reconexión vencida (cada minuto). */
+export declare const expireRejoinMatches: import("firebase-functions/v2/scheduler").ScheduleFunction;
 export declare const getRejoinStatus: import("firebase-functions/v2/https").CallableFunction<Record<string, never>, Promise<{
     available: boolean;
     matchId?: string;

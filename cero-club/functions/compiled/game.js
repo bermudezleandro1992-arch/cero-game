@@ -78,9 +78,10 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.endMatch = exports.forfeitMatch = exports.getRejoinStatus = exports.temporaryLeaveMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = void 0;
+exports.endMatch = exports.forfeitMatch = exports.getRejoinStatus = exports.expireRejoinMatches = exports.checkMatchRejoinExpiry = exports.temporaryLeaveMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = void 0;
 exports.startMatch = startMatch;
 const https_1 = require("firebase-functions/v2/https");
+const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-admin/firestore");
 const CeroEngine_1 = require("./CeroEngine");
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,6 +110,7 @@ function canRejoinMatch(match, uid) {
 async function clearPlayerAbsence(db, matchRef, uid) {
     await matchRef.update({
         [`absences.${uid}`]: firestore_1.FieldValue.delete(),
+        rejoinBanner: firestore_1.FieldValue.delete(),
     });
     await db.doc(`users/${uid}`).set({ activeRejoin: firestore_1.FieldValue.delete() }, { merge: true });
 }
@@ -122,7 +124,7 @@ async function expireAbsentPlayers(db, matchRef, match) {
         if (!winnerUid)
             continue;
         const batch = db.batch();
-        _applyMatchEndUpdates((ref, data) => batch.update(ref, data), db, matchRef, match, winnerUid, 'timeout', { forfeit: { loserUid: uid, winnerUid, reason: 'rejoin_expired' } });
+        _applyMatchEndUpdates((ref, data) => batch.update(ref, data), db, matchRef, match, winnerUid, 'timeout', { forfeit: { loserUid: uid, winnerUid, reason: 'rejoin_expired' }, rejoinBanner: firestore_1.FieldValue.delete() });
         await batch.commit();
         await _onMatchFinishedHooks(matchRef.id, winnerUid);
         return winnerUid;
@@ -474,6 +476,14 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
         const priv = privateSnap.data();
         guard(match.status === 'playing', 'failed-precondition', 'La partida no está en curso');
         guard(match.playerIds.includes(uid), 'permission-denied', 'No sos parte de esta partida');
+        // Si el jugador volvió de una desconexión temporal, limpiar ausencia.
+        if (match.absences?.[uid]) {
+            tx.update(matchRef, {
+                [`absences.${uid}`]: firestore_1.FieldValue.delete(),
+                rejoinBanner: firestore_1.FieldValue.delete(),
+            });
+            tx.set(db.doc(`users/${uid}`), { activeRejoin: firestore_1.FieldValue.delete() }, { merge: true });
+        }
         guard(match.turn === turnNumber, 'failed-precondition', `Turno desactualizado (servidor: ${match.turn}, cliente: ${turnNumber}). Recargá el estado.`);
         const privHands = handsFromStorage(priv.hands, match.playerIds.length);
         // ── Reconstruir el motor desde el snapshot ────────────────────────────
@@ -642,10 +652,16 @@ exports.temporaryLeaveMatch = (0, https_1.onCall)({ region: CFG.REGION }, async 
         const match = snap.data();
         guard(match.playerIds.includes(uid), 'permission-denied', 'No sos parte de esta partida');
         guard(match.status === 'playing' || match.status === 'waiting', 'failed-precondition', 'La partida ya terminó');
+        const playerName = match.players.find(p => p.uid === uid)?.name ?? 'Jugador';
         tx.update(ref, {
             [`absences.${uid}`]: {
                 rejoinUntil,
                 leftAt: firestore_1.FieldValue.serverTimestamp(),
+            },
+            rejoinBanner: {
+                absentUid: uid,
+                absentName: playerName,
+                rejoinUntil,
             },
         });
         tx.set(db.doc(`users/${uid}`), {
@@ -653,6 +669,44 @@ exports.temporaryLeaveMatch = (0, https_1.onCall)({ region: CFG.REGION }, async 
         }, { merge: true });
     });
     return { ok: true, rejoinUntil: rejoinUntilMs };
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// checkMatchRejoinExpiry — polling cliente para expirar reconexión
+// ─────────────────────────────────────────────────────────────────────────────
+exports.checkMatchRejoinExpiry = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+    const uid = request.auth.uid;
+    const matchId = requireString(request.data, 'matchId');
+    const db = (0, firestore_1.getFirestore)();
+    const ref = db.doc(`matches/${matchId}`);
+    const snap = await ref.get();
+    guard(snap.exists, 'not-found', 'Partida no encontrada');
+    const match = snap.data();
+    guard(match.playerIds.includes(uid), 'permission-denied', 'No sos parte de esta partida');
+    const winnerUid = await expireAbsentPlayers(db, ref, match);
+    if (winnerUid) {
+        return { ok: true, expired: true, winnerUid };
+    }
+    return { ok: true, expired: false };
+});
+/** Escanea partidas en curso con reconexión vencida (cada minuto). */
+exports.expireRejoinMatches = (0, scheduler_1.onSchedule)({ schedule: 'every 1 minutes', region: CFG.REGION, timeZone: 'America/Montevideo' }, async () => {
+    const db = (0, firestore_1.getFirestore)();
+    const now = Date.now();
+    const playing = await db.collection('matches')
+        .where('status', '==', 'playing')
+        .limit(200)
+        .get();
+    for (const docSnap of playing.docs) {
+        const match = docSnap.data();
+        const hasExpired = match.playerIds.some(uid => {
+            const abs = match.absences?.[uid];
+            return abs?.rejoinUntil && abs.rejoinUntil.toMillis() <= now;
+        });
+        if (hasExpired) {
+            await expireAbsentPlayers(db, docSnap.ref, match);
+        }
+    }
 });
 // ─────────────────────────────────────────────────────────────────────────────
 // getRejoinStatus — consultar si hay partida para reingresar

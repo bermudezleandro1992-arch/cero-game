@@ -18,8 +18,10 @@ exports.playTurn     = gameModule.playTurn;
 exports.leaveMatch   = gameModule.leaveMatch;
 exports.forfeitMatch = gameModule.forfeitMatch;
 exports.endMatch     = gameModule.endMatch;
-exports.temporaryLeaveMatch = gameModule.temporaryLeaveMatch;
-exports.getRejoinStatus     = gameModule.getRejoinStatus;
+exports.temporaryLeaveMatch   = gameModule.temporaryLeaveMatch;
+exports.getRejoinStatus       = gameModule.getRejoinStatus;
+exports.checkMatchRejoinExpiry = gameModule.checkMatchRejoinExpiry;
+exports.expireRejoinMatches   = gameModule.expireRejoinMatches;
 
 // ── Módulo: monetización + Mercado Pago ──────────────────────────────────────
 const monetModule = require('./compiled/monetization');

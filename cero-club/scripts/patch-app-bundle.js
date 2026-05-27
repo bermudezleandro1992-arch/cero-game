@@ -21,16 +21,17 @@ apply(
   'callables-rejoin-tournament',
   'async function NC(r){if(!r)throw new TypeError("leaveMatch: falta matchId");return Rc(AC,{matchId:r})}const tl=',
   `async function NC(r){if(!r)throw new TypeError("leaveMatch: falta matchId");return Rc(AC,{matchId:r})}
-let qC=null,rC=null,sC=null,tC=null,uC=null;
-function OC2(){return qC??(qC=or(ur,"temporaryLeaveMatch"))}
-function PC2(){return rC??(rC=or(ur,"getRejoinStatus"))}
-function QC2(){return sC??(sC=or(ur,"getWeeklyTournament"))}
-function RC2(){return tC??(tC=or(ur,"registerTournament"))}
-function SC2(){return uC??(uC=or(ur,"cancelTournamentRegistration"))}
-async function TC2(r){return Rc(OC2,{matchId:r})}
-async function UC2(r){return Rc(PC2,r??{})}
-async function VC2(r){return Rc(RC2,r??{})}
-async function WC2(r){return Rc(SC2,{tournamentId:r})}
+let M0a=null,M0b=null,M0c=null,M0d=null,M0e=null;
+function M0f(){return M0a??(M0a=or(ur,"temporaryLeaveMatch"))}
+function M0g(){return M0b??(M0b=or(ur,"getRejoinStatus"))}
+function M0h(){return M0c??(M0c=or(ur,"getWeeklyTournament"))}
+function M0i(){return M0d??(M0d=or(ur,"registerTournament"))}
+function M0j(){return M0e??(M0e=or(ur,"cancelTournamentRegistration"))}
+async function M0k(r){return Rc(M0f,{matchId:r})}
+async function M0l(r){return Rc(M0g,r??{})}
+async function M0m(r){return Rc(M0i,r??{})}
+async function M0n(r){return Rc(M0j,{tournamentId:r})}
+async function M0p(r){return Rc(M0h,r??{})}
 const tl=`,
 );
 
@@ -62,32 +63,14 @@ apply(
 );
 
 const oldYk = s.slice(s.indexOf('function yk('), s.indexOf('function _k({state:r})'));
-const newYk = `function yk({state:r,matchId:e,onExit:t}){const{match:s,isMyTurn:o,mustDeclareCero:l,busy:h,draw:f,declareCero:g,forfeit:_}=r,w=(s==null?void 0:s.phase)??"waiting",T=(s==null?void 0:s.drawStack)??0;return w==="game_over"||w==="waiting"?null:I.jsxs("div",{className:"flex items-center justify-center gap-3 flex-wrap",children:[l&&I.jsx("button",{type:"button",disabled:h,onClick:g,className:\`px-5 py-2 rounded-xl font-black text-sm\\r
-                     bg-pink-600 hover:bg-pink-500 active:scale-95\\r
-                     text-white border border-pink-400 shadow-lg\\r
-                     animate-pulse disabled:opacity-50 transition-all\`,children:"¡CERO!"}),o&&I.jsx("button",{type:"button",disabled:h,onClick:f,className:\`px-5 py-2 rounded-xl font-bold text-sm\\r
-                     bg-violet-700 hover:bg-violet-600 active:scale-95\\r
-                     text-white border border-violet-500 shadow-lg\\r
-                     disabled:opacity-50 transition-all\`,children:T>0?\`Robar \${T} cartas (+stack)\`:"Robar carta"}),I.jsx("button",{type:"button",disabled:h,onClick:async()=>{if(window.confirm("¿Salir temporalmente? Tenés 5 minutos para volver.")){try{await TC2(e),t()}catch(k){alert(k.message||"Error")}}},className:\`px-3 py-2 rounded-xl font-semibold text-xs\\r
-                   bg-transparent hover:bg-amber-900/40 active:scale-95\\r
-                   text-amber-300 border border-amber-700/60\\r
-                   disabled:opacity-40 transition-all\`,children:"Salir 5 min"}),I.jsx("button",{type:"button",disabled:h,onClick:()=>{window.confirm("¿Abandonar la partida? Tu rival ganará.")&&_()},className:\`px-3 py-2 rounded-xl font-semibold text-xs\\r
-                   bg-transparent hover:bg-red-900/40 active:scale-95\\r
-                   text-red-400 border border-red-800/60\\r
-                   disabled:opacity-40 transition-all\`,children:"Abandonar"})]})}`;
+const newYk = `function yk({state:r}){const{match:e,isMyTurn:t,mustDeclareCero:s,busy:o,draw:l,declareCero:h,forfeit:f,myHand:g}=r,w=(e==null?void 0:e.phase)??"waiting",T=(e==null?void 0:e.drawStack)??0,k=(g==null?void 0:g.length)??0,F=s||k===2;return w==="game_over"||w==="waiting"?null:I.jsxs("div",{className:"flex items-center justify-center gap-3 flex-wrap",children:[(s||k===2)&&I.jsx("button",{type:"button",disabled:o,onClick:h,className:\`font-black text-white border shadow-lg active:scale-95 disabled:opacity-50 \${F?"px-8 py-4 rounded-2xl text-xl animate-pulse bg-pink-600 border-pink-300":"px-5 py-2 rounded-xl text-sm bg-pink-600 border-pink-400"}\`,children:"¡CERO!"}),t&&I.jsx("button",{type:"button",disabled:o,onClick:l,className:\`px-5 py-2 rounded-xl font-bold text-sm bg-violet-700 hover:bg-violet-600 active:scale-95 text-white border border-violet-500 shadow-lg disabled:opacity-50 transition-all\`,children:T>0?\`Robar \${T} cartas (+stack)\`:"Robar carta"}),I.jsx("button",{type:"button",disabled:o,onClick:()=>{window.confirm("¿Abandonar la partida? Tu rival ganará.")&&f()},className:\`px-3 py-2 rounded-xl font-semibold text-xs bg-transparent hover:bg-red-900/40 active:scale-95 text-red-400 border border-red-800/60 disabled:opacity-40 transition-all\`,children:"Abandonar"})]})}`;
 
 if (!s.includes('function yk(')) {
   console.error('PATCH FAILED: yk not found');
   process.exit(1);
 }
 s = s.replace(oldYk, newYk);
-console.log('OK: temporary-leave-yk-full');
-
-apply(
-  'temporary-leave-vk-call',
-  'children:[I.jsx(yk,{state:t}),I.jsx(pk,{cards:l,',
-  'children:[I.jsx(yk,{state:t,matchId:r,onExit:e}),I.jsx(pk,{cards:l,',
-);
+console.log('OK: action-bar-yk-no-leave');
 
 fs.writeFileSync(bundlePath, s);
 console.log('Bundle patched successfully.');
