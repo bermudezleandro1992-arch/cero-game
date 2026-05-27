@@ -135,16 +135,20 @@ function buildPublicState(snap, playerIds) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function startMatch(db, matchRef, match) {
     const { playerIds, players } = match;
-    const names = players.map(p => p.name);
-    const engine = new CeroEngine_1.CeroEngine({ playerCount: playerIds.length, names, handSize: CFG.HAND_SIZE });
+    const uniqueIds = uniquePlayerIds(playerIds);
+    guard(uniqueIds.length >= CFG.MAX_PLAYERS, 'failed-precondition', 'Faltan jugadores para iniciar la partida');
+    const names = players.filter(p => uniqueIds.includes(p.uid)).map(p => p.name);
+    const engine = new CeroEngine_1.CeroEngine({ playerCount: uniqueIds.length, names, handSize: CFG.HAND_SIZE });
+    const dealt = engine.deal();
+    guard(dealt.ok, 'internal', dealt.ok ? 'ok' : dealt.error);
     const snap = engine.toFullSnapshot();
     const batch = db.batch();
     // Incrementar freeGamesPlayed + totalGamesPlayed para todos los jugadores
-    for (const uid of playerIds) {
-        batch.update(db.doc(`users/${uid}`), {
+    for (const uid of uniqueIds) {
+        batch.set(db.doc(`users/${uid}`), {
             freeGamesPlayed: firestore_1.FieldValue.increment(1),
             totalGamesPlayed: firestore_1.FieldValue.increment(1),
-        });
+        }, { merge: true });
     }
     // Estado privado del servidor (deck + discard + todas las manos)
     const privateRef = db.doc(`matches/${matchRef.id}/private/server`);
@@ -156,8 +160,8 @@ async function startMatch(db, matchRef, match) {
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
     // Mano individual de cada jugador (solo él puede leer)
-    for (let i = 0; i < playerIds.length; i++) {
-        const uid = playerIds[i];
+    for (let i = 0; i < uniqueIds.length; i++) {
+        const uid = uniqueIds[i];
         const handRef = db.doc(`matches/${matchRef.id}/hands/${uid}`);
         batch.set(handRef, { cards: [...snap.hands[i]], updatedAt: firestore_1.FieldValue.serverTimestamp() });
     }
@@ -166,7 +170,9 @@ async function startMatch(db, matchRef, match) {
         status: 'playing',
         turn: 1,
         startedAt: firestore_1.FieldValue.serverTimestamp(),
-        ...buildPublicState(snap, playerIds),
+        playerIds: uniqueIds,
+        playerCount: uniqueIds.length,
+        ...buildPublicState(snap, uniqueIds),
     });
     await batch.commit();
 }
@@ -187,7 +193,10 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         const matchData = matchSnap.data();
         if (matchData) {
             const ids = uniquePlayerIds(matchData.playerIds);
-            if (matchData.status === 'waiting' && ids.length >= CFG.MAX_PLAYERS) {
+            const needsStart = ids.length >= CFG.MAX_PLAYERS &&
+                (matchData.status === 'waiting' ||
+                    (matchData.status === 'playing' && matchData.phase === 'waiting' && !matchData.topDiscard));
+            if (needsStart) {
                 await startMatch(db, matchSnap.ref, { ...matchData, playerIds: ids, playerCount: ids.length });
             }
         }
@@ -269,24 +278,10 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         playerIndex = ids.length;
     }
     else {
-        // Buscar cualquier sala abierta del mismo modo
-        const openSnaps = await matchesRef
-            .where('status', '==', 'waiting')
-            .where('mode', '==', mode)
-            .where('playerCount', '<', CFG.MAX_PLAYERS)
-            .orderBy('playerCount')
-            .orderBy('createdAt')
-            .limit(5)
-            .get();
-        for (const docSnap of openSnaps.docs) {
-            const d = docSnap.data();
-            const ids = uniquePlayerIds(d.playerIds);
-            if (ids.includes(uid))
-                continue;
-            matchId = docSnap.id;
-            playerIndex = ids.length;
-            break;
-        }
+        // Sin matchId: crear sala propia o reingresar a la waiting existente (paso 0).
+        // Unirse a salas ajenas solo con matchId explícito (lobby / código).
+        matchId = '';
+        playerIndex = -1;
     }
     if (matchId) {
         // ── 3a. Unirse a sala existente (transacción) ─────────────────────────
