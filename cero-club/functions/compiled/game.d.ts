@@ -1,10 +1,10 @@
 /**
- * CERO — Módulo 2: Backend (TypeScript / Cloud Functions v2)
+ * CERO �?? Módulo 2: Backend (TypeScript / Cloud Functions v2)
  *
  * Garantías de seguridad:
  *   · El cliente NUNCA puede escribir en `matches/` ni en `private/server`.
  *   · Los balances de ceroCoins solo los modifica el Admin SDK dentro de una
- *     transacción Firestore — imposible de manipular desde el navegador.
+ *     transacción Firestore �?? imposible de manipular desde el navegador.
  *   · El mazo y las manos ajenas jamás se exponen al cliente.
  *   · El número de turno (`turn`) actúa como llave de idempotencia:
  *     requests duplicados o retrasados son rechazados sin efecto.
@@ -14,8 +14,8 @@
  *   users/{uid}
  *     email: string
  *     displayName: string
- *     ceroCoins: number          ← balance; solo escribe el servidor
- *     freeGamesPlayed: number    ← partidas gratis usadas
+ *     ceroCoins: number          �?� balance; solo escribe el servidor
+ *     freeGamesPlayed: number    �?� partidas gratis usadas
  *     totalGamesPlayed: number
  *     wins: number
  *     createdAt: Timestamp
@@ -27,20 +27,20 @@
  *     playerIds: string[]
  *     playerCount: number
  *     maxPlayers: number
- *     stakeCC: number            ← coins apostadas por partida
- *     turn: number               ← se incrementa en cada acción (idempotencia)
+ *     stakeCC: number            �?� coins apostadas por partida
+ *     turn: number               �?� se incrementa en cada acción (idempotencia)
  *     phase / current / direction / drawStack / chosenColor / topDiscard /
- *     handCounts / winner / pendingTurn  ← estado público (cliente escucha con onSnapshot)
+ *     handCounts / winner / pendingTurn  �?� estado público (cliente escucha con onSnapshot)
  *     lastAction: LastAction | null
  *     createdAt / startedAt / finishedAt: Timestamp
  *
- *   matches/{matchId}/private/server   ← NADIE puede leer (solo Admin SDK)
+ *   matches/{matchId}/private/server   �?� NADIE puede leer (solo Admin SDK)
  *     deck: Card[]
  *     discardPile: Card[]
- *     hands: Card[][]             ← indexado por playerIdx
+ *     hands: Card[][]             �?� indexado por playerIdx
  *     ceroCalled: number[]
  *
- *   matches/{matchId}/hands/{uid}      ← solo el dueño puede leer
+ *   matches/{matchId}/hands/{uid}      �?� solo el dueño puede leer
  *     cards: Card[]
  */
 import { FieldValue } from 'firebase-admin/firestore';
@@ -92,12 +92,24 @@ export interface MatchDoc {
     bracketSlot?: number | null;
     guestOnly?: boolean;
     createdAt?: FirebaseFirestore.Timestamp | ReturnType<typeof FieldValue.serverTimestamp>;
+    startedAt?: FirebaseFirestore.Timestamp | null;
     closedReason?: string;
 }
+/** Sala/partida colgada: waiting vieja o playing que nunca arranc� del todo. */
+export declare function isStuckMatch(match: MatchDoc, now?: number): boolean;
+/** Cierra waiting (delete) o playing colgada (finished + reembolso). */
+export declare function forceCloseMatch(db: FirebaseFirestore.Firestore, matchRef: FirebaseFirestore.DocumentReference, match: MatchDoc, reason: string): Promise<void>;
 /** Cierra una sala en espera, devuelve stake y la elimina del lobby. */
 export declare function closeWaitingRoom(db: FirebaseFirestore.Firestore, matchRef: FirebaseFirestore.DocumentReference, match: MatchDoc, reason: string): Promise<void>;
 type EndReason = 'won' | 'forfeit' | 'timeout';
 export declare function startMatch(db: FirebaseFirestore.Firestore, matchRef: FirebaseFirestore.DocumentReference, match: MatchDoc): Promise<void>;
+export declare const ensureMatchStarted: import("firebase-functions/v2/https").CallableFunction<{
+    matchId: string;
+}, Promise<{
+    ok: true;
+    started: boolean;
+    status: string;
+}>>;
 interface JoinMatchRequest {
     mode?: string;
     format?: string;
@@ -112,6 +124,21 @@ interface JoinMatchResponse {
     coinsLeft: number;
     stakeCC: number;
 }
+/** Cierra salas waiting hu�rfanas/colgadas del jugador (p. ej. qued� una waiting + una playing). */
+export declare function cleanupOrphanRoomsForUser(db: FirebaseFirestore.Firestore, uid: string): Promise<{
+    closedWaiting: number;
+    clearedRejoin: boolean;
+}>;
+export declare const cleanupMyRooms: import("firebase-functions/v2/https").CallableFunction<Record<string, never>, Promise<{
+    ok: true;
+    closedWaiting: number;
+    clearedRejoin: boolean;
+    activeMatch: {
+        matchId: string;
+        status: string;
+        stakeCC: number;
+    } | null;
+}>>;
 /**
  * Verifica elegibilidad (partidas gratis o saldo), descuenta coins atómicamente
  * y une al jugador a una sala existente o crea una nueva.
@@ -139,8 +166,8 @@ interface PlayTurnResponse {
  *   2. Valida turno con turnNumber (idempotencia).
  *   3. Reconstruye CeroEngine desde el snapshot privado.
  *   4. Ejecuta la acción (play / draw / pickColor / declareCero).
- *   5. Si ok=true → escribe el nuevo estado atómicamente.
- *   6. Si ok=false → lanza HttpsError y la transacción hace rollback automático.
+ *   5. Si ok=true �?? escribe el nuevo estado atómicamente.
+ *   6. Si ok=false �?? lanza HttpsError y la transacción hace rollback automático.
  */
 export declare const playTurn: import("firebase-functions/v2/https").CallableFunction<PlayTurnRequest, Promise<PlayTurnResponse>>;
 export declare const leaveMatch: import("firebase-functions/v2/https").CallableFunction<{
@@ -163,7 +190,7 @@ export declare const checkMatchRejoinExpiry: import("firebase-functions/v2/https
 }>>;
 /** Escanea partidas en curso con reconexión vencida (cada minuto). */
 export declare const expireRejoinMatches: import("firebase-functions/v2/scheduler").ScheduleFunction;
-/** Cierra salas waiting colgadas sin rival (~4 min). */
+/** Cierra salas waiting colgadas sin rival (~4 min) y partidas playing atascadas. */
 export declare const expireStaleWaitingMatches: import("firebase-functions/v2/scheduler").ScheduleFunction;
 export declare const getRejoinStatus: import("firebase-functions/v2/https").CallableFunction<Record<string, never>, Promise<{
     available: boolean;

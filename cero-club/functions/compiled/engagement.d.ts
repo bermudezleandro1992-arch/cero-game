@@ -10,7 +10,7 @@
  *
  * Regla de oro: ningún saldo se modifica desde el cliente — solo Cloud Functions.
  */
-type CosmeticCategory = 'card_skin' | 'avatar_frame';
+type CosmeticCategory = 'card_skin' | 'avatar_frame' | 'table_bg' | 'room_bg' | 'deck_back';
 export declare const COSMETIC_CATALOG: Record<string, {
     id: string;
     name: string;

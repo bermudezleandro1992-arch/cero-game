@@ -1,11 +1,11 @@
 "use strict";
 /**
- * CERO — Módulo 2: Backend (TypeScript / Cloud Functions v2)
+ * CERO �?? Módulo 2: Backend (TypeScript / Cloud Functions v2)
  *
  * Garantías de seguridad:
  *   · El cliente NUNCA puede escribir en `matches/` ni en `private/server`.
  *   · Los balances de ceroCoins solo los modifica el Admin SDK dentro de una
- *     transacción Firestore — imposible de manipular desde el navegador.
+ *     transacción Firestore �?? imposible de manipular desde el navegador.
  *   · El mazo y las manos ajenas jamás se exponen al cliente.
  *   · El número de turno (`turn`) actúa como llave de idempotencia:
  *     requests duplicados o retrasados son rechazados sin efecto.
@@ -15,8 +15,8 @@
  *   users/{uid}
  *     email: string
  *     displayName: string
- *     ceroCoins: number          ← balance; solo escribe el servidor
- *     freeGamesPlayed: number    ← partidas gratis usadas
+ *     ceroCoins: number          �?� balance; solo escribe el servidor
+ *     freeGamesPlayed: number    �?� partidas gratis usadas
  *     totalGamesPlayed: number
  *     wins: number
  *     createdAt: Timestamp
@@ -28,20 +28,20 @@
  *     playerIds: string[]
  *     playerCount: number
  *     maxPlayers: number
- *     stakeCC: number            ← coins apostadas por partida
- *     turn: number               ← se incrementa en cada acción (idempotencia)
+ *     stakeCC: number            �?� coins apostadas por partida
+ *     turn: number               �?� se incrementa en cada acción (idempotencia)
  *     phase / current / direction / drawStack / chosenColor / topDiscard /
- *     handCounts / winner / pendingTurn  ← estado público (cliente escucha con onSnapshot)
+ *     handCounts / winner / pendingTurn  �?� estado público (cliente escucha con onSnapshot)
  *     lastAction: LastAction | null
  *     createdAt / startedAt / finishedAt: Timestamp
  *
- *   matches/{matchId}/private/server   ← NADIE puede leer (solo Admin SDK)
+ *   matches/{matchId}/private/server   �?� NADIE puede leer (solo Admin SDK)
  *     deck: Card[]
  *     discardPile: Card[]
- *     hands: Card[][]             ← indexado por playerIdx
+ *     hands: Card[][]             �?� indexado por playerIdx
  *     ceroCalled: number[]
  *
- *   matches/{matchId}/hands/{uid}      ← solo el dueño puede leer
+ *   matches/{matchId}/hands/{uid}      �?� solo el dueño puede leer
  *     cards: Card[]
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -78,16 +78,19 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.endMatch = exports.forfeitMatch = exports.getRejoinStatus = exports.expireStaleWaitingMatches = exports.expireRejoinMatches = exports.checkMatchRejoinExpiry = exports.temporaryLeaveMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = void 0;
+exports.endMatch = exports.forfeitMatch = exports.getRejoinStatus = exports.expireStaleWaitingMatches = exports.expireRejoinMatches = exports.checkMatchRejoinExpiry = exports.temporaryLeaveMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = exports.cleanupMyRooms = exports.ensureMatchStarted = void 0;
+exports.isStuckMatch = isStuckMatch;
+exports.forceCloseMatch = forceCloseMatch;
 exports.closeWaitingRoom = closeWaitingRoom;
 exports.startMatch = startMatch;
+exports.cleanupOrphanRoomsForUser = cleanupOrphanRoomsForUser;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-admin/firestore");
 const CeroEngine_1 = require("./CeroEngine");
-// ─────────────────────────────────────────────────────────────────────────────
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 // Configuración del negocio
-// ─────────────────────────────────────────────────────────────────────────────
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 const CFG = {
     FREE_GAMES_LIMIT: 2, // partidas gratis para nuevos usuarios
     ENTRY_COST_CC: 50, // Cero Coins por partida paga
@@ -145,9 +148,9 @@ function handsFromStorage(raw, count) {
     const map = (raw && typeof raw === 'object' ? raw : {});
     return Array.from({ length: count }, (_, i) => [...(map[String(i)] || [])]);
 }
-// ─────────────────────────────────────────────────────────────────────────────
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 // Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 function guard(cond, code, msg) {
     if (!cond)
         throw new https_1.HttpsError(code, msg);
@@ -191,6 +194,64 @@ function matchCreatedMs(createdAt) {
         return 0;
     }
     return createdAt.toMillis();
+}
+function matchAgeMs(match) {
+    const started = match.startedAt ? matchCreatedMs(match.startedAt) : 0;
+    return started || matchCreatedMs(match.createdAt);
+}
+/** Sala/partida colgada: waiting vieja o playing que nunca arranc� del todo. */
+function isStuckMatch(match, now = Date.now()) {
+    const ageMs = matchAgeMs(match);
+    const oldEnough = ageMs === 0 || now - ageMs >= CFG.WAITING_ROOM_MS;
+    if (!oldEnough)
+        return false;
+    if (match.status === 'waiting')
+        return true;
+    if (match.status === 'playing' && match.phase === 'waiting' && !match.topDiscard)
+        return true;
+    return false;
+}
+async function clearActiveRejoinForPlayers(db, playerIds) {
+    const batch = db.batch();
+    for (const uid of playerIds) {
+        batch.set(db.doc(`users/${uid}`), { activeRejoin: firestore_1.FieldValue.delete() }, { merge: true });
+    }
+    await batch.commit();
+}
+/** Cierra waiting (delete) o playing colgada (finished + reembolso). */
+async function forceCloseMatch(db, matchRef, match, reason) {
+    if (match.status === 'waiting') {
+        await closeWaitingRoom(db, matchRef, match, reason);
+        await clearActiveRejoinForPlayers(db, match.playerIds);
+        return;
+    }
+    if (match.status !== 'playing')
+        return;
+    const batch = db.batch();
+    const stake = match.stakeCC ?? 0;
+    for (const uid of match.playerIds) {
+        const upd = { activeRejoin: firestore_1.FieldValue.delete() };
+        if (stake > 0)
+            upd.ceroCoins = firestore_1.FieldValue.increment(stake);
+        batch.set(db.doc(`users/${uid}`), upd, { merge: true });
+    }
+    batch.update(matchRef, {
+        status: 'finished',
+        phase: 'game_over',
+        winner: null,
+        finishedAt: firestore_1.FieldValue.serverTimestamp(),
+        closedReason: reason,
+        rejoinBanner: firestore_1.FieldValue.delete(),
+    });
+    await batch.commit();
+    await db.collection('coin_ledger').add({
+        matchId: matchRef.id,
+        type: 'match_admin_closed',
+        reason,
+        playerIds: match.playerIds,
+        stakeCC: stake,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+    }).catch(() => { });
 }
 function playerIsGuest(match, uid) {
     const p = match.players.find(x => x.uid === uid);
@@ -239,9 +300,9 @@ async function closeWaitingRoom(db, matchRef, match, reason) {
  * Aplica todas las escrituras necesarias para cerrar una partida.
  * Acepta un updateFn genérico para ser usado dentro de Transaction o WriteBatch.
  *
- *   · match → status=finished, winner, phase=game_over, endReason
- *   · winner → wins+1, totalGamesPlayed+1, ceroCoins += pozo (si stakeCC > 0)
- *   · loser  → totalGamesPlayed+1
+ *   · match �?? status=finished, winner, phase=game_over, endReason
+ *   · winner �?? wins+1, totalGamesPlayed+1, ceroCoins += pozo (si stakeCC > 0)
+ *   · loser  �?? totalGamesPlayed+1
  */
 function _applyMatchEndUpdates(updateFn, db, matchRef, match, winnerUid, reason, extraMatchFields = {}) {
     const prize = match.stakeCC * match.playerIds.length;
@@ -283,10 +344,17 @@ function buildPublicState(snap, playerIds) {
         pendingTurn: snap.pendingTurn ?? null,
     };
 }
-// ─────────────────────────────────────────────────────────────────────────────
-// _startMatch — helper interno (no es un endpoint)
-// ─────────────────────────────────────────────────────────────────────────────
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
+// _startMatch �?? helper interno (no es un endpoint)
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 async function startMatch(db, matchRef, match) {
+    const freshSnap = await matchRef.get();
+    if (freshSnap.exists) {
+        const fresh = freshSnap.data();
+        if (fresh.status === 'playing' && fresh.topDiscard) {
+            return;
+        }
+    }
     const { playerIds, players } = match;
     const uniqueIds = uniquePlayerIds(playerIds);
     guard(uniqueIds.length >= CFG.MAX_PLAYERS, 'failed-precondition', 'Faltan jugadores para iniciar la partida');
@@ -336,6 +404,35 @@ async function startMatch(db, matchRef, match) {
     });
     await batch.commit();
 }
+function matchNeedsStart(match) {
+    const ids = uniquePlayerIds(match.playerIds);
+    return ids.length >= CFG.MAX_PLAYERS &&
+        (match.status === 'waiting' ||
+            (match.status === 'playing' && match.phase === 'waiting' && !match.topDiscard));
+}
+async function tryStartMatchIfReady(db, matchRef, match) {
+    const ids = uniquePlayerIds(match.playerIds);
+    const normalized = { ...match, playerIds: ids, playerCount: ids.length };
+    if (!matchNeedsStart(normalized))
+        return false;
+    await startMatch(db, matchRef, normalized);
+    return true;
+}
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
+// ensureMatchStarted ? cliente/spectator puede forzar inicio si la sala qued� colgada
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
+exports.ensureMatchStarted = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 }, async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Ten�s que iniciar sesi�n');
+    const matchId = requireString(request.data, 'matchId');
+    const db = (0, firestore_1.getFirestore)();
+    const ref = db.doc(`matches/${matchId}`);
+    const snap = await ref.get();
+    guard(snap.exists, 'not-found', 'Partida no encontrada');
+    const match = snap.data();
+    const started = await tryStartMatchIfReady(db, ref, match);
+    const after = (await ref.get()).data();
+    return { ok: true, started, status: after.status };
+});
 function parseRequestedStake(stakeCC) {
     const n = typeof stakeCC === 'number' ? stakeCC : Number(stakeCC);
     return n === CFG.ENTRY_COST_CC ? CFG.ENTRY_COST_CC : 0;
@@ -371,6 +468,88 @@ async function chargeEntryStake(db, uid, auth, stakeCC) {
         return { charged: true, coinsLeft: balance - stakeCC };
     });
 }
+async function findActiveMatchForUser(db, uid) {
+    for (const status of ['playing', 'waiting']) {
+        const snap = await db.collection('matches')
+            .where('status', '==', status)
+            .where('playerIds', 'array-contains', uid)
+            .limit(5)
+            .get();
+        if (!snap.empty) {
+            const doc = snap.docs[0];
+            return { id: doc.id, data: doc.data() };
+        }
+    }
+    return null;
+}
+/** Cierra salas waiting hu�rfanas/colgadas del jugador (p. ej. qued� una waiting + una playing). */
+async function cleanupOrphanRoomsForUser(db, uid) {
+    let closedWaiting = 0;
+    let clearedRejoin = false;
+    const userRef = db.doc(`users/${uid}`);
+    const userSnap = await userRef.get();
+    const activeRejoin = userSnap.data()?.activeRejoin;
+    if (activeRejoin?.matchId) {
+        const rejoinSnap = await db.doc(`matches/${activeRejoin.matchId}`).get();
+        const untilMs = activeRejoin.rejoinUntil?.toMillis?.() ?? 0;
+        const rejoinValid = rejoinSnap.exists
+            && untilMs > Date.now()
+            && canRejoinMatch(rejoinSnap.data(), uid);
+        if (!rejoinValid) {
+            await userRef.set({ activeRejoin: firestore_1.FieldValue.delete() }, { merge: true });
+            clearedRejoin = true;
+        }
+    }
+    const [waitingSnap, playingSnap] = await Promise.all([
+        db.collection('matches')
+            .where('status', '==', 'waiting')
+            .where('playerIds', 'array-contains', uid)
+            .get(),
+        db.collection('matches')
+            .where('status', '==', 'playing')
+            .where('playerIds', 'array-contains', uid)
+            .get(),
+    ]);
+    const hasPlaying = !playingSnap.empty;
+    const now = Date.now();
+    for (const docSnap of waitingSnap.docs) {
+        const match = docSnap.data();
+        const createdMs = matchCreatedMs(match.createdAt);
+        const stale = createdMs > 0 && now - createdMs >= CFG.WAITING_ROOM_MS;
+        const orphan = hasPlaying;
+        if (orphan || stale) {
+            await forceCloseMatch(db, docSnap.ref, match, orphan ? 'orphan_waiting' : 'waiting_expired');
+            closedWaiting++;
+        }
+    }
+    for (const docSnap of playingSnap.docs) {
+        const match = docSnap.data();
+        if (!isStuckMatch(match, now))
+            continue;
+        await tryStartMatchIfReady(db, docSnap.ref, match);
+        const fresh = (await docSnap.ref.get()).data();
+        if (fresh && isStuckMatch(fresh, now)) {
+            await forceCloseMatch(db, docSnap.ref, fresh, 'stuck_playing_cleanup');
+            closedWaiting++;
+        }
+    }
+    return { closedWaiting, clearedRejoin };
+}
+exports.cleanupMyRooms = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Ten�s que iniciar sesi�n');
+    const uid = request.auth.uid;
+    const db = (0, firestore_1.getFirestore)();
+    const { closedWaiting, clearedRejoin } = await cleanupOrphanRoomsForUser(db, uid);
+    const active = await findActiveMatchForUser(db, uid);
+    return {
+        ok: true,
+        closedWaiting,
+        clearedRejoin,
+        activeMatch: active
+            ? { matchId: active.id, status: active.data.status, stakeCC: active.data.stakeCC ?? 0 }
+            : null,
+    };
+});
 /**
  * Verifica elegibilidad (partidas gratis o saldo), descuenta coins atómicamente
  * y une al jugador a una sala existente o crea una nueva.
@@ -385,22 +564,21 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         : null;
     const forceCreate = request.data?.createNew === true;
     const db = (0, firestore_1.getFirestore)();
+    await cleanupOrphanRoomsForUser(db, uid);
+    const existingActive = await findActiveMatchForUser(db, uid);
     const finishJoin = async (matchId, playerIndex, charged, coinsLeft, stakeCC) => {
         const matchSnap = await db.doc(`matches/${matchId}`).get();
         const matchData = matchSnap.data();
         if (matchData) {
-            const ids = uniquePlayerIds(matchData.playerIds);
-            const needsStart = ids.length >= CFG.MAX_PLAYERS &&
-                (matchData.status === 'waiting' ||
-                    (matchData.status === 'playing' && matchData.phase === 'waiting' && !matchData.topDiscard));
-            if (needsStart) {
-                await startMatch(db, matchSnap.ref, { ...matchData, playerIds: ids, playerCount: ids.length });
-            }
+            await tryStartMatchIfReady(db, matchSnap.ref, matchData);
         }
         return { matchId, playerIndex, charged, coinsLeft, stakeCC };
     };
-    // ── 0. Reingreso a sala propia (sin cobrar de nuevo) ─────────────────────
+    // �??�?? 0. Reingreso a sala propia (sin cobrar de nuevo) �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
     if (requestedMatchId) {
+        if (existingActive && existingActive.id !== requestedMatchId) {
+            guard(false, 'failed-precondition', 'Ya ten�s una sala o partida activa. Volv� a ella antes de unirte a otra.');
+        }
         const pre = await db.doc(`matches/${requestedMatchId}`).get();
         if (pre.exists) {
             const d = pre.data();
@@ -417,22 +595,20 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
             }
         }
     }
-    else if (!forceCreate) {
-        const mine = await db.collection('matches')
-            .where('status', '==', 'waiting')
-            .where('playerIds', 'array-contains', uid)
-            .limit(1)
-            .get();
-        if (!mine.empty) {
-            const docSnap = mine.docs[0];
-            const d = docSnap.data();
-            const ids = uniquePlayerIds(d.playerIds);
-            // Solo reingresar a sala propia incompleta (1 jugador). Si está llena, crear nueva.
-            if (ids.length < CFG.MAX_PLAYERS) {
-                const bal = (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0;
-                return finishJoin(docSnap.id, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
-            }
+    else if (!forceCreate && existingActive) {
+        const d = existingActive.data;
+        const ids = uniquePlayerIds(d.playerIds);
+        const bal = (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0;
+        if (d.status === 'playing' && canRejoinMatch(d, uid)) {
+            await clearPlayerAbsence(db, db.doc(`matches/${existingActive.id}`), uid);
+            return finishJoin(existingActive.id, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
         }
+        if (d.status === 'waiting' && ids.length < CFG.MAX_PLAYERS) {
+            return finishJoin(existingActive.id, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
+        }
+    }
+    else if (forceCreate && existingActive) {
+        guard(false, 'failed-precondition', 'Ya ten�s una sala o partida activa. Volv� a ella antes de crear otra.');
     }
     const matchesRef = db.collection('matches');
     let matchId = '';
@@ -452,13 +628,14 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         entryStake = d.stakeCC ?? 0;
     }
     else {
+        guard(!existingActive, 'failed-precondition', 'Ya ten�s una sala o partida activa. Volv� a ella antes de crear otra.');
         entryStake = callerIsGuest ? 0 : parseRequestedStake(request.data?.stakeCC);
         guard(!callerIsGuest || entryStake === 0, 'permission-denied', 'Como invitado solo podés crear salas gratuitas (0 CN).');
     }
     const { charged, coinsLeft } = await chargeEntryStake(db, uid, request.auth, entryStake);
     const joiningUserIsGuest = callerIsGuest || await userIsGuest(db, uid);
     if (matchId) {
-        // ── 3a. Unirse a sala existente (transacción) ─────────────────────────
+        // �??�?? 3a. Unirse a sala existente (transacción) �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
         await db.runTransaction(async (tx) => {
             const ref = db.doc(`matches/${matchId}`);
             const snap = await tx.get(ref);
@@ -478,7 +655,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         });
     }
     else {
-        // ── 3b. Crear sala nueva ──────────────────────────────────────────────
+        // �??�?? 3b. Crear sala nueva �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
         const createIsGuest = callerIsGuest || await userIsGuest(db, uid);
         const newMatchData = {
             status: 'waiting',
@@ -524,8 +701,8 @@ const VALID_ACTIONS = new Set(['play', 'draw', 'pickColor', 'declareCero']);
  *   2. Valida turno con turnNumber (idempotencia).
  *   3. Reconstruye CeroEngine desde el snapshot privado.
  *   4. Ejecuta la acción (play / draw / pickColor / declareCero).
- *   5. Si ok=true → escribe el nuevo estado atómicamente.
- *   6. Si ok=false → lanza HttpsError y la transacción hace rollback automático.
+ *   5. Si ok=true �?? escribe el nuevo estado atómicamente.
+ *   6. Si ok=false �?? lanza HttpsError y la transacción hace rollback automático.
  */
 exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
@@ -572,7 +749,7 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
         }
         guard(match.turn === turnNumber, 'failed-precondition', `Turno desactualizado (servidor: ${match.turn}, cliente: ${turnNumber}). Recargá el estado.`);
         const privHands = handsFromStorage(priv.hands, match.playerIds.length);
-        // ── Reconstruir el motor desde el snapshot ────────────────────────────
+        // �??�?? Reconstruir el motor desde el snapshot �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
         const fullSnap = {
             phase: match.phase,
             current: match.current ?? 0,
@@ -596,7 +773,7 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
         if (action !== 'declareCero') {
             guard(engine.current === playerIndex, 'failed-precondition', 'No es tu turno');
         }
-        // ── Ejecutar la acción ─────────────────────────────────────────────────
+        // �??�?? Ejecutar la acción �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
         let result;
         switch (action) {
             case 'play': {
@@ -620,13 +797,13 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
                 break;
             }
         }
-        // ── Rollback si el motor rechaza la acción ────────────────────────────
+        // �??�?? Rollback si el motor rechaza la acción �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
         if (!result.ok) {
             throw new https_1.HttpsError('failed-precondition', result.error);
         }
         const newSnap = engine.toFullSnapshot();
         const newTurn = match.turn + 1;
-        // ── Escribir nuevo estado (todo dentro de la misma transacción) ───────
+        // �??�?? Escribir nuevo estado (todo dentro de la misma transacción) �??�??�??�??�??�??�??
         // 1. Estado privado del servidor
         tx.set(privateRef, {
             deck: [...newSnap.deck],
@@ -691,9 +868,9 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
     }
     return { ok: true, publicState: resultPublic, myHand: resultHand, turn: resultTurn };
 });
-// ─────────────────────────────────────────────────────────────────────────────
-// leaveMatch — salir de sala en espera (sin cobrar ni penalizar)
-// ─────────────────────────────────────────────────────────────────────────────
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
+// leaveMatch �?? salir de sala en espera (sin cobrar ni penalizar)
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 exports.leaveMatch = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
     const uid = request.auth.uid;
@@ -726,9 +903,9 @@ exports.leaveMatch = (0, https_1.onCall)({ region: CFG.REGION }, async (request)
     });
     return { ok: true };
 });
-// ─────────────────────────────────────────────────────────────────────────────
-// temporaryLeaveMatch — salir sin abandonar (5 min para volver)
-// ─────────────────────────────────────────────────────────────────────────────
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
+// temporaryLeaveMatch �?? salir sin abandonar (5 min para volver)
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 exports.temporaryLeaveMatch = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
     const uid = request.auth.uid;
@@ -761,9 +938,9 @@ exports.temporaryLeaveMatch = (0, https_1.onCall)({ region: CFG.REGION }, async 
     });
     return { ok: true, rejoinUntil: rejoinUntilMs };
 });
-// ─────────────────────────────────────────────────────────────────────────────
-// checkMatchRejoinExpiry — polling cliente para expirar reconexión
-// ─────────────────────────────────────────────────────────────────────────────
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
+// checkMatchRejoinExpiry �?? polling cliente para expirar reconexión
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 exports.checkMatchRejoinExpiry = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
     const uid = request.auth.uid;
@@ -799,25 +976,36 @@ exports.expireRejoinMatches = (0, scheduler_1.onSchedule)({ schedule: 'every 1 m
         }
     }
 });
-/** Cierra salas waiting colgadas sin rival (~4 min). */
+/** Cierra salas waiting colgadas sin rival (~4 min) y partidas playing atascadas. */
 exports.expireStaleWaitingMatches = (0, scheduler_1.onSchedule)({ schedule: 'every 1 minutes', region: CFG.REGION, timeZone: 'America/Montevideo' }, async () => {
     const db = (0, firestore_1.getFirestore)();
-    const cutoff = Date.now() - CFG.WAITING_ROOM_MS;
-    const waiting = await db.collection('matches')
-        .where('status', '==', 'waiting')
-        .limit(200)
-        .get();
+    const now = Date.now();
+    const cutoff = now - CFG.WAITING_ROOM_MS;
+    const [waiting, playing] = await Promise.all([
+        db.collection('matches').where('status', '==', 'waiting').limit(200).get(),
+        db.collection('matches').where('status', '==', 'playing').limit(200).get(),
+    ]);
     for (const docSnap of waiting.docs) {
         const match = docSnap.data();
         const createdMs = matchCreatedMs(match.createdAt);
         if (createdMs > 0 && createdMs <= cutoff) {
-            await closeWaitingRoom(db, docSnap.ref, match, 'waiting_expired');
+            await forceCloseMatch(db, docSnap.ref, match, 'waiting_expired');
+        }
+    }
+    for (const docSnap of playing.docs) {
+        const match = docSnap.data();
+        if (isStuckMatch(match, now)) {
+            await tryStartMatchIfReady(db, docSnap.ref, match);
+            const fresh = (await docSnap.ref.get()).data();
+            if (fresh && isStuckMatch(fresh, now)) {
+                await forceCloseMatch(db, docSnap.ref, fresh, 'stuck_playing_expired');
+            }
         }
     }
 });
-// ─────────────────────────────────────────────────────────────────────────────
-// getRejoinStatus — consultar si hay partida para reingresar
-// ─────────────────────────────────────────────────────────────────────────────
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
+// getRejoinStatus �?? consultar si hay partida para reingresar
+// �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 exports.getRejoinStatus = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
     const uid = request.auth.uid;
@@ -837,7 +1025,8 @@ exports.getRejoinStatus = (0, https_1.onCall)({ region: CFG.REGION }, async (req
         return { available: false };
     }
     const match = matchSnap.data();
-    if (!canRejoinMatch(match, uid)) {
+    if (!canRejoinMatch(match, uid) || match.status === 'finished' || isStuckMatch(match)) {
+        await db.doc(`users/${uid}`).set({ activeRejoin: firestore_1.FieldValue.delete() }, { merge: true });
         return { available: false };
     }
     return {

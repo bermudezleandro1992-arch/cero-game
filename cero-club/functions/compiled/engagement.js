@@ -81,6 +81,13 @@ function guard(cond, code, msg) {
     if (!cond)
         throw new https_1.HttpsError(code, msg);
 }
+const EQUIP_FIELD = {
+    card_skin: 'equippedSkin',
+    avatar_frame: 'equippedFrame',
+    table_bg: 'equippedTableBg',
+    room_bg: 'equippedRoomBg',
+    deck_back: 'equippedDeckBack',
+};
 exports.COSMETIC_CATALOG = {
     skin_neon: { id: 'skin_neon', name: 'Neón Oscuro', category: 'card_skin', price: 200, preview: 'skins/neon' },
     skin_gold: { id: 'skin_gold', name: 'Dorado Real', category: 'card_skin', price: 350, preview: 'skins/gold' },
@@ -90,6 +97,16 @@ exports.COSMETIC_CATALOG = {
     frame_ice: { id: 'frame_ice', name: 'Marco de Hielo', category: 'avatar_frame', price: 200, preview: 'frames/ice' },
     frame_gold: { id: 'frame_gold', name: 'Marco Dorado', category: 'avatar_frame', price: 400, preview: 'frames/gold' },
     frame_champion: { id: 'frame_champion', name: 'Campeón', category: 'avatar_frame', price: 750, preview: 'frames/champ' },
+    table_neon: { id: 'table_neon', name: 'Mesa Neón', category: 'table_bg', price: 300, preview: 'tables/neon' },
+    table_marble: { id: 'table_marble', name: 'Mesa Mármol', category: 'table_bg', price: 450, preview: 'tables/marble' },
+    table_carbon: { id: 'table_carbon', name: 'Mesa Carbon', category: 'table_bg', price: 550, preview: 'tables/carbon' },
+    bg_stadium: { id: 'bg_stadium', name: 'Estadio', category: 'room_bg', price: 400, preview: 'rooms/stadium' },
+    bg_beach: { id: 'bg_beach', name: 'Playa', category: 'room_bg', price: 350, preview: 'rooms/beach' },
+    bg_city: { id: 'bg_city', name: 'Ciudad Noche', category: 'room_bg', price: 400, preview: 'rooms/city' },
+    bg_football: { id: 'bg_football', name: 'Cancha Fútbol', category: 'room_bg', price: 500, preview: 'rooms/football' },
+    deck_classic: { id: 'deck_classic', name: 'Mazo Clásico', category: 'deck_back', price: 150, preview: 'decks/classic' },
+    deck_gold: { id: 'deck_gold', name: 'Mazo Dorado', category: 'deck_back', price: 350, preview: 'decks/gold' },
+    deck_cyber: { id: 'deck_cyber', name: 'Mazo Cyber', category: 'deck_back', price: 450, preview: 'decks/cyber' },
 };
 /**
  * Idempotente: si el perfil ya existe, devuelve los datos actuales.
@@ -135,6 +152,11 @@ exports.initUserProfile = (0, https_1.onCall)({ region: REGION }, async (request
             ownedCosmetics: [],
             equippedSkin: null,
             equippedFrame: null,
+            equippedTableBg: null,
+            equippedRoomBg: null,
+            equippedDeckBack: null,
+            countryCode: null,
+            photoURL: null,
             referralCode,
             referredBy: null,
             referralCount: 0,
@@ -356,12 +378,17 @@ exports.equipCosmetic = (0, https_1.onCall)({ region: REGION }, async (request) 
         const snap = await userRef.get();
         const owned = snap.data()?.['ownedCosmetics'] ?? [];
         guard(owned.includes(cosmeticId), 'permission-denied', 'No tenés este cosmético');
-        const field = cosmetic.category === 'card_skin' ? 'equippedSkin' : 'equippedFrame';
+        const field = EQUIP_FIELD[cosmetic.category];
         await userRef.update({ [field]: cosmeticId });
     }
     else {
-        // Desequipar todo (null)
-        await userRef.update({ equippedSkin: null, equippedFrame: null });
+        await userRef.update({
+            equippedSkin: null,
+            equippedFrame: null,
+            equippedTableBg: null,
+            equippedRoomBg: null,
+            equippedDeckBack: null,
+        });
     }
     return { ok: true };
 });

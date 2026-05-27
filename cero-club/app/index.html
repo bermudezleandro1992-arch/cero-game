@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
-    html, body { margin: 0; background: #04030d; color: #c4b5fd; min-height: 100%; }
-    #root { min-height: 100vh; }
+    html, body { margin: 0; background: #04030d; color: #c4b5fd; min-height: 100%; height: 100%; overflow: hidden; }
+    #root { height: 100dvh; max-height: 100dvh; overflow: hidden; }
     #cero-boot-fallback {
       display: none; position: fixed; inset: 0; z-index: 99999;
       flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
@@ -27,7 +27,7 @@
   </style>
   <script>
     (function () {
-      var BUILD = '2026052709';
+      var BUILD = '2026052710';
       window.__CERO_BUILD__ = BUILD;
       var link = document.querySelector('link[rel="stylesheet"][href*="index-"]');
       if (link && link.href.indexOf('v=') < 0) link.href += (link.href.indexOf('?') >= 0 ? '&' : '?') + 'v=' + BUILD;
@@ -46,8 +46,8 @@
       }
     })();
   </script>
-  <script type="module" crossorigin src="/app/assets/index-CEoU91fI.js?v=2026052708"></script>
-  <link rel="stylesheet" crossorigin href="/app/assets/index-Bz3E6dZB.css?v=2026052708">
+  <script type="module" crossorigin src="/app/assets/index-CEoU91fI.js?v=2026052710"></script>
+  <link rel="stylesheet" crossorigin href="/app/assets/index-Bz3E6dZB.css?v=2026052710">
 </head>
 <body>
   <div id="root"></div>

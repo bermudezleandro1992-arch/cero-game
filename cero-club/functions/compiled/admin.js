@@ -50,6 +50,9 @@ function matchCreatedMs(createdAt) {
     }
     return createdAt.toMillis();
 }
+function matchAgeMs(data) {
+    return matchCreatedMs(data.startedAt) || matchCreatedMs(data.createdAt);
+}
 async function assertAdmin(uid) {
     const db = (0, firestore_1.getFirestore)();
     const snap = await db.doc(`admins/${uid}`).get();
@@ -152,34 +155,42 @@ exports.adminListWaitingMatches = (0, https_1.onCall)({ region: REGION }, async 
     await assertAdmin(request.auth.uid);
     const limit = Math.min(request.data?.limit ?? 50, 100);
     const db = (0, firestore_1.getFirestore)();
-    const snap = await db.collection('matches')
-        .where('status', '==', 'waiting')
-        .orderBy('createdAt', 'desc')
-        .limit(limit)
-        .get();
+    const { isStuckMatch } = await Promise.resolve().then(() => __importStar(require('./game')));
+    const [waitingSnap, playingSnap] = await Promise.all([
+        db.collection('matches').where('status', '==', 'waiting').limit(limit).get(),
+        db.collection('matches').where('status', '==', 'playing').limit(limit).get(),
+    ]);
     const now = Date.now();
-    return {
-        matches: snap.docs.map(d => {
-            const data = d.data();
-            const createdMs = matchCreatedMs(data.createdAt);
-            const ageMs = createdMs > 0 ? now - createdMs : null;
-            return {
-                id: d.id,
-                mode: data.mode ?? 'classic',
-                stakeCC: data.stakeCC ?? 0,
-                playerCount: data.playerCount ?? 0,
-                maxPlayers: data.maxPlayers ?? 2,
-                guestOnly: data.guestOnly === true,
-                players: (data.players ?? []).map((p) => ({
-                    uid: p.uid ?? '',
-                    name: p.name ?? 'Jugador',
-                })),
-                createdAt: createdMs || null,
-                ageMinutes: ageMs != null ? Math.round(ageMs / 60000) : null,
-                stale: ageMs != null && ageMs >= 4 * 60 * 1000,
-            };
-        }),
+    const mapDoc = (d, status) => {
+        const data = d.data();
+        const createdMs = matchCreatedMs(data.createdAt);
+        const ageMs = matchAgeMs(data);
+        const ageMinutes = ageMs > 0 ? Math.round((now - ageMs) / 60000) : null;
+        return {
+            id: d.id,
+            status,
+            mode: data.mode ?? 'classic',
+            stakeCC: data.stakeCC ?? 0,
+            playerCount: data.playerCount ?? 0,
+            maxPlayers: data.maxPlayers ?? 2,
+            guestOnly: data.guestOnly === true,
+            phase: data.phase ?? '—',
+            players: (data.players ?? []).map((p) => ({
+                uid: p.uid ?? '',
+                name: p.name ?? 'Jugador',
+            })),
+            createdAt: createdMs || null,
+            ageMinutes,
+            stale: isStuckMatch(data, now),
+        };
     };
+    const matches = [
+        ...waitingSnap.docs.map(d => mapDoc(d, 'waiting')),
+        ...playingSnap.docs
+            .map(d => mapDoc(d, 'playing'))
+            .filter(m => m.stale),
+    ].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, limit);
+    return { matches };
 });
 exports.adminCloseWaitingMatch = (0, https_1.onCall)({ region: REGION }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
@@ -191,29 +202,40 @@ exports.adminCloseWaitingMatch = (0, https_1.onCall)({ region: REGION }, async (
     const snap = await ref.get();
     guard(snap.exists, 'not-found', 'Sala no encontrada');
     const match = snap.data();
-    guard(match.status === 'waiting', 'failed-precondition', 'La sala ya no está en espera');
-    const { closeWaitingRoom } = await Promise.resolve().then(() => __importStar(require('./game')));
-    await closeWaitingRoom(db, ref, match, request.data?.reason ?? 'admin_close');
+    guard(match.status === 'waiting' || (match.status === 'playing' && match.phase === 'waiting' && !match.topDiscard), 'failed-precondition', 'Solo se pueden cerrar salas en espera o partidas colgadas sin iniciar');
+    const { forceCloseMatch } = await Promise.resolve().then(() => __importStar(require('./game')));
+    await forceCloseMatch(db, ref, match, request.data?.reason ?? 'admin_close');
     return { ok: true, matchId };
 });
 exports.adminCleanupStaleRooms = (0, https_1.onCall)({ region: REGION }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
     await assertAdmin(request.auth.uid);
-    const minAgeMinutes = Math.min(Math.max(request.data?.minAgeMinutes ?? 4, 1), 60);
+    const minAgeMinutes = Math.min(Math.max(request.data?.minAgeMinutes ?? 4, 0), 60);
     const limit = Math.min(request.data?.limit ?? 100, 200);
     const cutoff = Date.now() - minAgeMinutes * 60 * 1000;
+    const now = Date.now();
     const db = (0, firestore_1.getFirestore)();
-    const snap = await db.collection('matches')
-        .where('status', '==', 'waiting')
-        .limit(limit)
-        .get();
-    const { closeWaitingRoom } = await Promise.resolve().then(() => __importStar(require('./game')));
+    const { forceCloseMatch, isStuckMatch } = await Promise.resolve().then(() => __importStar(require('./game')));
+    const [waitingSnap, playingSnap] = await Promise.all([
+        db.collection('matches').where('status', '==', 'waiting').limit(limit).get(),
+        db.collection('matches').where('status', '==', 'playing').limit(limit).get(),
+    ]);
     let closed = 0;
-    for (const docSnap of snap.docs) {
+    for (const docSnap of waitingSnap.docs) {
         const match = docSnap.data();
-        const createdMs = matchCreatedMs(match.createdAt);
-        if (createdMs > 0 && createdMs <= cutoff) {
-            await closeWaitingRoom(db, docSnap.ref, match, 'admin_cleanup_stale');
+        const ageMs = matchCreatedMs(match.createdAt);
+        if (minAgeMinutes === 0 || ageMs === 0 || ageMs <= cutoff) {
+            await forceCloseMatch(db, docSnap.ref, match, 'admin_cleanup_stale');
+            closed++;
+        }
+    }
+    for (const docSnap of playingSnap.docs) {
+        const match = docSnap.data();
+        if (!isStuckMatch(match, now))
+            continue;
+        const ageMs = matchAgeMs(match);
+        if (minAgeMinutes === 0 || ageMs === 0 || ageMs <= cutoff) {
+            await forceCloseMatch(db, docSnap.ref, match, 'admin_cleanup_stuck_playing');
             closed++;
         }
     }

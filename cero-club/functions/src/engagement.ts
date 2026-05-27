@@ -63,7 +63,15 @@ function guard(cond: unknown, code: ErrCode, msg: string): asserts cond {
 // Catálogo de cosméticos (SOLO el servidor define precios)
 // ─────────────────────────────────────────────────────────────────────────────
 
-type CosmeticCategory = 'card_skin' | 'avatar_frame';
+type CosmeticCategory = 'card_skin' | 'avatar_frame' | 'table_bg' | 'room_bg' | 'deck_back';
+
+const EQUIP_FIELD: Record<CosmeticCategory, string> = {
+  card_skin:    'equippedSkin',
+  avatar_frame: 'equippedFrame',
+  table_bg:     'equippedTableBg',
+  room_bg:      'equippedRoomBg',
+  deck_back:    'equippedDeckBack',
+};
 
 export const COSMETIC_CATALOG: Record<string, {
   id:       string;
@@ -80,6 +88,16 @@ export const COSMETIC_CATALOG: Record<string, {
   frame_ice:      { id: 'frame_ice',      name: 'Marco de Hielo', category: 'avatar_frame', price: 200,  preview: 'frames/ice'      },
   frame_gold:     { id: 'frame_gold',     name: 'Marco Dorado',   category: 'avatar_frame', price: 400,  preview: 'frames/gold'     },
   frame_champion: { id: 'frame_champion', name: 'Campeón',        category: 'avatar_frame', price: 750,  preview: 'frames/champ'    },
+  table_neon:     { id: 'table_neon',     name: 'Mesa Neón',      category: 'table_bg',     price: 300,  preview: 'tables/neon'     },
+  table_marble:   { id: 'table_marble',   name: 'Mesa Mármol',    category: 'table_bg',     price: 450,  preview: 'tables/marble'   },
+  table_carbon:   { id: 'table_carbon',   name: 'Mesa Carbon',    category: 'table_bg',     price: 550,  preview: 'tables/carbon'   },
+  bg_stadium:     { id: 'bg_stadium',     name: 'Estadio',        category: 'room_bg',      price: 400,  preview: 'rooms/stadium'   },
+  bg_beach:       { id: 'bg_beach',       name: 'Playa',          category: 'room_bg',      price: 350,  preview: 'rooms/beach'     },
+  bg_city:        { id: 'bg_city',        name: 'Ciudad Noche',   category: 'room_bg',      price: 400,  preview: 'rooms/city'      },
+  bg_football:    { id: 'bg_football',    name: 'Cancha Fútbol',  category: 'room_bg',      price: 500,  preview: 'rooms/football'  },
+  deck_classic:   { id: 'deck_classic',   name: 'Mazo Clásico',   category: 'deck_back',    price: 150,  preview: 'decks/classic'   },
+  deck_gold:      { id: 'deck_gold',      name: 'Mazo Dorado',    category: 'deck_back',    price: 350,  preview: 'decks/gold'      },
+  deck_cyber:     { id: 'deck_cyber',     name: 'Mazo Cyber',     category: 'deck_back',    price: 450,  preview: 'decks/cyber'     },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,6 +164,11 @@ export const initUserProfile = onCall<Record<string, never>, Promise<InitProfile
         ownedCosmetics:    [] as string[],
         equippedSkin:      null as string | null,
         equippedFrame:     null as string | null,
+        equippedTableBg:   null as string | null,
+        equippedRoomBg:    null as string | null,
+        equippedDeckBack:  null as string | null,
+        countryCode:       null as string | null,
+        photoURL:          null as string | null,
         referralCode,
         referredBy:        null as string | null,
         referralCount:     0,
@@ -472,11 +495,16 @@ export const equipCosmetic = onCall<EquipCosmeticRequest>(
       const owned = (snap.data()?.['ownedCosmetics'] as string[] | undefined) ?? [];
       guard(owned.includes(cosmeticId), 'permission-denied', 'No tenés este cosmético');
 
-      const field = cosmetic.category === 'card_skin' ? 'equippedSkin' : 'equippedFrame';
+      const field = EQUIP_FIELD[cosmetic.category];
       await userRef.update({ [field]: cosmeticId });
     } else {
-      // Desequipar todo (null)
-      await userRef.update({ equippedSkin: null, equippedFrame: null });
+      await userRef.update({
+        equippedSkin:     null,
+        equippedFrame:    null,
+        equippedTableBg:  null,
+        equippedRoomBg:   null,
+        equippedDeckBack: null,
+      });
     }
 
     return { ok: true };
