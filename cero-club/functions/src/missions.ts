@@ -198,6 +198,15 @@ function nextWeeklyReset(): FirebaseFirestore.Timestamp {
  * Crea el doc de progreso si no existe.
  * Llama `FieldValue.increment` dentro de un batch para eficiencia.
  */
+/** Expuesto para game.ts — registrar acciones en tiempo real (comodín, CERO, etc.) */
+export async function trackMissionAction(
+  db:     FirebaseFirestore.Firestore,
+  uid:    string,
+  action: MissionAction,
+): Promise<void> {
+  return _updateMissionProgress(db, uid, action);
+}
+
 async function _updateMissionProgress(
   db:     FirebaseFirestore.Firestore,
   uid:    string,
@@ -395,7 +404,8 @@ export const onMatchFinished = onDocumentUpdated(
       );
     }
 
-    // Acción 'declare_cero' si la última acción fue declareCero
+    // declare_cero y play_wild se acreditan en playTurn (trackMissionAction).
+    // Fallback: última acción al cerrar partida.
     const lastAction = after['lastAction'] as { type?: string; uid?: string } | null;
     if (lastAction?.type === 'declareCero' && lastAction?.uid) {
       updates.push(_updateMissionProgress(db, lastAction.uid, 'declare_cero'));
@@ -555,6 +565,10 @@ export const checkMissions = onCall<{ matchId: string }>(
     // Acreditar 'win' al ganador
     if (winnerUid) {
       updates.push(_updateMissionProgress(db, winnerUid, 'win'));
+    }
+    const lastAction = match['lastAction'] as { type?: string; uid?: string } | null;
+    if (lastAction?.type === 'declareCero' && lastAction?.uid) {
+      updates.push(_updateMissionProgress(db, lastAction.uid, 'declare_cero'));
     }
 
     await Promise.all(updates);

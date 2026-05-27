@@ -50,6 +50,7 @@ import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { Transaction }         from 'firebase-admin/firestore';
 import { CeroEngine, COLORS }       from './CeroEngine';
 import type { Card, CardColor, GamePhase, FullSnapshot, Player } from './CeroEngine';
+import { trackMissionAction }       from './missions';
 
 // FunctionsErrorCode expl√≠cito ‚?? evita problemas con Parameters<typeof HttpsError>
 type ErrCode =
@@ -1028,6 +1029,8 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
     let resultHand!:   Card[];
     let resultTurn!:   number;
     let finishedWinner: string | null = null;
+    let trackWild = false;
+    let trackCero = false;
 
     await db.runTransaction(async (tx: Transaction) => {
       const [matchSnap, privateSnap] = await Promise.all([
@@ -1095,7 +1098,11 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
       switch (action) {
         case 'play': {
           guard(typeof data.cardId === 'number', 'invalid-argument', 'Falta cardId');
+          const playedCard = privHands[playerIndex]?.find(c => c.id === data.cardId);
           result = engine.play(playerIndex, data.cardId);
+          if (result.ok && playedCard?.color === 'wild') {
+            trackWild = true;
+          }
           break;
         }
         case 'draw': {
@@ -1111,6 +1118,7 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
         }
         case 'declareCero': {
           result = engine.declareCero(playerIndex);
+          if (result.ok) trackCero = true;
           break;
         }
       }
@@ -1195,6 +1203,11 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
     if (finishedWinner) {
       await _onMatchFinishedHooks(matchId, finishedWinner);
     }
+
+    try {
+      if (trackWild) await trackMissionAction(db, uid, 'play_wild');
+      if (trackCero) await trackMissionAction(db, uid, 'declare_cero');
+    } catch { /* misiones no bloquean la jugada */ }
 
     return { ok: true, publicState: resultPublic, myHand: resultHand, turn: resultTurn };
   },

@@ -34,6 +34,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkMissions = exports.seedMissions = exports.resetWeeklyMissions = exports.resetDailyMissions = exports.onMatchFinished = exports.claimMissionReward = exports.MISSION_CATALOG = void 0;
+exports.trackMissionAction = trackMissionAction;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -152,6 +153,10 @@ function nextWeeklyReset() {
  * Crea el doc de progreso si no existe.
  * Llama `FieldValue.increment` dentro de un batch para eficiencia.
  */
+/** Expuesto para game.ts — registrar acciones en tiempo real (comodín, CERO, etc.) */
+async function trackMissionAction(db, uid, action) {
+    return _updateMissionProgress(db, uid, action);
+}
 async function _updateMissionProgress(db, uid, action) {
     const now = new Date();
     const activeMissions = exports.MISSION_CATALOG.filter(m => m.active && m.requirement.action === action);
@@ -303,7 +308,8 @@ exports.onMatchFinished = (0, firestore_1.onDocumentUpdated)({ document: 'matche
             });
         })());
     }
-    // Acción 'declare_cero' si la última acción fue declareCero
+    // declare_cero y play_wild se acreditan en playTurn (trackMissionAction).
+    // Fallback: última acción al cerrar partida.
     const lastAction = after['lastAction'];
     if (lastAction?.type === 'declareCero' && lastAction?.uid) {
         updates.push(_updateMissionProgress(db, lastAction.uid, 'declare_cero'));
@@ -422,6 +428,10 @@ exports.checkMissions = (0, https_1.onCall)({ region: REGION }, async (request) 
     // Acreditar 'win' al ganador
     if (winnerUid) {
         updates.push(_updateMissionProgress(db, winnerUid, 'win'));
+    }
+    const lastAction = match['lastAction'];
+    if (lastAction?.type === 'declareCero' && lastAction?.uid) {
+        updates.push(_updateMissionProgress(db, lastAction.uid, 'declare_cero'));
     }
     await Promise.all(updates);
     return { ok: true, skipped: false };

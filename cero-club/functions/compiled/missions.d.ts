@@ -50,6 +50,13 @@ export interface MissionDef {
     order: number;
 }
 export declare const MISSION_CATALOG: MissionDef[];
+/**
+ * Incrementa el progreso de las misiones activas que coincidan con `action`.
+ * Crea el doc de progreso si no existe.
+ * Llama `FieldValue.increment` dentro de un batch para eficiencia.
+ */
+/** Expuesto para game.ts — registrar acciones en tiempo real (comodín, CERO, etc.) */
+export declare function trackMissionAction(db: FirebaseFirestore.Firestore, uid: string, action: MissionAction): Promise<void>;
 interface ClaimRequest {
     missionId: string;
 }
