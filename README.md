@@ -41,6 +41,28 @@ npm run dev
 3. **Salir** → marca desconectado; podés volver con el mismo usuario.
 4. **Volver al lobby / Entrar al juego** → no desconecta al cambiar de pantalla.
 
-## Deploy (Vercel)
+## Deploy en Firebase
 
-Configurá las mismas variables `VITE_FIREBASE_*` en el panel de Vercel y conectá el repositorio.
+### Requisitos previos
+
+1. Iniciá sesión: `npx firebase-tools login`
+2. Proyecto activo: `npx firebase-tools use cero-game` (o tu Project ID)
+3. En Firebase Console → **Authentication → Sign-in method → Anónimo** (habilitado)
+4. En Firebase Console → **Firestore Database** (crear si no existe)
+
+### Deploy manual
+
+```bash
+npm run deploy:firebase
+```
+
+Este script genera `.env` desde la config web de Firebase (si falta), compila la app y publica **Hosting + reglas de Firestore**.
+
+### Deploy directo
+
+```bash
+npm run build
+npx firebase-tools deploy --only hosting,firestore:rules
+```
+
+Tras el deploy, la app queda en `https://<project-id>.web.app`.
