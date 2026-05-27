@@ -91,7 +91,7 @@ const CFG = {
     FREE_GAMES_LIMIT: 2, // partidas gratis para nuevos usuarios
     ENTRY_COST_CC: 50, // Cero Coins por partida paga
     HAND_SIZE: 7,
-    TURN_SECONDS: 30,
+    TURN_SECONDS: 18,
     MAX_PLAYERS: 2,
     REGION: 'us-central1',
     REJOIN_MS: 5 * 60 * 1000, // 5 minutos para reingresar
