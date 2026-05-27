@@ -17,6 +17,10 @@ export default function RoomPage() {
   useLeaveOnTabClose(code, user?.uid, leaveRoom);
 
   useEffect(() => {
+    if (!loading && !user) navigate("/", { replace: true });
+  }, [loading, user, navigate]);
+
+  useEffect(() => {
     if (loading || !user || !code) return;
 
     let unsubRoom: (() => void) | undefined;

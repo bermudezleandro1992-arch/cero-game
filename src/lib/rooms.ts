@@ -271,6 +271,7 @@ export async function resetRoom(code: string, uid: string): Promise<boolean> {
         board: emptyBoard(),
         turn: "X",
         winner: null,
+        statsRecorded: false,
         status: countConnectedPlayers(room.players) >= room.maxPlayers ? "playing" : "waiting",
         updatedAt: serverTimestamp(),
       });

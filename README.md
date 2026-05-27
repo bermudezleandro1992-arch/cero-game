@@ -2,7 +2,12 @@
 
 Juego multijugador de **Cero Mata Cero** (tres en raya) en tiempo real con Firebase.
 
-## Problemas corregidos
+## Ranking ELO
+
+- Login con **Google** (sin cuentas anónimas)
+- Rating inicial: **1000 ELO**
+- Ligas: Bronce → Plata → Oro → Diamante → Leyenda
+- Victorias/derrotas/empates con rachas y tabla global en `/ranking`
 
 - **Error de conexión al unirse:** la sala se crea en Firestore antes de navegar y el join usa transacciones atómicas con manejo de errores en listeners.
 - **No poder volver a la sala:** al salir solo se marca `connected: false` (no se borra la sala ni el jugador), permitiendo reconexión con el mismo usuario.
@@ -11,7 +16,13 @@ Juego multijugador de **Cero Mata Cero** (tres en raya) en tiempo real con Fireb
 ## Requisitos
 
 - Node.js 18+
-- Proyecto Firebase con **Authentication** (Anónimo habilitado) y **Firestore**
+- Proyecto Firebase (`cero-prod`) con **Authentication → Google** habilitado y **Firestore**
+
+### Habilitar Google Sign-In
+
+Firebase Console → Authentication → Sign-in method → **Google** → Habilitar.
+
+Agregá `cero-prod.web.app` y `cero-prod.firebaseapp.com` en dominios autorizados si hace falta.
 
 ## Configuración
 

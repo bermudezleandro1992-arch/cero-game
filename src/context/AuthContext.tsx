@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -8,54 +9,78 @@ import {
 } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "../lib/firebase";
-import { ensureAuth, getDisplayName, getStoredDisplayName } from "../lib/auth";
+import { getDisplayName, loginWithGoogle, logout } from "../lib/auth";
+import { ensurePlayerProfile, getPlayerStats } from "../lib/stats";
+import type { PlayerStats } from "../types/player";
 
 interface AuthContextValue {
   user: User | null;
   displayName: string;
+  stats: PlayerStats | null;
   loading: boolean;
-  setDisplayName: (name: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
+  refreshStats: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [displayName, setDisplayNameState] = useState(getStoredDisplayName());
+  const [stats, setStats] = useState<PlayerStats | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const refreshStats = useCallback(async () => {
+    if (!auth.currentUser) {
+      setStats(null);
+      return;
+    }
+    const next = await getPlayerStats(auth.currentUser.uid);
+    setStats(next);
+  }, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (nextUser) => {
+      setUser(nextUser);
       if (nextUser) {
-        setUser(nextUser);
-        setDisplayNameState(getDisplayName(nextUser));
-        setLoading(false);
-        return;
+        try {
+          const profile = await ensurePlayerProfile(nextUser);
+          setStats(profile);
+        } catch (error) {
+          console.error("[AuthProvider]", error);
+        }
+      } else {
+        setStats(null);
       }
-
-      try {
-        const authed = await ensureAuth(getStoredDisplayName());
-        setUser(authed);
-        setDisplayNameState(getDisplayName(authed));
-      } catch (error) {
-        console.error("[AuthProvider]", error);
-      } finally {
-        setLoading(false);
-      }
+      setLoading(false);
     });
-
     return unsub;
   }, []);
 
-  const setDisplayName = async (name: string) => {
-    const authed = await ensureAuth(name);
+  const handleLogin = async () => {
+    const authed = await loginWithGoogle();
     setUser(authed);
-    setDisplayNameState(getDisplayName(authed));
+    const profile = await ensurePlayerProfile(authed);
+    setStats(profile);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setUser(null);
+    setStats(null);
   };
 
   const value = useMemo(
-    () => ({ user, displayName, loading, setDisplayName }),
-    [user, displayName, loading]
+    () => ({
+      user,
+      displayName: user ? getDisplayName(user) : "",
+      stats,
+      loading,
+      loginWithGoogle: handleLogin,
+      logout: handleLogout,
+      refreshStats,
+    }),
+    [user, stats, loading, refreshStats]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

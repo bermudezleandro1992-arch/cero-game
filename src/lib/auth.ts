@@ -1,56 +1,43 @@
 import {
-  signInAnonymously,
+  GoogleAuthProvider,
   onAuthStateChanged,
-  updateProfile,
+  signInWithPopup,
+  signOut,
   type User,
 } from "firebase/auth";
 import { auth } from "./firebase";
+import { ensurePlayerProfile } from "./stats";
 
-const DISPLAY_NAME_KEY = "cero_display_name";
+const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: "select_account" });
 
-export function getStoredDisplayName(): string {
-  return localStorage.getItem(DISPLAY_NAME_KEY) ?? "";
-}
-
-export function setStoredDisplayName(name: string): void {
-  localStorage.setItem(DISPLAY_NAME_KEY, name.trim());
-}
-
-export function waitForAuthUser(): Promise<User> {
-  return new Promise((resolve, reject) => {
-    const unsub = onAuthStateChanged(
-      auth,
-      (user) => {
-        if (user) {
-          unsub();
-          resolve(user);
-        }
-      },
-      (error) => {
-        unsub();
-        reject(error);
-      }
-    );
+export function waitForAuthUser(): Promise<User | null> {
+  return new Promise((resolve) => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      unsub();
+      resolve(user);
+    });
   });
 }
 
-export async function ensureAuth(displayName?: string): Promise<User> {
-  if (auth.currentUser) {
-    const name = displayName?.trim() || getStoredDisplayName();
-    if (name && auth.currentUser.displayName !== name) {
-      await updateProfile(auth.currentUser, { displayName: name });
-      if (displayName) setStoredDisplayName(name);
-    }
-    return auth.currentUser;
-  }
+export async function loginWithGoogle(): Promise<User> {
+  const result = await signInWithPopup(auth, provider);
+  await ensurePlayerProfile(result.user);
+  return result.user;
+}
 
-  const cred = await signInAnonymously(auth);
-  const name = displayName?.trim() || getStoredDisplayName() || "Jugador";
-  await updateProfile(cred.user, { displayName: name });
-  setStoredDisplayName(name);
-  return cred.user;
+export async function logout(): Promise<void> {
+  await signOut(auth);
 }
 
 export function getDisplayName(user: User): string {
-  return user.displayName?.trim() || getStoredDisplayName() || "Jugador";
+  return user.displayName?.trim() || user.email?.split("@")[0] || "Jugador";
+}
+
+export function getPhotoURL(user: User): string | null {
+  return user.photoURL || null;
+}
+
+export function isGoogleUser(user: User): boolean {
+  return user.providerData.some((p) => p.providerId === "google.com");
 }

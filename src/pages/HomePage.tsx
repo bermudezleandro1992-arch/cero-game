@@ -1,21 +1,37 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import AppShell from "../components/AppShell";
+import GoogleLoginCard, { PlayerStatsCard } from "../components/GoogleLoginCard";
+import LeaderboardPreview from "../components/LeaderboardPreview";
 import { useAuth } from "../context/AuthContext";
 import { createRoom, joinRoom } from "../lib/rooms";
 
 export default function HomePage() {
-  const { user, displayName, loading, setDisplayName } = useAuth();
+  const { user, displayName, loading } = useAuth();
   const navigate = useNavigate();
-  const [nameInput, setNameInput] = useState(displayName);
   const [roomCode, setRoomCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  if (loading || !user) {
+  if (loading) {
     return (
       <div className="page center">
         <div className="loader" />
-        <p>Conectando...</p>
+        <p>Cargando...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="page">
+        <div className="hero">
+          <p className="eyebrow">Tateti ranked online</p>
+          <h1>CERO GAME</h1>
+          <p className="subtitle">Multijugador en tiempo real con ranking ELO y login Google.</p>
+        </div>
+        <GoogleLoginCard />
+        <LeaderboardPreview />
       </div>
     );
   }
@@ -24,8 +40,7 @@ export default function HomePage() {
     setError("");
     setBusy(true);
     try {
-      await setDisplayName(nameInput);
-      const room = await createRoom(user.uid, nameInput.trim() || displayName);
+      const room = await createRoom(user.uid, displayName);
       navigate(`/sala/${room.code}`);
     } catch (err) {
       console.error(err);
@@ -45,8 +60,7 @@ export default function HomePage() {
     setError("");
     setBusy(true);
     try {
-      await setDisplayName(nameInput);
-      const result = await joinRoom(code, user.uid, nameInput.trim() || displayName);
+      const result = await joinRoom(code, user.uid, displayName);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -61,46 +75,42 @@ export default function HomePage() {
   };
 
   return (
-    <div className="page">
-      <div className="hero">
-        <p className="eyebrow">Multijugador en tiempo real</p>
-        <h1>CERO GAME</h1>
-        <p className="subtitle">Crea una sala, compartí el código y juega al instante.</p>
+    <AppShell>
+      <div className="page home-page">
+        <div className="hero compact">
+          <p className="eyebrow">Listo para ranked</p>
+          <h1>¿Jugamos?</h1>
+          <p className="subtitle">Creá una sala o unite con código. Cada victoria suma ELO.</p>
+        </div>
+
+        <PlayerStatsCard />
+
+        <div className="card stack">
+          <button className="btn primary" onClick={handlePlayNow} disabled={busy}>
+            {busy ? "Creando sala..." : "Jugar ahora"}
+          </button>
+
+          <div className="divider">o unirse con código</div>
+
+          <label className="field">
+            <span>Código de sala</span>
+            <input
+              value={roomCode}
+              onChange={(e) => setRoomCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="123456"
+              inputMode="numeric"
+            />
+          </label>
+
+          <button className="btn secondary" onClick={handleJoin} disabled={busy}>
+            Unirse a sala
+          </button>
+
+          {error && <p className="error">{error}</p>}
+        </div>
+
+        <LeaderboardPreview />
       </div>
-
-      <div className="card stack">
-        <label className="field">
-          <span>Tu nombre</span>
-          <input
-            value={nameInput}
-            onChange={(e) => setNameInput(e.target.value)}
-            placeholder="Jugador"
-            maxLength={20}
-          />
-        </label>
-
-        <button className="btn primary" onClick={handlePlayNow} disabled={busy}>
-          {busy ? "Creando sala..." : "Jugar ahora"}
-        </button>
-
-        <div className="divider">o unirse con código</div>
-
-        <label className="field">
-          <span>Código de sala</span>
-          <input
-            value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="123456"
-            inputMode="numeric"
-          />
-        </label>
-
-        <button className="btn secondary" onClick={handleJoin} disabled={busy}>
-          Unirse a sala
-        </button>
-
-        {error && <p className="error">{error}</p>}
-      </div>
-    </div>
+    </AppShell>
   );
 }

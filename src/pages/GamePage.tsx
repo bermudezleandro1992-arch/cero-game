@@ -9,19 +9,25 @@ import { joinRoom, leaveRoom, makeMove, resetRoom, subscribeToRoom } from "../li
 import {
   countConnectedPlayers,
   getMyPlayer,
+  getPlayerList,
   type PlayerSymbol,
   type RoomData,
 } from "../types/room";
+import { recordMatchStats } from "../lib/stats";
 
 export default function GamePage() {
   const { code = "" } = useParams();
-  const { user, displayName, loading } = useAuth();
+  const { user, displayName, loading, refreshStats } = useAuth();
   const navigate = useNavigate();
   const [room, setRoom] = useState<RoomData | null>(null);
   const [connectionError, setConnectionError] = useState("");
   const [ready, setReady] = useState(false);
 
   useLeaveOnTabClose(code, user?.uid, leaveRoom);
+
+  useEffect(() => {
+    if (!loading && !user) navigate("/", { replace: true });
+  }, [loading, user, navigate]);
 
   useEffect(() => {
     if (loading || !user || !code) return;
@@ -57,6 +63,20 @@ export default function GamePage() {
       unsubRoom?.();
     };
   }, [code, user, displayName, loading]);
+
+  useEffect(() => {
+    if (!room?.winner || !user || room.statsRecorded) return;
+    const players = getPlayerList(room.players);
+    if (players.length < 2) return;
+
+    recordMatchStats(
+      code,
+      room.winner,
+      players.map((p) => ({ uid: p.uid, symbol: p.symbol }))
+    )
+      .then(() => refreshStats())
+      .catch((error) => console.error("[GamePage] stats", error));
+  }, [room?.winner, room?.statsRecorded, room?.players, code, user, refreshStats]);
 
   const me = room && user ? getMyPlayer(room, user.uid) : undefined;
 

@@ -3,6 +3,7 @@ import { AuthProvider } from "./context/AuthContext";
 import HomePage from "./pages/HomePage";
 import RoomPage from "./pages/RoomPage";
 import GamePage from "./pages/GamePage";
+import RankingPage from "./pages/RankingPage";
 import ConfigWarning from "./components/ConfigWarning";
 import { isFirebaseConfigured } from "./lib/firebase";
 
@@ -15,6 +16,7 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/ranking" element={<RankingPage />} />
         <Route path="/sala/:code" element={<RoomPage />} />
         <Route path="/juego/:code" element={<GamePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

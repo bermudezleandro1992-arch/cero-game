@@ -19,6 +19,7 @@ export interface RoomData {
   winner: PlayerSymbol | "draw" | null;
   createdAt: number;
   updatedAt: number;
+  statsRecorded?: boolean;
   players: Record<string, RoomPlayer>;
 }
 
@@ -69,6 +70,7 @@ export function parseRoomData(code: string, data: Record<string, unknown>): Room
     winner: (data.winner as PlayerSymbol | "draw" | null) ?? null,
     createdAt: Number(data.createdAt ?? Date.now()),
     updatedAt: Number(data.updatedAt ?? Date.now()),
+    statsRecorded: Boolean(data.statsRecorded),
     players: playersRaw,
   };
 }
