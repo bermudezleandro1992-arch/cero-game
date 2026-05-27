@@ -105,41 +105,70 @@ class CeroOnlineGame {
       format: data.format || this.opts.format || '1v1',
       voice:  data.voice  || this.opts.voice  || 'fem',
     };
-    this.myIndex   = (data.playerIds || []).indexOf(this.myUid);
+
+    const uniqIds = window.RoomLifecycle?.uniquePlayerIds
+      ? window.RoomLifecycle.uniquePlayerIds(data.playerIds)
+      : [...new Set(data.playerIds || [])];
+    this.myIndex = uniqIds.indexOf(this.myUid);
     if (this.myIndex === -1) {
       this.myIndex = (data.players || []).findIndex(p => p.uid === this.myUid);
     }
 
     if (this.myIndex === -1) {
-      const ids = data.playerIds || [];
-      if (ids.length < (data.maxPlayers || 2) && !ids.includes(this.myUid)) {
-        const players = [...(data.players || []), {
-          uid: this.myUid,
+      if (window.RoomLifecycle?.joinOrRejoin) {
+        await window.RoomLifecycle.joinOrRejoin(this.roomId, this.myUid, {
           name: _playerLabel() || 'Jugador',
           photo: null,
-        }];
-        await updateDoc(roomRef, {
-          players,
-          playerIds: [...ids, this.myUid],
-          [`ready_${this.myUid}`]: true,
-          lastActivity: serverTimestamp(),
         });
-        this.myIndex = players.length - 1;
-        this._roomData = { ...data, players, playerIds: [...ids, this.myUid] };
+        const fresh = await getDoc(roomRef);
+        if (fresh.exists()) {
+          data = fresh.data();
+          this._roomData = data;
+        }
+        const ids = window.RoomLifecycle?.uniquePlayerIds
+          ? window.RoomLifecycle.uniquePlayerIds(data.playerIds)
+          : [...new Set(data.playerIds || [])];
+        this.myIndex = ids.indexOf(this.myUid);
+        if (this.myIndex === -1) throw new Error('No estás en esta sala');
       } else {
-        throw new Error('No estás en esta sala');
+        const ids = uniqIds;
+        if (ids.length < (data.maxPlayers || 2) && !ids.includes(this.myUid)) {
+          const players = [...(data.players || []), {
+            uid: this.myUid,
+            name: _playerLabel() || 'Jugador',
+            photo: null,
+          }];
+          await updateDoc(roomRef, {
+            players,
+            playerIds: [...ids, this.myUid],
+            [`ready_${this.myUid}`]: true,
+            lastActivity: serverTimestamp(),
+          });
+          this.myIndex = players.length - 1;
+          this._roomData = { ...data, players, playerIds: [...ids, this.myUid] };
+        } else {
+          throw new Error('No estás en esta sala');
+        }
       }
+    } else if (window.RoomLifecycle?.joinOrRejoin) {
+      await window.RoomLifecycle.joinOrRejoin(this.roomId, this.myUid, {
+        name: _playerLabel() || 'Jugador',
+        photo: null,
+      });
+      const fresh = await getDoc(roomRef);
+      if (fresh.exists()) {
+        this._roomData = fresh.data();
+      }
+    } else {
+      const readyField = `ready_${this.myUid}`;
+      await updateDoc(roomRef, {
+        [readyField]:  true,
+        lastActivity:  serverTimestamp(),
+      });
     }
 
     this.isHost = (this._roomData.hostId === this.myUid)
       || (this.myIndex === 0 && !this._roomData.hostId);
-
-    // Mark player as ready
-    const readyField = `ready_${this.myUid}`;
-    await updateDoc(roomRef, {
-      [readyField]:  true,
-      lastActivity:  serverTimestamp(),
-    });
 
     // Subscribe to room updates
     const unsubRoom = onSnapshot(roomRef, snap => {
@@ -167,7 +196,9 @@ class CeroOnlineGame {
   _tryStartDeal() {
     const d = this._roomData;
     if (!d || d.status !== 'waiting' || d.phase) return;
-    const ids = d.playerIds || [];
+    const ids = window.RoomLifecycle?.uniquePlayerIds
+      ? window.RoomLifecycle.uniquePlayerIds(d.playerIds)
+      : [...new Set(d.playerIds || [])];
     const maxP = d.maxPlayers || 2;
     const need = Math.min(maxP, Math.max(2, ids.length));
     const allReady = ids.length >= need &&
@@ -977,7 +1008,9 @@ function _deckRoomPatch(cards, discard, extra = {}) {
 }
 
 function _orderedPlayers(d) {
-  const ids = d?.playerIds || [];
+  const ids = window.RoomLifecycle?.uniquePlayerIds
+    ? window.RoomLifecycle.uniquePlayerIds(d?.playerIds)
+    : [...new Set(d?.playerIds || [])];
   const nameMap = Object.fromEntries((d?.players || []).map(p => [p.uid, p]));
   if (ids.length) {
     return ids.map(uid => nameMap[uid] || { uid, name: 'Jugador', photo: null });

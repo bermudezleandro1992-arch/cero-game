@@ -116,9 +116,9 @@ const MM = (() => {
 
     const {
 
-      db, collection, doc, setDoc, getDoc, onSnapshot, query, where, limit,
+      db, collection, doc, setDoc, getDoc, getDocs, onSnapshot, query, where, limit,
 
-      serverTimestamp, deleteDoc,
+      serverTimestamp, deleteDoc, runTransaction,
 
     } = window.FBHub;
 
@@ -243,29 +243,39 @@ const MM = (() => {
 
 
 
+        const partnerQRef = doc(db, 'matchmaking', game, 'queue', partner.uid);
+
+        const pairKey = [uid, partner.uid].sort().join('|');
+
+
+
         try {
 
-          const partnerQRef = doc(db, 'matchmaking', game, 'queue', partner.uid);
+          const existingSnap = await getDocs(query(
 
-          const partnerSnap = await getDoc(partnerQRef);
+            collection(db, 'rooms'),
 
-          const partnerData = partnerSnap.data();
+            where('pairKey', '==', pairKey),
 
-          if (partnerData?.roomId) {
+            where('status', '==', 'waiting'),
 
-            finish(partnerData.roomId, 'partner-queue');
+            limit(1),
 
-            return;
+          ));
 
-          }
+          if (!existingSnap.empty) {
 
+            const existingId = existingSnap.docs[0].id;
 
+            await Promise.all([
 
-          const mySnap = await getDoc(_queueRef);
+              setDoc(_queueRef, { status: 'matched', roomId: existingId }, { merge: true }),
 
-          if (mySnap.data()?.roomId) {
+              setDoc(partnerQRef, { status: 'matched', roomId: existingId }, { merge: true }),
 
-            finish(mySnap.data().roomId, 'my-queue');
+            ]);
+
+            finish(existingId, 'existing-pair');
 
             return;
 
@@ -284,8 +294,6 @@ const MM = (() => {
             { uid: partner.uid, name: partner.name, photo: partner.photo || null },
 
           ];
-
-          const pairKey = [uid, partner.uid].sort().join('|');
 
 
 
@@ -357,21 +365,49 @@ const MM = (() => {
 
 
 
-          await setDoc(newRoomRef, base);
+          let matchedRoomId = roomId;
+
+          await runTransaction(db, async tx => {
+
+            const [partnerSnap, mySnap] = await Promise.all([
+
+              tx.get(partnerQRef),
+
+              tx.get(_queueRef),
+
+            ]);
+
+            const partnerData = partnerSnap.data();
+
+            const myData = mySnap.data();
+
+            if (partnerData?.roomId) {
+
+              matchedRoomId = partnerData.roomId;
+
+              return;
+
+            }
+
+            if (myData?.roomId) {
+
+              matchedRoomId = myData.roomId;
+
+              return;
+
+            }
+
+            tx.set(newRoomRef, base);
+
+            tx.set(_queueRef, { status: 'matched', roomId }, { merge: true });
+
+            tx.set(partnerQRef, { status: 'matched', roomId }, { merge: true });
+
+          });
 
 
 
-          await Promise.all([
-
-            setDoc(_queueRef, { status: 'matched', roomId }, { merge: true }),
-
-            setDoc(partnerQRef, { status: 'matched', roomId }, { merge: true }),
-
-          ]);
-
-
-
-          finish(roomId, 'created');
+          finish(matchedRoomId, matchedRoomId === roomId ? 'created' : 'matched-race');
 
         } catch (e) {
 
@@ -465,7 +501,7 @@ const MM = (() => {
 
           if (data.game !== game) continue;
 
-          const ids = data.playerIds || [];
+          const ids = [...new Set(data.playerIds || [])];
 
           if (ids.length >= 2 && ids.includes(uid)) {
 

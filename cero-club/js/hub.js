@@ -858,7 +858,10 @@ function _renderMyRoomBar(roomData) {
   window._myActiveRoomId = roomData.id;
   const game = roomData.game === 'cero' ? 'CERO' : 'Truco';
   const st = roomData.status === 'playing' ? 'En partida' : 'Esperando jugadores';
-  const n = (roomData.playerIds?.length || roomData.players?.length || 1);
+  const n = (window.RoomLifecycle?.uniquePlayerIds
+    ? window.RoomLifecycle.uniquePlayerIds(roomData.playerIds)
+    : [...new Set(roomData.playerIds || [])]
+  ).length || roomData.players?.length || 1;
   const max = roomData.maxPlayers || 2;
   const stakeLbl = roomData.stakeCC
     ? ` · Pozo ◈ ${((roomData.stakeCC || 0) * (roomData.stakesPaid?.length || n)).toLocaleString('es-AR')} CC`
@@ -881,13 +884,31 @@ async function enterMyRoom() {
   const id = window._myActiveRoomId;
   const user = _loadSessionUser();
   if (!id || !user?.uid) return;
-  const snap = await window.FBHub?.getDoc(window.FBHub.doc(window.FBHub.db, 'rooms', id));
-  const game = snap?.data()?.game || 'cero';
-  if (game === 'cero') {
-    const d = snap?.data() || {};
-    window.location.href = buildCeroOnlineUrl(id, user.uid, d);
-  } else {
-    window.location.href = `/games/truco/index.html?roomId=${id}&uid=${user.uid}&pvp=1`;
+  const fb = window.FBHub;
+  try {
+    const snap = await fb?.getDoc(fb.doc(fb.db, 'rooms', id));
+    if (!snap?.exists()) {
+      window._myActiveRoomId = null;
+      _renderMyRoomBar(null);
+      return;
+    }
+    const d = snap.data();
+    const game = d.game || 'cero';
+    if (window.RoomLifecycle?.joinOrRejoin) {
+      await window.RoomLifecycle.joinOrRejoin(id, user.uid, {
+        name: user.name || user.displayName,
+        photo: user.photo || null,
+      });
+    } else if (d.leftPlayers?.[user.uid] && window.RoomLifecycle?.clearLeft) {
+      await window.RoomLifecycle.clearLeft(id, user.uid);
+    }
+    if (game === 'cero') {
+      window.location.href = buildCeroOnlineUrl(id, user.uid, d);
+    } else {
+      window.location.href = `/games/truco/index.html?roomId=${id}&uid=${user.uid}&pvp=1`;
+    }
+  } catch (e) {
+    alert(e.message || 'No se pudo entrar a la sala');
   }
 }
 
@@ -1131,7 +1152,9 @@ async function joinQuickRoom(roomId, game) {
       const d = snap.data();
       if (d.isPrivate) throw new Error('Sala privada. Pedí invitación al host.');
       if (d.status !== 'waiting') throw new Error('La sala ya empezó o terminó');
-      const ids = d.playerIds || [];
+      const ids = window.RoomLifecycle?.uniquePlayerIds
+        ? window.RoomLifecycle.uniquePlayerIds(d.playerIds)
+        : [...new Set(d.playerIds || [])];
       const max = d.maxPlayers || 2;
       if (!ids.includes(user.uid) && ids.length >= max) throw new Error('La sala está llena');
     }
@@ -1148,25 +1171,32 @@ async function joinQuickRoom(roomId, game) {
 async function _joinTrucoRoom(roomId, user) {
   const fb = window.FBHub;
   if (!fb) throw new Error('Sin conexión');
-  const roomRef = fb.doc(fb.db, 'rooms', roomId);
-  const snap = await fb.getDoc(roomRef);
-  if (!snap.exists()) throw new Error('La sala ya no existe');
-  const d = snap.data();
-  if (d.status !== 'waiting') throw new Error('La sala ya empezó o terminó');
-  const ids = d.playerIds || [];
-  if (ids.includes(user.uid)) {
-    window.location.href = `/games/truco/index.html?roomId=${roomId}&uid=${user.uid}&pvp=1`;
-    return;
+  if (window.RoomLifecycle?.joinOrRejoin) {
+    await window.RoomLifecycle.joinOrRejoin(roomId, user.uid, {
+      name: user.name || 'Jugador',
+      photo: user.photo || null,
+    });
+  } else {
+    const roomRef = fb.doc(fb.db, 'rooms', roomId);
+    const snap = await fb.getDoc(roomRef);
+    if (!snap.exists()) throw new Error('La sala ya no existe');
+    const d = snap.data();
+    if (d.status !== 'waiting') throw new Error('La sala ya empezó o terminó');
+    const ids = [...new Set(d.playerIds || [])];
+    if (ids.includes(user.uid)) {
+      window.location.href = `/games/truco/index.html?roomId=${roomId}&uid=${user.uid}&pvp=1`;
+      return;
+    }
+    const max = d.maxPlayers || 2;
+    if (ids.length >= max) throw new Error('La sala está llena');
+    const players = [...(d.players || []), { uid: user.uid, name: user.name || 'Jugador', photo: user.photo || null }];
+    await fb.updateDoc(roomRef, {
+      players,
+      playerIds: [...ids, user.uid],
+      [`ready_${user.uid}`]: true,
+      lastActivity: fb.serverTimestamp(),
+    });
   }
-  const max = d.maxPlayers || 2;
-  if (ids.length >= max) throw new Error('La sala está llena');
-  const players = [...(d.players || []), { uid: user.uid, name: user.name || 'Jugador', photo: user.photo || null }];
-  await fb.updateDoc(roomRef, {
-    players,
-    playerIds: [...ids, user.uid],
-    [`ready_${user.uid}`]: true,
-    lastActivity: fb.serverTimestamp(),
-  });
   window.location.href = `/games/truco/index.html?roomId=${roomId}&uid=${user.uid}&pvp=1`;
 }
 

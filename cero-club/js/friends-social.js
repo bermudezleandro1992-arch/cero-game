@@ -661,12 +661,20 @@ const FriendsSocial = (() => {
         hub.collection(hub.db, 'rooms'),
         hub.where('playerIds', 'array-contains', uid),
         hub.where('status', 'in', ['waiting', 'playing']),
-        hub.limit(3)
+        hub.limit(5)
       );
       const snap = await hub.getDocs(q);
       if (snap.empty) return null;
-      const d = snap.docs[0];
-      return { id: d.id, ...d.data() };
+      const uniq = window.RoomLifecycle?.uniquePlayerIds || (ids => [...new Set(ids || [])]);
+      const rooms = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(r => uniq(r.playerIds).includes(uid))
+        .sort((a, b) => {
+          const ta = a.lastActivity?.toMillis?.() || a.createdAt?.toMillis?.() || 0;
+          const tb = b.lastActivity?.toMillis?.() || b.createdAt?.toMillis?.() || 0;
+          return tb - ta;
+        });
+      return rooms[0] || null;
     } catch (e) {
       console.warn('[Friends] findMyActiveRoom:', e.message);
       return null;
@@ -784,7 +792,11 @@ const FriendsSocial = (() => {
     if (!snap.exists()) throw new Error('La sala ya no existe');
     const d = snap.data();
 
-    if (d.isPrivate && !d.playerIds?.includes(_user.uid)) {
+    const uniqIds = window.RoomLifecycle?.uniquePlayerIds
+      ? window.RoomLifecycle.uniquePlayerIds(d.playerIds)
+      : [...new Set(d.playerIds || [])];
+
+    if (d.isPrivate && !uniqIds.includes(_user.uid)) {
       const invited = (d.invitedUids || []).includes(_user.uid);
       const codeOk = joinCode && d.joinCode
         && String(joinCode).toUpperCase() === String(d.joinCode).toUpperCase();
@@ -793,21 +805,30 @@ const FriendsSocial = (() => {
       }
     }
 
-    if (!d.playerIds?.includes(uid)) {
-      const max = d.maxPlayers || 2;
-      if ((d.playerIds?.length || 0) >= max) throw new Error('La sala está llena');
+    const alreadyIn = uniqIds.includes(uid);
+    if (!alreadyIn) {
       const stake = d.stakeCC || 0;
       if (stake > 0 && window.RoomPrizes?.chargeStake) {
         await window.RoomPrizes.chargeStake(uid, roomId, stake);
       }
+    }
+
+    if (window.RoomLifecycle?.joinOrRejoin) {
+      await window.RoomLifecycle.joinOrRejoin(roomId, uid, {
+        name: _user.name || 'Jugador',
+        photo: _user.photo || null,
+      });
+    } else if (!alreadyIn) {
+      const max = d.maxPlayers || 2;
+      if (uniqIds.length >= max) throw new Error('La sala está llena');
       const players = [...(d.players || []), { uid, name: _user.name || 'Jugador', photo: _user.photo || null }];
       await hub.updateDoc(roomRef, {
         players,
-        playerIds: [...(d.playerIds || []), uid],
+        playerIds: [...uniqIds, uid],
         [`ready_${uid}`]: true,
         lastActivity: hub.serverTimestamp(),
       });
-    } else if (d.status === 'waiting') {
+    } else {
       await hub.updateDoc(roomRef, {
         [`ready_${uid}`]: true,
         lastActivity: hub.serverTimestamp(),

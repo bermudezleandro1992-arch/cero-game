@@ -8,6 +8,15 @@ const RoomLifecycle = (() => {
   const CERO_REJOIN_MS = 90_000;
   let _boundRoom = null;
 
+  function uniquePlayerIds(ids) {
+    return [...new Set((ids || []).filter(Boolean))];
+  }
+
+  function _playersForIds(ids, players) {
+    const nameMap = Object.fromEntries((players || []).map(p => [p.uid, p]));
+    return ids.map(id => nameMap[id] || { uid: id, name: 'Jugador', photo: null });
+  }
+
   function _hasRejoinCoins(game) {
     if (game === 'cero') return true;
     try {
@@ -106,11 +115,70 @@ const RoomLifecycle = (() => {
     if (!fb?.db) return;
     await fb.updateDoc(fb.doc(fb.db, 'rooms', roomId), {
       [`leftPlayers.${uid}`]: fb.deleteField(),
+      [`ready_${uid}`]: true,
       lastActivity: fb.serverTimestamp(),
     });
   }
 
-  return { leave, bindUnload, unbind, canRejoin, clearLeft, CERO_REJOIN_MS };
+  /** Join or rejoin a room atomically (dedupes playerIds, clears leftPlayers). */
+  async function joinOrRejoin(roomId, uid, player = {}) {
+    const fb = window.FBHub;
+    if (!fb?.db || !roomId || !uid) throw new Error('Datos incompletos');
+
+    const roomRef = fb.doc(fb.db, 'rooms', roomId);
+    return fb.runTransaction(fb.db, async tx => {
+      const snap = await tx.get(roomRef);
+      if (!snap.exists()) throw new Error('La sala ya no existe');
+
+      const d = snap.data();
+      let ids = uniquePlayerIds(d.playerIds);
+      const max = d.maxPlayers || 2;
+      const patch = {
+        lastActivity: fb.serverTimestamp(),
+        [`ready_${uid}`]: true,
+      };
+
+      if (ids.includes(uid)) {
+        if (d.leftPlayers?.[uid]) {
+          patch[`leftPlayers.${uid}`] = fb.deleteField();
+        }
+        if ((d.playerIds || []).length !== ids.length) {
+          patch.playerIds = ids;
+          patch.players = _playersForIds(ids, d.players);
+        }
+        tx.update(roomRef, patch);
+        return { kind: 'rejoin', data: d };
+      }
+
+      if (d.status !== 'waiting') throw new Error('La sala ya empezó o terminó');
+      if (ids.length >= max) throw new Error('La sala está llena');
+
+      const players = [...(d.players || [])];
+      if (!players.some(p => p.uid === uid)) {
+        players.push({
+          uid,
+          name: player.name || 'Jugador',
+          photo: player.photo || null,
+        });
+      }
+      ids = [...ids, uid];
+      patch.players = players;
+      patch.playerIds = ids;
+      tx.update(roomRef, patch);
+      return { kind: 'join', data: d };
+    });
+  }
+
+  return {
+    leave,
+    bindUnload,
+    unbind,
+    canRejoin,
+    clearLeft,
+    joinOrRejoin,
+    uniquePlayerIds,
+    CERO_REJOIN_MS,
+  };
 })();
 
 window.RoomLifecycle = RoomLifecycle;
