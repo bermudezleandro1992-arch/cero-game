@@ -176,6 +176,41 @@ async function startMatch(db, matchRef, match) {
     });
     await batch.commit();
 }
+function parseRequestedStake(stakeCC) {
+    const n = typeof stakeCC === 'number' ? stakeCC : Number(stakeCC);
+    return n === CFG.ENTRY_COST_CC ? CFG.ENTRY_COST_CC : 0;
+}
+async function chargeEntryStake(db, uid, auth, stakeCC) {
+    if (stakeCC <= 0) {
+        const bal = (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0;
+        return { charged: false, coinsLeft: bal };
+    }
+    return db.runTransaction(async (tx) => {
+        const userRef = db.doc(`users/${uid}`);
+        const snap = await tx.get(userRef);
+        if (!snap.exists) {
+            tx.set(userRef, {
+                email: auth.token.email ?? '',
+                displayName: auth.token.name ?? 'Jugador',
+                ceroCoins: 0,
+                freeGamesPlayed: 0,
+                totalGamesPlayed: 0,
+                wins: 0,
+            });
+            guard(false, 'resource-exhausted', `Saldo insuficiente. Necesitás ${stakeCC} CN, tenés 0.`);
+        }
+        const user = snap.data();
+        const balance = user.ceroCoins ?? 0;
+        const isVIPActive = !!(user.vip?.active === true &&
+            (user.vip.expiresAt?.toMillis() ?? 0) > Date.now());
+        if (isVIPActive) {
+            return { charged: false, coinsLeft: balance };
+        }
+        guard(balance >= stakeCC, 'resource-exhausted', `Saldo insuficiente. Necesitás ${stakeCC} CN, tenés ${balance}.`);
+        tx.update(userRef, { ceroCoins: firestore_1.FieldValue.increment(-stakeCC) });
+        return { charged: true, coinsLeft: balance - stakeCC };
+    });
+}
 /**
  * Verifica elegibilidad (partidas gratis o saldo), descuenta coins atómicamente
  * y une al jugador a una sala existente o crea una nueva.
@@ -188,7 +223,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         ? request.data.matchId
         : null;
     const db = (0, firestore_1.getFirestore)();
-    const finishJoin = async (matchId, playerIndex, charged, coinsLeft) => {
+    const finishJoin = async (matchId, playerIndex, charged, coinsLeft, stakeCC) => {
         const matchSnap = await db.doc(`matches/${matchId}`).get();
         const matchData = matchSnap.data();
         if (matchData) {
@@ -200,7 +235,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
                 await startMatch(db, matchSnap.ref, { ...matchData, playerIds: ids, playerCount: ids.length });
             }
         }
-        return { matchId, playerIndex, charged, coinsLeft };
+        return { matchId, playerIndex, charged, coinsLeft, stakeCC };
     };
     // ── 0. Reingreso a sala propia (sin cobrar de nuevo) ─────────────────────
     if (requestedMatchId) {
@@ -209,7 +244,8 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
             const d = pre.data();
             const ids = uniquePlayerIds(d.playerIds);
             if (ids.includes(uid)) {
-                return finishJoin(requestedMatchId, ids.indexOf(uid), false, (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0);
+                const bal = (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0;
+                return finishJoin(requestedMatchId, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
             }
         }
     }
@@ -224,49 +260,14 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
             const d = docSnap.data();
             const ids = uniquePlayerIds(d.playerIds);
             const bal = (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0;
-            return finishJoin(docSnap.id, ids.indexOf(uid), false, bal);
+            return finishJoin(docSnap.id, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
         }
     }
-    // ── 1. Verificar elegibilidad y descontar coins (transacción atómica) ────
-    const userRef = db.doc(`users/${uid}`);
-    const { charged, coinsLeft } = await db.runTransaction(async (tx) => {
-        const snap = await tx.get(userRef);
-        if (!snap.exists) {
-            // Crear perfil en la primera partida
-            tx.set(userRef, {
-                email: request.auth.token.email ?? '',
-                displayName: request.auth.token.name ?? 'Jugador',
-                ceroCoins: 0,
-                freeGamesPlayed: 0,
-                totalGamesPlayed: 0,
-                wins: 0,
-            });
-            return { charged: false, coinsLeft: 0 };
-        }
-        const user = snap.data();
-        const freeUsed = user.freeGamesPlayed ?? 0;
-        const balance = user.ceroCoins ?? 0;
-        // ── VIP: partidas gratis ilimitadas ──────────────────────────────────
-        const isVIPActive = !!(user.vip?.active === true &&
-            (user.vip.expiresAt?.toMillis() ?? 0) > Date.now());
-        if (isVIPActive) {
-            return { charged: false, coinsLeft: balance };
-        }
-        // ── Cupo gratuito ───────────────────────────────────────────────────
-        if (freeUsed < CFG.FREE_GAMES_LIMIT) {
-            return { charged: false, coinsLeft: balance };
-        }
-        // ── Pago en Coins ───────────────────────────────────────────────────
-        guard(balance >= CFG.ENTRY_COST_CC, 'resource-exhausted', `Saldo insuficiente. Necesitás ${CFG.ENTRY_COST_CC} CC, tenés ${balance}.`);
-        tx.update(userRef, { ceroCoins: firestore_1.FieldValue.increment(-CFG.ENTRY_COST_CC) });
-        return { charged: true, coinsLeft: balance - CFG.ENTRY_COST_CC };
-    });
-    // ── 2. Buscar sala: por ID específico o cualquier sala abierta del modo ──
     const matchesRef = db.collection('matches');
     let matchId = '';
     let playerIndex = -1;
+    let entryStake = 0;
     if (requestedMatchId) {
-        // Unirse a sala específica — validar que exista y esté disponible
         const specificSnap = await db.doc(`matches/${requestedMatchId}`).get();
         guard(specificSnap.exists, 'not-found', 'Sala no encontrada');
         const d = specificSnap.data();
@@ -276,13 +277,12 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         guard(!ids.includes(uid), 'failed-precondition', 'Ya estás en esta sala');
         matchId = requestedMatchId;
         playerIndex = ids.length;
+        entryStake = d.stakeCC ?? 0;
     }
     else {
-        // Sin matchId: crear sala propia o reingresar a la waiting existente (paso 0).
-        // Unirse a salas ajenas solo con matchId explícito (lobby / código).
-        matchId = '';
-        playerIndex = -1;
+        entryStake = parseRequestedStake(request.data?.stakeCC);
     }
+    const { charged, coinsLeft } = await chargeEntryStake(db, uid, request.auth, entryStake);
     if (matchId) {
         // ── 3a. Unirse a sala existente (transacción) ─────────────────────────
         await db.runTransaction(async (tx) => {
@@ -307,7 +307,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
             playerIds: [uid],
             playerCount: 1,
             maxPlayers: CFG.MAX_PLAYERS,
-            stakeCC: charged ? CFG.ENTRY_COST_CC : 0,
+            stakeCC: entryStake,
             turn: 0,
             phase: 'waiting',
             current: null,
@@ -327,7 +327,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         matchId = ref.id;
         playerIndex = 0;
     }
-    return finishJoin(matchId, playerIndex, charged, coinsLeft);
+    return finishJoin(matchId, playerIndex, charged, coinsLeft, entryStake);
 });
 const VALID_ACTIONS = new Set(['play', 'draw', 'pickColor', 'declareCero']);
 /**

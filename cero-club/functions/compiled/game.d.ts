@@ -82,12 +82,14 @@ interface JoinMatchRequest {
     mode?: string;
     format?: string;
     matchId?: string;
+    stakeCC?: number;
 }
 interface JoinMatchResponse {
     matchId: string;
     playerIndex: number;
     charged: boolean;
     coinsLeft: number;
+    stakeCC: number;
 }
 /**
  * Verifica elegibilidad (partidas gratis o saldo), descuenta coins atómicamente
