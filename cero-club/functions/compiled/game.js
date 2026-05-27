@@ -44,8 +44,42 @@
  *   matches/{matchId}/hands/{uid}      ← solo el dueño puede leer
  *     cards: Card[]
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.endMatch = exports.forfeitMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = void 0;
+exports.endMatch = exports.forfeitMatch = exports.getRejoinStatus = exports.temporaryLeaveMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = void 0;
+exports.startMatch = startMatch;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const CeroEngine_1 = require("./CeroEngine");
@@ -59,9 +93,47 @@ const CFG = {
     TURN_SECONDS: 30,
     MAX_PLAYERS: 2,
     REGION: 'us-central1',
+    REJOIN_MS: 5 * 60 * 1000, // 5 minutos para reingresar
 };
 function uniquePlayerIds(ids) {
     return [...new Set((ids || []).filter(Boolean))];
+}
+function canRejoinMatch(match, uid) {
+    if (!match.playerIds.includes(uid))
+        return false;
+    const abs = match.absences?.[uid];
+    if (!abs?.rejoinUntil)
+        return match.status === 'waiting';
+    return abs.rejoinUntil.toMillis() > Date.now();
+}
+async function clearPlayerAbsence(db, matchRef, uid) {
+    await matchRef.update({
+        [`absences.${uid}`]: firestore_1.FieldValue.delete(),
+    });
+    await db.doc(`users/${uid}`).set({ activeRejoin: firestore_1.FieldValue.delete() }, { merge: true });
+}
+async function expireAbsentPlayers(db, matchRef, match) {
+    const now = Date.now();
+    for (const uid of match.playerIds) {
+        const abs = match.absences?.[uid];
+        if (!abs?.rejoinUntil || abs.rejoinUntil.toMillis() > now)
+            continue;
+        const winnerUid = match.playerIds.find(id => id !== uid);
+        if (!winnerUid)
+            continue;
+        const batch = db.batch();
+        _applyMatchEndUpdates((ref, data) => batch.update(ref, data), db, matchRef, match, winnerUid, 'timeout', { forfeit: { loserUid: uid, winnerUid, reason: 'rejoin_expired' } });
+        await batch.commit();
+        try {
+            const { onTournamentMatchFinished } = await Promise.resolve().then(() => __importStar(require('./tournaments')));
+            await onTournamentMatchFinished(matchRef.id, winnerUid);
+        }
+        catch (err) {
+            console.error('[expireAbsent] tournament hook:', err);
+        }
+        return winnerUid;
+    }
+    return null;
 }
 function handsToStorage(hands) {
     const out = {};
@@ -246,6 +318,12 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
             const ids = uniquePlayerIds(d.playerIds);
             if (ids.includes(uid)) {
                 const bal = (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0;
+                guard(canRejoinMatch(d, uid), 'failed-precondition', d.status === 'playing'
+                    ? 'El plazo de 5 minutos para reingresar expiró'
+                    : 'No podés reingresar a esta sala');
+                if (d.status === 'playing') {
+                    await clearPlayerAbsence(db, pre.ref, uid);
+                }
                 return finishJoin(requestedMatchId, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
             }
         }
@@ -357,11 +435,19 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
     const matchRef = db.doc(`matches/${matchId}`);
     const privateRef = db.doc(`matches/${matchId}/private/server`);
     const handRef = db.doc(`matches/${matchId}/hands/${uid}`);
+    const preMatchSnap = await matchRef.get();
+    if (preMatchSnap.exists) {
+        const preMatch = preMatchSnap.data();
+        const expiredWinner = await expireAbsentPlayers(db, matchRef, preMatch);
+        if (expiredWinner) {
+            throw new https_1.HttpsError('failed-precondition', 'La partida terminó por abandono del rival');
+        }
+    }
     let resultPublic;
     let resultHand;
     let resultTurn;
+    let finishedWinner = null;
     await db.runTransaction(async (tx) => {
-        // ── Leer los tres documentos en paralelo dentro de la transacción ─────
         const [matchSnap, privateSnap] = await Promise.all([
             tx.get(matchRef),
             tx.get(privateRef),
@@ -485,7 +571,18 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
         resultPublic = publicPatch;
         resultHand = [...newSnap.hands[playerIndex]];
         resultTurn = newTurn;
+        if (isFinished && winnerUid)
+            finishedWinner = winnerUid;
     });
+    if (finishedWinner) {
+        try {
+            const { onTournamentMatchFinished } = await Promise.resolve().then(() => __importStar(require('./tournaments')));
+            await onTournamentMatchFinished(matchId, finishedWinner);
+        }
+        catch (err) {
+            console.error('[playTurn] tournament hook:', err);
+        }
+    }
     return { ok: true, publicState: resultPublic, myHand: resultHand, turn: resultTurn };
 });
 // ─────────────────────────────────────────────────────────────────────────────
@@ -518,6 +615,68 @@ exports.leaveMatch = (0, https_1.onCall)({ region: CFG.REGION }, async (request)
     });
     return { ok: true };
 });
+// ─────────────────────────────────────────────────────────────────────────────
+// temporaryLeaveMatch — salir sin abandonar (5 min para volver)
+// ─────────────────────────────────────────────────────────────────────────────
+exports.temporaryLeaveMatch = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+    const uid = request.auth.uid;
+    const matchId = requireString(request.data, 'matchId');
+    const db = (0, firestore_1.getFirestore)();
+    const ref = db.doc(`matches/${matchId}`);
+    const rejoinUntilMs = Date.now() + CFG.REJOIN_MS;
+    const rejoinUntil = firestore_1.Timestamp.fromMillis(rejoinUntilMs);
+    await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        guard(snap.exists, 'not-found', 'Partida no encontrada');
+        const match = snap.data();
+        guard(match.playerIds.includes(uid), 'permission-denied', 'No sos parte de esta partida');
+        guard(match.status === 'playing' || match.status === 'waiting', 'failed-precondition', 'La partida ya terminó');
+        tx.update(ref, {
+            [`absences.${uid}`]: {
+                rejoinUntil,
+                leftAt: firestore_1.FieldValue.serverTimestamp(),
+            },
+        });
+        tx.set(db.doc(`users/${uid}`), {
+            activeRejoin: { matchId, rejoinUntil, status: match.status },
+        }, { merge: true });
+    });
+    return { ok: true, rejoinUntil: rejoinUntilMs };
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// getRejoinStatus — consultar si hay partida para reingresar
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getRejoinStatus = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+    const uid = request.auth.uid;
+    const db = (0, firestore_1.getFirestore)();
+    const userSnap = await db.doc(`users/${uid}`).get();
+    const active = userSnap.data()?.activeRejoin;
+    if (!active?.matchId || !active.rejoinUntil) {
+        return { available: false };
+    }
+    const untilMs = active.rejoinUntil.toMillis?.() ?? active.rejoinUntil;
+    if (untilMs <= Date.now()) {
+        await db.doc(`users/${uid}`).set({ activeRejoin: firestore_1.FieldValue.delete() }, { merge: true });
+        return { available: false };
+    }
+    const matchSnap = await db.doc(`matches/${active.matchId}`).get();
+    if (!matchSnap.exists) {
+        return { available: false };
+    }
+    const match = matchSnap.data();
+    if (!canRejoinMatch(match, uid)) {
+        return { available: false };
+    }
+    return {
+        available: true,
+        matchId: active.matchId,
+        rejoinUntil: untilMs,
+        status: match.status,
+        stakeCC: match.stakeCC ?? 0,
+    };
+});
 /** Abandono voluntario: entrega la victoria al rival y devuelve el pozo. */
 exports.forfeitMatch = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
@@ -534,6 +693,13 @@ exports.forfeitMatch = (0, https_1.onCall)({ region: CFG.REGION }, async (reques
     const batch = db.batch();
     _applyMatchEndUpdates((ref, data) => batch.update(ref, data), db, matchSnap.ref, match, winnerUid, 'forfeit', { forfeit: { loserUid: uid, winnerUid } });
     await batch.commit();
+    try {
+        const { onTournamentMatchFinished } = await Promise.resolve().then(() => __importStar(require('./tournaments')));
+        await onTournamentMatchFinished(matchId, winnerUid);
+    }
+    catch (err) {
+        console.error('[forfeitMatch] tournament hook:', err);
+    }
     return { ok: true, winnerUid };
 });
 /**
@@ -580,6 +746,13 @@ exports.endMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
     const batch = db.batch();
     _applyMatchEndUpdates((ref, d) => batch.update(ref, d), db, matchSnap.ref, match, winnerUid, reason);
     await batch.commit();
+    try {
+        const { onTournamentMatchFinished } = await Promise.resolve().then(() => __importStar(require('./tournaments')));
+        await onTournamentMatchFinished(matchId, winnerUid);
+    }
+    catch (err) {
+        console.error('[endMatch] tournament hook:', err);
+    }
     return { ok: true, winnerUid };
 });
 //# sourceMappingURL=game.js.map

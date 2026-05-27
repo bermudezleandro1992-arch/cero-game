@@ -1,53 +1,15 @@
 /**
- * functions/src/tournaments.ts
- *
- * Sistema de torneos para CERO.
- *
- * Esquema Firestore:
- *
- *   tournaments/{id}
- *     name:             string
- *     description:      string
- *     mode:             'classic' | 'cero'
- *     entryFee:         number          — CC para inscribirse (0 = gratis)
- *     prizePool:        number          — CC acumulados del pozo
- *     guaranteedPrize:  number          — CC garantizados por el organizador
- *     maxPlayers:       number
- *     minPlayers:       number          — mínimo para iniciar
- *     registrationDeadline: Timestamp
- *     startTime:        Timestamp       — hora programada de inicio
- *     status:           'upcoming' | 'open' | 'in_progress' | 'finished' | 'cancelled'
- *     participantIds:   string[]
- *     participantCount: number
- *     winnerId:         string | null
- *     runnerUpId:       string | null
- *     prizeDistribution: { first: number; second?: number; third?: number } (% del pozo)
- *     createdAt:        Timestamp
- *     createdBy:        string          — uid del admin
- *     finishedAt:       Timestamp | null
- *
- *   tournaments/{id}/registrations/{uid}
- *     uid:          string
- *     displayName:  string
- *     registeredAt: Timestamp
- *     seed:         number | null
- *     eliminated:   boolean
- *     position:     number | null       — posición final
- *
- * Cloud Functions exportadas:
- *   registerTournament          — jugador: inscribirse pagando entryFee
- *   cancelTournamentRegistration — jugador: cancelar (si status = 'open')
- *   awardTournamentPrizes        — admin: distribuir premios al terminar
+ * Torneos semanales CERO — inscripción, bracket 8 jugadores, premio en CN
  */
 
-import { onCall, HttpsError }      from 'firebase-functions/v2/https';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import type { Transaction }         from 'firebase-admin/firestore';
+import { startMatch } from './game';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Configuración
-// ─────────────────────────────────────────────────────────────────────────────
-
+const BRACKET_SIZE = 8;
+const ENTRY_FEE = 50;
+const PRIZE_POOL = 400;
 const REGION = 'us-central1';
 
 type ErrCode =
@@ -60,316 +22,417 @@ function guard(cond: unknown, code: ErrCode, msg: string): asserts cond {
   if (!cond) throw new HttpsError(code, msg);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tipos
-// ─────────────────────────────────────────────────────────────────────────────
+type BracketPair = {
+  slot: number;
+  p1: string;
+  p2: string;
+  matchId: string | null;
+  winnerUid: string | null;
+};
 
-type TournamentStatus = 'upcoming' | 'open' | 'in_progress' | 'finished' | 'cancelled';
-
-interface PrizeDistribution {
-  first:   number;   // % del prizePool (ej: 70)
-  second?: number;   // % (ej: 20)
-  third?:  number;   // % (ej: 10)
+function weekKey(d = new Date()): string {
+  const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = x.getUTCDay() || 7;
+  x.setUTCDate(x.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(x.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((x.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${x.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
-interface TournamentDoc {
-  name:                  string;
-  description:           string;
-  mode:                  'classic' | 'cero';
-  entryFee:              number;
-  prizePool:             number;
-  guaranteedPrize:       number;
-  maxPlayers:            number;
-  minPlayers:            number;
-  registrationDeadline:  FirebaseFirestore.Timestamp;
-  startTime:             FirebaseFirestore.Timestamp;
-  status:                TournamentStatus;
-  participantIds:        string[];
-  participantCount:      number;
-  winnerId:              string | null;
-  runnerUpId:            string | null;
-  prizeDistribution:     PrizeDistribution;
-  createdBy:             string;
-  createdAt:             FirebaseFirestore.FieldValue;
-  finishedAt:            FirebaseFirestore.FieldValue | null;
+function tournamentDocId(wk: string): string {
+  return `weekly-${wk}`;
 }
 
-interface RegistrationDoc {
-  uid:          string;
-  displayName:  string;
-  registeredAt: FirebaseFirestore.FieldValue;
-  seed:         number | null;
-  eliminated:   boolean;
-  position:     number | null;
+async function assertAdmin(uid: string): Promise<void> {
+  const snap = await getFirestore().doc(`admins/${uid}`).get();
+  guard(snap.exists, 'permission-denied', 'Solo operadores');
 }
 
-interface UserDoc {
-  ceroCoins:  number;
-  vip?:       { active: boolean; expiresAt: FirebaseFirestore.Timestamp };
+async function ensureWeeklyDoc(wk: string) {
+  const db = getFirestore();
+  const ref = db.collection('tournaments').doc(tournamentDocId(wk));
+  const snap = await ref.get();
+  if (snap.exists) return ref;
+  const now = Date.now();
+  await ref.set({
+    name: `Torneo semanal ${wk}`,
+    type: 'weekly',
+    weekKey: wk,
+    status: 'registration',
+    entryFee: ENTRY_FEE,
+    prizePool: PRIZE_POOL,
+    bracketSize: BRACKET_SIZE,
+    participants: [],
+    bracket: [],
+    currentRound: 0,
+    championUid: null,
+    createdAt: now,
+    startAt: now + 60_000,
+    lockAt: now + 7 * 24 * 60 * 60 * 1000,
+    updatedAt: now,
+  });
+  return ref;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// registerTournament
-// ─────────────────────────────────────────────────────────────────────────────
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a;
+}
 
-interface RegisterRequest  { tournamentId: string }
-interface RegisterResponse { ok: true; position: number; charged: boolean; coinsLeft: number }
+async function createTournamentMatch(
+  p1: string,
+  p2: string,
+  tournamentId: string,
+  tournamentRound: number,
+  bracketSlot: number,
+): Promise<string> {
+  const db = getFirestore();
+  const [u1, u2] = await Promise.all([
+    db.doc(`users/${p1}`).get(),
+    db.doc(`users/${p2}`).get(),
+  ]);
 
-/**
- * Inscribe al jugador en un torneo, descontando el entryFee de forma atómica.
- *
- * Condiciones para inscribirse:
- *   · status = 'open'
- *   · No inscripto previamente
- *   · registration deadline no superada
- *   · Sala no llena
- *   · Saldo >= entryFee (a menos que entryFee = 0 o sea VIP con fee <= 50)
- */
-export const registerTournament = onCall<RegisterRequest, Promise<RegisterResponse>>(
-  { region: REGION, timeoutSeconds: 30 },
-  async (request) => {
-    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+  const matchData = {
+    status: 'waiting' as const,
+    mode: 'classic' as const,
+    players: [
+      { uid: p1, name: u1.data()?.displayName ?? 'Jugador', index: 0 },
+      { uid: p2, name: u2.data()?.displayName ?? 'Jugador', index: 1 },
+    ],
+    playerIds: [p1, p2],
+    playerCount: 2,
+    maxPlayers: 2,
+    stakeCC: 0,
+    turn: 0,
+    phase: 'waiting' as const,
+    current: null,
+    direction: null,
+    drawStack: null,
+    chosenColor: null,
+    topDiscard: null,
+    handCounts: null,
+    winner: null,
+    pendingTurn: null,
+    createdAt: FieldValue.serverTimestamp(),
+    startedAt: null,
+    finishedAt: null,
+    lastAction: null,
+    tournamentId,
+    tournamentRound,
+    bracketSlot,
+  };
 
-    const uid          = request.auth!.uid;
-    const displayName  = request.auth!.token.name ?? 'Jugador';
-    const tournamentId = request.data.tournamentId;
-    guard(typeof tournamentId === 'string' && tournamentId, 'invalid-argument', 'Falta tournamentId');
+  const ref = await db.collection('matches').add(matchData);
+  await startMatch(db, ref, matchData);
+  return ref.id;
+}
 
-    const db          = getFirestore();
-    const tournRef    = db.doc(`tournaments/${tournamentId}`);
-    const regRef      = db.doc(`tournaments/${tournamentId}/registrations/${uid}`);
-    const userRef     = db.doc(`users/${uid}`);
+export async function seedBracket(tournamentId: string): Promise<void> {
+  const db = getFirestore();
+  const ref = db.collection('tournaments').doc(tournamentId);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  const t = snap.data()!;
+  if (t.status !== 'registration') return;
 
-    let coinsLeft = 0;
+  let participants = [...((t.participants as string[]) || [])];
+  while (participants.length < BRACKET_SIZE) {
+    participants.push(`__bye__${participants.length}`);
+  }
+  participants = shuffle(participants).slice(0, BRACKET_SIZE);
 
-    await db.runTransaction(async (tx: Transaction) => {
-      const [tournSnap, regSnap, userSnap] = await Promise.all([
-        tx.get(tournRef),
-        tx.get(regRef),
-        tx.get(userRef),
-      ]);
-
-      guard(tournSnap.exists, 'not-found', 'Torneo no encontrado');
-      const tourn = tournSnap.data() as TournamentDoc;
-
-      guard(tourn.status === 'open',                       'failed-precondition', 'El torneo no está abierto para inscripciones');
-      guard(!regSnap.exists,                               'already-exists',      'Ya estás inscripto en este torneo');
-      guard(tourn.participantCount < tourn.maxPlayers,     'resource-exhausted',  'El torneo está lleno');
-      guard(
-        tourn.registrationDeadline.toMillis() > Date.now(),
-        'failed-precondition',
-        'El plazo de inscripción ya cerró',
-      );
-
-      const user    = (userSnap.data() ?? {}) as UserDoc;
-      const balance = user.ceroCoins ?? 0;
-      const fee     = tourn.entryFee;
-
-      // VIP no paga si el entryFee es <= 100 CC
-      const isVIP = !!(
-        user.vip?.active === true &&
-        (user.vip.expiresAt?.toMillis() ?? 0) > Date.now()
-      );
-      const effectiveFee = (isVIP && fee <= 100) ? 0 : fee;
-
-      guard(
-        balance >= effectiveFee,
-        'resource-exhausted',
-        `Saldo insuficiente. Necesitás ${effectiveFee} CC, tenés ${balance}.`,
-      );
-
-      if (effectiveFee > 0) {
-        tx.update(userRef, { ceroCoins: FieldValue.increment(-effectiveFee) });
-        coinsLeft = balance - effectiveFee;
-      } else {
-        coinsLeft = balance;
-      }
-
-      // Registrar inscripción
-      const regDoc: RegistrationDoc = {
-        uid,
-        displayName,
-        registeredAt: FieldValue.serverTimestamp(),
-        seed:         null,
-        eliminated:   false,
-        position:     null,
-      };
-      tx.set(regRef, regDoc);
-
-      // Actualizar torneo: sumar al pozo y contador
-      tx.update(tournRef, {
-        participantIds:   FieldValue.arrayUnion(uid),
-        participantCount: FieldValue.increment(1),
-        prizePool:        FieldValue.increment(effectiveFee),
-      });
+  const round1: BracketPair[] = [];
+  for (let i = 0; i < BRACKET_SIZE / 2; i++) {
+    round1.push({
+      slot: i,
+      p1: participants[i * 2]!,
+      p2: participants[i * 2 + 1]!,
+      matchId: null,
+      winnerUid: null,
     });
+  }
 
-    const finalTourn  = (await tournRef.get()).data() as TournamentDoc;
-    return {
-      ok:       true,
-      position: finalTourn.participantCount,
-      charged:  true,
-      coinsLeft,
-    };
-  },
-);
+  await ref.update({
+    status: 'active',
+    participants,
+    bracket: [round1],
+    currentRound: 1,
+    updatedAt: Date.now(),
+  });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// cancelTournamentRegistration
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface CancelRegResponse { ok: true; refunded: number }
-
-/**
- * Cancela la inscripción de un jugador y devuelve el entryFee.
- * Solo disponible mientras status = 'open'.
- */
-export const cancelTournamentRegistration = onCall<RegisterRequest, Promise<CancelRegResponse>>(
-  { region: REGION },
-  async (request) => {
-    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
-
-    const uid          = request.auth!.uid;
-    const tournamentId = request.data.tournamentId;
-    guard(typeof tournamentId === 'string' && tournamentId, 'invalid-argument', 'Falta tournamentId');
-
-    const db       = getFirestore();
-    const tournRef = db.doc(`tournaments/${tournamentId}`);
-    const regRef   = db.doc(`tournaments/${tournamentId}/registrations/${uid}`);
-    const userRef  = db.doc(`users/${uid}`);
-
-    let refunded = 0;
-
-    await db.runTransaction(async (tx: Transaction) => {
-      const [tournSnap, regSnap] = await Promise.all([tx.get(tournRef), tx.get(regRef)]);
-
-      guard(tournSnap.exists, 'not-found',          'Torneo no encontrado');
-      guard(regSnap.exists,   'not-found',          'No estás inscripto en este torneo');
-
-      const tourn = tournSnap.data() as TournamentDoc;
-      guard(tourn.status === 'open', 'failed-precondition', 'Solo podés cancelar mientras el torneo esté abierto');
-
-      refunded = tourn.entryFee;
-
-      tx.delete(regRef);
-      tx.update(tournRef, {
-        participantIds:   FieldValue.arrayRemove(uid),
-        participantCount: FieldValue.increment(-1),
-        prizePool:        FieldValue.increment(-refunded),
-      });
-
-      if (refunded > 0) {
-        tx.update(userRef, { ceroCoins: FieldValue.increment(refunded) });
-      }
-    });
-
-    return { ok: true, refunded };
-  },
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// awardTournamentPrizes — admin: distribuye el pozo al terminar
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface AwardPrizesRequest {
-  tournamentId: string;
-  results: Array<{        // posiciones finales (orden: 1.°, 2.°, 3.°…)
-    uid:      string;
-    position: number;
-  }>;
+  await createRoundMatches(tournamentId, 0);
 }
 
-interface AwardPrizesResponse {
-  ok:      true;
-  awarded: Array<{ uid: string; coins: number; position: number }>;
-}
+async function createRoundMatches(tournamentId: string, roundIndex: number): Promise<void> {
+  const db = getFirestore();
+  const ref = db.collection('tournaments').doc(tournamentId);
+  const snap = await ref.get();
+  const t = snap.data()!;
+  const bracket = JSON.parse(JSON.stringify(t.bracket)) as BracketPair[][];
+  const round = bracket[roundIndex];
+  if (!round) return;
 
-/**
- * Cierra el torneo, registra los resultados y distribuye el premio.
- * Solo puede ser llamada por admins.
- *
- * `prizeDistribution` define los % para cada posición.
- * Si hay `guaranteedPrize`, se agrega al pozo antes de distribuir.
- */
-export const awardTournamentPrizes = onCall<AwardPrizesRequest, Promise<AwardPrizesResponse>>(
-  { region: REGION, timeoutSeconds: 60 },
-  async (request) => {
-    guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
-    const callerUid   = request.auth!.uid;
+  const updatedRound = [...round];
+  for (let i = 0; i < updatedRound.length; i++) {
+    const pair = updatedRound[i]!;
+    if (pair.matchId || pair.winnerUid) continue;
 
-    const db          = getFirestore();
-    const adminSnap   = await db.doc(`admins/${callerUid}`).get();
-    guard(adminSnap.exists, 'permission-denied', 'Solo operadores pueden distribuir premios');
+    const { p1, p2 } = pair;
+    if (p1.startsWith('__bye__') && p2.startsWith('__bye__')) continue;
+    if (p1.startsWith('__bye__')) {
+      updatedRound[i] = { ...pair, winnerUid: p2 };
+      continue;
+    }
+    if (p2.startsWith('__bye__')) {
+      updatedRound[i] = { ...pair, winnerUid: p1 };
+      continue;
+    }
 
-    const { tournamentId, results } = request.data;
-    guard(typeof tournamentId === 'string' && tournamentId, 'invalid-argument', 'Falta tournamentId');
-    guard(Array.isArray(results) && results.length > 0,     'invalid-argument', 'Falta results');
-
-    const tournRef  = db.doc(`tournaments/${tournamentId}`);
-    const tournSnap = await tournRef.get();
-    guard(tournSnap.exists, 'not-found', 'Torneo no encontrado');
-
-    const tourn = tournSnap.data() as TournamentDoc;
-    guard(
-      tourn.status === 'in_progress' || tourn.status === 'open',
-      'failed-precondition',
-      'El torneo ya fue procesado o cancelado',
+    const matchId = await createTournamentMatch(
+      p1, p2, tournamentId, roundIndex + 1, pair.slot,
     );
+    updatedRound[i] = { ...pair, matchId };
+  }
 
-    // Calcular premios
-    const totalPot  = tourn.prizePool + tourn.guaranteedPrize;
-    const dist      = tourn.prizeDistribution;
-    const awarded: AwardPrizesResponse['awarded'] = [];
+  bracket[roundIndex] = updatedRound;
+  await ref.update({ bracket, updatedAt: Date.now() });
+  await resolveByesAndAdvance(tournamentId);
+}
 
-    const prizeByPosition: Record<number, number> = {
-      1: Math.floor(totalPot * (dist.first  / 100)),
-      2: Math.floor(totalPot * ((dist.second ?? 0) / 100)),
-      3: Math.floor(totalPot * ((dist.third  ?? 0) / 100)),
-    };
+export async function onTournamentMatchFinished(
+  matchId: string,
+  winnerUid: string | null,
+): Promise<void> {
+  if (!winnerUid) return;
+  const db = getFirestore();
+  const matchSnap = await db.collection('matches').doc(matchId).get();
+  if (!matchSnap.exists) return;
+  const tournamentId = matchSnap.data()?.tournamentId as string | undefined;
+  if (!tournamentId) return;
 
-    const batch = db.batch();
+  const ref = db.collection('tournaments').doc(tournamentId);
+  const tSnap = await ref.get();
+  if (!tSnap.exists) return;
+  const t = tSnap.data()!;
+  if (t.status !== 'active') return;
 
-    // Actualizar registraciones
-    for (const r of results) {
-      const regRef = db.doc(`tournaments/${tournamentId}/registrations/${r.uid}`);
-      batch.update(regRef, { position: r.position, eliminated: true });
-
-      const coins = prizeByPosition[r.position] ?? 0;
-      if (coins > 0) {
-        batch.update(db.doc(`users/${r.uid}`), {
-          ceroCoins:        FieldValue.increment(coins),
-          totalGamesPlayed: FieldValue.increment(1),
-          ...(r.position === 1 ? { wins: FieldValue.increment(1) } : {}),
-        });
-        awarded.push({ uid: r.uid, coins, position: r.position });
+  const bracket = JSON.parse(JSON.stringify(t.bracket)) as BracketPair[][];
+  let found = false;
+  for (let ri = 0; ri < bracket.length && !found; ri++) {
+    for (let si = 0; si < (bracket[ri]?.length ?? 0); si++) {
+      if (bracket[ri]![si]!.matchId === matchId) {
+        bracket[ri]![si]!.winnerUid = winnerUid;
+        found = true;
+        break;
       }
     }
+  }
+  if (!found) return;
 
-    const winner    = results.find(r => r.position === 1)?.uid ?? null;
-    const runnerUp  = results.find(r => r.position === 2)?.uid ?? null;
+  await ref.update({ bracket, updatedAt: Date.now() });
+  await resolveByesAndAdvance(tournamentId);
+}
 
-    batch.update(tournRef, {
-      status:      'finished',
-      winnerId:    winner,
-      runnerUpId:  runnerUp,
-      finishedAt:  FieldValue.serverTimestamp(),
+async function resolveByesAndAdvance(tournamentId: string): Promise<void> {
+  const db = getFirestore();
+  const ref = db.collection('tournaments').doc(tournamentId);
+  const snap = await ref.get();
+  const t = snap.data()!;
+  const bracket = JSON.parse(JSON.stringify(t.bracket)) as BracketPair[][];
+  const roundIndex = bracket.length - 1;
+  const round = bracket[roundIndex];
+  if (!round) return;
+
+  const allDone = round.every(
+    (p) => p.winnerUid != null || (p.p1.startsWith('__bye__') && p.p2.startsWith('__bye__')),
+  );
+  if (!allDone) return;
+
+  const winners = round.map((p) => p.winnerUid).filter(Boolean) as string[];
+  if (winners.length === 1) {
+    await awardTournamentWinner(tournamentId, winners[0]!);
+    return;
+  }
+
+  const nextRound: BracketPair[] = [];
+  for (let i = 0; i < winners.length; i += 2) {
+    nextRound.push({
+      slot: Math.floor(i / 2),
+      p1: winners[i]!,
+      p2: winners[i + 1] ?? `__bye__${i}`,
+      matchId: null,
+      winnerUid: null,
     });
+  }
+  bracket.push(nextRound);
+  await ref.update({
+    bracket,
+    currentRound: bracket.length,
+    updatedAt: Date.now(),
+  });
+  await createRoundMatches(tournamentId, bracket.length - 1);
+}
 
-    await batch.commit();
+async function awardTournamentWinner(tournamentId: string, championUid: string): Promise<void> {
+  const db = getFirestore();
+  const ref = db.collection('tournaments').doc(tournamentId);
+  const snap = await ref.get();
+  const prize = (snap.data()?.prizePool as number) ?? PRIZE_POOL;
+  const userRef = db.doc(`users/${championUid}`);
 
-    // Ledger
-    for (const a of awarded) {
-      await db.collection('coin_ledger').add({
-        uid:          a.uid,
-        amount:       a.coins,
-        type:         'tournament_prize',
-        tournamentId,
-        position:     a.position,
-        grantedBy:    callerUid,
-        createdAt:    FieldValue.serverTimestamp(),
-      });
+  await db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(userRef);
+    tx.update(userRef, {
+      ceroCoins: (userSnap.data()?.ceroCoins ?? 0) + prize,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.update(ref, {
+      status: 'finished',
+      championUid,
+      finishedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    tx.set(db.collection('coinTransactions').doc(), {
+      uid: championUid,
+      type: 'tournament_prize',
+      amount: prize,
+      tournamentId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+export const registerTournament = onCall({ region: REGION }, async (req) => {
+  const uid = req.auth?.uid;
+  guard(uid, 'unauthenticated', 'Iniciá sesión');
+
+  const weekKeyParam = (req.data?.weekKey as string) || weekKey();
+  const ref = await ensureWeeklyDoc(weekKeyParam);
+  const snap = await ref.get();
+  const t = snap.data()!;
+  if (t.status !== 'registration') {
+    throw new HttpsError('failed-precondition', 'Inscripciones cerradas.');
+  }
+  if ((t.participants as string[]).includes(uid)) {
+    return { ok: true, alreadyRegistered: true, tournamentId: ref.id };
+  }
+  if ((t.participants as string[]).length >= BRACKET_SIZE) {
+    throw new HttpsError('resource-exhausted', 'Cupos completos (8 jugadores).');
+  }
+
+  const db = getFirestore();
+  const userRef = db.doc(`users/${uid}`);
+  await db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(userRef);
+    const balance = userSnap.data()?.ceroCoins ?? 0;
+    if (balance < ENTRY_FEE) {
+      throw new HttpsError('failed-precondition', `Necesitás ${ENTRY_FEE} Cero Coins.`);
     }
+    tx.update(userRef, {
+      ceroCoins: balance - ENTRY_FEE,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.update(ref, {
+      participants: FieldValue.arrayUnion(uid),
+      updatedAt: Date.now(),
+    });
+    tx.set(db.collection('coinTransactions').doc(), {
+      uid,
+      type: 'tournament_entry',
+      amount: -ENTRY_FEE,
+      tournamentId: ref.id,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
 
-    return { ok: true, awarded };
+  const after = await ref.get();
+  const count = ((after.data()?.participants as string[]) || []).length;
+  if (count >= BRACKET_SIZE) {
+    await seedBracket(ref.id);
+  }
+  return { ok: true, tournamentId: ref.id, participants: count };
+});
+
+export const cancelTournamentRegistration = onCall({ region: REGION }, async (req) => {
+  const uid = req.auth?.uid;
+  guard(uid, 'unauthenticated', 'Iniciá sesión');
+  const tournamentId = req.data?.tournamentId as string;
+  if (!tournamentId) throw new HttpsError('invalid-argument', 'tournamentId requerido.');
+
+  const db = getFirestore();
+  const ref = db.collection('tournaments').doc(tournamentId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Torneo no encontrado.');
+  const t = snap.data()!;
+  if (t.status !== 'registration') {
+    throw new HttpsError('failed-precondition', 'El torneo ya empezó.');
+  }
+  if (!(t.participants as string[]).includes(uid)) {
+    throw new HttpsError('failed-precondition', 'No estás inscrito.');
+  }
+
+  const userRef = db.doc(`users/${uid}`);
+  await db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(userRef);
+    tx.update(userRef, {
+      ceroCoins: (userSnap.data()?.ceroCoins ?? 0) + ENTRY_FEE,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.update(ref, {
+      participants: FieldValue.arrayRemove(uid),
+      updatedAt: Date.now(),
+    });
+  });
+  return { ok: true };
+});
+
+export const getWeeklyTournament = onCall({ region: REGION }, async (req) => {
+  if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Iniciá sesión');
+  const wk = (req.data?.weekKey as string) || weekKey();
+  const ref = await ensureWeeklyDoc(wk);
+  const snap = await ref.get();
+  const t = snap.data()!;
+  const participants = ((t.participants as string[]) || []).filter((id) => !id.startsWith('__bye__'));
+  const names: Record<string, string> = {};
+  await Promise.all(participants.map(async (pid) => {
+    const u = await getFirestore().doc(`users/${pid}`).get();
+    names[pid] = u.data()?.displayName || pid.slice(0, 8);
+  }));
+
+  return {
+    tournamentId: ref.id,
+    weekKey: wk,
+    status: t.status,
+    entryFee: t.entryFee,
+    prizePool: t.prizePool,
+    participants,
+    participantCount: participants.length,
+    bracketSize: BRACKET_SIZE,
+    bracket: t.bracket || [],
+    currentRound: t.currentRound || 0,
+    championUid: t.championUid || null,
+    names,
+  };
+});
+
+export const adminSeedWeeklyTournament = onCall({ region: REGION }, async (req) => {
+  guard(req.auth?.uid, 'unauthenticated', 'Iniciá sesión');
+  await assertAdmin(req.auth!.uid);
+  const wk = (req.data?.weekKey as string) || weekKey();
+  const ref = await ensureWeeklyDoc(wk);
+  if (req.data?.forceSeed) {
+    await seedBracket(ref.id);
+  }
+  return { ok: true, tournamentId: ref.id, weekKey: wk };
+});
+
+export const seedWeeklyTournament = onSchedule(
+  { schedule: '0 12 * * 1', timeZone: 'America/Argentina/Buenos_Aires', region: REGION },
+  async () => {
+    await ensureWeeklyDoc(weekKey());
   },
 );

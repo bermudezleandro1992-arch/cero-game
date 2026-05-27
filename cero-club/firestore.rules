@@ -395,10 +395,10 @@ service cloud.firestore {
   }
 
   function _adminUserCoinsOk() {
-    return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coins'])
-      && request.resource.data.coins is int
-      && request.resource.data.coins >= 0
-      && request.resource.data.coins <= 5000000;
+    return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ceroCoins'])
+      && request.resource.data.ceroCoins is int
+      && request.resource.data.ceroCoins >= 0
+      && request.resource.data.ceroCoins <= 5000000;
   }
 
   function _adminCoinRequestUpdateOk() {

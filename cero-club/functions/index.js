@@ -18,6 +18,8 @@ exports.playTurn     = gameModule.playTurn;
 exports.leaveMatch   = gameModule.leaveMatch;
 exports.forfeitMatch = gameModule.forfeitMatch;
 exports.endMatch     = gameModule.endMatch;
+exports.temporaryLeaveMatch = gameModule.temporaryLeaveMatch;
+exports.getRejoinStatus     = gameModule.getRejoinStatus;
 
 // ── Módulo: monetización + Mercado Pago ──────────────────────────────────────
 const monetModule = require('./compiled/monetization');
@@ -31,7 +33,16 @@ exports.grantMonthlyVIPCoins = monetModule.grantMonthlyVIPCoins;
 const tournModule = require('./compiled/tournaments');
 exports.registerTournament            = tournModule.registerTournament;
 exports.cancelTournamentRegistration  = tournModule.cancelTournamentRegistration;
-exports.awardTournamentPrizes         = tournModule.awardTournamentPrizes;
+exports.getWeeklyTournament           = tournModule.getWeeklyTournament;
+exports.adminSeedWeeklyTournament     = tournModule.adminSeedWeeklyTournament;
+exports.seedWeeklyTournament          = tournModule.seedWeeklyTournament;
+
+// ── Módulo: admin panel ───────────────────────────────────────────────────────
+const adminModule = require('./compiled/admin');
+exports.adminGetUser          = adminModule.adminGetUser;
+exports.adminSetCeroCoins     = adminModule.adminSetCeroCoins;
+exports.adminUpdateUser       = adminModule.adminUpdateUser;
+exports.adminListTournaments  = adminModule.adminListTournaments;
 
 // ── Módulo: misiones ──────────────────────────────────────────────────────────
 const missModule = require('./compiled/missions');

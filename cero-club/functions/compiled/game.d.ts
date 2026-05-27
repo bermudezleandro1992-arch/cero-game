@@ -76,13 +76,22 @@ interface MatchDoc {
     winner: string | null;
     pendingTurn: number | null;
     lastAction: LastAction | null;
+    absences?: Record<string, {
+        rejoinUntil: FirebaseFirestore.Timestamp;
+        leftAt: FirebaseFirestore.Timestamp;
+    }>;
+    tournamentId?: string | null;
+    tournamentRound?: number | null;
+    bracketSlot?: number | null;
 }
 type EndReason = 'won' | 'forfeit' | 'timeout';
+export declare function startMatch(db: FirebaseFirestore.Firestore, matchRef: FirebaseFirestore.DocumentReference, match: MatchDoc): Promise<void>;
 interface JoinMatchRequest {
     mode?: string;
     format?: string;
     matchId?: string;
     stakeCC?: number;
+    createNew?: boolean;
 }
 interface JoinMatchResponse {
     matchId: string;
@@ -126,6 +135,19 @@ export declare const leaveMatch: import("firebase-functions/v2/https").CallableF
     matchId: string;
 }, Promise<{
     ok: true;
+}>>;
+export declare const temporaryLeaveMatch: import("firebase-functions/v2/https").CallableFunction<{
+    matchId: string;
+}, Promise<{
+    ok: true;
+    rejoinUntil: number;
+}>>;
+export declare const getRejoinStatus: import("firebase-functions/v2/https").CallableFunction<Record<string, never>, Promise<{
+    available: boolean;
+    matchId?: string;
+    rejoinUntil?: number;
+    status?: string;
+    stakeCC?: number;
 }>>;
 interface ForfeitResponse {
     ok: true;

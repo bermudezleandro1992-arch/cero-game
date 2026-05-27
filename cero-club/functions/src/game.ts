@@ -45,7 +45,7 @@
  */
 
 import { onCall, HttpsError }       from 'firebase-functions/v2/https';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { Transaction }         from 'firebase-admin/firestore';
 import { CeroEngine, COLORS }       from './CeroEngine';
 import type { Card, CardColor, GamePhase, FullSnapshot, Player } from './CeroEngine';
@@ -68,6 +68,7 @@ const CFG = {
   TURN_SECONDS:     30,
   MAX_PLAYERS:      2,
   REGION:           'us-central1',
+  REJOIN_MS:        5 * 60 * 1000,   // 5 minutos para reingresar
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -126,6 +127,10 @@ interface MatchDoc {
   winner:      string | null;      // UID del ganador
   pendingTurn: number | null;
   lastAction:  LastAction | null;
+  absences?:   Record<string, { rejoinUntil: FirebaseFirestore.Timestamp; leftAt: FirebaseFirestore.Timestamp }>;
+  tournamentId?:    string | null;
+  tournamentRound?: number | null;
+  bracketSlot?:     number | null;
 }
 
 interface PrivateServerDoc {
@@ -137,6 +142,55 @@ interface PrivateServerDoc {
 
 function uniquePlayerIds(ids: string[] | undefined): string[] {
   return [...new Set((ids || []).filter(Boolean))];
+}
+
+function canRejoinMatch(match: MatchDoc, uid: string): boolean {
+  if (!match.playerIds.includes(uid)) return false;
+  const abs = match.absences?.[uid];
+  if (!abs?.rejoinUntil) return match.status === 'waiting';
+  return abs.rejoinUntil.toMillis() > Date.now();
+}
+
+async function clearPlayerAbsence(
+  db: FirebaseFirestore.Firestore,
+  matchRef: FirebaseFirestore.DocumentReference,
+  uid: string,
+): Promise<void> {
+  await matchRef.update({
+    [`absences.${uid}`]: FieldValue.delete(),
+  });
+  await db.doc(`users/${uid}`).set({ activeRejoin: FieldValue.delete() }, { merge: true });
+}
+
+async function expireAbsentPlayers(
+  db: FirebaseFirestore.Firestore,
+  matchRef: FirebaseFirestore.DocumentReference,
+  match: MatchDoc,
+): Promise<string | null> {
+  const now = Date.now();
+  for (const uid of match.playerIds) {
+    const abs = match.absences?.[uid];
+    if (!abs?.rejoinUntil || abs.rejoinUntil.toMillis() > now) continue;
+    const winnerUid = match.playerIds.find(id => id !== uid);
+    if (!winnerUid) continue;
+    const batch = db.batch();
+    _applyMatchEndUpdates(
+      (ref, data) => batch.update(ref, data),
+      db, matchRef, match, winnerUid, 'timeout',
+      { forfeit: { loserUid: uid, winnerUid, reason: 'rejoin_expired' } },
+    );
+    await batch.commit();
+
+    try {
+      const { onTournamentMatchFinished } = await import('./tournaments');
+      await onTournamentMatchFinished(matchRef.id, winnerUid);
+    } catch (err) {
+      console.error('[expireAbsent] tournament hook:', err);
+    }
+
+    return winnerUid;
+  }
+  return null;
 }
 
 function handsToStorage(hands: ReadonlyArray<ReadonlyArray<Card>>): Record<string, Card[]> {
@@ -232,7 +286,7 @@ function buildPublicState(snap: FullSnapshot, playerIds: string[]): Partial<Matc
 // _startMatch — helper interno (no es un endpoint)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function startMatch(
+export async function startMatch(
   db:      FirebaseFirestore.Firestore,
   matchRef: FirebaseFirestore.DocumentReference,
   match:   MatchDoc,
@@ -413,6 +467,13 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
         const ids = uniquePlayerIds(d.playerIds);
         if (ids.includes(uid)) {
           const bal = (await db.doc(`users/${uid}`).get()).data()?.ceroCoins ?? 0;
+          guard(canRejoinMatch(d, uid), 'failed-precondition',
+            d.status === 'playing'
+              ? 'El plazo de 5 minutos para reingresar expiró'
+              : 'No podés reingresar a esta sala');
+          if (d.status === 'playing') {
+            await clearPlayerAbsence(db, pre.ref, uid);
+          }
           return finishJoin(requestedMatchId, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
         }
       }
@@ -568,12 +629,21 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
     const privateRef = db.doc(`matches/${matchId}/private/server`);
     const handRef    = db.doc(`matches/${matchId}/hands/${uid}`);
 
+    const preMatchSnap = await matchRef.get();
+    if (preMatchSnap.exists) {
+      const preMatch = preMatchSnap.data() as MatchDoc;
+      const expiredWinner = await expireAbsentPlayers(db, matchRef, preMatch);
+      if (expiredWinner) {
+        throw new HttpsError('failed-precondition', 'La partida terminó por abandono del rival');
+      }
+    }
+
     let resultPublic!: Partial<MatchDoc>;
     let resultHand!:   Card[];
     let resultTurn!:   number;
+    let finishedWinner: string | null = null;
 
     await db.runTransaction(async (tx: Transaction) => {
-      // ── Leer los tres documentos en paralelo dentro de la transacción ─────
       const [matchSnap, privateSnap] = await Promise.all([
         tx.get(matchRef),
         tx.get(privateRef),
@@ -723,7 +793,17 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
       resultPublic = publicPatch;
       resultHand   = [...newSnap.hands[playerIndex]!];
       resultTurn   = newTurn;
+      if (isFinished && winnerUid) finishedWinner = winnerUid;
     });
+
+    if (finishedWinner) {
+      try {
+        const { onTournamentMatchFinished } = await import('./tournaments');
+        await onTournamentMatchFinished(matchId, finishedWinner);
+      } catch (err) {
+        console.error('[playTurn] tournament hook:', err);
+      }
+    }
 
     return { ok: true, publicState: resultPublic, myHand: resultHand, turn: resultTurn };
   },
@@ -770,6 +850,97 @@ export const leaveMatch = onCall<{ matchId: string }, Promise<{ ok: true }>>(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// temporaryLeaveMatch — salir sin abandonar (5 min para volver)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const temporaryLeaveMatch = onCall<{ matchId: string }, Promise<{ ok: true; rejoinUntil: number }>>(
+  { region: CFG.REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+
+    const uid     = request.auth!.uid;
+    const matchId = requireString(request.data as Record<string, unknown>, 'matchId');
+    const db      = getFirestore();
+    const ref     = db.doc(`matches/${matchId}`);
+    const rejoinUntilMs = Date.now() + CFG.REJOIN_MS;
+    const rejoinUntil   = Timestamp.fromMillis(rejoinUntilMs);
+
+    await db.runTransaction(async (tx: Transaction) => {
+      const snap = await tx.get(ref);
+      guard(snap.exists, 'not-found', 'Partida no encontrada');
+
+      const match = snap.data() as MatchDoc;
+      guard(match.playerIds.includes(uid), 'permission-denied', 'No sos parte de esta partida');
+      guard(match.status === 'playing' || match.status === 'waiting', 'failed-precondition', 'La partida ya terminó');
+
+      tx.update(ref, {
+        [`absences.${uid}`]: {
+          rejoinUntil,
+          leftAt: FieldValue.serverTimestamp(),
+        },
+      });
+      tx.set(db.doc(`users/${uid}`), {
+        activeRejoin: { matchId, rejoinUntil, status: match.status },
+      }, { merge: true });
+    });
+
+    return { ok: true, rejoinUntil: rejoinUntilMs };
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getRejoinStatus — consultar si hay partida para reingresar
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getRejoinStatus = onCall<Record<string, never>, Promise<{
+  available: boolean;
+  matchId?: string;
+  rejoinUntil?: number;
+  status?: string;
+  stakeCC?: number;
+}>>(
+  { region: CFG.REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+    const uid = request.auth!.uid;
+    const db  = getFirestore();
+
+    const userSnap = await db.doc(`users/${uid}`).get();
+    const active = userSnap.data()?.activeRejoin as {
+      matchId?: string; rejoinUntil?: FirebaseFirestore.Timestamp; status?: string;
+    } | undefined;
+
+    if (!active?.matchId || !active.rejoinUntil) {
+      return { available: false };
+    }
+
+    const untilMs = active.rejoinUntil.toMillis?.() ?? active.rejoinUntil as unknown as number;
+    if (untilMs <= Date.now()) {
+      await db.doc(`users/${uid}`).set({ activeRejoin: FieldValue.delete() }, { merge: true });
+      return { available: false };
+    }
+
+    const matchSnap = await db.doc(`matches/${active.matchId}`).get();
+    if (!matchSnap.exists) {
+      return { available: false };
+    }
+
+    const match = matchSnap.data() as MatchDoc;
+    if (!canRejoinMatch(match, uid)) {
+      return { available: false };
+    }
+
+    return {
+      available: true,
+      matchId:   active.matchId,
+      rejoinUntil: untilMs,
+      status:    match.status,
+      stakeCC:   match.stakeCC ?? 0,
+    };
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // forfeitMatch
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -803,6 +974,14 @@ export const forfeitMatch = onCall<{ matchId: string }, Promise<ForfeitResponse>
     );
 
     await batch.commit();
+
+    try {
+      const { onTournamentMatchFinished } = await import('./tournaments');
+      await onTournamentMatchFinished(matchId, winnerUid);
+    } catch (err) {
+      console.error('[forfeitMatch] tournament hook:', err);
+    }
+
     return { ok: true, winnerUid };
   },
 );
@@ -885,6 +1064,14 @@ export const endMatch = onCall<EndMatchRequest, Promise<ForfeitResponse>>(
     );
 
     await batch.commit();
+
+    try {
+      const { onTournamentMatchFinished } = await import('./tournaments');
+      await onTournamentMatchFinished(matchId, winnerUid);
+    } catch (err) {
+      console.error('[endMatch] tournament hook:', err);
+    }
+
     return { ok: true, winnerUid };
   },
 );
