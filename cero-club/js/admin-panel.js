@@ -31,6 +31,7 @@ let currentUser = null;
 let selectedUid = null;
 let depositsCache = [];
 let selectedDepositId = null;
+let waitingRoomsCache = [];
 
 function fmtTs(ms) {
   if (!ms) return '—';
@@ -161,6 +162,43 @@ async function isOperator(uid) {
   return snap.exists();
 }
 
+async function loadWaitingRooms() {
+  const list = $('roomsList');
+  if (!list) return;
+  try {
+    const data = await callFn('adminListWaitingMatches', { limit: 60 });
+    waitingRoomsCache = data.matches || [];
+    if (!waitingRoomsCache.length) {
+      list.innerHTML = '<p style="color:#a78bfa;font-size:.85rem">No hay salas en espera.</p>';
+      return;
+    }
+    list.innerHTML = `<table><thead><tr>
+      <th>ID</th><th>Jugadores</th><th>Modo</th><th>CN</th><th>Edad</th><th></th>
+    </tr></thead><tbody>${waitingRoomsCache.map((m) => `<tr>
+      <td style="font-family:monospace;font-size:.65rem;max-width:120px;word-break:break-all">${esc(m.id)}</td>
+      <td>${esc((m.players || []).map((p) => p.name).join(', ') || '—')}<br><span style="color:#a78bfa;font-size:.7rem">${m.playerCount}/${m.maxPlayers}${m.guestOnly ? ' · invitados' : ''}</span></td>
+      <td>${esc(m.mode)}</td>
+      <td>${m.stakeCC > 0 ? `<b>${m.stakeCC}</b>` : '0'}</td>
+      <td style="${m.stale ? 'color:#f59e0b;font-weight:700' : ''}">${m.ageMinutes != null ? m.ageMinutes + ' min' : '—'}</td>
+      <td><button type="button" class="btn-warn btn-close-room" data-id="${esc(m.id)}">Cerrar</button></td>
+    </tr>`).join('')}</tbody></table>`;
+    list.querySelectorAll('.btn-close-room').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!window.confirm('¿Cerrar esta sala y devolver CN si corresponde?')) return;
+        try {
+          await callFn('adminCloseWaitingMatch', { matchId: btn.dataset.id, reason: 'admin_manual' });
+          showStatus($('panelStatus'), 'Sala cerrada.', true);
+          await loadWaitingRooms();
+        } catch (err) {
+          showStatus($('panelStatus'), err.message, false);
+        }
+      });
+    });
+  } catch (err) {
+    list.innerHTML = `<p style="color:#f87171">${esc(err.message)}</p>`;
+  }
+}
+
 async function loadTournaments() {
   const list = $('tournamentsList');
   try {
@@ -209,6 +247,7 @@ async function ensurePanelAccess(user) {
   $('adminUserLabel').textContent = `${user.email} · operador`;
   await loadTournaments();
   await loadDeposits();
+  await loadWaitingRooms();
   return true;
 }
 
@@ -313,6 +352,27 @@ $('btnForceSeed').addEventListener('click', async () => {
 });
 
 $('btnRefreshDeposits').addEventListener('click', () => loadDeposits());
+$('btnRefreshRooms')?.addEventListener('click', () => loadWaitingRooms());
+$('btnCleanupStale')?.addEventListener('click', async () => {
+  if (!window.confirm('¿Cerrar salas en espera con más de 4 minutos?')) return;
+  try {
+    const r = await callFn('adminCleanupStaleRooms', { minAgeMinutes: 4 });
+    showStatus($('panelStatus'), `Listo: ${r.closed} sala(s) cerrada(s).`, true);
+    await loadWaitingRooms();
+  } catch (err) {
+    showStatus($('panelStatus'), err.message, false);
+  }
+});
+$('btnCleanupAllWaiting')?.addEventListener('click', async () => {
+  if (!window.confirm('¿Cerrar TODAS las salas en espera? Se devolverán CN si corresponde.')) return;
+  try {
+    const r = await callFn('adminCleanupStaleRooms', { minAgeMinutes: 0 });
+    showStatus($('panelStatus'), `Listo: ${r.closed} sala(s) cerrada(s).`, true);
+    await loadWaitingRooms();
+  } catch (err) {
+    showStatus($('panelStatus'), err.message, false);
+  }
+});
 $('btnCloseDeposit').addEventListener('click', () => {
   $('depositModal').classList.add('hidden');
   selectedDepositId = null;

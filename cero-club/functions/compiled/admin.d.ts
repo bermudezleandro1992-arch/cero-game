@@ -21,4 +21,17 @@ export declare const adminUpdateUser: import("firebase-functions/v2/https").Call
 export declare const adminListTournaments: import("firebase-functions/v2/https").CallableFunction<{
     limit?: number;
 }, any>;
+export declare const adminListWaitingMatches: import("firebase-functions/v2/https").CallableFunction<{
+    limit?: number;
+}, any>;
+interface AdminCloseWaitingRequest {
+    matchId: string;
+    reason?: string;
+}
+export declare const adminCloseWaitingMatch: import("firebase-functions/v2/https").CallableFunction<AdminCloseWaitingRequest, any>;
+interface AdminCleanupStaleRequest {
+    minAgeMinutes?: number;
+    limit?: number;
+}
+export declare const adminCleanupStaleRooms: import("firebase-functions/v2/https").CallableFunction<AdminCleanupStaleRequest, any>;
 export {};

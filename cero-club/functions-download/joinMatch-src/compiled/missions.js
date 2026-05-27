@@ -287,21 +287,13 @@ exports.onMatchFinished = (0, firestore_1.onDocumentUpdated)({ document: 'matche
     for (const uid of playerIds) {
         updates.push(_updateMissionProgress(db, uid, 'play'));
     }
-    // Acción 'win' para el ganador + actualizar contador semanal (no invitados)
+    // Acción 'win' para el ganador + actualizar contador semanal
     if (winnerUid) {
         updates.push(_updateMissionProgress(db, winnerUid, 'win'));
-        updates.push((async () => {
-            const userSnap = await db.doc(`users/${winnerUid}`).get();
-            const isGuest = userSnap.data()?.['isGuest'] === true
-                || userSnap.data()?.['anon'] === true;
-            if (isGuest)
-                return;
-            await db.doc(`users/${winnerUid}`).update({
-                weeklyWins: firestore_2.FieldValue.increment(1),
-                monthlyWins: firestore_2.FieldValue.increment(1),
-                rankScore: firestore_2.FieldValue.increment(10),
-            });
-        })());
+        updates.push(db.doc(`users/${winnerUid}`).update({
+            weeklyWins: firestore_2.FieldValue.increment(1),
+            rankScore: firestore_2.FieldValue.increment(10),
+        }).then(() => { }).catch(() => { }));
     }
     // Acción 'declare_cero' si la última acción fue declareCero
     const lastAction = after['lastAction'];

@@ -18,17 +18,11 @@ exports.playTurn     = gameModule.playTurn;
 exports.leaveMatch   = gameModule.leaveMatch;
 exports.forfeitMatch = gameModule.forfeitMatch;
 exports.endMatch     = gameModule.endMatch;
-exports.temporaryLeaveMatch   = gameModule.temporaryLeaveMatch;
-exports.getRejoinStatus       = gameModule.getRejoinStatus;
-exports.checkMatchRejoinExpiry = gameModule.checkMatchRejoinExpiry;
-exports.expireRejoinMatches   = gameModule.expireRejoinMatches;
-exports.expireStaleWaitingMatches = gameModule.expireStaleWaitingMatches;
 
 // ── Módulo: monetización + Mercado Pago ──────────────────────────────────────
 const monetModule = require('./compiled/monetization');
 exports.purchaseCoins       = monetModule.purchaseCoins;
 exports.createCoinPayment   = monetModule.createCoinPayment;
-exports.getPaymentCatalog   = monetModule.getPaymentCatalog;
 exports.activateVIP         = monetModule.activateVIP;
 exports.mercadoPagoWebhook  = monetModule.mercadoPagoWebhook;
 exports.grantMonthlyVIPCoins = monetModule.grantMonthlyVIPCoins;
@@ -37,19 +31,7 @@ exports.grantMonthlyVIPCoins = monetModule.grantMonthlyVIPCoins;
 const tournModule = require('./compiled/tournaments');
 exports.registerTournament            = tournModule.registerTournament;
 exports.cancelTournamentRegistration  = tournModule.cancelTournamentRegistration;
-exports.getWeeklyTournament           = tournModule.getWeeklyTournament;
-exports.adminSeedWeeklyTournament     = tournModule.adminSeedWeeklyTournament;
-exports.seedWeeklyTournament          = tournModule.seedWeeklyTournament;
-
-// ── Módulo: admin panel ───────────────────────────────────────────────────────
-const adminModule = require('./compiled/admin');
-exports.adminGetUser          = adminModule.adminGetUser;
-exports.adminSetCeroCoins     = adminModule.adminSetCeroCoins;
-exports.adminUpdateUser       = adminModule.adminUpdateUser;
-exports.adminListTournaments  = adminModule.adminListTournaments;
-exports.adminListWaitingMatches = adminModule.adminListWaitingMatches;
-exports.adminCloseWaitingMatch  = adminModule.adminCloseWaitingMatch;
-exports.adminCleanupStaleRooms  = adminModule.adminCleanupStaleRooms;
+exports.awardTournamentPrizes         = tournModule.awardTournamentPrizes;
 
 // ── Módulo: misiones ──────────────────────────────────────────────────────────
 const missModule = require('./compiled/missions');
@@ -69,24 +51,6 @@ exports.updateRanking      = engModule.updateRanking;         // snapshot manual
 exports.resetWeeklyRanking = engModule.resetWeeklyRanking;
 exports.purchaseCosmetic   = engModule.purchaseCosmetic;
 exports.equipCosmetic      = engModule.equipCosmetic;
-
-// ── Módulo: billetera (P2P, referidos, apuestas, espectadores) ────────────────
-const walletModule = require('./compiled/wallet');
-exports.transferCeroCoins   = walletModule.transferCeroCoins;
-exports.getWalletHistory    = walletModule.getWalletHistory;
-exports.applyReferralCode   = walletModule.applyReferralCode;
-exports.placeMatchBet       = walletModule.placeMatchBet;
-exports.getMatchBettingInfo = walletModule.getMatchBettingInfo;
-exports.joinAsSpectator     = walletModule.joinAsSpectator;
-
-// ── Depósitos con comprobante + panel CEO ─────────────────────────────────────
-const depositsModule = require('./compiled/deposits');
-exports.getDepositMethods    = depositsModule.getDepositMethods;
-exports.submitDepositRequest = depositsModule.submitDepositRequest;
-exports.adminListDeposits    = depositsModule.adminListDeposits;
-exports.adminReviewDeposit   = depositsModule.adminReviewDeposit;
-
-exports.resetMonthlyRanking = engModule.resetMonthlyRanking;
 
 let _visionClient = null;
 function getVisionClient() {

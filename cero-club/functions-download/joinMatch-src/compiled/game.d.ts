@@ -43,13 +43,11 @@
  *   matches/{matchId}/hands/{uid}      ← solo el dueño puede leer
  *     cards: Card[]
  */
-import { FieldValue } from 'firebase-admin/firestore';
 import type { Card, CardColor, GamePhase } from './CeroEngine';
 interface PlayerInfo {
     uid: string;
     name: string;
     index: number;
-    isGuest?: boolean;
 }
 interface LastAction {
     type: string;
@@ -59,7 +57,7 @@ interface LastAction {
     color?: CardColor | null;
     count?: number | undefined;
 }
-export interface MatchDoc {
+interface MatchDoc {
     status: 'waiting' | 'playing' | 'finished';
     mode: 'classic' | 'cero';
     players: PlayerInfo[];
@@ -78,39 +76,18 @@ export interface MatchDoc {
     winner: string | null;
     pendingTurn: number | null;
     lastAction: LastAction | null;
-    absences?: Record<string, {
-        rejoinUntil: FirebaseFirestore.Timestamp;
-        leftAt: FirebaseFirestore.Timestamp;
-    }>;
-    rejoinBanner?: {
-        absentUid: string;
-        absentName: string;
-        rejoinUntil: FirebaseFirestore.Timestamp;
-    } | null;
-    tournamentId?: string | null;
-    tournamentRound?: number | null;
-    bracketSlot?: number | null;
-    guestOnly?: boolean;
-    createdAt?: FirebaseFirestore.Timestamp | ReturnType<typeof FieldValue.serverTimestamp>;
-    closedReason?: string;
 }
-/** Cierra una sala en espera, devuelve stake y la elimina del lobby. */
-export declare function closeWaitingRoom(db: FirebaseFirestore.Firestore, matchRef: FirebaseFirestore.DocumentReference, match: MatchDoc, reason: string): Promise<void>;
 type EndReason = 'won' | 'forfeit' | 'timeout';
-export declare function startMatch(db: FirebaseFirestore.Firestore, matchRef: FirebaseFirestore.DocumentReference, match: MatchDoc): Promise<void>;
 interface JoinMatchRequest {
     mode?: string;
     format?: string;
     matchId?: string;
-    stakeCC?: number;
-    createNew?: boolean;
 }
 interface JoinMatchResponse {
     matchId: string;
     playerIndex: number;
     charged: boolean;
     coinsLeft: number;
-    stakeCC: number;
 }
 /**
  * Verifica elegibilidad (partidas gratis o saldo), descuenta coins atómicamente
@@ -147,30 +124,6 @@ export declare const leaveMatch: import("firebase-functions/v2/https").CallableF
     matchId: string;
 }, Promise<{
     ok: true;
-}>>;
-export declare const temporaryLeaveMatch: import("firebase-functions/v2/https").CallableFunction<{
-    matchId: string;
-}, Promise<{
-    ok: true;
-    rejoinUntil: number;
-}>>;
-export declare const checkMatchRejoinExpiry: import("firebase-functions/v2/https").CallableFunction<{
-    matchId: string;
-}, Promise<{
-    ok: true;
-    expired: boolean;
-    winnerUid?: string;
-}>>;
-/** Escanea partidas en curso con reconexión vencida (cada minuto). */
-export declare const expireRejoinMatches: import("firebase-functions/v2/scheduler").ScheduleFunction;
-/** Cierra salas waiting colgadas sin rival (~4 min). */
-export declare const expireStaleWaitingMatches: import("firebase-functions/v2/scheduler").ScheduleFunction;
-export declare const getRejoinStatus: import("firebase-functions/v2/https").CallableFunction<Record<string, never>, Promise<{
-    available: boolean;
-    matchId?: string;
-    rejoinUntil?: number;
-    status?: string;
-    stakeCC?: number;
 }>>;
 interface ForfeitResponse {
     ok: true;

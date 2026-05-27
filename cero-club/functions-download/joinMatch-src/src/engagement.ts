@@ -15,7 +15,6 @@ import { onCall, HttpsError }             from 'firebase-functions/v2/https';
 import { onSchedule }                     from 'firebase-functions/v2/scheduler';
 import { getFirestore, FieldValue }       from 'firebase-admin/firestore';
 import type { Transaction }               from 'firebase-admin/firestore';
-import * as crypto                        from 'crypto';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes
@@ -26,14 +25,10 @@ const WELCOME_COINS       = 100;
 const DAILY_BONUS_COINS   = 10;
 const DAILY_COOLDOWN_MS   = 24 * 60 * 60 * 1000;    // 24 h en ms
 
-function referralCodeForUid(uid: string): string {
-  return crypto.createHash('sha256').update(uid).digest('hex').slice(0, 8).toUpperCase();
-}
-
-const WEEKLY_PRIZES: Record<number, number> = {  // posición → CC (top 3 destacados)
-  1:  1_000,
-  2:  600,
-  3:  400,
+const WEEKLY_PRIZES: Record<number, number> = {  // posición → CC
+  1:  500,
+  2:  300,
+  3:  200,
   4:  75,
   5:  75,
   6:  50,
@@ -41,12 +36,6 @@ const WEEKLY_PRIZES: Record<number, number> = {  // posición → CC (top 3 dest
   8:  50,
   9:  50,
   10: 50,
-};
-
-const MONTHLY_TOP3_PRIZES: Record<number, number> = {
-  1: 5_000,
-  2: 3_000,
-  3: 1_500,
 };
 
 type ErrCode =
@@ -103,10 +92,6 @@ export const initUserProfile = onCall<Record<string, never>, Promise<InitProfile
     const uid     = request.auth!.uid;
     const name    = request.auth!.token.name  ?? 'Jugador';
     const email   = request.auth!.token.email ?? '';
-    const isGuest = (
-      (request.auth!.token['firebase'] as { sign_in_provider?: string } | undefined)
-        ?.sign_in_provider === 'anonymous'
-    );
     const db      = getFirestore();
     const userRef = db.doc(`users/${uid}`);
 
@@ -118,38 +103,26 @@ export const initUserProfile = onCall<Record<string, never>, Promise<InitProfile
 
       if (snap.exists) {
         ceroCoins = (snap.data()?.['ceroCoins'] as number | undefined) ?? 0;
-        if (!snap.data()?.['referralCode']) {
-          tx.update(userRef, { referralCode: referralCodeForUid(uid) });
-        }
-        return;   // perfil ya existe, no tocar saldo
+        return;   // perfil ya existe, no tocar
       }
 
-      // Primer login: crear perfil con bonus de bienvenida (invitados sin bonus)
+      // Primer login: crear perfil con bonus de bienvenida
       created   = true;
-      ceroCoins = isGuest ? 0 : WELCOME_COINS;
-
-      const referralCode = referralCodeForUid(uid);
+      ceroCoins = WELCOME_COINS;
 
       tx.set(userRef, {
         displayName:       name,
         email,
-        ceroCoins:         isGuest ? 0 : WELCOME_COINS,
-        isGuest,
-        anon:              isGuest,
+        ceroCoins:         WELCOME_COINS,
         freeGamesPlayed:   0,
         totalGamesPlayed:  0,
         wins:              0,
-        weeklyWins:        0,     // ranking semanal
-        monthlyWins:       0,     // ranking mensual
+        weeklyWins:        0,     // para el ranking semanal
         rankScore:         0,     // puntos de ranking (wins × 10 − losses × 2)
         lastDailyClaim:    null,
         ownedCosmetics:    [] as string[],
         equippedSkin:      null as string | null,
         equippedFrame:     null as string | null,
-        referralCode,
-        referredBy:        null as string | null,
-        referralCount:     0,
-        referralBonusClaimed: false,
         createdAt:         FieldValue.serverTimestamp(),
       });
     });
@@ -317,74 +290,6 @@ export const resetWeeklyRanking = onSchedule(
     await batch.commit();
 
     console.info(`[resetWeeklyRanking] ${weekKey} procesado. Top: ${entries[0]?.name ?? 'nadie'}`);
-  },
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// resetMonthlyRanking — día 1 de cada mes 00:05 UTC — premia top 3 del mes
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const resetMonthlyRanking = onSchedule(
-  { schedule: '5 0 1 * *', region: REGION, timeoutSeconds: 540 },
-  async () => {
-    const db  = getFirestore();
-    const now = new Date();
-    const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-    const prevMonth = now.getUTCMonth() === 0
-      ? `${now.getUTCFullYear() - 1}-12`
-      : `${now.getUTCFullYear()}-${String(now.getUTCMonth()).padStart(2, '0')}`;
-
-    const topSnap = await db.collection('users')
-      .orderBy('monthlyWins', 'desc')
-      .limit(50)
-      .get();
-
-    const entries = topSnap.docs.map((d, i) => ({
-      uid:         d.id,
-      name:        (d.data()['displayName'] as string | undefined) ?? 'Jugador',
-      monthlyWins: (d.data()['monthlyWins'] as number | undefined) ?? 0,
-      position:    i + 1,
-    }));
-
-    await db.doc(`ranking/${prevMonth}`).set({
-      period:      'monthly',
-      monthKey:    prevMonth,
-      generatedAt: FieldValue.serverTimestamp(),
-      entries:     entries.slice(0, 10),
-    });
-
-    const batch = db.batch();
-    for (const entry of entries.slice(0, 3)) {
-      const prize = MONTHLY_TOP3_PRIZES[entry.position] ?? 0;
-      if (prize <= 0 || entry.monthlyWins === 0) continue;
-
-      batch.update(db.doc(`users/${entry.uid}`), {
-        ceroCoins: FieldValue.increment(prize),
-      });
-      batch.set(
-        db.collection(`users/${entry.uid}/notifications`).doc(),
-        {
-          type:      'monthly_prize',
-          title:     `Top ${entry.position} del mes`,
-          body:      `Ganaste ${prize} CN por el puesto ${entry.position} en ${prevMonth}.`,
-          coins:     prize,
-          monthKey:  prevMonth,
-          read:      false,
-          createdAt: FieldValue.serverTimestamp(),
-        },
-      );
-    }
-    await batch.commit();
-
-    for (let i = 0; i < topSnap.docs.length; i += 450) {
-      const resetBatch = db.batch();
-      for (const d of topSnap.docs.slice(i, i + 450)) {
-        resetBatch.update(d.ref, { monthlyWins: 0 });
-      }
-      await resetBatch.commit();
-    }
-
-    console.info(`[resetMonthlyRanking] ${prevMonth} — campeón: ${entries[0]?.name ?? 'nadie'}`);
   },
 );
 

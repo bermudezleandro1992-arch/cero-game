@@ -377,21 +377,14 @@ export const onMatchFinished = onDocumentUpdated(
       updates.push(_updateMissionProgress(db, uid, 'play'));
     }
 
-    // Acción 'win' para el ganador + actualizar contador semanal (no invitados)
+    // Acción 'win' para el ganador + actualizar contador semanal
     if (winnerUid) {
       updates.push(_updateMissionProgress(db, winnerUid, 'win'));
       updates.push(
-        (async () => {
-          const userSnap = await db.doc(`users/${winnerUid}`).get();
-          const isGuest  = userSnap.data()?.['isGuest'] === true
-                        || userSnap.data()?.['anon'] === true;
-          if (isGuest) return;
-          await db.doc(`users/${winnerUid}`).update({
-            weeklyWins:  FieldValue.increment(1),
-            monthlyWins: FieldValue.increment(1),
-            rankScore:   FieldValue.increment(10),
-          });
-        })(),
+        db.doc(`users/${winnerUid}`).update({
+          weeklyWins: FieldValue.increment(1),
+          rankScore:  FieldValue.increment(10),
+        }).then(() => { /* void */ }).catch(() => { /* usuario puede no existir aún */ }),
       );
     }
 

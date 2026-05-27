@@ -18,6 +18,13 @@ function guard(cond: unknown, code: ErrCode, msg: string): asserts cond {
   if (!cond) throw new HttpsError(code, msg);
 }
 
+function matchCreatedMs(createdAt: unknown): number {
+  if (!createdAt || typeof (createdAt as { toMillis?: () => number }).toMillis !== 'function') {
+    return 0;
+  }
+  return (createdAt as { toMillis: () => number }).toMillis();
+}
+
 async function assertAdmin(uid: string): Promise<void> {
   const db = getFirestore();
   const snap = await db.doc(`admins/${uid}`).get();
@@ -165,5 +172,122 @@ export const adminListTournaments = onCall<{ limit?: number }>(
     return {
       tournaments: snap.docs.map(d => ({ id: d.id, ...d.data() })),
     };
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// adminListWaitingMatches — salas abiertas colgadas
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const adminListWaitingMatches = onCall<{ limit?: number }>(
+  { region: REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
+    await assertAdmin(request.auth!.uid);
+
+    const limit = Math.min(request.data?.limit ?? 50, 100);
+    const db    = getFirestore();
+    const snap  = await db.collection('matches')
+      .where('status', '==', 'waiting')
+      .orderBy('createdAt', 'desc')
+      .limit(limit)
+      .get();
+
+    const now = Date.now();
+    return {
+      matches: snap.docs.map(d => {
+        const data = d.data();
+        const createdMs = matchCreatedMs(data.createdAt);
+        const ageMs = createdMs > 0 ? now - createdMs : null;
+        return {
+          id:          d.id,
+          mode:        data.mode ?? 'classic',
+          stakeCC:     data.stakeCC ?? 0,
+          playerCount: data.playerCount ?? 0,
+          maxPlayers:  data.maxPlayers ?? 2,
+          guestOnly:   data.guestOnly === true,
+          players:     (data.players ?? []).map((p: { uid?: string; name?: string }) => ({
+            uid:  p.uid ?? '',
+            name: p.name ?? 'Jugador',
+          })),
+          createdAt: createdMs || null,
+          ageMinutes: ageMs != null ? Math.round(ageMs / 60000) : null,
+          stale: ageMs != null && ageMs >= 4 * 60 * 1000,
+        };
+      }),
+    };
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// adminCloseWaitingMatch — cerrar una sala waiting
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AdminCloseWaitingRequest { matchId: string; reason?: string }
+
+export const adminCloseWaitingMatch = onCall<AdminCloseWaitingRequest>(
+  { region: REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
+    await assertAdmin(request.auth!.uid);
+
+    const matchId = request.data?.matchId;
+    guard(typeof matchId === 'string' && matchId, 'invalid-argument', 'matchId inválido');
+
+    const db  = getFirestore();
+    const ref = db.doc(`matches/${matchId}`);
+    const snap = await ref.get();
+    guard(snap.exists, 'not-found', 'Sala no encontrada');
+
+    const match = snap.data() as import('./game').MatchDoc;
+    guard(match.status === 'waiting', 'failed-precondition', 'La sala ya no está en espera');
+
+    const { closeWaitingRoom } = await import('./game');
+    await closeWaitingRoom(db, ref, match, request.data?.reason ?? 'admin_close');
+
+    return { ok: true, matchId };
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// adminCleanupStaleRooms — cerrar todas las waiting > minAgeMinutes
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AdminCleanupStaleRequest { minAgeMinutes?: number; limit?: number }
+
+export const adminCleanupStaleRooms = onCall<AdminCleanupStaleRequest>(
+  { region: REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
+    await assertAdmin(request.auth!.uid);
+
+    const minAgeMinutes = Math.min(Math.max(request.data?.minAgeMinutes ?? 4, 1), 60);
+    const limit         = Math.min(request.data?.limit ?? 100, 200);
+    const cutoff        = Date.now() - minAgeMinutes * 60 * 1000;
+
+    const db   = getFirestore();
+    const snap = await db.collection('matches')
+      .where('status', '==', 'waiting')
+      .limit(limit)
+      .get();
+
+    const { closeWaitingRoom } = await import('./game');
+    let closed = 0;
+
+    for (const docSnap of snap.docs) {
+      const match = docSnap.data() as import('./game').MatchDoc;
+      const createdMs = matchCreatedMs(match.createdAt);
+      if (createdMs > 0 && createdMs <= cutoff) {
+        await closeWaitingRoom(
+          db,
+          docSnap.ref,
+          match,
+          'admin_cleanup_stale',
+        );
+        closed++;
+      }
+    }
+
+    return { ok: true, closed, minAgeMinutes };
   },
 );

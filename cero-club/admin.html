@@ -159,6 +159,17 @@
       </div>
 
       <div class="card">
+        <h2>Salas abiertas colgadas</h2>
+        <p class="sub">Salas en espera sin rival. Se cierran solas a los ~4 min; podés limpiarlas acá.</p>
+        <div class="actions">
+          <button type="button" class="btn-primary" id="btnRefreshRooms">Actualizar listado</button>
+          <button type="button" class="btn-warn" id="btnCleanupStale">Limpiar colgadas (+4 min)</button>
+          <button type="button" class="btn-danger" id="btnCleanupAllWaiting">Cerrar TODAS las waiting</button>
+        </div>
+        <div id="roomsList" style="margin-top:16px"></div>
+      </div>
+
+      <div class="card">
         <h2>Torneos semanales</h2>
         <div class="actions">
           <button type="button" class="btn-warn" id="btnSeedTournament">Crear / refrescar torneo semanal</button>
