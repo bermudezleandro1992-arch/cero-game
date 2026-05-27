@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>CERO · Mesa en vivo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/cero.css?v=20" />
+</head>
+<body>
+
+  <div class="cero-app">
+
+    <header class="cero-header">
+      <a href="/" class="back-link">← Lobby</a>
+      <div class="header-center">
+        <span class="header-brand">CERO</span>
+        <div class="header-tags">
+          <span class="htag" id="gameMode">Clásico</span>
+          <span class="htag" id="playerCountLabel">2 jugadores</span>
+          <span class="htag htag-format" id="gameFormatLabel">1 vs 1</span>
+        </div>
+      </div>
+      <div class="header-controls">
+        <button type="button" class="icon-btn" id="ceroSidebarBtn" title="Panel" aria-label="Abrir panel">☰</button>
+        <button type="button" class="icon-btn cero-abandon-btn" id="ceroAbandonBtn" title="Abandonar partida" hidden>🚪 Salir</button>
+        <button class="icon-btn" id="muteBtn" title="Silenciar voz">🔊</button>
+      </div>
+    </header>
+
+    <div class="mobile-hud" id="mobileHud" aria-hidden="true">
+      <div class="mobile-score-strip" id="mobileScoreStrip"></div>
+    </div>
+
+    <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
+
+    <div class="cero-layout">
+
+      <!-- ── MESA PRINCIPAL ───────────────────────────────────────── -->
+      <main class="cero-main">
+        <div class="turn-timer-wrap" id="turnTimerWrap" aria-hidden="true">
+          <span class="turn-timer-lbl" id="turnTimerLbl">Tu turno</span>
+          <div class="turn-timer-track"><div class="turn-timer-bar" id="turnTimerBar"></div></div>
+        </div>
+
+        <div class="game-area" id="ceroTable">
+
+          <div class="table-oval">
+            <div class="cpu-seats-layer" id="cpuSeats"></div>
+
+            <div class="table-center" id="tableCenter">
+              <div class="center-piles">
+                <div class="pile-wrap pile-deck-wrap">
+                  <div class="pile-label">Mazo</div>
+                  <div class="card-pile deck-pile" id="deckPile"></div>
+                </div>
+                <div class="center-divider" hidden>
+                  <div class="color-indicator" id="colorIndicator" title="Color activo (Modo Cero)"></div>
+                  <div class="draw-stack-badge" id="drawStackBadge" style="display:none">+0</div>
+                </div>
+                <div class="pile-wrap pile-discard-wrap">
+                  <div class="pile-label">Descarte</div>
+                  <div class="card-pile discard-pile discard-face-up" id="discardPile"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="status-banner" id="statusBanner">Repartiendo...</div>
+          </div>
+
+          <div class="player-zone">
+            <div class="my-team-hero" id="myTeamHero" style="display:none" aria-hidden="true"></div>
+            <div class="player-label">
+              <span class="player-name-badge" id="myPlayerName">Vos</span>
+              <span class="player-team-badge" id="myTeamBadge" style="display:none"></span>
+              <div class="cero-say-indicator" id="ceroBadge" style="display:none">CERO!</div>
+            </div>
+            <div class="player-hand" id="playerHand"></div>
+            <div class="action-bar" id="actionBar"></div>
+          </div>
+
+        </div>
+      </main>
+
+      <!-- ── PANEL LATERAL ───────────────────────────────────────── -->
+      <aside class="cero-sidebar">
+
+        <section class="score-panel" id="scorePanel">
+          <div class="sp-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 010-5H6M18 9h1.5a2.5 2.5 0 000-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22M12 2v7"/></svg>
+            PUNTAJE
+          </div>
+          <div class="score-list" id="scoreList"></div>
+        </section>
+
+        <section class="cero-rules-panel" id="ceroRulesPanel">
+          <span class="qc-label">Regla CERO</span>
+          <p class="cero-rule-hint">Con 1 carta: apretá <strong>★ ¡CERO!</strong> antes de tirar. Si no, el rival puede denunciar (+2 cartas).</p>
+          <button type="button" class="cero-denounce-btn cero-denounce-sidebar" id="btnDenounceCero" style="display:none">¡NO DIJO CERO!</button>
+        </section>
+
+        <section class="quick-chat">
+          <span class="qc-label">Mensajes rápidos</span>
+          <div class="chat-quickbtns">
+            <button type="button" class="chat-quick" data-msg="¡CERO!">★ CERO</button>
+            <button type="button" class="chat-quick" data-msg="¡Última carta!">🃏 Última</button>
+            <button type="button" class="chat-quick" data-msg="¡+2!">+2</button>
+            <button type="button" class="chat-quick" data-msg="¡+4!">+4</button>
+            <button type="button" class="chat-quick" data-msg="◈ Skill gaming">◈ CC</button>
+            <button type="button" class="chat-quick" data-msg="¡Suerte!">🎲</button>
+            <button type="button" class="chat-quick" data-msg="¡GG!">👍 GG</button>
+            <button type="button" class="chat-quick" data-msg="jaja">😂</button>
+            <button type="button" class="chat-quick" data-msg="🔥">🔥</button>
+            <button type="button" class="chat-quick" data-msg="😎">😎</button>
+          </div>
+        </section>
+
+        <section class="throw-panel">
+          <span class="qc-label">Items a rival (sanos)</span>
+          <div class="throw-btns" id="throwBtns"></div>
+        </section>
+
+        <section class="cards-guide-panel" hidden>
+          <span class="qc-label">Guía Modo Cero ★</span>
+          <div class="cards-guide-list" id="cardsGuideList"></div>
+        </section>
+
+        <section class="chat-panel">
+          <div class="cp-header">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            CHAT MESA
+          </div>
+          <div class="chat-log" id="chatLog"></div>
+          <form class="chat-form" id="chatForm">
+            <input type="text" id="chatInput" placeholder="Escribí un mensaje..." maxlength="120" autocomplete="off" />
+            <button type="submit" class="chat-send">Enviar</button>
+          </form>
+        </section>
+
+      </aside>
+    </div>
+  </div>
+
+  <div class="play-pile" id="playPile" aria-hidden="true"></div>
+
+  <script type="module" src="/js/firebase-hub.js?v=10"></script>
+  <script src="/js/room-lifecycle.js?v=8"></script>
+  <script src="/js/room-prizes.js?v=3"></script>
+  <script src="/js/match-rewards.js?v=3"></script>
+  <script src="/js/friends-social.js?v=15"></script>
+  <script src="js/cards.js?v=9"></script>
+  <script src="js/game.js?v=8"></script>
+  <script src="js/cero-turn-timer.js?v=7"></script>
+  <script src="js/cero-table-skins.js?v=2"></script>
+  <script src="js/cero-throws.js?v=1"></script>
+  <script src="js/cero-chat.js?v=6"></script>
+  <script src="js/cero-colyseus.js?v=5"></script>
+  <script src="js/cero-online.js?v=25"></script>
+  <script src="js/cero-host-server.js?v=3"></script>
+  <script src="js/ui.js?v=25"></script>
+  <script src="js/cero-drag.js?v=8"></script>
+  <script src="js/main.js?v=18"></script>
+</body>
+</html>

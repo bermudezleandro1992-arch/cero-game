@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cero Club · Hub de Juegos</title>
+  <script>
+    try {
+      if (sessionStorage.getItem('cero_user')) location.replace('/app/');
+    } catch (_) {}
+  </script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/hub.css?v=12" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       HUB SHELL  —  sidebar izquierda + contenido principal
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="hub-shell">
+
+  <!-- ── LEFT SIDEBAR ─────────────────────────────────────────── -->
+  <aside class="hub-sidebar" id="hubSidebar">
+
+    <!-- Logo -->
+    <div class="sidebar-logo">
+      <span class="sl-icon">
+        <svg width="26" height="26" viewBox="0 0 36 36" fill="none">
+          <rect x="2" y="2" width="32" height="32" rx="6" fill="#00EF90" opacity=".12"/>
+          <rect x="2" y="2" width="32" height="32" rx="6" stroke="#00EF90" stroke-width="1.5"/>
+          <text x="18" y="24" text-anchor="middle" font-family="Georgia,serif" font-size="22" font-weight="700" fill="#00EF90">0</text>
+        </svg>
+      </span>
+      <div class="sl-text">
+        <span class="sl-zero">CERO</span><span class="sl-club">CLUB</span>
+        <span class="sl-beta">BETA</span>
+      </div>
+    </div>
+
+    <!-- Nav items -->
+    <nav class="sidebar-nav">
+      <button class="snav-item active" data-section="lobby" onclick="_snavGo('lobby', this)">
+        <svg class="snav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+        <span class="snav-label">Inicio</span>
+      </button>
+      <button class="snav-item" data-section="ranking" onclick="_snavGo('ranking', this)">
+        <svg class="snav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <span class="snav-label">Ranking</span>
+      </button>
+      <button class="snav-item" data-section="tienda" onclick="_snavGo('tienda', this)">
+        <svg class="snav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+        <span class="snav-label">Tienda</span>
+      </button>
+      <button class="snav-item" data-section="torneos" onclick="_snavGo('torneos', this)">
+        <svg class="snav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M17 3H7l-1 7a5 5 0 0010 0L17 3z"/><path d="M6.5 10H4a1 1 0 01-1-1V7h3M17.5 10H20a1 1 0 001-1V7h-3"/></svg>
+        <span class="snav-label">Torneos</span>
+      </button>
+      <button class="snav-item" data-section="perfil" onclick="_snavGo('perfil', this)">
+        <svg class="snav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span class="snav-label">Perfil</span>
+      </button>
+      <button class="snav-item" onclick="openHubChat()">
+        <svg class="snav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span class="snav-label">Chat</span>
+      </button>
+    </nav>
+
+    <!-- Spacer -->
+    <div class="sidebar-spacer"></div>
+
+    <!-- Online count + solicitudes de amigos -->
+    <div class="sidebar-online">
+      <div class="sidebar-online-left">
+        <span class="sol-dot"></span>
+        <span id="onlineLiveCount" data-online-count data-online-format="full">0 en línea</span>
+      </div>
+      <button type="button" class="online-friends-btn" onclick="openProfileHub('notificaciones')" title="Perfil y notificaciones" aria-label="Notificaciones">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="notif-badge sidebar-friends-badge" id="sidebarFriendsBadge" hidden>0</span>
+      </button>
+    </div>
+
+    <!-- Profile section -->
+    <div class="sidebar-profile" id="sidebarProfile">
+      <div class="sp-avatar" id="spAvatar">
+        <span id="avatarInitials">JD</span>
+        <div id="avatarLevel" class="sp-level">1</div>
+      </div>
+      <div class="sp-info">
+        <div class="sp-name" id="profileName">Juan Díaz</div>
+        <div class="sp-coins" id="coinsAmount" onclick="openCeroWallet()" title="Gestionar Cero Coin" style="cursor:pointer">◈ 1.500 CC</div>
+      </div>
+      <button class="sp-edit" onclick="openProfileHub('perfil')" title="Mi cuenta">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+    </div>
+
+    <!-- Logout -->
+    <button class="sidebar-logout" id="headerLogoutBtn" onclick="logout()" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      <span>Salir</span>
+    </button>
+    <a href="login.html" class="sidebar-login" id="headerLoginBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      <span>Ingresar</span>
+    </a>
+  </aside>
+
+  <!-- ── MAIN CONTENT ──────────────────────────────────────────── -->
+  <div class="hub-content">
+
+    <!-- ── TOP BAR (mobile burger + compact info) ─────────────── -->
+    <header class="hub-topbar">
+      <button class="topbar-burger" id="sidebarToggle" onclick="_toggleSidebar()" aria-label="Menú">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="hub-logo topbar-logo">
+        <span class="logo-zero">CERO</span><span class="logo-club">CLUB</span>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-online-group">
+          <div class="topbar-online">
+            <span class="online-dot-sm"></span>
+            <span class="topbar-count" data-online-count data-online-format="short">0</span>
+            <span class="topbar-online-lbl">en línea</span>
+          </div>
+          <button type="button" class="online-friends-btn topbar-notif-btn" onclick="openProfileHub('notificaciones')" title="Perfil y notificaciones" aria-label="Notificaciones">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+            <span class="notif-badge" id="notifBadge" hidden>0</span>
+          </button>
+        </div>
+        <div class="topbar-avatar" id="topbarAvatar" onclick="openProfileHub('perfil')">JD</div>
+      </div>
+    </header>
+
+    <!-- ── MOBILE PROFILE STRIP ─────────────────────────────── -->
+    <div class="mobile-profile-strip" id="mobileProfileStrip">
+      <div class="mps-avatar" id="mpsAvatar">JD</div>
+      <div class="mps-info">
+        <div class="mps-name" id="mpsName">Cargando...</div>
+        <div class="mps-coins" id="mpsCoins">◈ 0 CC</div>
+      </div>
+      <button type="button" class="online-friends-btn mps-notif-btn" onclick="openProfileHub('notificaciones')" aria-label="Notificaciones">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="notif-badge mps-notif-badge" id="mpsNotifBadge" hidden>0</span>
+      </button>
+      <button class="mps-play" onclick="openModal('modalRoomSelector')">▶ JUGAR</button>
+    </div>
+
+    <!-- ── SECTIONS wrapper ───────────────────────────────────── -->
+    <main class="hub-main">
+
+    <!-- OLD sidebar kept hidden for JS compatibility (profile-sidebar IDs) -->
+    <aside class="profile-sidebar" style="display:none" aria-hidden="true">
+      <div class="profile-card">
+        <div class="profile-avatar-wrap">
+          <div class="profile-avatar" id="profileAvatar">
+            <span class="avatar-initials" style="display:none"></span>
+          </div>
+          <div class="profile-status online"></div>
+        </div>
+        <div class="profile-info"></div>
+        <div class="coins-display" id="coinsDisplay">
+          <div class="coins-data">
+            <span class="coins-amount" style="display:none"></span>
+          </div>
+        </div>
+        <div class="profile-stats">
+          <div class="stat-item"><span class="stat-value" id="statGames">0</span></div>
+          <div class="stat-item"><span class="stat-value" id="statWins">0</span></div>
+          <div class="stat-item"><span class="stat-value" id="statWinRate">0%</span></div>
+        </div>
+      </div>
+      <div class="profile-quick-actions"></div>
+      <div class="recent-activity"><ul class="activity-list" id="activityList"></ul></div>
+    </aside>
+
+    <section class="lobby-content">
+      <!-- ── HERO STATS BAR ───────────────────────────────────── -->
+      <div class="hub-stats-bar">
+        <div class="hsb-item hsb-item--online">
+          <span class="hsb-icon hsb-icon-pulse" aria-hidden="true"></span>
+          <div class="hsb-stat">
+            <div class="hsb-val" data-online-count data-online-format="short">0</div>
+            <div class="hsb-lbl">En línea</div>
+          </div>
+        </div>
+        <div class="hsb-item">
+          <span class="hsb-icon">🎮</span>
+          <div><div class="hsb-val" id="hsb-rooms">0</div><div class="hsb-lbl">Partidas activas</div></div>
+        </div>
+        <div class="hsb-item">
+          <span class="hsb-icon">🏆</span>
+          <div><div class="hsb-val" id="hsb-tournaments">0</div><div class="hsb-lbl">Torneos</div></div>
+        </div>
+        <div class="hsb-sep"></div>
+        <button class="hsb-play-btn" onclick="openModal('modalRoomSelector')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Jugar ahora
+        </button>
+      </div>
+
+      <div class="lobby-header">
+        <h1 class="lobby-title">Elegí tu juego</h1>
+        <p class="lobby-subtitle">Encontrá sala o creá una nueva — el mazo está listo.</p>
+      </div>
+
+      <!-- ── GAME CARDS GRID ──────────────────────────────────────── -->
+      <div class="games-grid">
+
+        <!-- TRUCO -->
+        <div class="game-card" data-game="truco" id="cardTruco">
+          <div class="game-card-glow glow-truco"></div>
+          <div class="game-card-inner">
+            <div class="game-info">
+              <div class="game-tag">🇦🇷 Clásico Argentino</div>
+              <h2 class="game-name">Truco</h2>
+              <p class="game-desc">Cantá el truco, flor y envido. Mesa para 1v1, 2v2 y 3v3. A 15 o 30 puntos.</p>
+              <div class="game-meta">
+                <span class="meta-pill">2–6 jugadores</span>
+                <span class="meta-pill">Con/Sin Flor</span>
+                <span class="meta-pill">15 ó 30 pts</span>
+              </div>
+            </div>
+            <div class="game-action-area">
+              <div class="online-indicator">
+                <span class="online-dot"></span>
+                <span class="online-count"><span id="trucoOnline" data-online-game="truco" data-online-format="short" data-online-label="jugando">0</span> jugando</span>
+              </div>
+              <button class="btn-play btn-truco" onclick="openRoomModal('truco')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right:4px"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-7 3l2 4h-4l2-4zm0 12l-4-4h8l-4 4z"/></svg>
+                Crear Sala
+              </button>
+            </div>
+            <!-- Classic naipes artwork -->
+            <div class="game-icon-area truco-icon-area">
+              <div class="naipe-fan">
+                <!-- Espada 1 -->
+                <div class="naipe-card nc-esp nc-r-left">
+                  <span class="nc-num">1</span>
+                  <span class="nc-sym">🗡</span>
+                </div>
+                <!-- Basto 3 -->
+                <div class="naipe-card nc-bas nc-r-center">
+                  <span class="nc-num">3</span>
+                  <span class="nc-sym">✤</span>
+                </div>
+                <!-- Oro 7 -->
+                <div class="naipe-card nc-oro nc-r-right">
+                  <span class="nc-num">7</span>
+                  <span class="nc-sym">●</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CERO -->
+        <div class="game-card game-card-cero" data-game="cero" id="cardCero">
+          <div class="game-card-glow glow-cero"></div>
+          <div class="game-card-inner">
+            <div class="game-icon-area cero-icon-area">
+              <div class="cero-preview-cards">
+                <div class="prev-card pc-mag">7</div>
+                <div class="prev-card pc-gld">+4</div>
+                <div class="prev-card pc-blu">5</div>
+                <div class="prev-card pc-back"><span>CERO</span></div>
+              </div>
+            </div>
+            <div class="game-info">
+              <div class="game-tag featured-tag">✦ Dark Arena Edition</div>
+              <h2 class="game-name">Cero</h2>
+              <p class="game-desc">Modo Clásico y el exclusivo <strong>Modo Cero</strong> con 4 cartas secretas únicas. El mazo más épico que vas a jugar.</p>
+              <div class="game-meta">
+                <span class="meta-pill">2–8 jugadores</span>
+                <span class="meta-pill">Modo Cero ★</span>
+                <span class="meta-pill">Dark Arena</span>
+              </div>
+            </div>
+            <div class="game-action-area">
+              <div class="online-indicator">
+                <span class="online-dot"></span>
+                <span class="online-count"><span id="ceroOnline" data-online-game="cero" data-online-format="short" data-online-label="jugando">0</span> jugando</span>
+              </div>
+              <button class="btn-play btn-cero" onclick="openRoomModal('cero')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right:4px"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-7 3l2 4h-4l2-4zm0 12l-4-4h8l-4 4z"/></svg>
+                Crear Sala
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- UNO 3D (prototype) -->
+        <div class="game-card game-card-uno" data-game="uno" id="cardUno">
+          <div class="game-card-glow glow-uno"></div>
+          <div class="game-card-inner">
+            <div class="game-icon-area uno-icon-area">
+              <div class="uno-preview-cards">
+                <div class="uno-prev red">7</div>
+                <div class="uno-prev blue">+2</div>
+                <div class="uno-prev green">0</div>
+                <div class="uno-prev yellow">↺</div>
+              </div>
+            </div>
+            <div class="game-info">
+              <div class="game-tag">Prototype · Mesa 2D premium</div>
+              <h2 class="game-name">UNO</h2>
+              <p class="game-desc">Basado en Unum — mesa de fieltro, cartas OpenGameArt y reglas oficiales. Single player vs bots para comparar con CERO.</p>
+              <div class="game-meta">
+                <span class="meta-pill">1 vs bots</span>
+                <span class="meta-pill">Mesa 3D</span>
+                <span class="meta-pill">Offline</span>
+              </div>
+            </div>
+            <div class="game-action-area">
+              <button class="btn-play btn-uno" onclick="window.location.href='/games/uno/'">
+                Probar UNO 3D
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /games-grid -->
+
+      <!-- ── LIVE ROOMS ────────────────────────────────────────────── -->
+      <div class="live-rooms-section">
+        <div class="section-header-row">
+          <h3 class="section-label-lg">Salas en Juego</h3>
+          <div class="online-total-badge">
+            <span class="online-dot-sm"></span>
+            <span data-online-count data-online-format="full">0 en línea</span>
+            <button type="button" class="online-friends-btn online-friends-btn--inline" onclick="openProfileHub('notificaciones')" title="Notificaciones" aria-label="Notificaciones">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="my-room-bar" id="myRoomBar" hidden></div>
+        <div class="live-rooms-grid" id="liveRoomsGrid">
+          <!-- filled by hub.js -->
+        </div>
+        <div class="quickplay-row">
+          <button class="quickplay-btn qp-truco" onclick="playNowPick('truco')">
+            ♠ Jugar Truco rápido · 1v1
+          </button>
+          <button class="quickplay-btn qp-cero" onclick="playNowPick('cero')">
+            ★ Jugar Cero rápido · 1v1
+          </button>
+        </div>
+      </div>
+
+      <!-- ── HUB TOOLS PANEL ───────────────────────────────────────── -->
+      <div class="hub-tools">
+
+        <!-- Tab navigation -->
+        <div class="tools-tabs">
+          <button class="tools-tab active" data-tab="reglamentos">📖 Reglamentos</button>
+          <button class="tools-tab" data-tab="legal">ℹ️ Info Legal</button>
+        </div>
+
+        <!-- ── PANEL: REGLAMENTOS ──────────────────────────────────── -->
+        <div class="tools-panel active" id="panel-reglamentos">
+          <p class="rules-pdf-banner">
+            📄 <a href="/legal/reglamento-oficial.pdf" target="_blank" rel="noopener">Reglamento oficial completo (PDF)</a>
+            · <a href="#terminos" onclick="document.querySelector('[data-tab=legal]')?.click()">Términos y reembolsos</a>
+          </p>
+          <div class="rules-accordion">
+
+            <div class="rule-item">
+              <button class="rule-toggle">♠ Reglamento del Truco <span class="rule-arrow">▾</span></button>
+              <div class="rule-content">
+                <p>Juego argentino para 2, 4 o 6 jugadores con mazo español de 40 cartas. Objetivo: llegar a <strong>15 puntos</strong>.</p>
+                <ul>
+                  <li><strong>Reparto:</strong> 3 cartas por jugador cada mano.</li>
+                  <li><strong>Envido:</strong> Se canta antes de bajar cartas. El puntaje es la suma de las 2 más altas del mismo palo + 20.</li>
+                  <li><strong>Truco:</strong> Se canta para apostar la mano. Truco (2 pts) → Re-Truco (3) → Vale Cuatro (4).</li>
+                  <li><strong>Jerarquía:</strong> 1♠ › 1♣ › 7♠ › 7♦ › 3 › 2 › 1♥ › 1♦ › 12 › 11 › 10 › 7♥ › 7♣ › 6 › 5 › 4</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="rule-item">
+              <button class="rule-toggle">♦ Reglamento del Chinchón <span class="rule-arrow">▾</span></button>
+              <div class="rule-content">
+                <p>Juego con mazo de 52 cartas para 2–6 jugadores. Objetivo: bajar todas tus cartas antes que los demás.</p>
+                <ul>
+                  <li><strong>Combinaciones:</strong> Escalas (3+ cartas del mismo palo, consecutivas) y Piernas (3+ del mismo número).</li>
+                  <li><strong>Turno:</strong> Tomás del mazo o del descarte y tirás una carta.</li>
+                  <li><strong>Cierre:</strong> Cuando tenés todo armado cerrás. Los demás pagan con sus cartas sueltas.</li>
+                  <li><strong>Chinchón:</strong> Cerrar con las 7 cartas en una sola escala — ¡victoria automática!</li>
+                  <li><strong>Eliminación:</strong> Al llegar a 100 puntos de penalidad quedás afuera.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="rule-item">
+              <button class="rule-toggle">★ Reglamento del Cero <span class="rule-arrow">▾</span></button>
+              <div class="rule-content">
+                <p>El juego de colores de Cero Club. Sé el primero en quedarte sin cartas.</p>
+                <ul>
+                  <li><strong>Turno:</strong> Jugás una carta que coincida en color o número con la del centro.</li>
+                  <li><strong>+2:</strong> El siguiente jugador roba 2 cartas y pierde su turno.</li>
+                  <li><strong>+4:</strong> Roba 4, cambia el color activo y pierde el turno.</li>
+                  <li><strong>↩ / ⟳:</strong> Invierten el orden / saltean al siguiente jugador.</li>
+                  <li><strong>¡CERO!:</strong> Cuando te queda 1 carta debés cantarlo. Si alguien te atrapa antes, robás 2.</li>
+                </ul>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── PANEL: LEGAL ───────────────────────────────────────── -->
+        <div class="tools-panel" id="panel-legal">
+          <div class="legal-content">
+            <h3 id="terminos">Documentación oficial</h3>
+            <p>Cero Club · Skill Gaming · Argentina. Al usar la plataforma aceptás los documentos vigentes:</p>
+            <ul class="legal-doc-list">
+              <li>
+                <a href="/legal/terminos-reembolsos-integral.pdf" target="_blank" rel="noopener">Términos, condiciones y reembolsos (integral)</a>
+                <span class="legal-doc-meta">PDF oficial</span>
+              </li>
+              <li>
+                <a href="/legal/terminos-condiciones-reembolso.pdf" target="_blank" rel="noopener">Términos y condiciones · Política de reembolso</a>
+                <span class="legal-doc-meta">PDF oficial</span>
+              </li>
+              <li>
+                <a href="/legal/reglamento-oficial.pdf" target="_blank" rel="noopener">Reglamento oficial CERO y TRUCO</a>
+                <span class="legal-doc-meta">Skill Gaming</span>
+              </li>
+            </ul>
+
+            <h3 id="cero-coins">Cero Coins (CC)</h3>
+            <ul>
+              <li><strong>1 CC = 1 ARS</strong> en adquisición y canje verificados (Skill Gaming, juego de habilidad).</li>
+              <li>Para adquirir CC enviás <strong>comprobante de operación</strong> (PDF o imagen). La acreditación es manual tras revisión.</li>
+              <li>El canje a pesos exige <strong>verificación de identidad</strong> (DNI + selfie).</li>
+              <li>Las mesas con premio en CC siguen el reglamento de la sala y los términos de habilidad.</li>
+            </ul>
+
+            <h3 id="privacidad">Privacidad</h3>
+            <p>Usamos email, perfil, estadísticas de juego y comprobantes de pago solo para operar el servicio y prevenir fraudes. No vendemos datos a terceros.</p>
+
+            <h3>Sobre Cero Club</h3>
+            <p>Desarrollado en Argentina. Truco y CERO online contra personas reales, con reglas oficiales y mesas privadas.</p>
+            <p class="legal-version">© 2026 Cero Club · Documentos actualizados Mayo 2026</p>
+          </div>
+        </div>
+
+      </div><!-- /hub-tools -->
+
+    </section><!-- /lobby-content -->
+    </main><!-- /hub-main -->
+  </div><!-- /hub-content -->
+
+  </div><!-- /hub-shell -->
+
+  <!-- Sidebar overlay for mobile -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="_toggleSidebar()"></div>
+
+  <!-- ── MODAL: TRUCO ROOM ──────────────────────────────────────── -->
+  <div class="room-modal" id="modalTruco">
+    <div class="room-modal-box">
+      <button class="rm-close" onclick="closeRoomModal()">✕</button>
+      <div class="rm-header">
+        <span class="rm-icon truco-icon">♠</span>
+        <div>
+          <h2 class="rm-title">Truco</h2>
+          <p class="rm-sub">Configurá tu partida</p>
+        </div>
+      </div>
+
+      <div class="rm-options">
+        <div class="rm-opt-group">
+          <span class="rm-opt-label">Puntaje</span>
+          <div class="rm-pills" data-group="truco-points">
+            <button class="rm-pill active" data-val="15">15 pts</button>
+            <button class="rm-pill" data-val="30">30 pts</button>
+          </div>
+        </div>
+        <div class="rm-opt-group">
+          <span class="rm-opt-label">Flor</span>
+          <div class="rm-pills" data-group="truco-flor">
+            <button class="rm-pill active" data-val="no">Sin Flor</button>
+            <button class="rm-pill" data-val="si">Con Flor</button>
+          </div>
+        </div>
+        <div class="rm-opt-group">
+          <span class="rm-opt-label">Modo</span>
+          <div class="rm-pills" data-group="truco-mode">
+            <button class="rm-pill active" data-val="1v1">1 vs 1</button>
+            <button class="rm-pill" data-val="2v2">2 vs 2</button>
+            <button class="rm-pill" data-val="3v3">3 vs 3</button>
+          </div>
+        </div>
+        <div class="rm-opt-group">
+          <span class="rm-opt-label">🎙 Relator</span>
+          <div class="rm-pills" data-group="truco-voice">
+            <button class="rm-pill active" data-val="male">👨 Hombre</button>
+            <button class="rm-pill" data-val="female">👩 Mujer</button>
+            <button class="rm-pill" data-val="none">🔇 Sin voz</button>
+          </div>
+        </div>
+        <div class="rm-opt-group">
+          <span class="rm-opt-label">◈ Pozo Cero Coins (cada jugador)</span>
+          <p class="rm-opt-hint">Mín. 800 · máx. 20.000 CC · 1 CC = 1 ARS · el ganador cobra el pozo.</p>
+          <div class="rm-pills" data-group="truco-stake">
+            <button class="rm-pill active" data-val="800">800</button>
+            <button class="rm-pill" data-val="2000">2.000</button>
+            <button class="rm-pill" data-val="5000">5.000</button>
+            <button class="rm-pill" data-val="10000">10.000</button>
+            <button class="rm-pill" data-val="20000">20.000</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rm-invite-uno">
+        <div class="rm-invite-uno-head">
+          <span class="rm-opt-label">Invitar amigos</span>
+          <button type="button" class="invite-all-link" onclick="FriendsSocial.inviteAllFriends()">Invitar a todos</button>
+        </div>
+        <div class="invite-avatar-grid" id="trucoInviteGrid">
+          <button type="button" class="invite-add-tile" onclick="FriendsSocial.openInvitePicker('truco')" title="Agregar amigo">
+            <span class="invite-add-icon">+</span>
+            <span class="invite-add-lbl">Invitar</span>
+          </button>
+        </div>
+        <p class="invite-selected-lbl" id="ceroInviteCount">0 amigos invitados</p>
+      </div>
+
+      <button class="rm-play-btn btn-truco" onclick="launchTrucoPrivateRoom()">
+        ♠ Crear sala e invitar
+      </button>
+      <p class="rm-music-hint" id="rmMusicHint">🎸 Sonando guitarra criolla...</p>
+    </div>
+  </div>
+
+  <!-- ── MODAL: CERO ROOM ────────────────────────────────────────── -->
+  <div class="room-modal" id="modalCero">
+    <div class="room-modal-box rm-cero">
+      <button class="rm-close" onclick="closeRoomModal()">✕</button>
+      <div class="rm-header">
+        <span class="rm-icon cero-rm-icon">★</span>
+        <div>
+          <h2 class="rm-title">Cero — Dark Arena</h2>
+          <p class="rm-sub">Elegí el modo de juego</p>
+        </div>
+      </div>
+
+      <div class="rm-options">
+        <div class="rm-opt-group">
+          <span class="rm-opt-label">Modo de juego</span>
+          <div class="rm-pills" data-group="cero-mode">
+            <button class="rm-pill active" data-val="classic">Clásico</button>
+            <button class="rm-pill pill-special" data-val="cero">Modo Cero ★</button>
+          </div>
+        </div>
+        <div class="rm-opt-group">
+          <span class="rm-opt-label">Formato</span>
+          <div class="rm-pills" data-group="cero-format">
+            <button class="rm-pill active" data-val="1v1">1 vs 1</button>
+            <button class="rm-pill pill-special" data-val="2v2">2 vs 2</button>
+            <button class="rm-pill" data-val="3v3">3 vs 3</button>
+          </div>
+        </div>
+        <div class="rm-opt-group" id="ceroPlayersGroup">
+          <span class="rm-opt-label">Cupos en mesa</span>
+          <p class="rm-opt-hint">Con <strong>1v1 / 2v2 / 3v3</strong> el cupo lo define el formato de la sala online.</p>
+          <div class="rm-pills" data-group="cero-players">
+            <button class="rm-pill active" data-val="2">2</button>
+            <button class="rm-pill" data-val="3">3</button>
+            <button class="rm-pill" data-val="4">4</button>
+            <button class="rm-pill" data-val="6">6</button>
+          </div>
+        </div>
+        <div class="rm-opt-group">
+          <span class="rm-opt-label">Espectadores</span>
+          <div class="rm-pills" data-group="cero-spectate">
+            <button class="rm-pill active" data-val="yes">Permitir</button>
+            <button class="rm-pill" data-val="no">No permitir</button>
+          </div>
+        </div>
+        <div class="rm-opt-group">
+          <span class="rm-opt-label">Tipo de sala</span>
+          <div class="rm-pills" data-group="cero-room-type">
+            <button class="rm-pill active" data-val="public">Pública</button>
+            <button class="rm-pill" data-val="private">Privada 🔒</button>
+          </div>
+          <p class="rm-opt-hint" id="ceroPrivateHint" hidden>Privada: solo amigos invitados o quien tenga el link.</p>
+        </div>
+        <div class="rm-opt-group">
+          <span class="rm-opt-label">Voces</span>
+          <div class="rm-pills" data-group="cero-voice">
+            <button class="rm-pill active" data-val="fem">Femenino</button>
+            <button class="rm-pill" data-val="masc">Masculino</button>
+            <button class="rm-pill" data-val="off">Sin voz</button>
+          </div>
+        </div>
+        <div class="rm-opt-group">
+          <span class="rm-opt-label">Premio de la mesa</span>
+          <div class="rm-pills" data-group="cero-stake-type">
+            <button class="rm-pill active" data-val="free">Gratis · sin CC</button>
+            <button class="rm-pill" data-val="coins">Con Cero Coins</button>
+          </div>
+          <p class="rm-opt-hint">Skill Gaming: el ganador recibe el pozo en su cuenta (solo si elegís CC).</p>
+          <div class="rm-pills" id="ceroStakeAmounts" data-group="cero-stake" hidden>
+            <button class="rm-pill active" data-val="800">800</button>
+            <button class="rm-pill" data-val="2000">2.000</button>
+            <button class="rm-pill" data-val="5000">5.000</button>
+            <button class="rm-pill" data-val="10000">10.000</button>
+            <button class="rm-pill" data-val="20000">20.000</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rm-cero-special-note" id="ceroModeNote" style="display:none">
+        <span class="note-icon">★</span>
+        <span>Modo Cero agrega 4 cartas secretas únicas al mazo: <strong>Total, Espejo, Swap y Cero★</strong></span>
+      </div>
+
+      <div class="rm-invite-uno">
+        <div class="rm-invite-uno-head">
+          <span class="rm-opt-label">Invitar amigos</span>
+          <button type="button" class="invite-all-link" onclick="FriendsSocial.inviteAllFriends()">Invitar a todos</button>
+        </div>
+        <div class="invite-avatar-grid" id="ceroInviteGrid">
+          <button type="button" class="invite-add-tile" onclick="FriendsSocial.openInvitePicker('cero')" title="Agregar amigo">
+            <span class="invite-add-icon">+</span>
+            <span class="invite-add-lbl">Invitar</span>
+          </button>
+        </div>
+        <p class="invite-selected-lbl" id="ceroInviteCount">0 amigos invitados</p>
+        <div class="room-share-link" id="ceroShareLinkBox" hidden>
+          <span class="rm-opt-label">Link de invitación (sala privada)</span>
+          <div class="room-share-row">
+            <input type="text" class="pf-input" id="ceroShareLinkInput" readonly />
+            <button type="button" class="notif-btn" id="ceroShareLinkCopy">Copiar</button>
+          </div>
+        </div>
+      </div>
+
+      <button class="rm-play-btn btn-cero" onclick="launchCeroPrivateRoom()">
+        ★ Crear sala e invitar
+      </button>
+    </div>
+  </div>
+
+  <!-- ── MODAL: INVITACIÓN A SALA (centro) ─────────────────────── -->
+  <div class="room-modal room-invite-popup" id="modalRoomInvite">
+    <div class="room-invite-box" onclick="event.stopPropagation()">
+      <span class="room-invite-pulse">🎮</span>
+      <h2 class="room-invite-title" id="roomInviteTitle">Te invitan a jugar</h2>
+      <p class="room-invite-body" id="roomInviteBody">Un amigo te invita a una partida</p>
+      <p class="room-invite-meta" id="roomInviteMeta">Aceptá para entrar al instante</p>
+      <div class="room-invite-actions">
+        <button type="button" class="mm-action-btn" id="roomInviteAccept">✓ Aceptar invitación</button>
+        <button type="button" class="notif-btn notif-btn-muted" id="roomInviteDecline">Ahora no</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL: ABANDONAR / CERRAR SALA ────────────────────────── -->
+  <div class="room-modal" id="modalAbandon">
+    <div class="abandon-modal-box" onclick="event.stopPropagation()">
+      <button class="rm-close" onclick="closeModal('modalAbandon')">✕</button>
+      <span class="abandon-icon">⚠️</span>
+      <h3 id="abandonTitle">¿Abandonar la partida?</h3>
+      <div class="abandon-body" id="abandonBody"></div>
+      <p class="abandon-warn" id="abandonWarn" hidden></p>
+      <div class="abandon-actions">
+        <button type="button" class="my-room-close" onclick="confirmAbandonRoom()">Sí, abandonar</button>
+        <button type="button" class="notif-btn notif-btn-muted" onclick="closeModal('modalAbandon')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL: INVITAR AMIGOS ─────────────────────────────────── -->
+  <div class="room-modal" id="modalInviteFriends">
+    <div class="room-modal-box rm-friends">
+      <button class="rm-close" onclick="closeModal('modalInviteFriends')">✕</button>
+      <h2 class="rm-title">Invitar a la partida</h2>
+      <p class="rm-sub">Elegí quién recibe la notificación en su cuenta</p>
+      <div class="friends-list-wrap friend-picker" id="friendPickerList"></div>
+      <button type="button" class="mm-action-btn" onclick="closeModal('modalInviteFriends')">Listo</button>
+    </div>
+  </div>
+
+  <!-- ── MODAL: JUGAR AHORA (Truco / Cero rápido 1v1) ──────────── -->
+  <div class="room-modal" id="modalRoomSelector">
+    <div class="room-modal-box rm-play-now" onclick="event.stopPropagation()">
+      <button type="button" class="rm-close" onclick="closeModal('modalRoomSelector')">✕</button>
+      <h2 class="rm-title">Jugar ahora</h2>
+      <p class="rm-sub">Partida rápida <strong>1 vs 1</strong> · invitados y registrados</p>
+      <div class="play-now-grid" id="playNowGrid">
+        <button type="button" class="play-now-card play-now-truco" data-play-game="truco">
+          <span class="pnc-glow"></span>
+          <span class="pnc-icon">♠</span>
+          <span class="pnc-name">Truco</span>
+          <span class="pnc-meta">1 vs 1 · 15 puntos</span>
+          <span class="pnc-cta">Entrar a la cola →</span>
+        </button>
+        <button type="button" class="play-now-card play-now-cero" data-play-game="cero">
+          <span class="pnc-glow"></span>
+          <span class="pnc-icon">★</span>
+          <span class="pnc-name">Cero</span>
+          <span class="pnc-meta">1 vs 1 · Clásico</span>
+          <span class="pnc-cta">Entrar a la cola →</span>
+        </button>
+      </div>
+      <p class="play-now-hint">Buscamos un rival real. Si no hay nadie, creá sala e invitá amigos.</p>
+    </div>
+  </div>
+
+  <!-- ── MODAL: CHAT (global + privado) ─────────────────────────── -->
+  <div class="room-modal" id="modalHubChat">
+    <div class="room-modal-box hub-chat-box" onclick="event.stopPropagation()">
+      <button type="button" class="rm-close" onclick="closeModal('modalHubChat')">✕</button>
+      <h2 class="rm-title">Chat Cero Club</h2>
+      <div class="hub-chat-tabs">
+        <button type="button" class="hub-chat-tab active" data-hub-chat-tab="global" onclick="HubChat.switchTab('global')">🌐 Global</button>
+        <button type="button" class="hub-chat-tab" data-hub-chat-tab="private" onclick="HubChat.switchTab('private')">🔒 Privado</button>
+      </div>
+      <div class="hub-chat-panel active" data-hub-chat-panel="global">
+        <div class="hub-chat-log" id="hubChatGlobalLog"></div>
+        <form class="hub-chat-form" onsubmit="return HubChat.sendGlobal(event)">
+          <input type="text" id="hubChatGlobalInput" placeholder="Mensaje para todos..." maxlength="200" autocomplete="off" />
+          <button type="submit" class="hub-chat-send">Enviar</button>
+        </form>
+      </div>
+      <div class="hub-chat-panel" data-hub-chat-panel="private">
+        <select id="hubChatFriendSelect" class="hub-chat-select" onchange="HubChat.onFriendSelect(this.value)">
+          <option value="">Elegí un amigo</option>
+        </select>
+        <div class="hub-chat-log" id="hubChatPrivateLog">
+          <p class="hub-chat-empty">Elegí un amigo para chatear en privado</p>
+        </div>
+        <form class="hub-chat-form" onsubmit="return HubChat.sendPrivate(event)">
+          <input type="text" id="hubChatPrivateInput" placeholder="Mensaje privado..." maxlength="200" autocomplete="off" />
+          <button type="submit" class="hub-chat-send">Enviar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MATCHMAKING MODAL ─────────────────────────────────────── -->
+  <div class="room-modal" id="modalMatchmaking">
+    <div class="mm-box">
+      <button class="rm-close" onclick="cancelQuickPlay()">✕</button>
+      <div class="mm-spinner"></div>
+      <h3 class="mm-title" id="mmTitle">Buscando oponente...</h3>
+      <p class="mm-status">En cola: <span id="mmQueueCount">1</span> jugador</p>
+      <p class="mm-game" id="mmGame">Truco Clásico · 15 pts</p>
+      <button class="mm-cancel-btn" onclick="cancelQuickPlay()">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- ── SPECTATE MODAL (requires login) ───────────────────────── -->
+  <div class="room-modal" id="modalSpectate">
+    <div class="mm-box">
+      <button class="rm-close" onclick="closeModal('modalSpectate')">✕</button>
+      <div style="font-size:2rem;margin-bottom:.5rem">👁</div>
+      <h3 class="mm-title">Espectear partida</h3>
+      <p class="mm-status">Para espectear necesitás tener una cuenta registrada.</p>
+      <div style="display:flex;gap:.5rem;margin-top:.75rem;justify-content:center;flex-wrap:wrap">
+        <a href="login.html" class="mm-action-btn">Registrarme</a>
+        <button class="mm-cancel-btn" onclick="closeModal('modalSpectate')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PROFILE MODAL (perfil + amigos + notificaciones) ──────── -->
+  <div class="room-modal" id="modalProfile">
+    <div class="profile-modal-box profile-hub-box" onclick="event.stopPropagation()">
+      <button class="rm-close" onclick="closeModal('modalProfile')">✕</button>
+      <h3 class="mm-title profile-hub-title">Mi cuenta</h3>
+
+      <div class="profile-hub-tabs" role="tablist">
+        <button type="button" class="profile-hub-tab active" data-profile-tab="perfil" onclick="FriendsSocial.switchProfileTab('perfil')">Perfil</button>
+        <button type="button" class="profile-hub-tab" data-profile-tab="stats" onclick="FriendsSocial.switchProfileTab('stats')">Stats</button>
+        <button type="button" class="profile-hub-tab" data-profile-tab="amigos" onclick="FriendsSocial.switchProfileTab('amigos')">
+          Amigos <span class="profile-tab-badge" id="profileTabFriendsBadge" hidden>0</span>
+        </button>
+        <button type="button" class="profile-hub-tab" data-profile-tab="notificaciones" onclick="FriendsSocial.switchProfileTab('notificaciones')">
+          Alertas <span class="profile-tab-badge" id="profileTabNotifBadge" hidden>0</span>
+        </button>
+        <button type="button" class="profile-hub-tab" data-profile-tab="cuenta" onclick="FriendsSocial.switchProfileTab('cuenta')">Cuenta</button>
+      </div>
+
+      <div class="profile-hub-scroll">
+        <div class="profile-hub-panel active" data-profile-panel="perfil">
+          <div class="profile-avatar-upload" id="profileAvatarWrap">
+            <div class="profile-edit-avatar" id="profileEditAvatar"><span class="pf-initial">J</span></div>
+            <button type="button" class="profile-photo-btn" id="profilePhotoBtn" title="Cambiar foto">📷</button>
+            <input type="file" id="profilePhotoInput" accept="image/jpeg,image/png,image/webp" hidden />
+          </div>
+          <p class="profile-photo-status" id="profilePhotoStatus">Subí una foto JPG/PNG (se comprime automáticamente).</p>
+          <p class="profile-photo-active" id="profilePhotoActiveLbl" hidden>✅ Foto personalizada activa</p>
+
+          <div class="pf-stats-row" id="pfStatsRow">
+            <div class="pf-stat"><span id="pfStatGames">0</span><small>Partidas</small></div>
+            <div class="pf-stat"><span id="pfStatWins">0</span><small>Victorias</small></div>
+            <div class="pf-stat"><span id="pfStatCoins">0</span><small>Coins ◈</small></div>
+          </div>
+
+          <div class="profile-edit-form">
+            <label class="pf-label">Nick / Nombre de jugador</label>
+            <div class="pf-input-wrap">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#666"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <input type="text" class="pf-input pf-input-icon" id="pfName" placeholder="Tu nick o nombre" maxlength="24" autocomplete="off" />
+            </div>
+            <p class="pf-hint">Así te verán otros jugadores en las salas y el ranking.</p>
+
+            <label class="pf-label" style="margin-top:.75rem">Color de avatar</label>
+            <div class="avatar-color-row" id="avatarColorRow">
+              <button class="av-color" data-color="#00EF90" style="background:#00EF90" title="Verde neon"></button>
+              <button class="av-color" data-color="#7c3aed" style="background:#7c3aed" title="Violeta"></button>
+              <button class="av-color" data-color="#db2777" style="background:#db2777" title="Rosa"></button>
+              <button class="av-color" data-color="#059669" style="background:#059669" title="Verde"></button>
+              <button class="av-color" data-color="#d97706" style="background:#d97706" title="Naranja"></button>
+              <button class="av-color" data-color="#2563eb" style="background:#2563eb" title="Azul"></button>
+            </div>
+            <button class="mm-action-btn" onclick="saveProfile()" style="width:100%;margin-top:.75rem;background:var(--neon);color:#000;font-weight:800">
+              ✓ Guardar cambios
+            </button>
+          </div>
+        </div>
+
+        <div class="profile-hub-panel" data-profile-panel="stats">
+          <div class="stats-grid-premium">
+            <div class="stat-card-premium stat-wins">
+              <span class="scp-icon">🏆</span>
+              <span class="scp-val" id="statsWins">0</span>
+              <span class="scp-lbl">Victorias</span>
+            </div>
+            <div class="stat-card-premium stat-games">
+              <span class="scp-icon">🎮</span>
+              <span class="scp-val" id="statsGames">0</span>
+              <span class="scp-lbl">Partidas</span>
+            </div>
+            <div class="stat-card-premium stat-rate">
+              <span class="scp-icon">📈</span>
+              <span class="scp-val" id="statsWinRate">0%</span>
+              <span class="scp-lbl">Win rate</span>
+            </div>
+            <div class="stat-card-premium stat-coins">
+              <span class="scp-icon">◈</span>
+              <span class="scp-val" id="statsCoins">0</span>
+              <span class="scp-lbl">Saldo CC</span>
+            </div>
+          </div>
+          <div class="stats-progress-block">
+            <h4 class="friends-section-title">Progreso</h4>
+            <div class="stats-progress-row">
+              <span>Win rate</span>
+              <span id="statsWinRateLbl">0%</span>
+            </div>
+            <div class="stats-progress-track"><div class="stats-progress-fill stats-fill-cyan" id="statsWinRateBar" style="width:0%"></div></div>
+            <div class="stats-progress-row">
+              <span id="statsRatioLbl">0 victorias / 0 partidas</span>
+              <span id="statsRatioPct">0%</span>
+            </div>
+            <div class="stats-progress-track"><div class="stats-progress-fill stats-fill-gold" id="statsRatioBar" style="width:0%"></div></div>
+          </div>
+          <button type="button" class="mm-action-btn" style="width:100%;margin-top:.5rem" onclick="openCeroWallet()">◈ Gestionar Cero Coin</button>
+        </div>
+
+        <div class="profile-hub-panel" data-profile-panel="cuenta">
+          <div class="cuenta-block">
+            <span class="pf-label">Email</span>
+            <p class="cuenta-email" id="cuentaEmail">—</p>
+            <span class="cuenta-badge" id="cuentaProviderBadge">Cuenta registrada</span>
+          </div>
+          <div class="cuenta-block">
+            <span class="pf-label">🎙 Voz del juego</span>
+            <p class="pf-hint">Avisos durante la partida (turno, CERO, victoria).</p>
+            <div class="voice-pill-grid" id="voicePillGrid">
+              <button type="button" class="voice-pill" data-voice="off">🔇 Off</button>
+              <button type="button" class="voice-pill" data-voice="masc">👨 Masc</button>
+              <button type="button" class="voice-pill active" data-voice="fem">👩 Fem</button>
+              <button type="button" class="voice-pill" data-voice="fast">⚡ Rápido</button>
+              <button type="button" class="voice-pill" data-voice="robot">🤖 Robot</button>
+              <button type="button" class="voice-pill" data-voice="grave">🎤 Grave</button>
+            </div>
+          </div>
+          <button type="button" class="mm-action-btn" style="width:100%" onclick="openCeroWallet()">◈ Gestionar Cero Coin</button>
+          <button type="button" class="notif-btn notif-btn-muted" style="width:100%;margin-top:.5rem" onclick="CeroWallet.openVerifyModal()">🔒 Verificar identidad</button>
+        </div>
+
+        <div class="profile-hub-panel" data-profile-panel="amigos">
+          <p class="profile-flash-msg" id="profileFlashMsgAmigos" hidden></p>
+          <p class="rm-sub profile-panel-sub">Compartí tu código para que te agreguen</p>
+          <div class="friend-code-box">
+            <span class="friend-code-lbl">Tu código</span>
+            <span class="friend-code-val" id="myFriendCode">------</span>
+          </div>
+          <div class="friend-add-row">
+            <input type="text" class="pf-input" id="friendCodeInput" placeholder="Código de amigo (6 letras)" maxlength="6" style="text-transform:uppercase" />
+            <button type="button" class="mm-action-btn" onclick="FriendsSocial.addFriendByCode()">Agregar</button>
+          </div>
+          <p class="friend-add-error" id="friendAddError"></p>
+
+          <div class="friends-section" id="friendsPendingSection">
+            <div class="friends-section-head">
+              <h3 class="friends-section-title">Solicitudes pendientes</h3>
+              <span class="friends-pending-count" id="friendsPendingCount" hidden>0</span>
+            </div>
+            <div class="friends-pending-list" id="friendsPendingList">
+              <p class="invite-hint">No tenés solicitudes nuevas</p>
+            </div>
+          </div>
+
+          <div class="friends-section">
+            <h3 class="friends-section-title">Mis amigos</h3>
+            <div class="friends-list-wrap" id="friendsList"></div>
+          </div>
+        </div>
+
+        <div class="profile-hub-panel" data-profile-panel="notificaciones">
+          <div class="notif-panel-toolbar">
+            <p class="rm-sub profile-panel-sub" style="margin:0">Invitaciones, chat, amigos y Cero Coins</p>
+            <button type="button" class="notif-clear-btn" onclick="FriendsSocial.clearNotificationHistory()">Limpiar historial</button>
+          </div>
+          <p class="profile-flash-msg" id="profileFlashMsg" hidden></p>
+          <div class="notif-list profile-notif-list" id="notifList">
+            <p class="notif-empty">Cargando...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RANKING MODAL ─────────────────────────────────────────── -->
+  <div class="room-modal" id="modalRanking">
+    <div class="ranking-modal-box">
+      <button class="rm-close" onclick="closeModal('modalRanking')">✕</button>
+      <h3 class="mm-title">🏆 Ranking Cero Club</h3>
+      <div class="ranking-tabs">
+        <button class="rk-tab active" data-game="all">General</button>
+        <button class="rk-tab" data-game="truco">Truco</button>
+        <button class="rk-tab" data-game="cero">Cero</button>
+      </div>
+      <div class="ranking-list" id="rankingList">
+        <!-- filled by hub.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TOURNAMENTS MODAL ─────────────────────────────────────── -->
+  <div class="room-modal" id="modalTournaments">
+    <div class="mm-box">
+      <button class="rm-close" onclick="closeModal('modalTournaments')">✕</button>
+      <h3 class="mm-title">🎯 Torneos de la Comunidad</h3>
+      <div class="hub-t-filter-tabs">
+        <button type="button" class="hub-t-filter active" data-hub-tfilter="upcoming">Próximos</button>
+        <button type="button" class="hub-t-filter" data-hub-tfilter="live">En curso</button>
+        <button type="button" class="hub-t-filter" data-hub-tfilter="done">Finalizados</button>
+      </div>
+      <div class="tournaments-list" id="tournamentsList">
+        <!-- filled by hub.js -->
+      </div>
+      <p class="mm-status" style="margin-top:.75rem;font-size:.72rem">
+        Modo prueba · Argentina · Ganá Cero Coins sin dinero real
+      </p>
+    </div>
+  </div>
+
+  <!-- ── STORE / TIENDA MODAL ─────────────────────────────────── -->
+  <div class="room-modal" id="modalStore">
+    <div class="store-modal-box">
+      <button class="rm-close" onclick="closeModal('modalStore')">✕</button>
+      <div class="store-header">
+        <h3 class="mm-title">🛒 Tienda Cero Club</h3>
+        <div class="store-balance">◈ <span id="storeCoins">1.500</span> CC · <span id="storeRankPts">0</span> pts ranking</div>
+      </div>
+      <div class="store-tabs">
+        <button class="store-tab active" data-cat="cards">🃏 Cartas</button>
+        <button class="store-tab" data-cat="tables">🟩 Mesas</button>
+        <button class="store-tab" data-cat="avatars">👤 Avatares</button>
+        <button class="store-tab" data-cat="emotes">💬 Emotes</button>
+        <button class="store-tab" data-cat="unlocks">🎯 Items</button>
+        <button class="store-tab" data-cat="boost">⚡ Boosts</button>
+      </div>
+      <div class="store-grid" id="storeGrid">
+        <!-- filled by hub.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ── COINS MODAL ───────────────────────────────────────────── -->
+  <!-- ── GESTIONAR CERO COIN (Wallet) ──────────────────────────── -->
+  <div class="room-modal" id="modalCoins">
+    <div class="wallet-modal-box" onclick="event.stopPropagation()">
+      <button class="rm-close" onclick="closeModal('modalCoins')">✕</button>
+      <h3 class="wallet-modal-title">◈ Gestionar Cero Coin</h3>
+
+      <div class="wallet-balance-card">
+        <span class="wallet-balance-lbl">SALDO CERO COINS</span>
+        <span class="wallet-balance-val" id="walletBalance">0</span>
+        <span class="wallet-balance-rate">1 CC = 1 ARS · Skill Gaming · Argentina</span>
+        <span class="wallet-verified-badge" id="walletVerifiedBadge" hidden>✓ Identidad verificada</span>
+      </div>
+
+      <div class="wallet-tabs">
+        <button type="button" class="wallet-tab active" data-wallet-tab="adquirir" onclick="CeroWallet.switchTab('adquirir')">💰 Adquirir CC</button>
+        <button type="button" class="wallet-tab" data-wallet-tab="canjear" onclick="CeroWallet.switchTab('canjear')">📱 Canjear CC</button>
+      </div>
+
+      <div class="wallet-scroll">
+        <div id="walletPanelAcquire">
+          <p class="wallet-section-lbl">ELEGÍ TU PACK</p>
+          <div class="wallet-pack-grid" id="walletPackGrid"></div>
+          <div class="wallet-sub-panel" id="walletPurchasePanel" hidden></div>
+          <div class="wallet-pending-list" id="walletPendingList" hidden></div>
+          <div class="wallet-code-row">
+            <label class="pf-label">Canjear código promocional</label>
+            <input type="text" class="pf-input" id="redeemCode" placeholder="CERO-XXXX-XXXX" style="text-transform:uppercase" />
+            <button type="button" class="mm-action-btn" onclick="redeemCode()">Canjear código</button>
+          </div>
+        </div>
+
+        <div id="walletPanelRedeem" hidden>
+          <div class="wallet-verify-gate" id="walletVerifyGate">
+            <span class="wallet-lock-icon">🔒</span>
+            <h4>Verificación de identidad requerida</h4>
+            <p>Para canjear CC necesitás verificar tu identidad con nombre, DNI, fecha de nacimiento y foto de rostro.</p>
+            <button type="button" class="mm-action-btn" onclick="CeroWallet.openVerifyModal()">Verificar ahora</button>
+          </div>
+          <div id="walletRedeemContent" hidden>
+            <p class="wallet-section-lbl">ELEGÍ EL MONTO A CANJEAR</p>
+            <div class="wallet-pack-grid" id="walletRedeemGrid"></div>
+            <div class="wallet-sub-panel" id="walletRedeemPanel" hidden></div>
+          </div>
+        </div>
+
+      </div>
+
+      <p class="wallet-disclaimer">◈ Adquirí CC con comprobante · canjeá premios verificando identidad · Skill Gaming Argentina · <a href="/legal/terminos-reembolsos-integral.pdf" target="_blank" rel="noopener">Reglamento</a></p>
+    </div>
+  </div>
+
+  <!-- Verificación identidad + selfie -->
+  <div class="room-modal wallet-verify-modal" id="walletVerifyModal">
+    <div class="wallet-verify-box" onclick="event.stopPropagation()">
+      <button class="rm-close" onclick="CeroWallet.closeVerifyModal()">✕</button>
+      <span class="wallet-lock-icon">🔒</span>
+      <h3>Verificá tu identidad</h3>
+      <p class="wallet-verify-sub">Obligatorio para canjear CC. Previene fraudes y cuentas falsas.</p>
+      <label class="pf-label">Nombre y apellido completo</label>
+      <input type="text" class="pf-input" id="walletIdName" placeholder="Ej: Juan García" />
+      <label class="pf-label">DNI (sin puntos)</label>
+      <input type="text" class="pf-input" id="walletIdDni" placeholder="12345678" maxlength="8" />
+      <label class="pf-label">Fecha de nacimiento</label>
+      <input type="date" class="pf-input" id="walletIdDob" />
+      <label class="pf-label">Validación facial (selfie)</label>
+      <div class="wallet-face-wrap" id="walletFacePreview">
+        <video id="walletFaceVideo" playsinline muted></video>
+        <canvas id="walletFaceCanvas" hidden></canvas>
+        <img id="walletFacePreviewImg" class="wallet-face-img" hidden alt="Selfie" />
+        <p class="wallet-hint">Centrá tu rostro en el recuadro, con buena luz.</p>
+      </div>
+      <div class="wallet-face-actions">
+        <button type="button" class="notif-btn" onclick="CeroWallet.startCamera()">Abrir cámara</button>
+        <button type="button" class="notif-btn notif-btn-muted" onclick="CeroWallet.captureFace()">Capturar foto</button>
+      </div>
+      <button type="button" class="mm-action-btn" onclick="CeroWallet.submitIdentity()">Verificar identidad</button>
+    </div>
+  </div>
+
+  <!-- ── HIDDEN nav buttons kept for hub.js compatibility ─────── -->
+  <div style="display:none" aria-hidden="true">
+    <button class="nav-btn active" data-section="lobby">Lobby</button>
+    <button class="nav-btn" data-section="ranking">Ranking</button>
+    <button class="nav-btn" data-section="tienda">Tienda</button>
+  </div>
+
+  <!-- ── MOBILE BOTTOM NAV ─────────────────────────────────────── -->
+  <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Navegación">
+    <button class="mbn-item active" data-mbn="lobby" onclick="_mbnGo('lobby')">
+      <svg class="mbn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+      <span class="mbn-label">Inicio</span>
+    </button>
+    <button class="mbn-item" data-mbn="ranking" onclick="_mbnGo('ranking')">
+      <svg class="mbn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      <span class="mbn-label">Ranking</span>
+    </button>
+    <!-- Center play button -->
+    <button class="mbn-item mbn-play" onclick="openModal('modalRoomSelector')">
+      <svg class="mbn-svg" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <span class="mbn-label">JUGAR</span>
+    </button>
+    <button class="mbn-item" data-mbn="tienda" onclick="_mbnGo('tienda')">
+      <svg class="mbn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      <span class="mbn-label">Tienda</span>
+    </button>
+    <button class="mbn-item" data-mbn="profile" onclick="openProfileHub('perfil')">
+      <svg class="mbn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span class="mbn-label">Perfil</span>
+    </button>
+  </nav>
+
+  <!-- Firebase module (real-time profile + online count) -->
+  <script type="module" src="js/firebase-hub.js?v=10"></script>
+  <script defer src="js/room-lifecycle.js?v=8"></script>
+  <script defer src="js/room-prizes.js?v=3"></script>
+  <script defer src="js/match-rewards.js?v=3"></script>
+  <!-- Matchmaking queue -->
+  <script src="js/matchmaking.js?v=7"></script>
+  <script src="js/hub-chat.js?v=3"></script>
+  <script src="js/cero-wallet.js?v=4"></script>
+  <script src="js/friends-social.js?v=18"></script>
+  <script src="js/profile-avatar.js?v=8"></script>
+  <!-- Voice + Ambient guitar (shared with truco game) -->
+  <script src="games/truco/js/voice.js"></script>
+  <script src="/js/tournament-bracket.js?v=1"></script>
+  <script src="js/hub.js?v=21"></script>
+  <script>
+    // Modal routing for nav sections
+    const _sectionModals = {
+      ranking: 'modalRanking',
+      tienda:  'modalStore',
+      torneos: 'modalTournaments',
+    };
+
+    function _mbnGo(section) {
+      document.querySelectorAll('.mbn-item[data-mbn]').forEach(b => {
+        b.classList.toggle('active', b.dataset.mbn === section);
+      });
+      document.querySelectorAll('.snav-item[data-section]').forEach(b => {
+        b.classList.toggle('active', b.dataset.section === section);
+      });
+      const modal = _sectionModals[section];
+      if (modal) {
+        if (typeof openModal === 'function') openModal(modal);
+        return;
+      }
+      const navBtn = document.querySelector(`.nav-btn[data-section="${section}"]`);
+      if (navBtn) navBtn.click();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function _snavGo(section, el) {
+      document.querySelectorAll('.snav-item').forEach(b => b.classList.remove('active'));
+      if (el) el.classList.add('active');
+      document.querySelectorAll('.mbn-item[data-mbn]').forEach(b => {
+        b.classList.toggle('active', b.dataset.mbn === section);
+      });
+      if (section === 'perfil') {
+        document.querySelector('.snav-item[data-section="lobby"]')?.classList.add('active');
+        if (el) el.classList.add('active');
+        if (typeof openProfileHub === 'function') openProfileHub('perfil');
+        return;
+      }
+      const modal = _sectionModals[section];
+      if (modal) {
+        document.querySelector('.snav-item[data-section="lobby"]')?.classList.add('active');
+        if (el) el.classList.add('active');
+        if (typeof openModal === 'function') openModal(modal);
+        return;
+      }
+      const navBtn = document.querySelector(`.nav-btn[data-section="${section}"]`);
+      if (navBtn) navBtn.click();
+    }
+
+    function _toggleSidebar() {
+      const s = document.getElementById('hubSidebar');
+      const o = document.getElementById('sidebarOverlay');
+      s.classList.toggle('open');
+      o.classList.toggle('active');
+    }
+  </script>
+</body>
+</html>

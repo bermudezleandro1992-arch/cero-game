@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Cero Club — Entrá a jugar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/login.css" />
+</head>
+<body>
+
+<main class="login-shell">
+
+  <!-- ── Brand ──────────────────────────────────────────────────── -->
+  <header class="brand">
+    <div class="brand-logo">
+      <span class="bl-cero">CERO</span><span class="bl-club">CLUB</span>
+    </div>
+    <p class="brand-tagline">Skill Gaming · Competencia Online</p>
+    <div class="brand-cards" aria-hidden="true">
+      <div class="bc bc-esp">7<br><small>E</small></div>
+      <div class="bc bc-bas">1<br><small>B</small></div>
+      <div class="bc bc-oro">7<br><small>O</small></div>
+      <div class="bc bc-cop">1<br><small>C</small></div>
+      <div class="bc bc-cero">★</div>
+    </div>
+  </header>
+
+  <!-- ── Social banner ──────────────────────────────────────────── -->
+  <a class="social-banner" href="https://instagram.com/cerogamingco" target="_blank" rel="noopener">
+    <span class="sb-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="ig-grad" cx="30%" cy="107%" r="150%">
+            <stop offset="0%" stop-color="#fdf497"/>
+            <stop offset="5%"  stop-color="#fdf497"/>
+            <stop offset="45%" stop-color="#fd5949"/>
+            <stop offset="60%" stop-color="#d6249f"/>
+            <stop offset="90%" stop-color="#285AEB"/>
+          </radialGradient>
+        </defs>
+        <rect x="2" y="2" width="20" height="20" rx="5" ry="5" fill="url(#ig-grad)"/>
+        <circle cx="12" cy="12" r="4.5" stroke="white" stroke-width="1.6" fill="none"/>
+        <circle cx="17.2" cy="6.8" r="1.1" fill="white"/>
+      </svg>
+    </span>
+    <div class="sb-text">
+      <div class="sb-title">Seguinos en Instagram</div>
+      <div class="sb-sub">@cerogamingco · Novedades y torneos</div>
+    </div>
+    <span class="sb-btn">Seguir</span>
+  </a>
+
+  <!-- ── Auth card ───────────────────────────────────────────────── -->
+  <section class="auth-card">
+    <div class="auth-tabs">
+      <button class="atab active" data-panel="panel-login">Ingresar</button>
+      <button class="atab" data-panel="panel-register">Crear cuenta</button>
+    </div>
+
+    <!-- ── Login panel ─────────────────────────────────────────── -->
+    <div id="panel-login" class="auth-panel active">
+
+      <form id="formLogin" class="auth-form" novalidate>
+        <div class="form-field" data-icon="✉️">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" placeholder="Email" autocomplete="email" required />
+        </div>
+        <div class="form-field" data-icon="🔒">
+          <label for="loginPass">Contraseña</label>
+          <input type="password" id="loginPass" placeholder="Contraseña" autocomplete="current-password" required />
+          <button type="button" class="pass-toggle" aria-label="Ver contraseña">👁</button>
+        </div>
+
+        <div class="form-row">
+          <label class="check-label">
+            <input type="checkbox" id="rememberMe" /> Recordarme
+          </label>
+          <button type="button" class="link-btn" id="btnForgot">¿Olvidaste tu contraseña?</button>
+        </div>
+
+        <p class="auth-error" id="loginError" role="alert" hidden></p>
+
+        <button type="submit" class="auth-btn primary-btn" id="btnLoginEmail">
+          <span class="btn-text">Ingresar a CERO</span>
+          <span class="btn-loader" hidden></span>
+        </button>
+      </form>
+
+      <div class="divider"><span>o</span></div>
+
+      <button class="auth-btn google-btn" id="btnGoogle">
+        <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+        </svg>
+        Continuar con Google
+      </button>
+
+      <div class="divider"><span>¿Primera vez?</span></div>
+
+      <button class="auth-btn guest-btn" id="btnGuest">
+        Continuar sin registrarme
+      </button>
+      <p class="guest-note">Sin cuenta no podés guardar monedas ni historial</p>
+    </div>
+
+    <!-- ── Register panel ─────────────────────────────────────── -->
+    <div id="panel-register" class="auth-panel">
+
+      <button class="auth-btn google-btn" id="btnGoogleReg">
+        <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+        </svg>
+        Registrarme con Google
+      </button>
+
+      <div class="divider"><span>o con email</span></div>
+
+      <form id="formRegister" class="auth-form" novalidate>
+        <div class="form-field" data-icon="👤">
+          <label for="regName">Nombre de usuario</label>
+          <input type="text" id="regName" placeholder="Nombre de usuario" autocomplete="nickname" required />
+        </div>
+        <div class="form-field" data-icon="✉️">
+          <label for="regEmail">Email</label>
+          <input type="email" id="regEmail" placeholder="Email" autocomplete="email" required />
+        </div>
+        <div class="form-field" data-icon="🔒">
+          <label for="regPass">Contraseña</label>
+          <input type="password" id="regPass" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="new-password" required minlength="6" />
+          <button type="button" class="pass-toggle" aria-label="Ver contraseña">👁</button>
+        </div>
+        <p class="auth-error" id="registerError" role="alert" hidden></p>
+        <button type="submit" class="auth-btn primary-btn" id="btnRegisterEmail">
+          <span class="btn-text">Crear cuenta gratis</span>
+          <span class="btn-loader" hidden></span>
+        </button>
+        <p class="guest-note">Al registrarte aceptás los <a href="/legal/terminos-reembolsos-integral.pdf" target="_blank" rel="noopener" class="link-btn">Términos y reembolsos</a> · Solo mayores de 18 años</p>
+      </form>
+    </div>
+
+    <!-- ── Auth success ────────────────────────────────────────── -->
+    <div id="authSuccess" class="auth-success" hidden>
+      <div class="success-avatar" id="successAvatar">?</div>
+      <p class="success-name" id="successName">Cargando...</p>
+      <p class="success-hint">Redirigiendo al Hub...</p>
+    </div>
+  </section>
+
+  <!-- ── Footer ─────────────────────────────────────────────────── -->
+  <footer class="login-footer">
+    <span>© 2025 Cero Club</span>
+    <span>·</span>
+    <a href="/legal/terminos-reembolsos-integral.pdf" target="_blank" rel="noopener" class="footer-link">Términos</a>
+    <span>·</span>
+    <a href="index.html#privacidad" class="footer-link">Privacidad</a>
+  </footer>
+
+</main>
+
+<!-- Firebase SDK (module) — handles auth, tab switching, and form logic -->
+<script type="module" src="js/auth.js"></script>
+
+</body>
+</html>

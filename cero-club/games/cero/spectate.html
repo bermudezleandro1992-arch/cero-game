@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cero · Espectador</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/cero.css" />
+  <style>
+    .spectate-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.7);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    .spectate-badge {
+      background: rgba(167,139,250,.15);
+      border: 1px solid rgba(167,139,250,.35);
+      border-radius: 8px;
+      padding: .5rem 1.2rem;
+      font-family: 'Space Mono', monospace;
+      font-size: .7rem;
+      letter-spacing: .15em;
+      color: #a78bfa;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+    .spec-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(7,5,26,.92);
+      border-top: 1px solid rgba(167,139,250,.2);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .7rem 1.2rem;
+      z-index: 50;
+    }
+    .spec-info { font-size: .8rem; color: #7b77a8; }
+    .spec-back { text-decoration: none; color: #a78bfa; font-size: .85rem; font-weight: 600; }
+    /* Disable all interaction on cards */
+    .cero-card { pointer-events: none !important; cursor: default !important; }
+    .deck-pile, .discard-pile { pointer-events: none !important; }
+  </style>
+</head>
+<body>
+  <div class="cero-app">
+    <header class="cero-header">
+      <a href="/" class="back-link">← Lobby</a>
+      <div class="header-center">
+        <span class="header-brand">CERO</span>
+        <span class="htag">👁 Espectando</span>
+      </div>
+      <div class="header-controls">
+        <span class="spectate-badge">LIVE</span>
+      </div>
+    </header>
+
+    <div class="game-area" id="ceroTable">
+      <div class="table-oval">
+        <div class="cpu-seats-layer" id="cpuSeats"></div>
+        <div class="table-center">
+          <div class="draw-stack-badge" id="drawStackBadge" style="display:none">+0</div>
+          <div class="pile-wrap">
+            <div class="pile-label">Descarte</div>
+            <div class="card-pile discard-pile" id="discardPile"></div>
+          </div>
+          <div class="color-indicator" id="colorIndicator"></div>
+          <div class="pile-wrap">
+            <div class="pile-label">Mazo</div>
+            <div class="card-pile deck-pile" id="deckPile"></div>
+          </div>
+        </div>
+        <div class="status-banner" id="statusBanner">Cargando partida...</div>
+      </div>
+      <!-- No player zone — spectators don't have cards -->
+    </div>
+  </div>
+
+  <div class="spec-bar">
+    <span class="spec-info" id="specInfo">Conectando...</span>
+    <a href="/" class="spec-back">← Volver al lobby</a>
+  </div>
+
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp }   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import {
+      getFirestore, doc, onSnapshot,
+    } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+    const app = initializeApp({
+      apiKey:            'AIzaSyBQERXx9ZEXRiYrhrWp4v2CX36p2bbn8vU',
+      authDomain:        'cero-club.firebaseapp.com',
+      projectId:         'cero-club',
+      storageBucket:     'cero-club.firebasestorage.app',
+      messagingSenderId: '411019935482',
+      appId:             '1:411019935482:web:32b4ffd87b83598aa3d343',
+    });
+    const db = getFirestore(app);
+
+    // Check auth
+    const session = JSON.parse(sessionStorage.getItem('cero_user') || 'null');
+    if (!session || session.anon) {
+      document.getElementById('statusBanner').textContent = 'Debés iniciar sesión para espectear.';
+      document.getElementById('specInfo').textContent     = 'Solo para usuarios registrados.';
+    } else {
+      const params = new URLSearchParams(location.search);
+      const roomId = params.get('roomId');
+      if (!roomId) {
+        document.getElementById('statusBanner').textContent = 'Sala no encontrada.';
+      } else {
+        _spectateRoom(db, doc, onSnapshot, roomId);
+      }
+    }
+
+    function _spectateRoom(db, docFn, onSnapshot, roomId) {
+      const roomRef = docFn(db, 'rooms', roomId);
+      onSnapshot(roomRef, snap => {
+        const d = snap.data();
+        if (!d) {
+          document.getElementById('statusBanner').textContent = 'Sala no disponible.';
+          return;
+        }
+        if (d.allowSpectate === false) {
+          document.getElementById('statusBanner').textContent = 'El anfitrión desactivó espectadores en esta sala.';
+          return;
+        }
+        _renderSpectate(d, roomId);
+      });
+    }
+
+    function _renderSpectate(d, roomId) {
+      // Status
+      const banner = document.getElementById('statusBanner');
+      const info   = document.getElementById('specInfo');
+      if (!d.phase || d.status === 'waiting') {
+        if (banner) banner.textContent = 'Esperando que empiece la partida...';
+        if (info)   info.textContent   = `Sala: ${roomId.slice(0,8)}...`;
+        return;
+      }
+      if (d.status === 'finished' || d.winner) {
+        const winner = (d.players || []).find(p => p.uid === d.winner);
+        if (banner) banner.textContent = `🏆 ¡${winner?.name || 'Un jugador'} ganó!`;
+        return;
+      }
+
+      const curPlayer = (d.players || [])[d.currentTurn];
+      if (banner) banner.textContent = `Turno de ${curPlayer?.name || '?'}`;
+      if (info)   info.textContent   = `Sala: ${roomId.slice(0,8)}... · ${(d.players||[]).map(p=>`${p.name}(${d.handCounts?.[p.uid]||0})`).join(' vs ')}`;
+
+      // Discard
+      _renderDiscardSpec(d.discardTop);
+      _renderColorSpec(d.color);
+      _renderDrawStackSpec(d.drawStack);
+      _renderSeatsSpec(d);
+      _renderDeckSpec(d.deckCount);
+    }
+
+    function _renderDiscardSpec(top) {
+      const el = document.getElementById('discardPile');
+      if (!el || !top) return;
+      el.innerHTML = '';
+      const css = { magenta:'#e879f9', gold:'#f59e0b', blue:'#60a5fa', green:'#4ade80', wild:'#a78bfa' };
+      const bg  = { magenta:'#1f0824', gold:'#1f1004', blue:'#041424', green:'#041f0e', wild:'#0e0524' };
+      const c   = top.color || 'wild';
+      el.innerHTML = `<div style="width:60px;height:86px;background:${bg[c]||'#111'};border:2px solid ${css[c]||'#555'};border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:900;color:${css[c]||'#fff'};font-family:'Space Mono',monospace;">${_valLabel(top.value)}</div>`;
+    }
+    function _valLabel(v) {
+      const m = { skip:'⊘', reverse:'⇄', draw2:'+2', wild:'★', wild4:'+4★', cero_total:'⚡', cero_mirror:'◈', cero_swap:'⇌', cero_star:'✦' };
+      return m[v] || v || '?';
+    }
+    function _renderColorSpec(color) {
+      const el  = document.getElementById('colorIndicator');
+      if (!el) return;
+      const bg  = { magenta:'#1f0824', gold:'#1f1004', blue:'#041424', green:'#041f0e', wild:'#0e0524' };
+      const cc  = { magenta:'#e879f9', gold:'#f59e0b', blue:'#60a5fa', green:'#4ade80', wild:'#a78bfa' };
+      el.style.cssText = `background:${bg[color]||'#111'};border-color:${cc[color]||'#555'};box-shadow:0 0 12px ${cc[color]||'transparent'}44`;
+    }
+    function _renderDrawStackSpec(n) {
+      const el = document.getElementById('drawStackBadge');
+      if (!el) return;
+      el.style.display = n > 0 ? 'flex' : 'none';
+      el.textContent   = `+${n}`;
+    }
+    function _renderDeckSpec(count) {
+      const el = document.getElementById('deckPile');
+      if (!el) return;
+      el.innerHTML = '';
+      for (let i = 0; i < Math.min(3, Math.max(1, count || 1)); i++) {
+        const card = document.createElement('div');
+        card.style.cssText = `position:absolute;width:50px;height:72px;background:linear-gradient(145deg,#0f0528,#07031a);border:2px solid rgba(139,92,246,.6);border-radius:7px;top:${-i*2}px;left:${-i}px;z-index:${i};display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:.6rem;font-weight:900;letter-spacing:.15em;background-clip:text;color:#a78bfa`;
+        card.textContent = 'CERO';
+        el.appendChild(card);
+      }
+    }
+    function _renderSeatsSpec(d) {
+      const wrap = document.getElementById('cpuSeats');
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      const players = d.players || [];
+      const n = players.length;
+      players.forEach((p, i) => {
+        const deg = (270 + i * (360 / n) + 360) % 360;
+        const rad = deg * Math.PI / 180;
+        const x   = 50 + 38 * Math.cos(rad);
+        const y   = 50 + 32 * Math.sin(rad);
+        const count = d.handCounts?.[p.uid] || 0;
+        const isTurn = d.currentTurn === i;
+        const seat = document.createElement('div');
+        seat.className = `cpu-seat${isTurn ? ' seat-active' : ''}`;
+        seat.style.cssText = `left:${x}%;top:${y}%;`;
+        seat.innerHTML = `
+          <div class="cpu-avatar${isTurn ? ' cpu-thinking' : ''}">${p.name?.[0]?.toUpperCase()||'?'}</div>
+          <div class="cpu-name-label">${p.name||'?'}</div>
+          <div class="cpu-card-count">
+            ${count <= 5
+              ? Array(count).fill('<div class="cpu-mini-card"></div>').join('')
+              : `<div class="cpu-mini-card"></div><span class="cpu-count-badge">×${count}</span>`}
+          </div>
+          ${count === 1 ? '<div class="cero-badge">CERO!</div>' : ''}`;
+        wrap.appendChild(seat);
+      });
+    }
+  </script>
+</body>
+</html>
