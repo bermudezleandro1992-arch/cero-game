@@ -23,6 +23,7 @@ exports.getRejoinStatus       = gameModule.getRejoinStatus;
 exports.checkMatchRejoinExpiry = gameModule.checkMatchRejoinExpiry;
 exports.expireRejoinMatches   = gameModule.expireRejoinMatches;
 exports.expireStaleWaitingMatches = gameModule.expireStaleWaitingMatches;
+exports.ensureMatchStarted = gameModule.ensureMatchStarted;
 
 // ── Módulo: monetización + Mercado Pago ──────────────────────────────────────
 const monetModule = require('./compiled/monetization');
