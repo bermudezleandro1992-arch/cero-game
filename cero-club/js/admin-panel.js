@@ -29,6 +29,122 @@ const $ = (id) => document.getElementById(id);
 
 let currentUser = null;
 let selectedUid = null;
+let depositsCache = [];
+let selectedDepositId = null;
+
+function fmtTs(ms) {
+  if (!ms) return '—';
+  return new Date(ms).toLocaleString('es-AR');
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+}
+
+async function loadDeposits() {
+  const list = $('depositsList');
+  try {
+    const data = await callFn('adminListDeposits', { status: 'pending', limit: 40 });
+    depositsCache = data.deposits || [];
+    const pending = data.alerts?.pendingDeposits ?? depositsCache.length;
+    $('depositBadge').textContent = pending > 0 ? `(${pending})` : '';
+    $('depositAlert').textContent = data.alerts?.lastDepositEmail
+      ? `Último: ${data.alerts.lastDepositEmail} · ${fmtTs(data.alerts.lastDepositAt)}`
+      : 'Sin depósitos recientes';
+
+    if (!depositsCache.length) {
+      list.innerHTML = '<p style="color:#a78bfa;font-size:.85rem">No hay depósitos pendientes.</p>';
+      return;
+    }
+
+    list.innerHTML = `<table><thead><tr>
+      <th>Fecha</th><th>Jugador</th><th>Método</th><th>CN</th><th>IP</th><th></th>
+    </tr></thead><tbody>${depositsCache.map((d) => `<tr class="deposit-row" data-id="${d.id}">
+      <td>${fmtTs(d.createdAt)}</td>
+      <td>${esc(d.displayName)}<br><span style="color:#a78bfa;font-size:.7rem">${esc(d.email)}</span></td>
+      <td>${esc(d.methodLabel)}</td>
+      <td><b>${d.coinsRequested}</b></td>
+      <td style="font-family:monospace;font-size:.7rem">${esc(d.security?.clientIp)}</td>
+      <td><button type="button" class="btn-warn btn-open-dep" data-id="${d.id}">Revisar</button></td>
+    </tr>`).join('')}</tbody></table>`;
+
+    list.querySelectorAll('.btn-open-dep').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openDepositModal(btn.dataset.id);
+      });
+    });
+  } catch (err) {
+    list.innerHTML = `<p style="color:#f87171">${esc(err.message)}</p>`;
+  }
+}
+
+function openDepositModal(id) {
+  const d = depositsCache.find((x) => x.id === id);
+  if (!d) return;
+  selectedDepositId = id;
+  $('depositAdminNote').value = '';
+  $('depositCoinsOverride').value = '';
+
+  const sec = d.security || {};
+  const hist = d.userHistory || {};
+  const isPdf = String(d.receiptMime || '').includes('pdf');
+
+  let receiptHtml = '';
+  if (d.receiptDataUrl) {
+    receiptHtml = isPdf
+      ? `<p><a href="${d.receiptDataUrl}" target="_blank" rel="noopener" class="btn-accent" style="display:inline-block;text-decoration:none">📄 Abrir PDF comprobante</a></p>`
+      : `<img class="receipt-preview" src="${d.receiptDataUrl}" alt="Comprobante" />`;
+  }
+
+  $('depositDetail').innerHTML = `
+    <p><strong>${esc(d.displayName)}</strong> · ${esc(d.email)}</p>
+    <p style="font-size:.75rem;color:#a78bfa;word-break:break-all">UID: ${esc(d.uid)}</p>
+    <p>Solicita <b style="color:#00ef90">${d.coinsRequested} CN</b> · Pagó ~${d.amountPaid} ${esc(d.currency)} · ${esc(d.methodLabel)}</p>
+    ${d.payerReference ? `<p>Ref. pagador: ${esc(d.payerReference)}</p>` : ''}
+    ${receiptHtml}
+    <div class="sec-grid">
+      <div class="sec-box"><b>IP depósito</b>${esc(sec.clientIp)}</div>
+      <div class="sec-box"><b>IP historial</b>${esc(hist.lastSessionIp)}</div>
+      <div class="sec-box"><b>Device ID</b>${esc(sec.deviceId) || '—'}</div>
+      <div class="sec-box"><b>Dispositivo</b>${esc(sec.deviceType)} · ${sec.isMobile ? 'Móvil' : 'PC'}</div>
+      <div class="sec-box"><b>SO / Plataforma</b>${esc(sec.os)} · ${esc(sec.platform)}</div>
+      <div class="sec-box"><b>Pantalla</b>${esc(sec.screen)}</div>
+      <div class="sec-box"><b>Idioma / TZ</b>${esc(sec.language)} · ${esc(sec.timezone)}</div>
+      <div class="sec-box"><b>Partidas jugadas</b>${hist.totalGamesPlayed ?? 0}</div>
+    </div>
+    <p style="font-size:.65rem;color:#a78bfa;word-break:break-all">UA: ${esc(sec.userAgent)}</p>
+  `;
+  $('depositModal').classList.remove('hidden');
+}
+
+async function reviewDeposit(action) {
+  if (!selectedDepositId) return;
+  const coinsRaw = $('depositCoinsOverride').value.trim();
+  const payload = {
+    depositId: selectedDepositId,
+    action,
+    adminNote: $('depositAdminNote').value.trim(),
+  };
+  if (coinsRaw && action === 'approve') payload.coinsToCredit = Number(coinsRaw);
+
+  if (action === 'approve' && !window.confirm('¿Acreditar monedas a este jugador?')) return;
+  if (action === 'reject' && !window.confirm('¿Rechazar este depósito?')) return;
+
+  try {
+    const r = await callFn('adminReviewDeposit', payload);
+    showStatus($('panelStatus'),
+      action === 'approve'
+        ? `✓ Acreditados ${r.coinsCredited} CN`
+        : 'Depósito rechazado',
+      true);
+    $('depositModal').classList.add('hidden');
+    selectedDepositId = null;
+    await loadDeposits();
+  } catch (err) {
+    showStatus($('panelStatus'), err.message, false);
+  }
+}
 
 function showStatus(el, msg, ok = true) {
   el.textContent = msg;
@@ -92,6 +208,7 @@ async function ensurePanelAccess(user) {
   $('panelSection').classList.remove('hidden');
   $('adminUserLabel').textContent = `${user.email} · operador`;
   await loadTournaments();
+  await loadDeposits();
   return true;
 }
 
@@ -194,6 +311,14 @@ $('btnForceSeed').addEventListener('click', async () => {
     showStatus($('panelStatus'), err.message, false);
   }
 });
+
+$('btnRefreshDeposits').addEventListener('click', () => loadDeposits());
+$('btnCloseDeposit').addEventListener('click', () => {
+  $('depositModal').classList.add('hidden');
+  selectedDepositId = null;
+});
+$('btnApproveDeposit').addEventListener('click', () => reviewDeposit('approve'));
+$('btnRejectDeposit').addEventListener('click', () => reviewDeposit('reject'));
 
 onAuthStateChanged(auth, async (user) => {
   if (user) await ensurePanelAccess(user);

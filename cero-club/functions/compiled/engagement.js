@@ -45,7 +45,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateRanking = exports.claimDailyReward = exports.equipCosmetic = exports.purchaseCosmetic = exports.resetWeeklyRanking = exports.claimDailyBonus = exports.initUserProfile = exports.COSMETIC_CATALOG = void 0;
+exports.updateRanking = exports.claimDailyReward = exports.equipCosmetic = exports.purchaseCosmetic = exports.resetMonthlyRanking = exports.resetWeeklyRanking = exports.claimDailyBonus = exports.initUserProfile = exports.COSMETIC_CATALOG = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-admin/firestore");
@@ -61,9 +61,9 @@ function referralCodeForUid(uid) {
     return crypto.createHash('sha256').update(uid).digest('hex').slice(0, 8).toUpperCase();
 }
 const WEEKLY_PRIZES = {
-    1: 500,
-    2: 300,
-    3: 200,
+    1: 1000,
+    2: 600,
+    3: 400,
     4: 75,
     5: 75,
     6: 50,
@@ -71,6 +71,11 @@ const WEEKLY_PRIZES = {
     8: 50,
     9: 50,
     10: 50,
+};
+const MONTHLY_TOP3_PRIZES = {
+    1: 5000,
+    2: 3000,
+    3: 1500,
 };
 function guard(cond, code, msg) {
     if (!cond)
@@ -119,7 +124,8 @@ exports.initUserProfile = (0, https_1.onCall)({ region: REGION }, async (request
             freeGamesPlayed: 0,
             totalGamesPlayed: 0,
             wins: 0,
-            weeklyWins: 0, // para el ranking semanal
+            weeklyWins: 0, // ranking semanal
+            monthlyWins: 0, // ranking mensual
             rankScore: 0, // puntos de ranking (wins × 10 − losses × 2)
             lastDailyClaim: null,
             ownedCosmetics: [],
@@ -246,6 +252,60 @@ exports.resetWeeklyRanking = (0, scheduler_1.onSchedule)({ schedule: '0 0 * * 1'
     }
     await batch.commit();
     console.info(`[resetWeeklyRanking] ${weekKey} procesado. Top: ${entries[0]?.name ?? 'nadie'}`);
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// resetMonthlyRanking — día 1 de cada mes 00:05 UTC — premia top 3 del mes
+// ─────────────────────────────────────────────────────────────────────────────
+exports.resetMonthlyRanking = (0, scheduler_1.onSchedule)({ schedule: '5 0 1 * *', region: REGION, timeoutSeconds: 540 }, async () => {
+    const db = (0, firestore_1.getFirestore)();
+    const now = new Date();
+    const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const prevMonth = now.getUTCMonth() === 0
+        ? `${now.getUTCFullYear() - 1}-12`
+        : `${now.getUTCFullYear()}-${String(now.getUTCMonth()).padStart(2, '0')}`;
+    const topSnap = await db.collection('users')
+        .orderBy('monthlyWins', 'desc')
+        .limit(50)
+        .get();
+    const entries = topSnap.docs.map((d, i) => ({
+        uid: d.id,
+        name: d.data()['displayName'] ?? 'Jugador',
+        monthlyWins: d.data()['monthlyWins'] ?? 0,
+        position: i + 1,
+    }));
+    await db.doc(`ranking/${prevMonth}`).set({
+        period: 'monthly',
+        monthKey: prevMonth,
+        generatedAt: firestore_1.FieldValue.serverTimestamp(),
+        entries: entries.slice(0, 10),
+    });
+    const batch = db.batch();
+    for (const entry of entries.slice(0, 3)) {
+        const prize = MONTHLY_TOP3_PRIZES[entry.position] ?? 0;
+        if (prize <= 0 || entry.monthlyWins === 0)
+            continue;
+        batch.update(db.doc(`users/${entry.uid}`), {
+            ceroCoins: firestore_1.FieldValue.increment(prize),
+        });
+        batch.set(db.collection(`users/${entry.uid}/notifications`).doc(), {
+            type: 'monthly_prize',
+            title: `Top ${entry.position} del mes`,
+            body: `Ganaste ${prize} CN por el puesto ${entry.position} en ${prevMonth}.`,
+            coins: prize,
+            monthKey: prevMonth,
+            read: false,
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+    }
+    await batch.commit();
+    for (let i = 0; i < topSnap.docs.length; i += 450) {
+        const resetBatch = db.batch();
+        for (const d of topSnap.docs.slice(i, i + 450)) {
+            resetBatch.update(d.ref, { monthlyWins: 0 });
+        }
+        await resetBatch.commit();
+    }
+    console.info(`[resetMonthlyRanking] ${prevMonth} — campeón: ${entries[0]?.name ?? 'nadie'}`);
 });
 exports.purchaseCosmetic = (0, https_1.onCall)({ region: REGION }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');

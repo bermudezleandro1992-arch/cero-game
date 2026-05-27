@@ -382,8 +382,9 @@ export const onMatchFinished = onDocumentUpdated(
       updates.push(_updateMissionProgress(db, winnerUid, 'win'));
       updates.push(
         db.doc(`users/${winnerUid}`).update({
-          weeklyWins: FieldValue.increment(1),
-          rankScore:  FieldValue.increment(10),
+          weeklyWins:  FieldValue.increment(1),
+          monthlyWins: FieldValue.increment(1),
+          rankScore:   FieldValue.increment(10),
         }).then(() => { /* void */ }).catch(() => { /* usuario puede no existir aún */ }),
       );
     }

@@ -258,6 +258,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── Depósitos con comprobante (solo lectura propia; escritura vía Cloud Functions) ─
+    match /deposit_requests/{depositId} {
+      allow read:  if request.auth != null
+                   && (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
     match /lobby_messages/{msgId} {
       allow read:   if request.auth != null;
       allow create: if request.auth != null

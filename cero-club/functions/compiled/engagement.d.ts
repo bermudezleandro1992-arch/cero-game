@@ -41,6 +41,7 @@ export declare const claimDailyBonus: import("firebase-functions/v2/https").Call
  * 4. Resetea weeklyWins y rankScore a 0 para todos.
  */
 export declare const resetWeeklyRanking: import("firebase-functions/v2/scheduler").ScheduleFunction;
+export declare const resetMonthlyRanking: import("firebase-functions/v2/scheduler").ScheduleFunction;
 interface PurchaseCosmeticRequest {
     cosmeticId: string;
 }

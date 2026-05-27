@@ -73,6 +73,15 @@ exports.placeMatchBet       = walletModule.placeMatchBet;
 exports.getMatchBettingInfo = walletModule.getMatchBettingInfo;
 exports.joinAsSpectator     = walletModule.joinAsSpectator;
 
+// ── Depósitos con comprobante + panel CEO ─────────────────────────────────────
+const depositsModule = require('./compiled/deposits');
+exports.getDepositMethods    = depositsModule.getDepositMethods;
+exports.submitDepositRequest = depositsModule.submitDepositRequest;
+exports.adminListDeposits    = depositsModule.adminListDeposits;
+exports.adminReviewDeposit   = depositsModule.adminReviewDeposit;
+
+exports.resetMonthlyRanking = engModule.resetMonthlyRanking;
+
 let _visionClient = null;
 function getVisionClient() {
   if (!_visionClient) {

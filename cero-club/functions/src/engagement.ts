@@ -30,10 +30,10 @@ function referralCodeForUid(uid: string): string {
   return crypto.createHash('sha256').update(uid).digest('hex').slice(0, 8).toUpperCase();
 }
 
-const WEEKLY_PRIZES: Record<number, number> = {  // posición → CC
-  1:  500,
-  2:  300,
-  3:  200,
+const WEEKLY_PRIZES: Record<number, number> = {  // posición → CC (top 3 destacados)
+  1:  1_000,
+  2:  600,
+  3:  400,
   4:  75,
   5:  75,
   6:  50,
@@ -41,6 +41,12 @@ const WEEKLY_PRIZES: Record<number, number> = {  // posición → CC
   8:  50,
   9:  50,
   10: 50,
+};
+
+const MONTHLY_TOP3_PRIZES: Record<number, number> = {
+  1: 5_000,
+  2: 3_000,
+  3: 1_500,
 };
 
 type ErrCode =
@@ -127,7 +133,8 @@ export const initUserProfile = onCall<Record<string, never>, Promise<InitProfile
         freeGamesPlayed:   0,
         totalGamesPlayed:  0,
         wins:              0,
-        weeklyWins:        0,     // para el ranking semanal
+        weeklyWins:        0,     // ranking semanal
+        monthlyWins:       0,     // ranking mensual
         rankScore:         0,     // puntos de ranking (wins × 10 − losses × 2)
         lastDailyClaim:    null,
         ownedCosmetics:    [] as string[],
@@ -304,6 +311,74 @@ export const resetWeeklyRanking = onSchedule(
     await batch.commit();
 
     console.info(`[resetWeeklyRanking] ${weekKey} procesado. Top: ${entries[0]?.name ?? 'nadie'}`);
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// resetMonthlyRanking — día 1 de cada mes 00:05 UTC — premia top 3 del mes
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const resetMonthlyRanking = onSchedule(
+  { schedule: '5 0 1 * *', region: REGION, timeoutSeconds: 540 },
+  async () => {
+    const db  = getFirestore();
+    const now = new Date();
+    const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const prevMonth = now.getUTCMonth() === 0
+      ? `${now.getUTCFullYear() - 1}-12`
+      : `${now.getUTCFullYear()}-${String(now.getUTCMonth()).padStart(2, '0')}`;
+
+    const topSnap = await db.collection('users')
+      .orderBy('monthlyWins', 'desc')
+      .limit(50)
+      .get();
+
+    const entries = topSnap.docs.map((d, i) => ({
+      uid:         d.id,
+      name:        (d.data()['displayName'] as string | undefined) ?? 'Jugador',
+      monthlyWins: (d.data()['monthlyWins'] as number | undefined) ?? 0,
+      position:    i + 1,
+    }));
+
+    await db.doc(`ranking/${prevMonth}`).set({
+      period:      'monthly',
+      monthKey:    prevMonth,
+      generatedAt: FieldValue.serverTimestamp(),
+      entries:     entries.slice(0, 10),
+    });
+
+    const batch = db.batch();
+    for (const entry of entries.slice(0, 3)) {
+      const prize = MONTHLY_TOP3_PRIZES[entry.position] ?? 0;
+      if (prize <= 0 || entry.monthlyWins === 0) continue;
+
+      batch.update(db.doc(`users/${entry.uid}`), {
+        ceroCoins: FieldValue.increment(prize),
+      });
+      batch.set(
+        db.collection(`users/${entry.uid}/notifications`).doc(),
+        {
+          type:      'monthly_prize',
+          title:     `Top ${entry.position} del mes`,
+          body:      `Ganaste ${prize} CN por el puesto ${entry.position} en ${prevMonth}.`,
+          coins:     prize,
+          monthKey:  prevMonth,
+          read:      false,
+          createdAt: FieldValue.serverTimestamp(),
+        },
+      );
+    }
+    await batch.commit();
+
+    for (let i = 0; i < topSnap.docs.length; i += 450) {
+      const resetBatch = db.batch();
+      for (const d of topSnap.docs.slice(i, i + 450)) {
+        resetBatch.update(d.ref, { monthlyWins: 0 });
+      }
+      await resetBatch.commit();
+    }
+
+    console.info(`[resetMonthlyRanking] ${prevMonth} — campeón: ${entries[0]?.name ?? 'nadie'}`);
   },
 );
 

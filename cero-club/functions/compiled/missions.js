@@ -292,6 +292,7 @@ exports.onMatchFinished = (0, firestore_1.onDocumentUpdated)({ document: 'matche
         updates.push(_updateMissionProgress(db, winnerUid, 'win'));
         updates.push(db.doc(`users/${winnerUid}`).update({
             weeklyWins: firestore_2.FieldValue.increment(1),
+            monthlyWins: firestore_2.FieldValue.increment(1),
             rankScore: firestore_2.FieldValue.increment(10),
         }).then(() => { }).catch(() => { }));
     }
