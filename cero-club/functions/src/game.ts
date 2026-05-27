@@ -141,6 +141,7 @@ export interface MatchDoc {
   bracketSlot?:     number | null;
   guestOnly?:       boolean;
   createdAt?:       FirebaseFirestore.Timestamp | ReturnType<typeof FieldValue.serverTimestamp>;
+  startedAt?:       FirebaseFirestore.Timestamp | null;
   closedReason?:    string;
 }
 
@@ -266,6 +267,74 @@ function matchCreatedMs(createdAt: MatchDoc['createdAt']): number {
     return 0;
   }
   return (createdAt as FirebaseFirestore.Timestamp).toMillis();
+}
+
+function matchAgeMs(match: MatchDoc): number {
+  const started = match.startedAt ? matchCreatedMs(match.startedAt) : 0;
+  return started || matchCreatedMs(match.createdAt);
+}
+
+/** Sala/partida colgada: waiting vieja o playing que nunca arrancó del todo. */
+export function isStuckMatch(match: MatchDoc, now = Date.now()): boolean {
+  const ageMs = matchAgeMs(match);
+  const oldEnough = ageMs === 0 || now - ageMs >= CFG.WAITING_ROOM_MS;
+  if (!oldEnough) return false;
+  if (match.status === 'waiting') return true;
+  if (match.status === 'playing' && match.phase === 'waiting' && !match.topDiscard) return true;
+  return false;
+}
+
+async function clearActiveRejoinForPlayers(
+  db: FirebaseFirestore.Firestore,
+  playerIds: string[],
+): Promise<void> {
+  const batch = db.batch();
+  for (const uid of playerIds) {
+    batch.set(db.doc(`users/${uid}`), { activeRejoin: FieldValue.delete() }, { merge: true });
+  }
+  await batch.commit();
+}
+
+/** Cierra waiting (delete) o playing colgada (finished + reembolso). */
+export async function forceCloseMatch(
+  db: FirebaseFirestore.Firestore,
+  matchRef: FirebaseFirestore.DocumentReference,
+  match: MatchDoc,
+  reason: string,
+): Promise<void> {
+  if (match.status === 'waiting') {
+    await closeWaitingRoom(db, matchRef, match, reason);
+    await clearActiveRejoinForPlayers(db, match.playerIds);
+    return;
+  }
+
+  if (match.status !== 'playing') return;
+
+  const batch = db.batch();
+  const stake = match.stakeCC ?? 0;
+  for (const uid of match.playerIds) {
+    const upd: Record<string, unknown> = { activeRejoin: FieldValue.delete() };
+    if (stake > 0) upd.ceroCoins = FieldValue.increment(stake);
+    batch.set(db.doc(`users/${uid}`), upd, { merge: true });
+  }
+  batch.update(matchRef, {
+    status:       'finished',
+    phase:        'game_over',
+    winner:       null,
+    finishedAt:   FieldValue.serverTimestamp(),
+    closedReason: reason,
+    rejoinBanner: FieldValue.delete(),
+  });
+  await batch.commit();
+
+  await db.collection('coin_ledger').add({
+    matchId:   matchRef.id,
+    type:      'match_admin_closed',
+    reason,
+    playerIds: match.playerIds,
+    stakeCC:   stake,
+    createdAt: FieldValue.serverTimestamp(),
+  }).catch(() => {});
 }
 
 function playerIsGuest(match: MatchDoc, uid: string): boolean {
@@ -659,7 +728,6 @@ export async function cleanupOrphanRoomsForUser(
     db.collection('matches')
       .where('status', '==', 'playing')
       .where('playerIds', 'array-contains', uid)
-      .limit(1)
       .get(),
   ]);
 
@@ -673,7 +741,18 @@ export async function cleanupOrphanRoomsForUser(
     const orphan = hasPlaying;
 
     if (orphan || stale) {
-      await closeWaitingRoom(db, docSnap.ref, match, orphan ? 'orphan_waiting' : 'waiting_expired');
+      await forceCloseMatch(db, docSnap.ref, match, orphan ? 'orphan_waiting' : 'waiting_expired');
+      closedWaiting++;
+    }
+  }
+
+  for (const docSnap of playingSnap.docs) {
+    const match = docSnap.data() as MatchDoc;
+    if (!isStuckMatch(match, now)) continue;
+    await tryStartMatchIfReady(db, docSnap.ref, match);
+    const fresh = (await docSnap.ref.get()).data() as MatchDoc | undefined;
+    if (fresh && isStuckMatch(fresh, now)) {
+      await forceCloseMatch(db, docSnap.ref, fresh, 'stuck_playing_cleanup');
       closedWaiting++;
     }
   }
@@ -1271,23 +1350,35 @@ export const expireRejoinMatches = onSchedule(
   },
 );
 
-/** Cierra salas waiting colgadas sin rival (~4 min). */
+/** Cierra salas waiting colgadas sin rival (~4 min) y partidas playing atascadas. */
 export const expireStaleWaitingMatches = onSchedule(
   { schedule: 'every 1 minutes', region: CFG.REGION, timeZone: 'America/Montevideo' },
   async () => {
     const db     = getFirestore();
-    const cutoff = Date.now() - CFG.WAITING_ROOM_MS;
+    const now    = Date.now();
+    const cutoff = now - CFG.WAITING_ROOM_MS;
 
-    const waiting = await db.collection('matches')
-      .where('status', '==', 'waiting')
-      .limit(200)
-      .get();
+    const [waiting, playing] = await Promise.all([
+      db.collection('matches').where('status', '==', 'waiting').limit(200).get(),
+      db.collection('matches').where('status', '==', 'playing').limit(200).get(),
+    ]);
 
     for (const docSnap of waiting.docs) {
       const match = docSnap.data() as MatchDoc;
       const createdMs = matchCreatedMs(match.createdAt);
       if (createdMs > 0 && createdMs <= cutoff) {
-        await closeWaitingRoom(db, docSnap.ref, match, 'waiting_expired');
+        await forceCloseMatch(db, docSnap.ref, match, 'waiting_expired');
+      }
+    }
+
+    for (const docSnap of playing.docs) {
+      const match = docSnap.data() as MatchDoc;
+      if (isStuckMatch(match, now)) {
+        await tryStartMatchIfReady(db, docSnap.ref, match);
+        const fresh = (await docSnap.ref.get()).data() as MatchDoc | undefined;
+        if (fresh && isStuckMatch(fresh, now)) {
+          await forceCloseMatch(db, docSnap.ref, fresh, 'stuck_playing_expired');
+        }
       }
     }
   },
@@ -1331,7 +1422,8 @@ export const getRejoinStatus = onCall<Record<string, never>, Promise<{
     }
 
     const match = matchSnap.data() as MatchDoc;
-    if (!canRejoinMatch(match, uid)) {
+    if (!canRejoinMatch(match, uid) || match.status === 'finished' || isStuckMatch(match)) {
+      await db.doc(`users/${uid}`).set({ activeRejoin: FieldValue.delete() }, { merge: true });
       return { available: false };
     }
 

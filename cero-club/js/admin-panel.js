@@ -165,17 +165,19 @@ async function isOperator(uid) {
 async function loadWaitingRooms() {
   const list = $('roomsList');
   if (!list) return;
+  list.innerHTML = '<p style="color:#a78bfa;font-size:.85rem">Cargando salas…</p>';
   try {
     const data = await callFn('adminListWaitingMatches', { limit: 60 });
     waitingRoomsCache = data.matches || [];
     if (!waitingRoomsCache.length) {
-      list.innerHTML = '<p style="color:#a78bfa;font-size:.85rem">No hay salas en espera.</p>';
+      list.innerHTML = '<p style="color:#a78bfa;font-size:.85rem">No hay salas ni partidas colgadas.</p>';
       return;
     }
     list.innerHTML = `<table><thead><tr>
-      <th>ID</th><th>Jugadores</th><th>Modo</th><th>CN</th><th>Edad</th><th></th>
+      <th>ID</th><th>Estado</th><th>Jugadores</th><th>Modo</th><th>CN</th><th>Edad</th><th></th>
     </tr></thead><tbody>${waitingRoomsCache.map((m) => `<tr>
       <td style="font-family:monospace;font-size:.65rem;max-width:120px;word-break:break-all">${esc(m.id)}</td>
+      <td style="${m.stale ? 'color:#f59e0b;font-weight:700' : ''}">${esc(m.status)}${m.phase && m.status === 'playing' ? '<br><span style="font-size:.65rem;color:#a78bfa">' + esc(m.phase) + '</span>' : ''}</td>
       <td>${esc((m.players || []).map((p) => p.name).join(', ') || '—')}<br><span style="color:#a78bfa;font-size:.7rem">${m.playerCount}/${m.maxPlayers}${m.guestOnly ? ' · invitados' : ''}</span></td>
       <td>${esc(m.mode)}</td>
       <td>${m.stakeCC > 0 ? `<b>${m.stakeCC}</b>` : '0'}</td>
@@ -364,10 +366,10 @@ $('btnCleanupStale')?.addEventListener('click', async () => {
   }
 });
 $('btnCleanupAllWaiting')?.addEventListener('click', async () => {
-  if (!window.confirm('¿Cerrar TODAS las salas en espera? Se devolverán CN si corresponde.')) return;
+  if (!window.confirm('¿Cerrar TODAS las salas waiting y partidas playing colgadas? Se devolverán CN si corresponde.')) return;
   try {
-    const r = await callFn('adminCleanupStaleRooms', { minAgeMinutes: 0 });
-    showStatus($('panelStatus'), `Listo: ${r.closed} sala(s) cerrada(s).`, true);
+    const r = await callFn('adminCleanupStaleRooms', { minAgeMinutes: 0, limit: 200 });
+    showStatus($('panelStatus'), `Listo: ${r.closed} sala(s)/partida(s) cerrada(s).`, true);
     await loadWaitingRooms();
   } catch (err) {
     showStatus($('panelStatus'), err.message, false);
