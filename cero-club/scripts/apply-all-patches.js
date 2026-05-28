@@ -30,6 +30,7 @@ const patches = [
   'patch-app-uno-ux-v22.js',
   'patch-app-quickmatch-v23.js',
   'patch-app-special-cards-v24.js',
+  'patch-app-continue-room-v25.js',
 ];
 
 for (const p of patches) {
