@@ -5,6 +5,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
+import { getAppConfig, publicConfigPayload } from './appConfig';
 
 const REGION = 'us-central1';
 const MAX_TOKENS = 5;
@@ -103,7 +104,7 @@ export const sendTestPush = onCall<Record<string, never>>(
   },
 );
 
-/** Config pública para el cliente (VAPID key, etc.) */
+/** Config pública para el cliente (VAPID key, lobby, flags). */
 export const getPublicConfig = onCall<Record<string, never>>(
   { region: REGION },
   async () => {
@@ -117,6 +118,12 @@ export const getPublicConfig = onCall<Record<string, never>>(
       } catch { /* ignore */ }
     }
 
-    return { vapidKey, pushEnabled: !!vapidKey };
+    const appCfg = await getAppConfig(db);
+
+    return {
+      vapidKey,
+      pushEnabled: !!vapidKey,
+      ...publicConfigPayload(appCfg),
+    };
   },
 );

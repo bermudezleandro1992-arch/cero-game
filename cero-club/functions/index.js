@@ -27,6 +27,7 @@ exports.ensureMatchStarted = gameModule.ensureMatchStarted;
 exports.cleanupMyRooms = gameModule.cleanupMyRooms;
 exports.getReplay      = gameModule.getReplay;
 exports.sendMatchChat  = gameModule.sendMatchChat;
+exports.resolveJoinCode = gameModule.resolveJoinCode;
 
 // ── Módulo: monetización + Mercado Pago ──────────────────────────────────────
 const monetModule = require('./compiled/monetization');
@@ -56,6 +57,10 @@ exports.adminListTournaments  = adminModule.adminListTournaments;
 exports.adminListWaitingMatches = adminModule.adminListWaitingMatches;
 exports.adminCloseWaitingMatch  = adminModule.adminCloseWaitingMatch;
 exports.adminCleanupStaleRooms  = adminModule.adminCleanupStaleRooms;
+
+const appConfigModule = require('./compiled/appConfig');
+exports.adminGetAppConfig = appConfigModule.adminGetAppConfig;
+exports.adminSetAppConfig = appConfigModule.adminSetAppConfig;
 
 // ── Módulo: misiones ──────────────────────────────────────────────────────────
 const missModule = require('./compiled/missions');

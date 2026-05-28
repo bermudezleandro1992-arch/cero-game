@@ -101,7 +101,7 @@ export interface MatchDoc {
     closedReason?: string;
 }
 /** Sala/partida colgada: waiting vieja o playing que nunca arranc� del todo. */
-export declare function isStuckMatch(match: MatchDoc, now?: number): boolean;
+export declare function isStuckMatch(match: MatchDoc, now?: number, waitingMs?: number): boolean;
 /** Cierra waiting (delete) o playing colgada (finished + reembolso). */
 export declare function forceCloseMatch(db: FirebaseFirestore.Firestore, matchRef: FirebaseFirestore.DocumentReference, match: MatchDoc, reason: string): Promise<void>;
 /** Cierra una sala en espera, devuelve stake y la elimina del lobby. */
@@ -200,7 +200,7 @@ export declare const checkMatchRejoinExpiry: import("firebase-functions/v2/https
 }>>;
 /** Escanea partidas en curso con reconexión vencida (cada minuto). */
 export declare const expireRejoinMatches: import("firebase-functions/v2/scheduler").ScheduleFunction;
-/** Cierra salas waiting colgadas sin rival (~4 min) y partidas playing atascadas. */
+/** Cierra salas waiting colgadas sin rival y partidas playing atascadas. */
 export declare const expireStaleWaitingMatches: import("firebase-functions/v2/scheduler").ScheduleFunction;
 export declare const getRejoinStatus: import("firebase-functions/v2/https").CallableFunction<Record<string, never>, Promise<{
     available: boolean;
@@ -248,5 +248,12 @@ interface SendMatchChatRequest {
 }
 export declare const sendMatchChat: import("firebase-functions/v2/https").CallableFunction<SendMatchChatRequest, Promise<{
     ok: true;
+}>>;
+export declare const resolveJoinCode: import("firebase-functions/v2/https").CallableFunction<{
+    code?: string;
+}, Promise<{
+    matchId: string;
+    stakeCC: number;
+    isPrivate: boolean;
 }>>;
 export {};

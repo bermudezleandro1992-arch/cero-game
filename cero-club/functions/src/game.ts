@@ -52,6 +52,7 @@ import { CeroEngine, COLORS }       from './CeroEngine';
 import type { Card, CardColor, GamePhase, FullSnapshot, Player } from './CeroEngine';
 import { trackMissionAction }       from './missions';
 import { sendPushToUser }           from './push';
+import { getAppConfig, getWaitingRoomMs, validateStakeAmount } from './appConfig';
 
 // FunctionsErrorCode explÃ­cito â?? evita problemas con Parameters<typeof HttpsError>
 type ErrCode =
@@ -73,7 +74,7 @@ const CFG = {
   MAX_PLAYERS:      2,        // default 1v1
   REGION:           'us-central1',
   REJOIN_MS:        5 * 60 * 1000,   // 5 minutos para reingresar
-  WAITING_ROOM_MS:  4 * 60 * 1000,   // cerrar salas waiting colgadas (~4 min)
+  WAITING_ROOM_MS:  5 * 60 * 1000,   // default; override vía config/app (panel admin)
 } as const;
 
 type MatchFormat = '1v1' | '2v2';
@@ -334,9 +335,9 @@ function matchAgeMs(match: MatchDoc): number {
 }
 
 /** Sala/partida colgada: waiting vieja o playing que nunca arrancó del todo. */
-export function isStuckMatch(match: MatchDoc, now = Date.now()): boolean {
+export function isStuckMatch(match: MatchDoc, now = Date.now(), waitingMs = CFG.WAITING_ROOM_MS): boolean {
   const ageMs = matchAgeMs(match);
-  const oldEnough = ageMs === 0 || now - ageMs >= CFG.WAITING_ROOM_MS;
+  const oldEnough = ageMs === 0 || now - ageMs >= waitingMs;
   if (!oldEnough) return false;
   if (match.status === 'waiting') return true;
   if (match.status === 'playing' && match.phase === 'waiting' && !match.topDiscard) return true;
@@ -705,25 +706,16 @@ interface JoinMatchResponse {
   shareLink?:  string | null;
 }
 
+/** Código numérico de 6 dígitos para salas privadas (fácil de compartir). */
 function makeJoinCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
+  return String(100_000 + Math.floor(Math.random() * 900_000));
 }
 
-function parseRequestedStake(stakeCC: unknown): number {
+async function parseRequestedStake(stakeCC: unknown, db: FirebaseFirestore.Firestore): Promise<number> {
   const n = typeof stakeCC === 'number' ? stakeCC : Number(stakeCC);
   if (!Number.isFinite(n) || n <= 0) return 0;
-  const rounded = Math.round(n);
-  guard(
-    rounded >= CFG.STAKE_MIN_CC && rounded <= CFG.STAKE_MAX_CC,
-    'invalid-argument',
-    `Apuesta inválida. Elegí entre ${CFG.STAKE_MIN_CC} y ${CFG.STAKE_MAX_CC} CN.`,
-  );
-  return rounded;
+  const cfg = await getAppConfig(db);
+  return validateStakeAmount(Math.round(n), cfg);
 }
 
 function assertPrivateJoinAllowed(
@@ -733,12 +725,12 @@ function assertPrivateJoinAllowed(
   alreadyInRoom: boolean,
 ): void {
   if (!match.isPrivate || alreadyInRoom) return;
-  const code = typeof joinCode === 'string' ? joinCode.trim().toUpperCase() : '';
-  const expected = (match.joinCode ?? '').toUpperCase();
+  const code = typeof joinCode === 'string' ? joinCode.trim().replace(/\D/g, '') : '';
+  const expected = String(match.joinCode ?? '').trim();
   guard(
     code.length > 0 && code === expected,
     'permission-denied',
-    'Sala privada. Necesitás el código o link del creador.',
+    'Sala privada. Necesitás el código de 6 dígitos o el link del creador.',
   );
 }
 
@@ -816,6 +808,7 @@ export async function cleanupOrphanRoomsForUser(
 ): Promise<{ closedWaiting: number; clearedRejoin: boolean }> {
   let closedWaiting = 0;
   let clearedRejoin = false;
+  const waitingMs = await getWaitingRoomMs(db);
 
   const userRef = db.doc(`users/${uid}`);
   const userSnap = await userRef.get();
@@ -853,7 +846,7 @@ export async function cleanupOrphanRoomsForUser(
   for (const docSnap of waitingSnap.docs) {
     const match = docSnap.data() as MatchDoc;
     const createdMs = matchCreatedMs(match.createdAt);
-    const stale = createdMs > 0 && now - createdMs >= CFG.WAITING_ROOM_MS;
+    const stale = createdMs > 0 && now - createdMs >= waitingMs;
     const orphan = hasPlaying;
 
     if (orphan || stale) {
@@ -864,10 +857,10 @@ export async function cleanupOrphanRoomsForUser(
 
   for (const docSnap of playingSnap.docs) {
     const match = docSnap.data() as MatchDoc;
-    if (!isStuckMatch(match, now)) continue;
+    if (!isStuckMatch(match, now, waitingMs)) continue;
     await tryStartMatchIfReady(db, docSnap.ref, match);
     const fresh = (await docSnap.ref.get()).data() as MatchDoc | undefined;
-    if (fresh && isStuckMatch(fresh, now)) {
+    if (fresh && isStuckMatch(fresh, now, waitingMs)) {
       await forceCloseMatch(db, docSnap.ref, fresh, 'stuck_playing_cleanup');
       closedWaiting++;
     }
@@ -914,14 +907,21 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
 
     const uid             = request.auth!.uid;
     const callerIsGuest   = isGuestAuth(request.auth!);
-    const mode            = request.data?.mode === 'cero' ? 'cero' : 'classic';
+    const db              = getFirestore();
+    const appCfg          = await getAppConfig(db);
+    const requestedMode   = request.data?.mode === 'cero' ? 'cero' : 'classic';
+    guard(
+      requestedMode !== 'cero' || appCfg.chaoticModeEnabled,
+      'failed-precondition',
+      'CERO Caótico estará disponible pronto. Por ahora jugá CERO Clásico.',
+    );
+    const mode            = requestedMode;
     const createFormat    = parseFormat(request.data?.format);
     const createMaxPlayers = maxPlayersForFormat(createFormat);
     const requestedMatchId = typeof request.data?.matchId === 'string' && request.data.matchId.length > 0
       ? request.data.matchId
       : null;
     const forceCreate = request.data?.createNew === true;
-    const db   = getFirestore();
 
     await cleanupOrphanRoomsForUser(db, uid);
 
@@ -967,7 +967,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
       const joinCode = finalData?.joinCode ?? null;
       const isPrivate = finalData?.isPrivate === true;
       const shareLink = isPrivate && joinCode
-        ? `https://cero-club.web.app/app/?join=${matchId}&key=${joinCode}`
+        ? `https://cero-club.web.app/app/?code=${joinCode}`
         : null;
       return { matchId, playerIndex, charged, coinsLeft, stakeCC, joinCode, isPrivate, shareLink };
     };
@@ -1032,9 +1032,11 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
     } else {
       guard(!existingActive, 'failed-precondition',
         'Ya tenés una sala o partida activa. Volvé a ella antes de crear otra.');
-      entryStake = callerIsGuest ? 0 : parseRequestedStake(request.data?.stakeCC);
+      entryStake = callerIsGuest ? 0 : await parseRequestedStake(request.data?.stakeCC, db);
       guard(!callerIsGuest || entryStake === 0, 'permission-denied',
-        'Como invitado solo podÃ©s crear salas gratuitas (0 CN).');
+        'Como invitado solo podÃ©s crear salas gratuitas (0 CeroCoins).');
+      guard(appCfg.freeRoomsEnabled !== false || entryStake > 0, 'failed-precondition',
+        'Las salas gratis están desactivadas. Elegí una apuesta en CeroCoins.');
     }
 
     const createPrivate = request.data?.isPrivate === true && !callerIsGuest;
@@ -1554,13 +1556,14 @@ export const expireRejoinMatches = onSchedule(
   },
 );
 
-/** Cierra salas waiting colgadas sin rival (~4 min) y partidas playing atascadas. */
+/** Cierra salas waiting colgadas sin rival y partidas playing atascadas. */
 export const expireStaleWaitingMatches = onSchedule(
   { schedule: 'every 1 minutes', region: CFG.REGION, timeZone: 'America/Montevideo' },
   async () => {
-    const db     = getFirestore();
-    const now    = Date.now();
-    const cutoff = now - CFG.WAITING_ROOM_MS;
+    const db        = getFirestore();
+    const now       = Date.now();
+    const waitingMs = await getWaitingRoomMs(db);
+    const cutoff    = now - waitingMs;
 
     const [waiting, playing] = await Promise.all([
       db.collection('matches').where('status', '==', 'waiting').limit(200).get(),
@@ -1577,10 +1580,10 @@ export const expireStaleWaitingMatches = onSchedule(
 
     for (const docSnap of playing.docs) {
       const match = docSnap.data() as MatchDoc;
-      if (isStuckMatch(match, now)) {
+      if (isStuckMatch(match, now, waitingMs)) {
         await tryStartMatchIfReady(db, docSnap.ref, match);
         const fresh = (await docSnap.ref.get()).data() as MatchDoc | undefined;
-        if (fresh && isStuckMatch(fresh, now)) {
+        if (fresh && isStuckMatch(fresh, now, waitingMs)) {
           await forceCloseMatch(db, docSnap.ref, fresh, 'stuck_playing_expired');
         }
       }
@@ -1626,7 +1629,8 @@ export const getRejoinStatus = onCall<Record<string, never>, Promise<{
     }
 
     const match = matchSnap.data() as MatchDoc;
-    if (!canRejoinMatch(match, uid) || match.status === 'finished' || isStuckMatch(match)) {
+    const waitingMs = await getWaitingRoomMs(db);
+    if (!canRejoinMatch(match, uid) || match.status === 'finished' || isStuckMatch(match, Date.now(), waitingMs)) {
       await db.doc(`users/${uid}`).set({ activeRejoin: FieldValue.delete() }, { merge: true });
       return { available: false };
     }
@@ -1842,5 +1846,37 @@ export const sendMatchChat = onCall<SendMatchChatRequest, Promise<{ ok: true }>>
     });
 
     return { ok: true };
+  },
+);
+
+// ?? Buscar sala privada por código de 6 dígitos ?????????????????????????????
+
+export const resolveJoinCode = onCall<{ code?: string }, Promise<{
+  matchId: string;
+  stakeCC: number;
+  isPrivate: boolean;
+}>>(
+  { region: CFG.REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+    const raw = typeof request.data?.code === 'string' ? request.data.code.trim().replace(/\D/g, '') : '';
+    guard(/^\d{6}$/.test(raw), 'invalid-argument', 'Ingresá un código de 6 dígitos.');
+
+    const db = getFirestore();
+    const q  = await db.collection('matches')
+      .where('joinCode', '==', raw)
+      .where('status', '==', 'waiting')
+      .limit(1)
+      .get();
+
+    guard(!q.empty, 'not-found', 'No hay sala activa con ese código. Puede haber expirado (5 min).');
+
+    const doc = q.docs[0]!;
+    const d   = doc.data() as MatchDoc;
+    return {
+      matchId:   doc.id,
+      stakeCC:   d.stakeCC ?? 0,
+      isPrivate: d.isPrivate === true,
+    };
   },
 );

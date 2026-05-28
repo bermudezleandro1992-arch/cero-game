@@ -8,6 +8,7 @@ exports.sendPushToUser = sendPushToUser;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const messaging_1 = require("firebase-admin/messaging");
+const appConfig_1 = require("./appConfig");
 const REGION = 'us-central1';
 const MAX_TOKENS = 5;
 function guard(cond, code, msg) {
@@ -77,7 +78,7 @@ exports.sendTestPush = (0, https_1.onCall)({ region: REGION }, async (request) =
     await sendPushToUser(uid, 'CERO Club', '¡Notificaciones activadas! 🔔', { type: 'test' });
     return { ok: true };
 });
-/** Config pública para el cliente (VAPID key, etc.) */
+/** Config pública para el cliente (VAPID key, lobby, flags). */
 exports.getPublicConfig = (0, https_1.onCall)({ region: REGION }, async () => {
     const db = (0, firestore_1.getFirestore)();
     let vapidKey = process.env.CERO_VAPID_KEY ?? '';
@@ -88,6 +89,11 @@ exports.getPublicConfig = (0, https_1.onCall)({ region: REGION }, async () => {
         }
         catch { /* ignore */ }
     }
-    return { vapidKey, pushEnabled: !!vapidKey };
+    const appCfg = await (0, appConfig_1.getAppConfig)(db);
+    return {
+        vapidKey,
+        pushEnabled: !!vapidKey,
+        ...(0, appConfig_1.publicConfigPayload)(appCfg),
+    };
 });
 //# sourceMappingURL=push.js.map

@@ -19,6 +19,7 @@ const patches = [
   'patch-app-full-v11.js',
   'patch-app-rooms-economy-v12.js',
   'patch-app-quickmatch-fix-v13.js',
+  'patch-app-lobby-ux-v14.js',
 ];
 
 for (const p of patches) {

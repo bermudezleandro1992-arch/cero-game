@@ -86,6 +86,12 @@ service cloud.firestore {
                        request.auth.uid == resource.data.fromUid;
     }
 
+    // ── Config app (lectura autenticada; escritura solo Cloud Functions) ─────
+    match /config/{docId} {
+      allow read:  if request.auth != null;
+      allow write: if false;
+    }
+
     // ── Online presence ────────────────────────────────────────────────────────
     // LECTURA PÚBLICA — solo contiene displayName y lastSeen (no es info sensible).
     // Permite mostrar el contador de jugadores en línea a usuarios no logueados.

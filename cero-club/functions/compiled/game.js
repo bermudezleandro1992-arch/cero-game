@@ -78,7 +78,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendMatchChat = exports.getReplay = exports.endMatch = exports.forfeitMatch = exports.getRejoinStatus = exports.expireStaleWaitingMatches = exports.expireRejoinMatches = exports.checkMatchRejoinExpiry = exports.temporaryLeaveMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = exports.cleanupMyRooms = exports.ensureMatchStarted = void 0;
+exports.resolveJoinCode = exports.sendMatchChat = exports.getReplay = exports.endMatch = exports.forfeitMatch = exports.getRejoinStatus = exports.expireStaleWaitingMatches = exports.expireRejoinMatches = exports.checkMatchRejoinExpiry = exports.temporaryLeaveMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = exports.cleanupMyRooms = exports.ensureMatchStarted = void 0;
 exports.isStuckMatch = isStuckMatch;
 exports.forceCloseMatch = forceCloseMatch;
 exports.closeWaitingRoom = closeWaitingRoom;
@@ -90,6 +90,7 @@ const firestore_1 = require("firebase-admin/firestore");
 const CeroEngine_1 = require("./CeroEngine");
 const missions_1 = require("./missions");
 const push_1 = require("./push");
+const appConfig_1 = require("./appConfig");
 // �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 // Configuración del negocio
 // �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
@@ -102,7 +103,7 @@ const CFG = {
     MAX_PLAYERS: 2, // default 1v1
     REGION: 'us-central1',
     REJOIN_MS: 5 * 60 * 1000, // 5 minutos para reingresar
-    WAITING_ROOM_MS: 4 * 60 * 1000, // cerrar salas waiting colgadas (~4 min)
+    WAITING_ROOM_MS: 5 * 60 * 1000, // default; override v�a config/app (panel admin)
 };
 function parseFormat(format) {
     return format === '2v2' ? '2v2' : '1v1';
@@ -240,9 +241,9 @@ function matchAgeMs(match) {
     return started || matchCreatedMs(match.createdAt);
 }
 /** Sala/partida colgada: waiting vieja o playing que nunca arranc� del todo. */
-function isStuckMatch(match, now = Date.now()) {
+function isStuckMatch(match, now = Date.now(), waitingMs = CFG.WAITING_ROOM_MS) {
     const ageMs = matchAgeMs(match);
-    const oldEnough = ageMs === 0 || now - ageMs >= CFG.WAITING_ROOM_MS;
+    const oldEnough = ageMs === 0 || now - ageMs >= waitingMs;
     if (!oldEnough)
         return false;
     if (match.status === 'waiting')
@@ -299,8 +300,11 @@ function playerIsGuest(match, uid) {
 }
 async function assertCanJoinWaitingRoom(db, uid, match, joiningUserIsGuest) {
     if (joiningUserIsGuest) {
-        guard(match.stakeCC === 0, 'permission-denied', 'Como invitado solo podés entrar a salas gratuitas (0 CN). Creá cuenta para jugar por premios.');
+        guard(match.stakeCC === 0, 'permission-denied', 'Como invitado solo pod�s entrar a salas gratuitas (0 CN). Cre� cuenta para jugar por premios.');
     }
+    // Salas gratuitas (0 CN): invitados y registrados pueden jugar juntos (juego r�pido).
+    if ((match.stakeCC ?? 0) === 0)
+        return;
     const otherIds = match.playerIds.filter(id => id !== uid);
     if (otherIds.length === 0)
         return;
@@ -482,28 +486,23 @@ exports.ensureMatchStarted = (0, https_1.onCall)({ region: CFG.REGION, timeoutSe
     const after = (await ref.get()).data();
     return { ok: true, started, status: after.status };
 });
+/** C�digo num�rico de 6 d�gitos para salas privadas (f�cil de compartir). */
 function makeJoinCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-        code += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return code;
+    return String(100000 + Math.floor(Math.random() * 900000));
 }
-function parseRequestedStake(stakeCC) {
+async function parseRequestedStake(stakeCC, db) {
     const n = typeof stakeCC === 'number' ? stakeCC : Number(stakeCC);
     if (!Number.isFinite(n) || n <= 0)
         return 0;
-    const rounded = Math.round(n);
-    guard(rounded >= CFG.STAKE_MIN_CC && rounded <= CFG.STAKE_MAX_CC, 'invalid-argument', `Apuesta inv�lida. Eleg� entre ${CFG.STAKE_MIN_CC} y ${CFG.STAKE_MAX_CC} CN.`);
-    return rounded;
+    const cfg = await (0, appConfig_1.getAppConfig)(db);
+    return (0, appConfig_1.validateStakeAmount)(Math.round(n), cfg);
 }
 function assertPrivateJoinAllowed(match, uid, joinCode, alreadyInRoom) {
     if (!match.isPrivate || alreadyInRoom)
         return;
-    const code = typeof joinCode === 'string' ? joinCode.trim().toUpperCase() : '';
-    const expected = (match.joinCode ?? '').toUpperCase();
-    guard(code.length > 0 && code === expected, 'permission-denied', 'Sala privada. Necesit�s el c�digo o link del creador.');
+    const code = typeof joinCode === 'string' ? joinCode.trim().replace(/\D/g, '') : '';
+    const expected = String(match.joinCode ?? '').trim();
+    guard(code.length > 0 && code === expected, 'permission-denied', 'Sala privada. Necesit�s el c�digo de 6 d�gitos o el link del creador.');
 }
 async function chargeEntryStake(db, uid, auth, stakeCC) {
     if (stakeCC <= 0) {
@@ -554,6 +553,7 @@ async function findActiveMatchForUser(db, uid) {
 async function cleanupOrphanRoomsForUser(db, uid) {
     let closedWaiting = 0;
     let clearedRejoin = false;
+    const waitingMs = await (0, appConfig_1.getWaitingRoomMs)(db);
     const userRef = db.doc(`users/${uid}`);
     const userSnap = await userRef.get();
     const activeRejoin = userSnap.data()?.activeRejoin;
@@ -583,7 +583,7 @@ async function cleanupOrphanRoomsForUser(db, uid) {
     for (const docSnap of waitingSnap.docs) {
         const match = docSnap.data();
         const createdMs = matchCreatedMs(match.createdAt);
-        const stale = createdMs > 0 && now - createdMs >= CFG.WAITING_ROOM_MS;
+        const stale = createdMs > 0 && now - createdMs >= waitingMs;
         const orphan = hasPlaying;
         if (orphan || stale) {
             await forceCloseMatch(db, docSnap.ref, match, orphan ? 'orphan_waiting' : 'waiting_expired');
@@ -592,11 +592,11 @@ async function cleanupOrphanRoomsForUser(db, uid) {
     }
     for (const docSnap of playingSnap.docs) {
         const match = docSnap.data();
-        if (!isStuckMatch(match, now))
+        if (!isStuckMatch(match, now, waitingMs))
             continue;
         await tryStartMatchIfReady(db, docSnap.ref, match);
         const fresh = (await docSnap.ref.get()).data();
-        if (fresh && isStuckMatch(fresh, now)) {
+        if (fresh && isStuckMatch(fresh, now, waitingMs)) {
             await forceCloseMatch(db, docSnap.ref, fresh, 'stuck_playing_cleanup');
             closedWaiting++;
         }
@@ -626,14 +626,17 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
     guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
     const uid = request.auth.uid;
     const callerIsGuest = isGuestAuth(request.auth);
-    const mode = request.data?.mode === 'cero' ? 'cero' : 'classic';
+    const db = (0, firestore_1.getFirestore)();
+    const appCfg = await (0, appConfig_1.getAppConfig)(db);
+    const requestedMode = request.data?.mode === 'cero' ? 'cero' : 'classic';
+    guard(requestedMode !== 'cero' || appCfg.chaoticModeEnabled, 'failed-precondition', 'CERO Ca�tico estar� disponible pronto. Por ahora jug� CERO Cl�sico.');
+    const mode = requestedMode;
     const createFormat = parseFormat(request.data?.format);
     const createMaxPlayers = maxPlayersForFormat(createFormat);
     const requestedMatchId = typeof request.data?.matchId === 'string' && request.data.matchId.length > 0
         ? request.data.matchId
         : null;
     const forceCreate = request.data?.createNew === true;
-    const db = (0, firestore_1.getFirestore)();
     await cleanupOrphanRoomsForUser(db, uid);
     const existingActive = await findActiveMatchForUser(db, uid);
     const finishJoin = async (matchId, playerIndex, charged, coinsLeft, stakeCC, notifyJoin = false) => {
@@ -658,7 +661,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         const joinCode = finalData?.joinCode ?? null;
         const isPrivate = finalData?.isPrivate === true;
         const shareLink = isPrivate && joinCode
-            ? `https://cero-club.web.app/app/?join=${matchId}&key=${joinCode}`
+            ? `https://cero-club.web.app/app/?code=${joinCode}`
             : null;
         return { matchId, playerIndex, charged, coinsLeft, stakeCC, joinCode, isPrivate, shareLink };
     };
@@ -718,8 +721,9 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
     }
     else {
         guard(!existingActive, 'failed-precondition', 'Ya ten�s una sala o partida activa. Volv� a ella antes de crear otra.');
-        entryStake = callerIsGuest ? 0 : parseRequestedStake(request.data?.stakeCC);
-        guard(!callerIsGuest || entryStake === 0, 'permission-denied', 'Como invitado solo podés crear salas gratuitas (0 CN).');
+        entryStake = callerIsGuest ? 0 : await parseRequestedStake(request.data?.stakeCC, db);
+        guard(!callerIsGuest || entryStake === 0, 'permission-denied', 'Como invitado solo podés crear salas gratuitas (0 CeroCoins).');
+        guard(appCfg.freeRoomsEnabled !== false || entryStake > 0, 'failed-precondition', 'Las salas gratis est�n desactivadas. Eleg� una apuesta en CeroCoins.');
     }
     const createPrivate = request.data?.isPrivate === true && !callerIsGuest;
     const { charged, coinsLeft } = await chargeEntryStake(db, uid, request.auth, entryStake);
@@ -763,7 +767,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
             playerCount: 1,
             maxPlayers: createMaxPlayers,
             stakeCC: entryStake,
-            guestOnly: createIsGuest && entryStake === 0,
+            guestOnly: false,
             isPrivate: createPrivate,
             joinCode: roomJoinCode,
             turn: 0,
@@ -1116,11 +1120,12 @@ exports.expireRejoinMatches = (0, scheduler_1.onSchedule)({ schedule: 'every 1 m
         }
     }
 });
-/** Cierra salas waiting colgadas sin rival (~4 min) y partidas playing atascadas. */
+/** Cierra salas waiting colgadas sin rival y partidas playing atascadas. */
 exports.expireStaleWaitingMatches = (0, scheduler_1.onSchedule)({ schedule: 'every 1 minutes', region: CFG.REGION, timeZone: 'America/Montevideo' }, async () => {
     const db = (0, firestore_1.getFirestore)();
     const now = Date.now();
-    const cutoff = now - CFG.WAITING_ROOM_MS;
+    const waitingMs = await (0, appConfig_1.getWaitingRoomMs)(db);
+    const cutoff = now - waitingMs;
     const [waiting, playing] = await Promise.all([
         db.collection('matches').where('status', '==', 'waiting').limit(200).get(),
         db.collection('matches').where('status', '==', 'playing').limit(200).get(),
@@ -1134,10 +1139,10 @@ exports.expireStaleWaitingMatches = (0, scheduler_1.onSchedule)({ schedule: 'eve
     }
     for (const docSnap of playing.docs) {
         const match = docSnap.data();
-        if (isStuckMatch(match, now)) {
+        if (isStuckMatch(match, now, waitingMs)) {
             await tryStartMatchIfReady(db, docSnap.ref, match);
             const fresh = (await docSnap.ref.get()).data();
-            if (fresh && isStuckMatch(fresh, now)) {
+            if (fresh && isStuckMatch(fresh, now, waitingMs)) {
                 await forceCloseMatch(db, docSnap.ref, fresh, 'stuck_playing_expired');
             }
         }
@@ -1165,7 +1170,8 @@ exports.getRejoinStatus = (0, https_1.onCall)({ region: CFG.REGION }, async (req
         return { available: false };
     }
     const match = matchSnap.data();
-    if (!canRejoinMatch(match, uid) || match.status === 'finished' || isStuckMatch(match)) {
+    const waitingMs = await (0, appConfig_1.getWaitingRoomMs)(db);
+    if (!canRejoinMatch(match, uid) || match.status === 'finished' || isStuckMatch(match, Date.now(), waitingMs)) {
         await db.doc(`users/${uid}`).set({ activeRejoin: firestore_1.FieldValue.delete() }, { merge: true });
         return { available: false };
     }
@@ -1286,5 +1292,25 @@ exports.sendMatchChat = (0, https_1.onCall)({ region: CFG.REGION }, async (reque
         createdAt: firestore_1.FieldValue.serverTimestamp(),
     });
     return { ok: true };
+});
+// ?? Buscar sala privada por c�digo de 6 d�gitos ?????????????????????????????
+exports.resolveJoinCode = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Ten�s que iniciar sesi�n');
+    const raw = typeof request.data?.code === 'string' ? request.data.code.trim().replace(/\D/g, '') : '';
+    guard(/^\d{6}$/.test(raw), 'invalid-argument', 'Ingres� un c�digo de 6 d�gitos.');
+    const db = (0, firestore_1.getFirestore)();
+    const q = await db.collection('matches')
+        .where('joinCode', '==', raw)
+        .where('status', '==', 'waiting')
+        .limit(1)
+        .get();
+    guard(!q.empty, 'not-found', 'No hay sala activa con ese c�digo. Puede haber expirado (5 min).');
+    const doc = q.docs[0];
+    const d = doc.data();
+    return {
+        matchId: doc.id,
+        stakeCC: d.stakeCC ?? 0,
+        isPrivate: d.isPrivate === true,
+    };
 });
 //# sourceMappingURL=game.js.map

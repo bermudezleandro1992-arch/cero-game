@@ -309,6 +309,7 @@ async function ensurePanelAccess(user) {
   await loadTournaments();
   await loadDeposits();
   await loadWaitingRooms();
+  await loadAppConfig();
   return true;
 }
 
@@ -496,9 +497,9 @@ $('btnForceSeed').addEventListener('click', async () => {
 $('btnRefreshDeposits').addEventListener('click', () => loadDeposits());
 $('btnRefreshRooms')?.addEventListener('click', () => loadWaitingRooms());
 $('btnCleanupStale')?.addEventListener('click', async () => {
-  if (!window.confirm('¿Cerrar salas en espera con más de 4 minutos?')) return;
+  if (!window.confirm('¿Cerrar salas en espera con más de 5 minutos?')) return;
   try {
-    const r = await callFn('adminCleanupStaleRooms', { minAgeMinutes: 4 });
+    const r = await callFn('adminCleanupStaleRooms', { minAgeMinutes: 5 });
     showStatus($('panelStatus'), `Listo: ${r.closed} sala(s) cerrada(s).`, true);
     await loadWaitingRooms();
   } catch (err) {
@@ -528,6 +529,40 @@ $('btnRejectDeposit').addEventListener('click', () => reviewDeposit('reject'));
   });
 });
 
-onAuthStateChanged(auth, async (user) => {
-  if (user) await ensurePanelAccess(user);
+async function loadAppConfig() {
+  try {
+    const data = await callFn('adminGetAppConfig', {});
+    const c = data.config || {};
+    $('cfgStakes').value = (c.roomStakes || []).join(', ');
+    $('cfgMin').value = c.stakeMin ?? 30;
+    $('cfgMax').value = c.stakeMax ?? 20000;
+    $('cfgWaitMin').value = c.waitingRoomMinutes ?? 5;
+    $('cfgFreeRooms').checked = c.freeRoomsEnabled !== false;
+    $('cfgChaotic').checked = c.chaoticModeEnabled === true;
+  } catch (err) {
+    showStatus($('panelStatus'), err.message, false);
+  }
+}
+
+$('btnLoadAppConfig')?.addEventListener('click', () => loadAppConfig());
+$('btnSaveAppConfig')?.addEventListener('click', async () => {
+  try {
+    const stakes = $('cfgStakes').value.split(',').map((x) => parseInt(x.trim(), 10)).filter((n) => Number.isFinite(n) && n >= 0);
+    const payload = {
+      roomStakes: stakes.length ? stakes : [0, 30, 50, 100],
+      stakeMin: parseInt($('cfgMin').value, 10) || 30,
+      stakeMax: parseInt($('cfgMax').value, 10) || 20000,
+      waitingRoomMinutes: parseInt($('cfgWaitMin').value, 10) || 5,
+      freeRoomsEnabled: $('cfgFreeRooms').checked,
+      chaoticModeEnabled: $('cfgChaotic').checked,
+    };
+    const r = await callFn('adminSetAppConfig', payload);
+    showStatus($('panelStatus'), 'Config guardada correctamente.', true);
+    if (r.config) {
+      $('cfgStakes').value = (r.config.roomStakes || []).join(', ');
+    }
+  } catch (err) {
+    showStatus($('panelStatus'), err.message, false);
+  }
 });
+

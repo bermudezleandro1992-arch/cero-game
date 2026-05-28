@@ -121,6 +121,12 @@ exports.COSMETIC_CATALOG = {
     skin_rainbow: { id: 'skin_rainbow', name: 'Cartas Arcoíris', category: 'card_skin', price: 420, preview: 'skins/galaxy' },
     frame_diamond: { id: 'frame_diamond', name: 'Marco Diamante', category: 'avatar_frame', price: 900, preview: 'frames/gold' },
     frame_legend: { id: 'frame_legend', name: 'Marco Leyenda', category: 'avatar_frame', price: 1200, preview: 'frames/champ' },
+    frame_neon_ring: { id: 'frame_neon_ring', name: 'Anillo Neón', category: 'avatar_frame', price: 850, preview: 'frames/neon-ring' },
+    frame_aurora: { id: 'frame_aurora', name: 'Aurora VIP', category: 'avatar_frame', price: 1500, preview: 'frames/aurora' },
+    frame_vip_glow: { id: 'frame_vip_glow', name: 'Brillo Élite', category: 'avatar_frame', price: 2000, preview: 'frames/vip' },
+    deck_flame: { id: 'deck_flame', name: 'Mazo Llama', category: 'deck_back', price: 480, preview: 'decks/flame' },
+    deck_legend: { id: 'deck_legend', name: 'Mazo Leyenda', category: 'deck_back', price: 720, preview: 'decks/legend' },
+    deck_neon: { id: 'deck_neon', name: 'Mazo Neón Pro', category: 'deck_back', price: 580, preview: 'decks/neon' },
 };
 /**
  * Idempotente: si el perfil ya existe, devuelve los datos actuales.
