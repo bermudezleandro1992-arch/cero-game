@@ -26,6 +26,7 @@ const patches = [
   'patch-app-gameplay-ux-v18.js',
   'patch-app-ranking-stake-v19.js',
   'patch-app-optimistic-v20.js',
+  'patch-app-perf-v21.js',
 ];
 
 for (const p of patches) {
