@@ -189,6 +189,7 @@ export interface MatchDoc {
   pendingTurn: number | null;
   ceroCalled?: number[] | null;
   ceroForgot?: string | null;
+  colorPickOptional?: boolean | null;
   lastAction:  LastAction | null;
   absences?:   Record<string, { rejoinUntil: FirebaseFirestore.Timestamp; leftAt: FirebaseFirestore.Timestamp }>;
   rejoinBanner?: {
@@ -546,6 +547,7 @@ function buildPublicState(snap: FullSnapshot, playerIds: string[]): Partial<Matc
     ceroCalled:  [...snap.ceroCalled],
     winner:      snap.winner !== null ? (playerIds[snap.winner] ?? null) : null,
     pendingTurn: snap.pendingTurn ?? null,
+    colorPickOptional: snap.colorPickOptional ?? false,
   };
 }
 
@@ -1136,7 +1138,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
 // playTurn
 // â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 
-type TurnAction = 'play' | 'draw' | 'pickColor' | 'declareCero' | 'penalizeCero';
+type TurnAction = 'play' | 'draw' | 'pickColor' | 'skipColor' | 'declareCero' | 'penalizeCero';
 
 interface PlayTurnRequest {
   matchId:    string;
@@ -1153,7 +1155,7 @@ interface PlayTurnResponse {
   turn:        number;
 }
 
-const VALID_ACTIONS = new Set<TurnAction>(['play', 'draw', 'pickColor', 'declareCero', 'penalizeCero']);
+const VALID_ACTIONS = new Set<TurnAction>(['play', 'draw', 'pickColor', 'skipColor', 'declareCero', 'penalizeCero']);
 
 /**
  * Ejecuta una acciÃ³n de juego dentro de una transacciÃ³n Firestore.
@@ -1253,6 +1255,7 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
         drawStack:   match.drawStack   ?? 0,
         chosenColor: match.chosenColor ?? null,
         pendingTurn: match.pendingTurn ?? null,
+        colorPickOptional: match.colorPickOptional ?? false,
         winner:      null,
         topDiscard:  match.topDiscard  ?? null,
         deckLeft:    priv.deck.length,
@@ -1268,13 +1271,14 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
       const playerIndex = match.playerIds.indexOf(uid);
 
       // declareCero / penalizeCero no requieren que sea el turno del jugador
-      if (action !== 'declareCero' && action !== 'penalizeCero') {
+      if (action !== 'declareCero' && action !== 'penalizeCero' && action !== 'skipColor') {
         guard(engine.current === playerIndex, 'failed-precondition', 'No es tu turno');
       }
 
       // â??â?? Ejecutar la acciÃ³n â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
       let result: ReturnType<CeroEngine['play']> | ReturnType<CeroEngine['draw']> |
-                  ReturnType<CeroEngine['pickColor']> | ReturnType<CeroEngine['declareCero']> |
+                  ReturnType<CeroEngine['pickColor']> | ReturnType<CeroEngine['skipColorPick']> |
+                  ReturnType<CeroEngine['declareCero']> |
                   ReturnType<CeroEngine['penalizeCero']>;
 
       switch (action) {
@@ -1288,6 +1292,9 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
           if (result.ok && playedCard?.color === 'wild') {
             trackWild = true;
           }
+          if (result.ok && playedCard?.value === 'wild2') {
+            trackWild = true;
+          }
           break;
         }
         case 'draw': {
@@ -1299,6 +1306,10 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
           const color = data.color as CardColor;
           guard((COLORS as readonly string[]).includes(color), 'invalid-argument', `Color invÃ¡lido: "${color}"`);
           result = engine.pickColor(playerIndex, color);
+          break;
+        }
+        case 'skipColor': {
+          result = engine.skipColorPick(playerIndex);
           break;
         }
         case 'declareCero': {

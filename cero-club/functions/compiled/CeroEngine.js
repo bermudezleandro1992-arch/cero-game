@@ -30,7 +30,7 @@ function isWild(card) {
 }
 function cardLabel(card) {
     const m = {
-        skip: '⊘', reverse: '⇄', draw2: '+2', wild: '★', wild4: '+4★',
+        skip: '⊘', reverse: '⇄', draw2: '+2', wild: '★', wild2: '+2★', wild4: '+4★',
     };
     return `${COLOR_LABEL[card.color]} ${m[card.value] ?? card.value}`;
 }
@@ -54,6 +54,7 @@ function createDeck() {
     }
     for (let i = 0; i < 4; i++) {
         deck.push(c('wild', 'wild', 'wild'));
+        deck.push(c('wild', 'wild2', 'wild'));
         deck.push(c('wild', 'wild4', 'wild'));
     }
     return shuffle(deck);
@@ -75,7 +76,9 @@ function activeColor(top, chosen) {
 function canStack(card, top) {
     if (card.value === 'draw2' && top.value === 'draw2')
         return true;
-    if (card.value === 'wild4' && (top.value === 'draw2' || top.value === 'wild4'))
+    if (card.value === 'wild2' && (top.value === 'draw2' || top.value === 'wild2'))
+        return true;
+    if (card.value === 'wild4' && (top.value === 'draw2' || top.value === 'wild2' || top.value === 'wild4'))
         return true;
     return false;
 }
@@ -114,10 +117,19 @@ function applyEffect(ctx, card, newSize) {
     if (newSize === 0)
         return { phase: 'game_over', winner: me };
     if (isWild(card)) {
+        if (card.value === 'wild2') {
+            return {
+                phase: 'color_pick',
+                drawStack: stk + 2,
+                pendingTurn: me,
+                colorPickOptional: true,
+            };
+        }
         return {
             phase: 'color_pick',
             drawStack: card.value === 'wild4' ? stk + 4 : stk,
             pendingTurn: me,
+            colorPickOptional: false,
         };
     }
     let nextDir = dir;
@@ -155,6 +167,19 @@ function applyColorChoice(ctx, color) {
         current: next,
         chosenColor: color,
         pendingTurn: null,
+        colorPickOptional: false,
+    };
+}
+function skipColorChoice(ctx) {
+    const { players, direction: dir, pendingTurn, current } = ctx;
+    const n = players.length;
+    const me = pendingTurn ?? current;
+    const next = nextIdx(me, dir, n);
+    return {
+        phase: next === me ? 'my_turn' : 'opp_turn',
+        current: next,
+        pendingTurn: null,
+        colorPickOptional: false,
     };
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,6 +204,7 @@ class CeroEngine {
         this._phase = 'waiting';
         this._winner = null;
         this._ceroCalled = new Set();
+        this._colorPickOptional = false;
     }
     // ── Getters ────────────────────────────────────────────────────────────────
     get phase() { return this._phase; }
@@ -203,6 +229,7 @@ class CeroEngine {
         this._chosenColor = isWild(first) ? null : first.color;
         if (isWild(first)) {
             this._phase = 'color_pick';
+            this._colorPickOptional = first.value === 'wild2';
         }
         else {
             this._applyPatch(applyEffect({ players: this.players, current: -1, direction: 1, drawStack: 0 }, first, this.handSize));
@@ -291,6 +318,14 @@ class CeroEngine {
         this._applyPatch(applyColorChoice({ players: this.players, current: this._current, direction: this._direction, drawStack: this._drawStack, pendingTurn: this._pendingTurn }, color));
         return { ok: true, snapshot: this._snapshot() };
     }
+    skipColorPick(playerIdx) {
+        if (this._phase !== 'color_pick')
+            return this._fail('No hay comodín activo');
+        if (!this._colorPickOptional)
+            return this._fail('Debés elegir un color');
+        this._applyPatch(skipColorChoice({ players: this.players, current: this._current, direction: this._direction, drawStack: this._drawStack, pendingTurn: this._pendingTurn }));
+        return { ok: true, snapshot: this._snapshot() };
+    }
     // ── declareCero() ──────────────────────────────────────────────────────────
     declareCero(playerIdx) {
         const handLen = this._hands[playerIdx].length;
@@ -352,6 +387,7 @@ class CeroEngine {
         e._phase = s.phase;
         e._winner = s.winner;
         e._ceroCalled = new Set(s.ceroCalled);
+        e._colorPickOptional = s.colorPickOptional ?? false;
         return e;
     }
     // ── Internos ───────────────────────────────────────────────────────────────
@@ -370,6 +406,7 @@ class CeroEngine {
             handCounts: this._hands.map(h => h.length),
             players: [...this.players],
             ceroCalled: [...this._ceroCalled],
+            colorPickOptional: this._colorPickOptional,
         };
     }
     _drawCards(n) {
@@ -395,6 +432,8 @@ class CeroEngine {
             this._pendingTurn = p.pendingTurn;
         if (p.chosenColor !== undefined)
             this._chosenColor = p.chosenColor;
+        if (p.colorPickOptional !== undefined)
+            this._colorPickOptional = p.colorPickOptional;
     }
     _fail(error) {
         return { ok: false, error };

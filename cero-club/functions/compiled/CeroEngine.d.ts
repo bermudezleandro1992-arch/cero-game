@@ -9,7 +9,7 @@
  *   · Sin referencias a window ni al DOM
  */
 export type CardColor = 'magenta' | 'gold' | 'blue' | 'green' | 'wild';
-export type CardValue = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'skip' | 'reverse' | 'draw2' | 'wild' | 'wild4';
+export type CardValue = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'skip' | 'reverse' | 'draw2' | 'wild' | 'wild2' | 'wild4';
 export type CardType = 'number' | 'special' | 'wild';
 export type GamePhase = 'waiting' | 'my_turn' | 'opp_turn' | 'color_pick' | 'game_over';
 export interface Card {
@@ -36,6 +36,7 @@ export interface GameSnapshot {
     readonly handCounts: ReadonlyArray<number>;
     readonly players: ReadonlyArray<Player>;
     readonly ceroCalled: ReadonlyArray<number>;
+    readonly colorPickOptional?: boolean;
     readonly deck?: ReadonlyArray<Card>;
     readonly discardPile?: ReadonlyArray<Card>;
 }
@@ -77,6 +78,7 @@ export declare class CeroEngine {
     private _phase;
     private _winner;
     private _ceroCalled;
+    private _colorPickOptional;
     constructor(opts: {
         playerCount: number;
         names?: string[];
@@ -91,6 +93,7 @@ export declare class CeroEngine {
     penalizeCero(targetIdx: number): ActionResult;
     draw(playerIdx: number): DrawResult;
     pickColor(playerIdx: number, color: CardColor): ActionResult;
+    skipColorPick(playerIdx: number): ActionResult;
     declareCero(playerIdx: number): ActionResult;
     playableCards(playerIdx: number): ReadonlyArray<Card>;
     whyBlocked(playerIdx: number, cardId: number): string | null;

@@ -76,7 +76,7 @@ apply(
 );
 
 // ── useMatch: declarar CERO opcional + penalidad ───────────────────────────────
-apply(
+applyOptional(
   'sk-can-declare',
   'ne=!!(e&&e.status==="playing"&&e.phase==="color_pick"&&e.pendingTurn===W),J=!!($&&s.filter(c=>!c.ghost).length===1&&!((gt=(et=e==null?void 0:e.ceroCalled)==null?void 0:et.includes)!=null&&gt.call(et,W))),ee=ik(s.filter(c=>!c.ghost),e,$&&!J)',
   'ne=!!(e&&e.status==="playing"&&e.phase==="color_pick"&&e.pendingTurn===W),M0hl=s.filter(c=>!c.ghost).length,M0cc=(e==null?void 0:e.ceroCalled)??[],J=!!($&&(M0hl===2||M0hl===1&&!M0cc.includes(W))),ee=ik(s.filter(c=>!c.ghost),e,$)',

@@ -15,7 +15,7 @@
 
 export type CardColor  = 'magenta' | 'gold' | 'blue' | 'green' | 'wild';
 export type CardValue  = '0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9'
-                       | 'skip'|'reverse'|'draw2'|'wild'|'wild4';
+                       | 'skip'|'reverse'|'draw2'|'wild'|'wild2'|'wild4';
 export type CardType   = 'number'|'special'|'wild';
 export type GamePhase  = 'waiting'|'my_turn'|'opp_turn'|'color_pick'|'game_over';
 
@@ -45,6 +45,7 @@ export interface GameSnapshot {
   readonly handCounts:  ReadonlyArray<number>;
   readonly players:     ReadonlyArray<Player>;
   readonly ceroCalled:  ReadonlyArray<number>;
+  readonly colorPickOptional?: boolean;
   // Campos de persistencia completa (solo para backend)
   readonly deck?:        ReadonlyArray<Card>;
   readonly discardPile?: ReadonlyArray<Card>;
@@ -80,7 +81,7 @@ export function isWild(card: Card): boolean {
 
 function cardLabel(card: Card): string {
   const m: Partial<Record<CardValue, string>> = {
-    skip: '⊘', reverse: '⇄', draw2: '+2', wild: '★', wild4: '+4★',
+    skip: '⊘', reverse: '⇄', draw2: '+2', wild: '★', wild2: '+2★', wild4: '+4★',
   };
   return `${COLOR_LABEL[card.color]} ${m[card.value] ?? card.value}`;
 }
@@ -108,6 +109,7 @@ function createDeck(): Card[] {
   }
   for (let i = 0; i < 4; i++) {
     deck.push(c('wild', 'wild',  'wild'));
+    deck.push(c('wild', 'wild2', 'wild'));
     deck.push(c('wild', 'wild4', 'wild'));
   }
   return shuffle(deck);
@@ -132,7 +134,8 @@ function activeColor(top: Card, chosen: CardColor | null): CardColor {
 
 function canStack(card: Card, top: Card): boolean {
   if (card.value === 'draw2' && top.value === 'draw2') return true;
-  if (card.value === 'wild4' && (top.value === 'draw2' || top.value === 'wild4')) return true;
+  if (card.value === 'wild2' && (top.value === 'draw2' || top.value === 'wild2')) return true;
+  if (card.value === 'wild4' && (top.value === 'draw2' || top.value === 'wild2' || top.value === 'wild4')) return true;
   return false;
 }
 
@@ -194,6 +197,7 @@ interface Patch {
   winner?:     number | null;
   pendingTurn?: number | null;
   chosenColor?: CardColor | null;
+  colorPickOptional?: boolean;
 }
 
 function nextIdx(cur: number, dir: 1 | -1, n: number): number {
@@ -207,10 +211,19 @@ function applyEffect(ctx: EngineCtx, card: Card, newSize: number): Patch {
   if (newSize === 0) return { phase: 'game_over', winner: me };
 
   if (isWild(card)) {
+    if (card.value === 'wild2') {
+      return {
+        phase:             'color_pick',
+        drawStack:         stk + 2,
+        pendingTurn:       me,
+        colorPickOptional: true,
+      };
+    }
     return {
-      phase:       'color_pick',
-      drawStack:   card.value === 'wild4' ? stk + 4 : stk,
-      pendingTurn: me,
+      phase:             'color_pick',
+      drawStack:         card.value === 'wild4' ? stk + 4 : stk,
+      pendingTurn:       me,
+      colorPickOptional: false,
     };
   }
 
@@ -248,10 +261,24 @@ function applyColorChoice(ctx: EngineCtx, color: CardColor): Patch {
   const me   = pendingTurn ?? current;
   const next = nextIdx(me, dir, n);
   return {
-    phase:       next === me ? 'my_turn' : 'opp_turn',
-    current:     next,
-    chosenColor: color,
-    pendingTurn: null,
+    phase:             next === me ? 'my_turn' : 'opp_turn',
+    current:           next,
+    chosenColor:       color,
+    pendingTurn:       null,
+    colorPickOptional: false,
+  };
+}
+
+function skipColorChoice(ctx: EngineCtx): Patch {
+  const { players, direction: dir, pendingTurn, current } = ctx;
+  const n    = players.length;
+  const me   = pendingTurn ?? current;
+  const next = nextIdx(me, dir, n);
+  return {
+    phase:             next === me ? 'my_turn' : 'opp_turn',
+    current:           next,
+    pendingTurn:       null,
+    colorPickOptional: false,
   };
 }
 
@@ -274,6 +301,7 @@ export class CeroEngine {
   private _phase:       GamePhase;
   private _winner:      number | null;
   private _ceroCalled:  Set<number>;
+  private _colorPickOptional: boolean;
 
   constructor(opts: { playerCount: number; names?: string[]; handSize?: number }) {
     const n      = Math.max(2, Math.min(8, opts.playerCount));
@@ -293,6 +321,7 @@ export class CeroEngine {
     this._phase       = 'waiting';
     this._winner      = null;
     this._ceroCalled  = new Set();
+    this._colorPickOptional = false;
   }
 
   // ── Getters ────────────────────────────────────────────────────────────────
@@ -322,6 +351,7 @@ export class CeroEngine {
 
     if (isWild(first)) {
       this._phase = 'color_pick';
+      this._colorPickOptional = first.value === 'wild2';
     } else {
       this._applyPatch(applyEffect(
         { players: this.players, current: -1, direction: 1, drawStack: 0 },
@@ -432,6 +462,18 @@ export class CeroEngine {
     return { ok: true, snapshot: this._snapshot() };
   }
 
+  skipColorPick(playerIdx: number): ActionResult {
+    if (this._phase !== 'color_pick')
+      return this._fail('No hay comodín activo');
+    if (!this._colorPickOptional)
+      return this._fail('Debés elegir un color');
+
+    this._applyPatch(skipColorChoice(
+      { players: this.players, current: this._current, direction: this._direction, drawStack: this._drawStack, pendingTurn: this._pendingTurn },
+    ));
+    return { ok: true, snapshot: this._snapshot() };
+  }
+
   // ── declareCero() ──────────────────────────────────────────────────────────
 
   declareCero(playerIdx: number): ActionResult {
@@ -494,6 +536,7 @@ export class CeroEngine {
     e._phase       = s.phase;
     e._winner      = s.winner;
     e._ceroCalled  = new Set(s.ceroCalled);
+    e._colorPickOptional = s.colorPickOptional ?? false;
     return e;
   }
 
@@ -514,6 +557,7 @@ export class CeroEngine {
       handCounts:  this._hands.map(h => h.length),
       players:     [...this.players],
       ceroCalled:  [...this._ceroCalled],
+      colorPickOptional: this._colorPickOptional,
     };
   }
 
@@ -534,6 +578,7 @@ export class CeroEngine {
     if (p.winner      !== undefined) this._winner      = p.winner;
     if (p.pendingTurn !== undefined) this._pendingTurn = p.pendingTurn;
     if (p.chosenColor !== undefined) this._chosenColor = p.chosenColor;
+    if (p.colorPickOptional !== undefined) this._colorPickOptional = p.colorPickOptional;
   }
 
   private _fail(error: string): ActionResult {

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 224" width="160" height="224">
+  <defs>
+    <radialGradient id="w4" cx="50%" cy="35%" r="75%">
+      <stop offset="0%" stop-color="#db2777"/><stop offset="40%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#0f172a"/>
+    </radialGradient>
+  </defs>
+  <rect x="4" y="4" width="152" height="216" rx="14" fill="url(#w4)" stroke="#f472b6" stroke-width="3"/>
+  <text x="80" y="24" text-anchor="middle" fill="#fce7f3" font-family="Arial,sans-serif" font-size="9" font-weight="800">WILD DRAW FOUR</text>
+  <text x="80" y="112" text-anchor="middle" fill="#fff" font-size="54" font-weight="900">+4</text>
+  <text x="80" y="205" text-anchor="middle" fill="#c4b5fd" font-family="Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="3">CERO</text>
+</svg>

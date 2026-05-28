@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 224" width="160" height="224">
+  
+  <rect x="4" y="4" width="152" height="216" rx="14" fill="#06050f" stroke="#ef4444" stroke-width="3"/>
+  <rect x="10" y="10" width="140" height="204" rx="10" fill="none" stroke="#fca5a5" stroke-width="1.5" opacity="0.55"/>
+  <path d="M4 28 H28 V4" fill="none" stroke="#ef4444" stroke-width="2"/>
+  <path d="M156 28 H132 V4" fill="none" stroke="#ef4444" stroke-width="2"/>
+  <path d="M4 196 H28 V220" fill="none" stroke="#ef4444" stroke-width="2"/>
+  <path d="M156 196 H132 V220" fill="none" stroke="#ef4444" stroke-width="2"/>
+  <g opacity="0.18" stroke="#7c3aed" stroke-width="1">
+    <path d="M20 40 H60 M100 40 H140 M20 180 H50 M110 180 H140"/>
+    <path d="M40 20 V60 M120 20 V55 M35 160 V200 M125 165 V200"/>
+    <circle cx="80" cy="110" r="28" fill="none"/>
+  </g>
+  <text x="80" y="28" text-anchor="middle" fill="#fca5a5" font-family="Arial,sans-serif" font-size="12" font-weight="800">+2</text>
+  <text x="80" y="112" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="52" font-weight="900" filter="url(#g)">+2</text>
+  <defs><filter id="g"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#ef4444"/></filter></defs>
+  <text x="80" y="205" text-anchor="middle" fill="#c4b5fd" font-family="Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="3">CERO</text>
+</svg>

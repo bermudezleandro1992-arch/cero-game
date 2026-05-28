@@ -390,6 +390,7 @@ function buildPublicState(snap, playerIds) {
         ceroCalled: [...snap.ceroCalled],
         winner: snap.winner !== null ? (playerIds[snap.winner] ?? null) : null,
         pendingTurn: snap.pendingTurn ?? null,
+        colorPickOptional: snap.colorPickOptional ?? false,
     };
 }
 // �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
@@ -803,7 +804,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
     }
     return finishJoin(matchId, playerIndex, charged, coinsLeft, entryStake, true);
 });
-const VALID_ACTIONS = new Set(['play', 'draw', 'pickColor', 'declareCero', 'penalizeCero']);
+const VALID_ACTIONS = new Set(['play', 'draw', 'pickColor', 'skipColor', 'declareCero', 'penalizeCero']);
 /**
  * Ejecuta una acción de juego dentro de una transacción Firestore.
  *
@@ -872,6 +873,7 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
             drawStack: match.drawStack ?? 0,
             chosenColor: match.chosenColor ?? null,
             pendingTurn: match.pendingTurn ?? null,
+            colorPickOptional: match.colorPickOptional ?? false,
             winner: null,
             topDiscard: match.topDiscard ?? null,
             deckLeft: priv.deck.length,
@@ -885,7 +887,7 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
         const engine = CeroEngine_1.CeroEngine.fromFullSnapshot(fullSnap);
         const playerIndex = match.playerIds.indexOf(uid);
         // declareCero / penalizeCero no requieren que sea el turno del jugador
-        if (action !== 'declareCero' && action !== 'penalizeCero') {
+        if (action !== 'declareCero' && action !== 'penalizeCero' && action !== 'skipColor') {
             guard(engine.current === playerIndex, 'failed-precondition', 'No es tu turno');
         }
         // �??�?? Ejecutar la acción �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
@@ -901,6 +903,9 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
                 if (result.ok && playedCard?.color === 'wild') {
                     trackWild = true;
                 }
+                if (result.ok && playedCard?.value === 'wild2') {
+                    trackWild = true;
+                }
                 break;
             }
             case 'draw': {
@@ -912,6 +917,10 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
                 const color = data.color;
                 guard(CeroEngine_1.COLORS.includes(color), 'invalid-argument', `Color inválido: "${color}"`);
                 result = engine.pickColor(playerIndex, color);
+                break;
+            }
+            case 'skipColor': {
+                result = engine.skipColorPick(playerIndex);
                 break;
             }
             case 'declareCero': {

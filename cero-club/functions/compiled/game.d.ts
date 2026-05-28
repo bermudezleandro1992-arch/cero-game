@@ -82,6 +82,7 @@ export interface MatchDoc {
     pendingTurn: number | null;
     ceroCalled?: number[] | null;
     ceroForgot?: string | null;
+    colorPickOptional?: boolean | null;
     lastAction: LastAction | null;
     absences?: Record<string, {
         rejoinUntil: FirebaseFirestore.Timestamp;
@@ -156,7 +157,7 @@ export declare const cleanupMyRooms: import("firebase-functions/v2/https").Calla
  * y une al jugador a una sala existente o crea una nueva.
  */
 export declare const joinMatch: import("firebase-functions/v2/https").CallableFunction<JoinMatchRequest, Promise<JoinMatchResponse>>;
-type TurnAction = 'play' | 'draw' | 'pickColor' | 'declareCero' | 'penalizeCero';
+type TurnAction = 'play' | 'draw' | 'pickColor' | 'skipColor' | 'declareCero' | 'penalizeCero';
 interface PlayTurnRequest {
     matchId: string;
     turnNumber: number;
