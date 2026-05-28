@@ -28,6 +28,7 @@ const patches = [
   'patch-app-optimistic-v20.js',
   'patch-app-perf-v21.js',
   'patch-app-uno-ux-v22.js',
+  'patch-app-quickmatch-v23.js',
 ];
 
 for (const p of patches) {

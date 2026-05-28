@@ -1008,8 +1008,14 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
         return finishJoin(existingActive.id, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
       }
     } else if (forceCreate && existingActive) {
-      guard(false, 'failed-precondition',
-        'Ya tenés una sala o partida activa. Volvé a ella antes de crear otra.');
+      const d = existingActive.data;
+      if (d.status === 'playing') {
+        guard(false, 'failed-precondition',
+          'Ya tenés una partida en curso. Volvé a ella antes de crear otra.');
+      }
+      if (d.status === 'waiting') {
+        await forceCloseMatch(db, db.doc(`matches/${existingActive.id}`), d, 'quick_match_replace');
+      }
     }
 
     const matchesRef = db.collection('matches');

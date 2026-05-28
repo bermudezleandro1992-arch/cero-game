@@ -699,7 +699,13 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         }
     }
     else if (forceCreate && existingActive) {
-        guard(false, 'failed-precondition', 'Ya ten�s una sala o partida activa. Volv� a ella antes de crear otra.');
+        const d = existingActive.data;
+        if (d.status === 'playing') {
+            guard(false, 'failed-precondition', 'Ya ten�s una partida en curso. Volv� a ella antes de crear otra.');
+        }
+        if (d.status === 'waiting') {
+            await forceCloseMatch(db, db.doc(`matches/${existingActive.id}`), d, 'quick_match_replace');
+        }
     }
     const matchesRef = db.collection('matches');
     let matchId = '';
