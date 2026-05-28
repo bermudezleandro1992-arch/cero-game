@@ -6,7 +6,13 @@ import {
   getAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  GoogleAuthProvider,
   signOut,
+  setPersistence,
+  browserLocalPersistence,
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js';
@@ -24,6 +30,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const fns = getFunctions(app, 'us-central1');
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+const WEBAUTHN_STORE = 'cero_admin_webauthn_v1';
+const UNLOCK_KEY = 'cero_admin_unlocked';
 
 const $ = (id) => document.getElementById(id);
 
@@ -32,6 +43,212 @@ let selectedUid = null;
 let depositsCache = [];
 let selectedDepositId = null;
 let waitingRoomsCache = [];
+let authBootstrapped = false;
+let pendingAuthUser = null;
+
+function isMobileDevice() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || window.matchMedia('(pointer: coarse)').matches;
+}
+
+function friendlyAuthError(code) {
+  const map = {
+    'auth/popup-closed-by-user': 'Cerraste la ventana de Google.',
+    'auth/popup-blocked': 'El navegador bloqueó la ventana. Probá de nuevo.',
+    'auth/cancelled-popup-request': 'Esperá un momento e intentá otra vez.',
+    'auth/user-not-found': 'No existe una cuenta con ese email.',
+    'auth/wrong-password': 'Contraseña incorrecta.',
+    'auth/invalid-credential': 'Email o contraseña incorrectos.',
+    'auth/too-many-requests': 'Demasiados intentos. Esperá unos minutos.',
+    'auth/network-request-failed': 'Sin conexión. Revisá tu internet.',
+    'auth/operation-not-allowed': 'Google Sign-In no está habilitado en Firebase.',
+  };
+  return map[code] || `Error de acceso (${code || 'desconocido'})`;
+}
+
+function bufToB64(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = '';
+  bytes.forEach((b) => { s += String.fromCharCode(b); });
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function b64ToBuf(b64) {
+  const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+  const str = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(str);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+function getStoredWebAuthn() {
+  try {
+    const raw = localStorage.getItem(WEBAUTHN_STORE);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredWebAuthn(data) {
+  localStorage.setItem(WEBAUTHN_STORE, JSON.stringify(data));
+}
+
+async function platformBioAvailable() {
+  if (!window.PublicKeyCredential?.isUserVerifyingPlatformAuthenticatorAvailable) return false;
+  try {
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch {
+    return false;
+  }
+}
+
+function updateBioUi() {
+  const btn = $('btnBioAdmin');
+  const hint = $('bioHint');
+  if (!btn) return;
+  const stored = getStoredWebAuthn();
+  const canBio = stored?.credentialId;
+  btn.hidden = !canBio;
+  btn.classList.toggle('hidden', !canBio);
+  if (hint) {
+    hint.hidden = !canBio;
+    hint.classList.toggle('hidden', !canBio);
+  }
+  if (canBio && stored?.label) {
+    $('btnBioLabel').textContent = stored.label;
+  }
+}
+
+async function registerWebAuthn(user) {
+  if (!(await platformBioAvailable())) return;
+  const existing = getStoredWebAuthn();
+  if (existing?.uid === user.uid && existing?.credentialId) return;
+
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const userId = new TextEncoder().encode(user.uid);
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: { name: 'CERO Admin', id: location.hostname },
+        user: {
+          id: userId,
+          name: user.email || user.uid,
+          displayName: user.displayName || 'Operador CERO',
+        },
+        pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform',
+          userVerification: 'required',
+          residentKey: 'preferred',
+        },
+        timeout: 60000,
+        attestation: 'none',
+      },
+    });
+    if (!cred?.rawId) return;
+    const label = isMobileDevice() ? 'Ingresar con huella / Face ID' : 'Ingresar con biometría';
+    setStoredWebAuthn({
+      uid: user.uid,
+      email: user.email || '',
+      credentialId: bufToB64(cred.rawId),
+      label,
+    });
+    updateBioUi();
+  } catch (err) {
+    console.warn('[admin] WebAuthn register skipped:', err);
+  }
+}
+
+async function unlockWithBiometric() {
+  const stored = getStoredWebAuthn();
+  if (!stored?.credentialId) {
+    showStatus($('loginStatus'), 'Primero ingresá con Google en este dispositivo.', false);
+    return false;
+  }
+
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        rpId: location.hostname,
+        allowCredentials: [{
+          id: b64ToBuf(stored.credentialId),
+          type: 'public-key',
+          transports: ['internal', 'hybrid'],
+        }],
+        userVerification: 'required',
+        timeout: 60000,
+      },
+    });
+
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now()));
+    const user = auth.currentUser;
+    if (user && user.uid === stored.uid) {
+      return ensurePanelAccess(user);
+    }
+    showStatus($('loginStatus'), 'Sesión vencida. Volvé a entrar con Google.', false);
+    await signInGoogle();
+    return false;
+  } catch (err) {
+    showStatus($('loginStatus'), 'No se pudo verificar la huella. Usá Google.', false);
+    return false;
+  }
+}
+
+async function signInGoogle() {
+  showStatus($('loginStatus'), 'Conectando con Google…', true);
+  try {
+    if (isMobileDevice()) {
+      await signInWithRedirect(auth, googleProvider);
+      return;
+    }
+    const cred = await signInWithPopup(auth, googleProvider);
+    await afterAuthSuccess(cred.user);
+  } catch (err) {
+    if (err?.code === 'auth/popup-blocked') {
+      await signInWithRedirect(auth, googleProvider);
+      return;
+    }
+    showStatus($('loginStatus'), friendlyAuthError(err?.code), false);
+  }
+}
+
+async function afterAuthSuccess(user) {
+  const ok = await ensurePanelAccess(user);
+  if (ok) {
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now()));
+    await registerWebAuthn(user);
+    showStatus($('panelStatus'), 'Sesión iniciada.', true);
+  }
+}
+
+async function handleAuthUser(user) {
+  if (!user) {
+    pendingAuthUser = null;
+    sessionStorage.removeItem(UNLOCK_KEY);
+    return;
+  }
+
+  const stored = getStoredWebAuthn();
+  const needsBio = stored?.uid === user.uid && stored?.credentialId;
+  const unlocked = sessionStorage.getItem(UNLOCK_KEY);
+
+  if (needsBio && !unlocked) {
+    pendingAuthUser = user;
+    $('loginSection')?.classList.remove('hidden');
+    $('panelSection')?.classList.add('hidden');
+    updateBioUi();
+    showStatus($('loginStatus'), 'Desbloqueá el panel con huella o Face ID.', true);
+    return;
+  }
+
+  pendingAuthUser = null;
+  await afterAuthSuccess(user);
+}
 
 function fmtTs(ms) {
   if (!ms) return '—';
@@ -341,10 +558,20 @@ $('btnLogin').addEventListener('click', async () => {
   }
   try {
     const cred = await signInWithEmailAndPassword(auth, email, pass);
-    const ok = await ensurePanelAccess(cred.user);
-    if (ok) showStatus($('panelStatus'), 'Sesión iniciada.', true);
+    await afterAuthSuccess(cred.user);
   } catch (err) {
-    showStatus($('loginStatus'), err.message, false);
+    showStatus($('loginStatus'), friendlyAuthError(err?.code) || err.message, false);
+  }
+});
+
+$('btnGoogleAdmin')?.addEventListener('click', () => signInGoogle());
+
+$('btnBioAdmin')?.addEventListener('click', async () => {
+  $('btnBioAdmin').disabled = true;
+  try {
+    await unlockWithBiometric();
+  } finally {
+    $('btnBioAdmin').disabled = false;
   }
 });
 
@@ -376,6 +603,7 @@ $('btnSeedMissions').addEventListener('click', async () => {
 });
 
 $('btnLogout').addEventListener('click', async () => {
+  sessionStorage.removeItem(UNLOCK_KEY);
   await signOut(auth);
   location.reload();
 });
@@ -565,4 +793,39 @@ $('btnSaveAppConfig')?.addEventListener('click', async () => {
     showStatus($('panelStatus'), err.message, false);
   }
 });
+
+(async function bootstrapAdminAuth() {
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+    const redirect = await getRedirectResult(auth);
+    if (redirect?.user) {
+      await afterAuthSuccess(redirect.user);
+    }
+  } catch (err) {
+    showStatus($('loginStatus'), friendlyAuthError(err?.code) || err.message, false);
+  }
+
+  updateBioUi();
+  platformBioAvailable().then((ok) => {
+    if (ok && !getStoredWebAuthn()) {
+      const hint = $('bioHint');
+      if (hint) {
+        hint.hidden = false;
+        hint.classList.remove('hidden');
+        hint.textContent = 'Después del primer ingreso con Google podés desbloquear con huella o Face ID en este dispositivo.';
+      }
+    }
+  });
+
+  onAuthStateChanged(auth, async (user) => {
+    if (authBootstrapped && !user) {
+      $('loginSection')?.classList.remove('hidden');
+      $('panelSection')?.classList.add('hidden');
+      currentUser = null;
+      return;
+    }
+    authBootstrapped = true;
+    if (user) await handleAuthUser(user);
+  });
+})();
 
