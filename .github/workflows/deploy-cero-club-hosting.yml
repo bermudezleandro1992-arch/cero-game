@@ -1,0 +1,41 @@
+name: Deploy CERO Club Hosting
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cursor/fix-react-hooks-2550
+      - main
+    paths:
+      - 'cero-club/app/**'
+      - 'cero-club/firebase.json'
+      - 'cero-club/.firebaserc'
+      - '.github/workflows/deploy-cero-club-hosting.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cero-club
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy Hosting
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          if [ -z "$FIREBASE_TOKEN" ]; then
+            echo "::error::Falta FIREBASE_TOKEN en GitHub Secrets."
+            echo "En tu PC (Chrome de escritorio): npx firebase-tools login:ci"
+            echo "Copiá el token y agregalo en GitHub → Settings → Secrets → FIREBASE_TOKEN"
+            exit 1
+          fi
+          firebase deploy --only hosting --project cero-club --token "$FIREBASE_TOKEN"
