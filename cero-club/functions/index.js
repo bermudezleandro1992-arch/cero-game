@@ -26,6 +26,7 @@ exports.expireStaleWaitingMatches = gameModule.expireStaleWaitingMatches;
 exports.ensureMatchStarted = gameModule.ensureMatchStarted;
 exports.cleanupMyRooms = gameModule.cleanupMyRooms;
 exports.getReplay      = gameModule.getReplay;
+exports.sendMatchChat  = gameModule.sendMatchChat;
 
 // ── Módulo: monetización + Mercado Pago ──────────────────────────────────────
 const monetModule = require('./compiled/monetization');

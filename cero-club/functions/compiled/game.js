@@ -78,7 +78,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getReplay = exports.endMatch = exports.forfeitMatch = exports.getRejoinStatus = exports.expireStaleWaitingMatches = exports.expireRejoinMatches = exports.checkMatchRejoinExpiry = exports.temporaryLeaveMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = exports.cleanupMyRooms = exports.ensureMatchStarted = void 0;
+exports.sendMatchChat = exports.getReplay = exports.endMatch = exports.forfeitMatch = exports.getRejoinStatus = exports.expireStaleWaitingMatches = exports.expireRejoinMatches = exports.checkMatchRejoinExpiry = exports.temporaryLeaveMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = exports.cleanupMyRooms = exports.ensureMatchStarted = void 0;
 exports.isStuckMatch = isStuckMatch;
 exports.forceCloseMatch = forceCloseMatch;
 exports.closeWaitingRoom = closeWaitingRoom;
@@ -1227,5 +1227,31 @@ exports.getReplay = (0, https_1.onCall)({ region: CFG.REGION }, async (request) 
         ok: true,
         actions: snap.docs.map(d => ({ id: d.id, ...d.data() })),
     };
+});
+exports.sendMatchChat = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Ten�s que iniciar sesi�n');
+    const uid = request.auth.uid;
+    const data = request.data ?? {};
+    const matchId = requireString(data, 'matchId');
+    const type = data.type;
+    const text = String(data.text ?? '').trim();
+    guard(['text', 'reaction', 'projectile'].includes(type), 'invalid-argument', 'Tipo inv�lido');
+    guard(text.length > 0 && text.length <= 200, 'invalid-argument', 'Mensaje inv�lido (1?200 chars)');
+    const db = (0, firestore_1.getFirestore)();
+    const matchSnap = await db.doc(`matches/${matchId}`).get();
+    guard(matchSnap.exists, 'not-found', 'Partida no encontrada');
+    const match = matchSnap.data();
+    guard(match.playerIds.includes(uid), 'permission-denied', 'No sos jugador de esta partida');
+    const name = match.players.find(p => p.uid === uid)?.name
+        ?? request.auth.token.name
+        ?? 'Jugador';
+    await db.collection(`matches/${matchId}/chat`).add({
+        uid,
+        name,
+        type,
+        text,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    return { ok: true };
 });
 //# sourceMappingURL=game.js.map

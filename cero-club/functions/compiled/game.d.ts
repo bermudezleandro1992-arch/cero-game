@@ -79,6 +79,7 @@ export interface MatchDoc {
     handCounts: number[] | null;
     winner: string | null;
     pendingTurn: number | null;
+    ceroCalled?: number[] | null;
     lastAction: LastAction | null;
     absences?: Record<string, {
         rejoinUntil: FirebaseFirestore.Timestamp;
@@ -232,5 +233,13 @@ export declare const getReplay: import("firebase-functions/v2/https").CallableFu
 }, Promise<{
     ok: true;
     actions: unknown[];
+}>>;
+interface SendMatchChatRequest {
+    matchId: string;
+    type: 'text' | 'reaction' | 'projectile';
+    text: string;
+}
+export declare const sendMatchChat: import("firebase-functions/v2/https").CallableFunction<SendMatchChatRequest, Promise<{
+    ok: true;
 }>>;
 export {};

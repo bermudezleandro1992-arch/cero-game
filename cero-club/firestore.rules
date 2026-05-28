@@ -198,10 +198,13 @@ service cloud.firestore {
     // Los clientes NUNCA escriben. Solo leen para sincronizar la UI con onSnapshot.
     // Todo el estado del juego (deck, manos, reglas) se valida en el server.
     match /matches/{matchId} {
-      // Salas en espera, en curso o terminadas: lectura para lobby y espectadores.
-      // Las manos siguen ocultas en subcollection hands/ (solo el dueño lee).
+      // Jugadores siempre pueden leer su partida; el resto solo si está activa/terminada.
       allow read:  if request.auth != null
-                   && (resource.data.status in ['waiting', 'playing', 'finished']);
+                   && (
+                     (resource.data.playerIds is list
+                       && resource.data.playerIds.hasAny([request.auth.uid]))
+                     || resource.data.status in ['waiting', 'playing', 'finished']
+                   );
       allow write: if false;   // solo Cloud Functions (Admin SDK)
 
       // Apuestas de espectadores — solo lectura propia; escritura solo servidor.
@@ -325,7 +328,7 @@ service cloud.firestore {
 
   function _isMatchPlayer(matchId) {
     let matchDoc = get(/databases/$(database)/documents/matches/$(matchId)).data;
-    return _playerIdsInclude(matchDoc.playerIds);
+    return matchDoc != null && _playerIdsInclude(matchDoc.playerIds);
   }
 
   function _tournamentRegistrationBumpOk() {

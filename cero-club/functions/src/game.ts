@@ -1740,3 +1740,50 @@ export const getReplay = onCall<{ matchId: string }, Promise<{ ok: true; actions
     };
   },
 );
+
+// ?????????????????????????????????????????????????????????????????????????????
+// sendMatchChat ? chat / reacciones / proyectiles (evita permisos del cliente)
+// ?????????????????????????????????????????????????????????????????????????????
+
+interface SendMatchChatRequest {
+  matchId: string;
+  type:    'text' | 'reaction' | 'projectile';
+  text:    string;
+}
+
+export const sendMatchChat = onCall<SendMatchChatRequest, Promise<{ ok: true }>>(
+  { region: CFG.REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+
+    const uid     = request.auth!.uid;
+    const data    = request.data ?? ({} as SendMatchChatRequest);
+    const matchId = requireString(data as unknown as Record<string, unknown>, 'matchId');
+    const type    = data.type;
+    const text    = String(data.text ?? '').trim();
+
+    guard(['text', 'reaction', 'projectile'].includes(type), 'invalid-argument', 'Tipo inválido');
+    guard(text.length > 0 && text.length <= 200, 'invalid-argument', 'Mensaje inválido (1?200 chars)');
+
+    const db        = getFirestore();
+    const matchSnap = await db.doc(`matches/${matchId}`).get();
+    guard(matchSnap.exists, 'not-found', 'Partida no encontrada');
+
+    const match = matchSnap.data() as MatchDoc;
+    guard(match.playerIds.includes(uid), 'permission-denied', 'No sos jugador de esta partida');
+
+    const name = match.players.find(p => p.uid === uid)?.name
+      ?? (request.auth!.token.name as string | undefined)
+      ?? 'Jugador';
+
+    await db.collection(`matches/${matchId}/chat`).add({
+      uid,
+      name,
+      type,
+      text,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    return { ok: true };
+  },
+);
