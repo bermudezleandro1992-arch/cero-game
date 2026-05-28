@@ -107,7 +107,7 @@ exports.COSMETIC_CATALOG = {
     bg_beach: { id: 'bg_beach', name: 'Playa', category: 'room_bg', price: 350, preview: 'rooms/beach' },
     bg_city: { id: 'bg_city', name: 'Ciudad Noche', category: 'room_bg', price: 400, preview: 'rooms/city' },
     bg_football: { id: 'bg_football', name: 'Cancha Fútbol', category: 'room_bg', price: 500, preview: 'rooms/football' },
-    deck_classic: { id: 'deck_classic', name: 'Mazo Clásico', category: 'deck_back', price: 150, preview: 'decks/classic' },
+    deck_classic: { id: 'deck_classic', name: 'Mazo CERO Clásico', category: 'deck_back', price: 150, preview: 'cards/classic-back' },
     deck_gold: { id: 'deck_gold', name: 'Mazo Dorado', category: 'deck_back', price: 350, preview: 'decks/gold' },
     deck_cyber: { id: 'deck_cyber', name: 'Mazo Cyber', category: 'deck_back', price: 450, preview: 'decks/cyber' },
     deck_holo: { id: 'deck_holo', name: 'Mazo Holográfico', category: 'deck_back', price: 520, preview: 'decks/cyber' },

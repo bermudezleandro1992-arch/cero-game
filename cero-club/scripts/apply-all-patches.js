@@ -21,6 +21,7 @@ const patches = [
   'patch-app-quickmatch-fix-v13.js',
   'patch-app-lobby-ux-v14.js',
   'patch-app-mundial-v15.js',
+  'patch-app-classic-deck-v16.js',
 ];
 
 for (const p of patches) {
