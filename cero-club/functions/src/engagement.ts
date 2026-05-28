@@ -30,6 +30,10 @@ function referralCodeForUid(uid: string): string {
   return crypto.createHash('sha256').update(uid).digest('hex').slice(0, 8).toUpperCase();
 }
 
+function transferIdForUid(uid: string): string {
+  return 'CC-' + crypto.createHash('sha256').update('xfer:' + uid).digest('hex').slice(0, 8).toUpperCase();
+}
+
 const WEEKLY_PRIZES: Record<number, number> = {  // posición → CC (top 3 destacados)
   1:  1_000,
   2:  600,
@@ -147,9 +151,10 @@ export const initUserProfile = onCall<Record<string, never>, Promise<InitProfile
 
       if (snap.exists) {
         ceroCoins = (snap.data()?.['ceroCoins'] as number | undefined) ?? 0;
-        if (!snap.data()?.['referralCode']) {
-          tx.update(userRef, { referralCode: referralCodeForUid(uid) });
-        }
+        const patch: Record<string, unknown> = {};
+        if (!snap.data()?.['referralCode']) patch.referralCode = referralCodeForUid(uid);
+        if (!snap.data()?.['transferId']) patch.transferId = transferIdForUid(uid);
+        if (Object.keys(patch).length) tx.update(userRef, patch);
         return;   // perfil ya existe, no tocar saldo
       }
 
@@ -158,6 +163,7 @@ export const initUserProfile = onCall<Record<string, never>, Promise<InitProfile
       ceroCoins = isGuest ? 0 : WELCOME_COINS;
 
       const referralCode = referralCodeForUid(uid);
+      const transferId   = transferIdForUid(uid);
 
       tx.set(userRef, {
         displayName:       name,
@@ -181,6 +187,7 @@ export const initUserProfile = onCall<Record<string, never>, Promise<InitProfile
         countryCode:       null as string | null,
         photoURL:          null as string | null,
         referralCode,
+        transferId,
         referredBy:        null as string | null,
         referralCount:     0,
         referralBonusClaimed: false,

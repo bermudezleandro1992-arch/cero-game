@@ -11,12 +11,13 @@
  *   · getMatchBettingInfo — estado de apuestas para UI
  */
 declare const MIN_TRANSFER = 10;
-declare const MAX_TRANSFER = 5000;
+declare const MAX_TRANSFER = 20000;
 declare const MIN_BET = 5;
 declare const MAX_BET = 500;
 declare const BETTING_WINDOW_MS: number;
 interface TransferRequest {
-    toUid: string;
+    toUid?: string;
+    toIdentifier?: string;
     amount: number;
     note?: string;
 }

@@ -95,7 +95,8 @@ const push_1 = require("./push");
 // �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 const CFG = {
     FREE_GAMES_LIMIT: 2, // partidas gratis para nuevos usuarios
-    ENTRY_COST_CC: 50, // Cero Coins por partida paga
+    STAKE_MIN_CC: 30, // apuesta m�nima en salas personalizadas
+    STAKE_MAX_CC: 20000, // apuesta m�xima en salas personalizadas
     HAND_SIZE: 7,
     TURN_SECONDS: 18,
     MAX_PLAYERS: 2, // default 1v1
@@ -481,9 +482,28 @@ exports.ensureMatchStarted = (0, https_1.onCall)({ region: CFG.REGION, timeoutSe
     const after = (await ref.get()).data();
     return { ok: true, started, status: after.status };
 });
+function makeJoinCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return code;
+}
 function parseRequestedStake(stakeCC) {
     const n = typeof stakeCC === 'number' ? stakeCC : Number(stakeCC);
-    return n === CFG.ENTRY_COST_CC ? CFG.ENTRY_COST_CC : 0;
+    if (!Number.isFinite(n) || n <= 0)
+        return 0;
+    const rounded = Math.round(n);
+    guard(rounded >= CFG.STAKE_MIN_CC && rounded <= CFG.STAKE_MAX_CC, 'invalid-argument', `Apuesta inv�lida. Eleg� entre ${CFG.STAKE_MIN_CC} y ${CFG.STAKE_MAX_CC} CN.`);
+    return rounded;
+}
+function assertPrivateJoinAllowed(match, uid, joinCode, alreadyInRoom) {
+    if (!match.isPrivate || alreadyInRoom)
+        return;
+    const code = typeof joinCode === 'string' ? joinCode.trim().toUpperCase() : '';
+    const expected = (match.joinCode ?? '').toUpperCase();
+    guard(code.length > 0 && code === expected, 'permission-denied', 'Sala privada. Necesit�s el c�digo o link del creador.');
 }
 async function chargeEntryStake(db, uid, auth, stakeCC) {
     if (stakeCC <= 0) {
@@ -633,7 +653,14 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
                 }
             }
         }
-        return { matchId, playerIndex, charged, coinsLeft, stakeCC };
+        const finalSnap = await db.doc(`matches/${matchId}`).get();
+        const finalData = finalSnap.data();
+        const joinCode = finalData?.joinCode ?? null;
+        const isPrivate = finalData?.isPrivate === true;
+        const shareLink = isPrivate && joinCode
+            ? `https://cero-club.web.app/app/?join=${matchId}&key=${joinCode}`
+            : null;
+        return { matchId, playerIndex, charged, coinsLeft, stakeCC, joinCode, isPrivate, shareLink };
     };
     // �??�?? 0. Reingreso a sala propia (sin cobrar de nuevo) �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
     if (requestedMatchId) {
@@ -683,6 +710,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         guard(d.status === 'waiting', 'failed-precondition', 'La sala ya comenzó o terminó');
         guard(ids.length < matchMaxPlayers(d), 'failed-precondition', 'La sala est� llena');
         guard(!ids.includes(uid), 'failed-precondition', 'Ya estás en esta sala');
+        assertPrivateJoinAllowed(d, uid, request.data?.joinCode, false);
         await assertCanJoinWaitingRoom(db, uid, d, callerIsGuest || await userIsGuest(db, uid));
         matchId = requestedMatchId;
         playerIndex = ids.length;
@@ -693,6 +721,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         entryStake = callerIsGuest ? 0 : parseRequestedStake(request.data?.stakeCC);
         guard(!callerIsGuest || entryStake === 0, 'permission-denied', 'Como invitado solo podés crear salas gratuitas (0 CN).');
     }
+    const createPrivate = request.data?.isPrivate === true && !callerIsGuest;
     const { charged, coinsLeft } = await chargeEntryStake(db, uid, request.auth, entryStake);
     const joiningUserIsGuest = callerIsGuest || await userIsGuest(db, uid);
     if (matchId) {
@@ -705,6 +734,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
             guard(d.status === 'waiting', 'failed-precondition', 'Sala ya no disponible');
             guard(ids.length < matchMaxPlayers(d), 'failed-precondition', 'Sala llena');
             guard(!ids.includes(uid), 'failed-precondition', 'Ya estás en esta sala');
+            assertPrivateJoinAllowed(d, uid, request.data?.joinCode, false);
             const newPlayers = [...d.players, {
                     uid,
                     name: request.auth.token.name ?? 'Jugador',
@@ -718,6 +748,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
     else {
         // �??�?? 3b. Crear sala nueva �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
         const createIsGuest = callerIsGuest || await userIsGuest(db, uid);
+        const roomJoinCode = createPrivate ? makeJoinCode() : null;
         const newMatchData = {
             status: 'waiting',
             mode,
@@ -732,7 +763,9 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
             playerCount: 1,
             maxPlayers: createMaxPlayers,
             stakeCC: entryStake,
-            guestOnly: createIsGuest,
+            guestOnly: createIsGuest && entryStake === 0,
+            isPrivate: createPrivate,
+            joinCode: roomJoinCode,
             turn: 0,
             phase: 'waiting',
             current: null,

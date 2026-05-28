@@ -14,12 +14,13 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { Transaction } from 'firebase-admin/firestore';
+import * as crypto from 'crypto';
 
 const REGION = 'us-central1';
 
 const MIN_TRANSFER       = 10;
-const MAX_TRANSFER       = 5_000;
-const DAILY_TRANSFER_CAP = 10_000;
+const MAX_TRANSFER       = 20_000;
+const DAILY_TRANSFER_CAP = 50_000;
 
 const MIN_BET            = 5;
 const MAX_BET            = 500;
@@ -56,9 +57,53 @@ async function ledgerEntry(
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface TransferRequest {
-  toUid:  string;
-  amount: number;
-  note?:  string;
+  toUid?:         string;
+  toIdentifier?:  string;
+  amount:         number;
+  note?:          string;
+}
+
+function transferIdForUid(uid: string): string {
+  return 'CC-' + crypto.createHash('sha256').update('xfer:' + uid).digest('hex').slice(0, 8).toUpperCase();
+}
+
+async function resolveTransferRecipient(
+  db: FirebaseFirestore.Firestore,
+  raw: string,
+): Promise<{ uid: string; label: string }> {
+  const id = raw.trim();
+  guard(id.length >= 3, 'invalid-argument', 'Destinatario inválido');
+
+  // ID de transferencia privado (CC-XXXXXXXX)
+  if (/^CC-[A-Z0-9]{6,12}$/i.test(id)) {
+    const code = id.toUpperCase();
+    const q = await db.collection('users').where('transferId', '==', code).limit(2).get();
+    guard(q.size === 1, 'not-found', 'ID de transferencia no encontrado');
+    const doc = q.docs[0]!;
+    return { uid: doc.id, label: code };
+  }
+
+  // Email registrado
+  if (id.includes('@')) {
+    const email = id.toLowerCase();
+    const q = await db.collection('users').where('email', '==', email).limit(2).get();
+    guard(q.size === 1, 'not-found', q.size > 1 ? 'Email duplicado — usá el ID de transferencia' : 'Email no registrado en Cero Club');
+    const doc = q.docs[0]!;
+    return { uid: doc.id, label: email };
+  }
+
+  // UID Firebase (20–32 chars alfanuméricos)
+  if (/^[a-zA-Z0-9]{20,32}$/.test(id)) {
+    const snap = await db.doc(`users/${id}`).get();
+    guard(snap.exists, 'not-found', 'Usuario no encontrado');
+    return { uid: id, label: id.slice(0, 8) + '…' };
+  }
+
+  // Nombre de usuario (displayName exacto)
+  const q = await db.collection('users').where('displayName', '==', id).limit(2).get();
+  guard(q.size === 1, 'not-found', q.size > 1 ? 'Nombre duplicado — usá email o ID CC-' : 'Nombre de usuario no encontrado');
+  const doc = q.docs[0]!;
+  return { uid: doc.id, label: id };
 }
 
 export const transferCeroCoins = onCall<TransferRequest>(
@@ -67,15 +112,21 @@ export const transferCeroCoins = onCall<TransferRequest>(
     guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
 
     const fromUid = request.auth!.uid;
-    const { toUid, amount, note } = request.data;
+    const { amount, note } = request.data;
+    const rawTarget = typeof request.data?.toIdentifier === 'string' && request.data.toIdentifier.trim()
+      ? request.data.toIdentifier.trim()
+      : typeof request.data?.toUid === 'string'
+        ? request.data.toUid.trim()
+        : '';
 
-    guard(typeof toUid === 'string' && toUid && toUid !== fromUid,
-      'invalid-argument', 'Destinatario inválido');
+    guard(rawTarget.length > 0, 'invalid-argument', 'Indicá email, nombre, ID CC- o UID del destinatario');
     guard(typeof amount === 'number' && Number.isInteger(amount)
       && amount >= MIN_TRANSFER && amount <= MAX_TRANSFER,
       'invalid-argument', `Monto inválido (${MIN_TRANSFER}–${MAX_TRANSFER} CN)`);
 
     const db = getFirestore();
+    const { uid: toUid, label: toLabel } = await resolveTransferRecipient(db, rawTarget);
+    guard(toUid !== fromUid, 'invalid-argument', 'No podés transferirte a vos mismo');
     const dayKey = todayKey();
     const transferLogRef = db.doc(`users/${fromUid}/transfer_daily/${dayKey}`);
 
@@ -128,7 +179,7 @@ export const transferCeroCoins = onCall<TransferRequest>(
       note: note?.slice(0, 120) ?? null,
     });
 
-    return { ok: true, newBalance, toUid, amount };
+    return { ok: true, newBalance, toUid, toLabel, amount };
   },
 );
 

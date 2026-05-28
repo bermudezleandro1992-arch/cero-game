@@ -13,6 +13,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     html, body { margin: 0; background: #04030d; color: #c4b5fd; height: 100%; overflow: hidden; overscroll-behavior: none; }
+    input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+      -webkit-box-shadow: 0 0 0 1000px #0e0524 inset !important;
+      -webkit-text-fill-color: #e9d5ff !important;
+      caret-color: #e9d5ff;
+    }
     #root { height: 100dvh; max-height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
     #cero-boot-fallback {
       display: none; position: fixed; inset: 0; z-index: 99999;
@@ -31,7 +36,7 @@
   </style>
   <script>
     (function () {
-      var BUILD = '2026052720';
+      var BUILD = '2026052721';
       window.__CERO_BUILD__ = BUILD;
       window.__CERO_VAPID__ = window.__CERO_VAPID__ || '';
       var link = document.querySelector('link[rel="stylesheet"][href*="index-"]');
@@ -49,8 +54,8 @@
       }
     })();
   </script>
-  <script type="module" crossorigin src="/app/assets/index-CEoU91fI.js?v=2026052720"></script>
-  <link rel="stylesheet" crossorigin href="/app/assets/index-Bz3E6dZB.css?v=2026052720">
+  <script type="module" crossorigin src="/app/assets/index-CEoU91fI.js?v=2026052721"></script>
+  <link rel="stylesheet" crossorigin href="/app/assets/index-Bz3E6dZB.css?v=2026052721">
 </head>
 <body>
   <div id="root"></div>

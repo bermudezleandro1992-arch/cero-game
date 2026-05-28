@@ -94,6 +94,8 @@ export interface MatchDoc {
     tournamentRound?: number | null;
     bracketSlot?: number | null;
     guestOnly?: boolean;
+    isPrivate?: boolean;
+    joinCode?: string | null;
     createdAt?: FirebaseFirestore.Timestamp | ReturnType<typeof FieldValue.serverTimestamp>;
     startedAt?: FirebaseFirestore.Timestamp | null;
     closedReason?: string;
@@ -119,6 +121,8 @@ interface JoinMatchRequest {
     matchId?: string;
     stakeCC?: number;
     createNew?: boolean;
+    isPrivate?: boolean;
+    joinCode?: string;
 }
 interface JoinMatchResponse {
     matchId: string;
@@ -126,6 +130,9 @@ interface JoinMatchResponse {
     charged: boolean;
     coinsLeft: number;
     stakeCC: number;
+    joinCode?: string | null;
+    isPrivate?: boolean;
+    shareLink?: string | null;
 }
 /** Cierra salas waiting hu�rfanas/colgadas del jugador (p. ej. qued� una waiting + una playing). */
 export declare function cleanupOrphanRoomsForUser(db: FirebaseFirestore.Firestore, uid: string): Promise<{

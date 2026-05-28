@@ -60,6 +60,9 @@ const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 h en ms
 function referralCodeForUid(uid) {
     return crypto.createHash('sha256').update(uid).digest('hex').slice(0, 8).toUpperCase();
 }
+function transferIdForUid(uid) {
+    return 'CC-' + crypto.createHash('sha256').update('xfer:' + uid).digest('hex').slice(0, 8).toUpperCase();
+}
 const WEEKLY_PRIZES = {
     1: 1000,
     2: 600,
@@ -138,15 +141,20 @@ exports.initUserProfile = (0, https_1.onCall)({ region: REGION }, async (request
         const snap = await tx.get(userRef);
         if (snap.exists) {
             ceroCoins = snap.data()?.['ceroCoins'] ?? 0;
-            if (!snap.data()?.['referralCode']) {
-                tx.update(userRef, { referralCode: referralCodeForUid(uid) });
-            }
+            const patch = {};
+            if (!snap.data()?.['referralCode'])
+                patch.referralCode = referralCodeForUid(uid);
+            if (!snap.data()?.['transferId'])
+                patch.transferId = transferIdForUid(uid);
+            if (Object.keys(patch).length)
+                tx.update(userRef, patch);
             return; // perfil ya existe, no tocar saldo
         }
         // Primer login: crear perfil con bonus de bienvenida (invitados sin bonus)
         created = true;
         ceroCoins = isGuest ? 0 : WELCOME_COINS;
         const referralCode = referralCodeForUid(uid);
+        const transferId = transferIdForUid(uid);
         tx.set(userRef, {
             displayName: name,
             email,
@@ -169,6 +177,7 @@ exports.initUserProfile = (0, https_1.onCall)({ region: REGION }, async (request
             countryCode: null,
             photoURL: null,
             referralCode,
+            transferId,
             referredBy: null,
             referralCount: 0,
             referralBonusClaimed: false,
