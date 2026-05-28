@@ -411,9 +411,12 @@ async function assertCanJoinWaitingRoom(
     guard(
       match.stakeCC === 0,
       'permission-denied',
-      'Como invitado solo podÃ©s entrar a salas gratuitas (0 CN). CreÃ¡ cuenta para jugar por premios.',
+      'Como invitado solo podés entrar a salas gratuitas (0 CN). Creá cuenta para jugar por premios.',
     );
   }
+
+  // Salas gratuitas (0 CN): invitados y registrados pueden jugar juntos (juego rápido).
+  if ((match.stakeCC ?? 0) === 0) return;
 
   const otherIds = match.playerIds.filter(id => id !== uid);
   if (otherIds.length === 0) return;
@@ -1084,7 +1087,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
         playerCount: 1,
         maxPlayers:  createMaxPlayers,
         stakeCC:     entryStake,
-        guestOnly:   createIsGuest && entryStake === 0,
+        guestOnly:   false,
         isPrivate:   createPrivate,
         joinCode:    roomJoinCode,
         turn:        0,

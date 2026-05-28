@@ -18,6 +18,7 @@ const patches = [
   'patch-app-gameplay-fixes-v10.js',
   'patch-app-full-v11.js',
   'patch-app-rooms-economy-v12.js',
+  'patch-app-quickmatch-fix-v13.js',
 ];
 
 for (const p of patches) {
