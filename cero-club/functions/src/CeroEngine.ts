@@ -410,8 +410,9 @@ export class CeroEngine {
   // ── declareCero() ──────────────────────────────────────────────────────────
 
   declareCero(playerIdx: number): ActionResult {
-    if (this._hands[playerIdx]!.length !== 1)
-      return this._fail('Solo podés declarar CERO con exactamente 1 carta');
+    const handLen = this._hands[playerIdx]!.length;
+    if (handLen < 1 || handLen > 2)
+      return this._fail('Declará CERO con 1 o 2 cartas en la mano');
     this._ceroCalled.add(playerIdx);
     return { ok: true, snapshot: this._snapshot() };
   }

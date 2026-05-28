@@ -12,6 +12,7 @@ const patches = [
   'patch-app-roadmap-v4.js',
   'patch-app-roadmap-v5.js',
   'patch-app-scroll-fix-v6.js',
+  'patch-app-gameplay-fixes-v7.js',
 ];
 
 for (const p of patches) {

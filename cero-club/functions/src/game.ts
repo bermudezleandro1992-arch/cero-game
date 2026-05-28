@@ -184,6 +184,7 @@ export interface MatchDoc {
   handCounts:  number[] | null;
   winner:      string | null;      // UID del ganador
   pendingTurn: number | null;
+  ceroCalled?: number[] | null;
   lastAction:  LastAction | null;
   absences?:   Record<string, { rejoinUntil: FirebaseFirestore.Timestamp; leftAt: FirebaseFirestore.Timestamp }>;
   rejoinBanner?: {
@@ -533,6 +534,7 @@ function buildPublicState(snap: FullSnapshot, playerIds: string[]): Partial<Matc
     chosenColor: snap.chosenColor ?? null,
     topDiscard:  snap.topDiscard  ?? null,
     handCounts:  [...snap.handCounts],
+    ceroCalled:  [...snap.ceroCalled],
     winner:      snap.winner !== null ? (playerIds[snap.winner] ?? null) : null,
     pendingTurn: snap.pendingTurn ?? null,
   };

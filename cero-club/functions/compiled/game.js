@@ -382,6 +382,7 @@ function buildPublicState(snap, playerIds) {
         chosenColor: snap.chosenColor ?? null,
         topDiscard: snap.topDiscard ?? null,
         handCounts: [...snap.handCounts],
+        ceroCalled: [...snap.ceroCalled],
         winner: snap.winner !== null ? (playerIds[snap.winner] ?? null) : null,
         pendingTurn: snap.pendingTurn ?? null,
     };
