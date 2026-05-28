@@ -40,6 +40,7 @@ const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const firestore_2 = require("firebase-admin/firestore");
+const push_1 = require("./push");
 // ─────────────────────────────────────────────────────────────────────────────
 // Configuración
 // ─────────────────────────────────────────────────────────────────────────────
@@ -262,6 +263,7 @@ exports.claimMissionReward = (0, https_1.onCall)({ region: REGION, timeoutSecond
         missionId,
         createdAt: firestore_2.FieldValue.serverTimestamp(),
     });
+    void (0, push_1.sendPushToUser)(uid, 'CERO Club', `¡Misión completada! +${coinsAwarded} CC`, { type: 'mission_complete', missionId });
     return { ok: true, coins: coinsAwarded, xp: xpAwarded };
 });
 // ─────────────────────────────────────────────────────────────────────────────

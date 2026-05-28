@@ -3,7 +3,7 @@
  * Notificaciones push (FCM) — guardar tokens y enviar avisos.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendTestPush = exports.saveFcmToken = void 0;
+exports.getPublicConfig = exports.sendTestPush = exports.saveFcmToken = void 0;
 exports.sendPushToUser = sendPushToUser;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
@@ -76,5 +76,18 @@ exports.sendTestPush = (0, https_1.onCall)({ region: REGION }, async (request) =
     const uid = request.auth.uid;
     await sendPushToUser(uid, 'CERO Club', '¡Notificaciones activadas! 🔔', { type: 'test' });
     return { ok: true };
+});
+/** Config pública para el cliente (VAPID key, etc.) */
+exports.getPublicConfig = (0, https_1.onCall)({ region: REGION }, async () => {
+    const db = (0, firestore_1.getFirestore)();
+    let vapidKey = process.env.CERO_VAPID_KEY ?? '';
+    if (!vapidKey) {
+        try {
+            const snap = await db.doc('config/public').get();
+            vapidKey = snap.data()?.['vapidKey'] ?? '';
+        }
+        catch { /* ignore */ }
+    }
+    return { vapidKey, pushEnabled: !!vapidKey };
 });
 //# sourceMappingURL=push.js.map

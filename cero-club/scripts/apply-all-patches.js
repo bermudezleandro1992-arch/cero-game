@@ -10,6 +10,7 @@ const patches = [
   'patch-app-cosmetics-v2.js',
   'patch-app-roadmap-v3.js',
   'patch-app-roadmap-v4.js',
+  'patch-app-roadmap-v5.js',
 ];
 
 for (const p of patches) {

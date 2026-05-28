@@ -37,6 +37,7 @@ import { onSchedule }                    from 'firebase-functions/v2/scheduler';
 import { onDocumentUpdated }             from 'firebase-functions/v2/firestore';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { Transaction }                    from 'firebase-admin/firestore';
+import { sendPushToUser }                      from './push';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Configuración
@@ -347,6 +348,13 @@ export const claimMissionReward = onCall<ClaimRequest, Promise<ClaimResponse>>(
       missionId,
       createdAt: FieldValue.serverTimestamp(),
     });
+
+    void sendPushToUser(
+      uid,
+      'CERO Club',
+      `¡Misión completada! +${coinsAwarded} CC`,
+      { type: 'mission_complete', missionId },
+    );
 
     return { ok: true, coins: coinsAwarded, xp: xpAwarded };
   },

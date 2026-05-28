@@ -89,6 +89,7 @@ const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-admin/firestore");
 const CeroEngine_1 = require("./CeroEngine");
 const missions_1 = require("./missions");
+const push_1 = require("./push");
 // �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
 // Configuración del negocio
 // �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
@@ -451,6 +452,11 @@ function matchNeedsStart(match) {
         (match.status === 'waiting' ||
             (match.status === 'playing' && match.phase === 'waiting' && !match.topDiscard));
 }
+async function notifyMatchPlayers(playerIds, title, body, data, exceptUid) {
+    await Promise.allSettled(playerIds
+        .filter(id => id && id !== exceptUid)
+        .map(id => (0, push_1.sendPushToUser)(id, title, body, data)));
+}
 async function tryStartMatchIfReady(db, matchRef, match) {
     const ids = uniquePlayerIds(match.playerIds);
     const normalized = { ...match, playerIds: ids, playerCount: ids.length };
@@ -609,11 +615,22 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
     const db = (0, firestore_1.getFirestore)();
     await cleanupOrphanRoomsForUser(db, uid);
     const existingActive = await findActiveMatchForUser(db, uid);
-    const finishJoin = async (matchId, playerIndex, charged, coinsLeft, stakeCC) => {
+    const finishJoin = async (matchId, playerIndex, charged, coinsLeft, stakeCC, notifyJoin = false) => {
         const matchSnap = await db.doc(`matches/${matchId}`).get();
         const matchData = matchSnap.data();
+        const wasWaiting = matchData?.status === 'waiting';
         if (matchData) {
-            await tryStartMatchIfReady(db, matchSnap.ref, matchData);
+            const started = await tryStartMatchIfReady(db, matchSnap.ref, matchData);
+            const fresh = (await db.doc(`matches/${matchId}`).get()).data();
+            if (fresh) {
+                const joinerName = request.auth.token.name ?? 'Jugador';
+                if (notifyJoin && wasWaiting && fresh.status === 'waiting') {
+                    void notifyMatchPlayers(uniquePlayerIds(fresh.playerIds), 'CERO Club', `${joinerName} se uni� (${fresh.playerCount}/${fresh.maxPlayers})`, { type: 'player_joined', matchId }, uid);
+                }
+                if (started || (wasWaiting && fresh.status === 'playing')) {
+                    void notifyMatchPlayers(uniquePlayerIds(fresh.playerIds), 'CERO Club', '�La partida empez�! Entr� a jugar.', { type: 'match_started', matchId });
+                }
+            }
         }
         return { matchId, playerIndex, charged, coinsLeft, stakeCC };
     };
@@ -734,7 +751,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         matchId = ref.id;
         playerIndex = 0;
     }
-    return finishJoin(matchId, playerIndex, charged, coinsLeft, entryStake);
+    return finishJoin(matchId, playerIndex, charged, coinsLeft, entryStake, true);
 });
 const VALID_ACTIONS = new Set(['play', 'draw', 'pickColor', 'declareCero']);
 /**

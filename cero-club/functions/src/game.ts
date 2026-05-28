@@ -51,6 +51,7 @@ import type { Transaction }         from 'firebase-admin/firestore';
 import { CeroEngine, COLORS }       from './CeroEngine';
 import type { Card, CardColor, GamePhase, FullSnapshot, Player } from './CeroEngine';
 import { trackMissionAction }       from './missions';
+import { sendPushToUser }           from './push';
 
 // FunctionsErrorCode explÃ­cito â?? evita problemas con Parameters<typeof HttpsError>
 type ErrCode =
@@ -623,6 +624,20 @@ function matchNeedsStart(match: MatchDoc): boolean {
       (match.status === 'playing' && match.phase === 'waiting' && !match.topDiscard));
 }
 
+async function notifyMatchPlayers(
+  playerIds: string[],
+  title:     string,
+  body:      string,
+  data:      Record<string, string>,
+  exceptUid?: string,
+): Promise<void> {
+  await Promise.allSettled(
+    playerIds
+      .filter(id => id && id !== exceptUid)
+      .map(id => sendPushToUser(id, title, body, data)),
+  );
+}
+
 async function tryStartMatchIfReady(
   db: FirebaseFirestore.Firestore,
   matchRef: FirebaseFirestore.DocumentReference,
@@ -873,11 +888,34 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
       charged: boolean,
       coinsLeft: number,
       stakeCC: number,
+      notifyJoin = false,
     ) => {
       const matchSnap = await db.doc(`matches/${matchId}`).get();
       const matchData = matchSnap.data() as MatchDoc | undefined;
+      const wasWaiting = matchData?.status === 'waiting';
       if (matchData) {
-        await tryStartMatchIfReady(db, matchSnap.ref, matchData);
+        const started = await tryStartMatchIfReady(db, matchSnap.ref, matchData);
+        const fresh = (await db.doc(`matches/${matchId}`).get()).data() as MatchDoc | undefined;
+        if (fresh) {
+          const joinerName = request.auth!.token.name ?? 'Jugador';
+          if (notifyJoin && wasWaiting && fresh.status === 'waiting') {
+            void notifyMatchPlayers(
+              uniquePlayerIds(fresh.playerIds),
+              'CERO Club',
+              `${joinerName} se unió (${fresh.playerCount}/${fresh.maxPlayers})`,
+              { type: 'player_joined', matchId },
+              uid,
+            );
+          }
+          if (started || (wasWaiting && fresh.status === 'playing')) {
+            void notifyMatchPlayers(
+              uniquePlayerIds(fresh.playerIds),
+              'CERO Club',
+              '¡La partida empezó! Entrá a jugar.',
+              { type: 'match_started', matchId },
+            );
+          }
+        }
       }
       return { matchId, playerIndex, charged, coinsLeft, stakeCC };
     };
@@ -1014,7 +1052,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
       playerIndex = 0;
     }
 
-    return finishJoin(matchId, playerIndex, charged, coinsLeft, entryStake);
+    return finishJoin(matchId, playerIndex, charged, coinsLeft, entryStake, true);
   },
 );
 

@@ -102,3 +102,21 @@ export const sendTestPush = onCall<Record<string, never>>(
     return { ok: true };
   },
 );
+
+/** Config pública para el cliente (VAPID key, etc.) */
+export const getPublicConfig = onCall<Record<string, never>>(
+  { region: REGION },
+  async () => {
+    const db   = getFirestore();
+    let vapidKey = process.env.CERO_VAPID_KEY ?? '';
+
+    if (!vapidKey) {
+      try {
+        const snap = await db.doc('config/public').get();
+        vapidKey = (snap.data()?.['vapidKey'] as string | undefined) ?? '';
+      } catch { /* ignore */ }
+    }
+
+    return { vapidKey, pushEnabled: !!vapidKey };
+  },
+);

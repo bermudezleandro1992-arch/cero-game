@@ -82,6 +82,7 @@ exports.claimSeasonTier     = seasonModule.claimSeasonTier;
 const pushModule = require('./compiled/push');
 exports.saveFcmToken  = pushModule.saveFcmToken;
 exports.sendTestPush  = pushModule.sendTestPush;
+exports.getPublicConfig = pushModule.getPublicConfig;
 
 // ── Módulo: billetera (P2P, referidos, apuestas, espectadores) ────────────────
 const walletModule = require('./compiled/wallet');
@@ -318,6 +319,12 @@ exports.ceroClubSetup = onRequest(
     } catch (err) {
       results.missions = { error: err.message };
       console.warn('[ceroClubSetup] missions seed:', err.message);
+    }
+
+    const vapidKey = process.env.CERO_VAPID_KEY ?? '';
+    if (vapidKey) {
+      await db.doc('config/public').set({ vapidKey, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      results.vapidKey = { stored: true };
     }
 
     res.json({ ok: true, ...results });
