@@ -200,20 +200,36 @@ async function unlockWithBiometric() {
 }
 
 async function signInGoogle() {
-  showStatus($('loginStatus'), 'Conectando con Google…', true);
+  const btn = $('btnGoogleAdmin');
+  const statusEl = $('loginStatus');
+  if (btn) {
+    btn.disabled = true;
+    btn.dataset.prevLabel = btn.textContent;
+    btn.textContent = 'Abriendo Google…';
+  }
+  showStatus(statusEl, 'Conectando con Google…', true);
+
   try {
-    if (isMobileDevice()) {
-      await signInWithRedirect(auth, googleProvider);
-      return;
-    }
     const cred = await signInWithPopup(auth, googleProvider);
     await afterAuthSuccess(cred.user);
   } catch (err) {
-    if (err?.code === 'auth/popup-blocked') {
-      await signInWithRedirect(auth, googleProvider);
-      return;
+    const code = err?.code || '';
+    if (code === 'auth/popup-blocked' || code === 'auth/popup-closed-by-user') {
+      showStatus(statusEl, 'Redirigiendo a Google…', true);
+      try {
+        await signInWithRedirect(auth, googleProvider);
+        return;
+      } catch (redirectErr) {
+        showStatus(statusEl, friendlyAuthError(redirectErr?.code) || redirectErr.message, false);
+      }
+    } else {
+      showStatus(statusEl, friendlyAuthError(code) || err.message || 'No se pudo conectar con Google', false);
     }
-    showStatus($('loginStatus'), friendlyAuthError(err?.code), false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      if (btn.dataset.prevLabel) btn.textContent = btn.dataset.prevLabel;
+    }
   }
 }
 
@@ -564,7 +580,12 @@ $('btnLogin').addEventListener('click', async () => {
   }
 });
 
-$('btnGoogleAdmin')?.addEventListener('click', () => signInGoogle());
+$('btnGoogleAdmin')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  signInGoogle().catch((err) => {
+    showStatus($('loginStatus'), err?.message || 'Error inesperado con Google', false);
+  });
+});
 
 $('btnBioAdmin')?.addEventListener('click', async () => {
   $('btnBioAdmin').disabled = true;
@@ -802,6 +823,7 @@ $('btnSaveAppConfig')?.addEventListener('click', async () => {
       await afterAuthSuccess(redirect.user);
     }
   } catch (err) {
+    console.error('[admin] redirect result:', err);
     showStatus($('loginStatus'), friendlyAuthError(err?.code) || err.message, false);
   }
 
