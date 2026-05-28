@@ -78,13 +78,56 @@ body::before {
   padding: .5rem 0;
 }
 
-.brand-logo {
+.brand-logo-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .65rem;
+  margin-bottom: .35rem;
+}
+
+.brand-logo-ring {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 108px;
+  height: 108px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--neon), #22d3ee, #a78bfa, var(--neon));
+  animation: logo-ring-spin 4s linear infinite, logo-ring-pulse 2.4s ease-in-out infinite;
+  mask: radial-gradient(circle, transparent 62%, #000 63%);
+  -webkit-mask: radial-gradient(circle, transparent 62%, #000 63%);
+  filter: drop-shadow(0 0 14px rgba(0,239,144,.35));
+  pointer-events: none;
+}
+
+@keyframes logo-ring-spin { to { transform: translateX(-50%) rotate(360deg); } }
+@keyframes logo-ring-pulse {
+  0%, 100% { opacity: .82; filter: drop-shadow(0 0 10px rgba(0,239,144,.25)); }
+  50%       { opacity: 1;   filter: drop-shadow(0 0 22px rgba(0,239,144,.55)); }
+}
+
+.brand-mark {
+  position: relative;
+  z-index: 1;
+  display: block;
+  filter: drop-shadow(0 0 18px rgba(0,239,144,.4));
+  animation: logo-mark-float 3.2s ease-in-out infinite;
+}
+
+@keyframes logo-mark-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-3px); }
+}
+
+.brand-wordmark {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 3.2rem;
+  font-size: 2.4rem;
   font-weight: 900;
   letter-spacing: -.03em;
   line-height: 1;
-  margin-bottom: .4rem;
 }
 
 .bl-cero {
@@ -93,9 +136,9 @@ body::before {
 
 .bl-club {
   color: var(--neon);
-  font-size: 2rem;
+  font-size: 1.55rem;
   font-weight: 700;
-  letter-spacing: .05em;
+  letter-spacing: .08em;
   vertical-align: super;
   margin-left: 4px;
 }
@@ -472,6 +515,8 @@ body::before {
 /* ── Mobile ───────────────────────────────────────────────────────────────── */
 @media (max-width: 480px) {
   body { padding: 1.25rem .75rem 2.5rem; }
-  .brand-logo { font-size: 2.6rem; }
+  .brand-wordmark { font-size: 2rem; }
+  .brand-mark { width: 76px; height: 76px; }
+  .brand-logo-ring { width: 90px; height: 90px; }
   .auth-panel { padding: 1rem; }
 }

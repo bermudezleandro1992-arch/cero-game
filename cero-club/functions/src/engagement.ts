@@ -119,6 +119,13 @@ export const COSMETIC_CATALOG: Record<string, {
   deck_flame:       { id: 'deck_flame',     name: 'Mazo Llama',     category: 'deck_back',    price: 480,  preview: 'decks/flame'     },
   deck_legend:      { id: 'deck_legend',    name: 'Mazo Leyenda',   category: 'deck_back',    price: 720,  preview: 'decks/legend'    },
   deck_neon:        { id: 'deck_neon',      name: 'Mazo Neón Pro',  category: 'deck_back',    price: 580,  preview: 'decks/neon'      },
+  bg_mundial:       { id: 'bg_mundial',     name: 'Ambiente Mundial', category: 'room_bg',    price: 680,  preview: 'rooms/mundial'   },
+  table_mundial:    { id: 'table_mundial',  name: 'Mesa Mundial',   category: 'table_bg',     price: 520,  preview: 'tables/mundial'  },
+  frame_mundial:    { id: 'frame_mundial',  name: 'Marco Mundial',  category: 'avatar_frame', price: 950,  preview: 'frames/mundial'  },
+  frame_laser:      { id: 'frame_laser',    name: 'Láser RGB',      category: 'avatar_frame', price: 1100, preview: 'frames/neon-ring' },
+  frame_prism:      { id: 'frame_prism',    name: 'Prisma Arcoíris', category: 'avatar_frame', price: 1300, preview: 'frames/aurora'  },
+  deck_mundial:     { id: 'deck_mundial',   name: 'Mazo Mundial',   category: 'deck_back',    price: 620,  preview: 'decks/mundial'   },
+  skin_mundial:     { id: 'skin_mundial',   name: 'Cartas Mundial', category: 'card_skin',    price: 480,  preview: 'skins/galaxy'    },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

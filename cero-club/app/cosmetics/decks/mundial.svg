@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 120">
+  <rect x="8" y="4" width="64" height="96" rx="8" fill="#14532d" stroke="#fbbf24" stroke-width="3"/>
+  <circle cx="40" cy="48" r="14" fill="none" stroke="#86efac" stroke-width="1.5" opacity=".7"/>
+  <circle cx="40" cy="48" r="5" fill="#fde047" opacity=".9"/>
+  <text x="40" y="82" text-anchor="middle" fill="#fde68a" font-size="9" font-weight="800" font-family="system-ui,sans-serif">MUNDIAL</text>
+</svg>
