@@ -39,7 +39,28 @@ async function assertAdmin(uid: string): Promise<void> {
 // adminGetUser — buscar por uid o email
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface AdminGetUserRequest { uid?: string; email?: string }
+interface AdminGetUserRequest { uid?: string; email?: string; displayName?: string }
+
+function userPayload(uid: string, data: FirebaseFirestore.DocumentData) {
+  const vip = data.vip as { active?: boolean; expiresAt?: FirebaseFirestore.Timestamp } | null | undefined;
+  return {
+    uid,
+    email:            data.email ?? '',
+    displayName:      data.displayName ?? 'Jugador',
+    ceroCoins:        data.ceroCoins ?? 0,
+    wins:             data.wins ?? 0,
+    totalGamesPlayed: data.totalGamesPlayed ?? 0,
+    weeklyWins:       data.weeklyWins ?? 0,
+    monthlyWins:      data.monthlyWins ?? 0,
+    xp:               data.xp ?? 0,
+    countryCode:      data.countryCode ?? null,
+    isGuest:          data.isGuest === true || data.anon === true,
+    vip:              vip ?? null,
+    vipActive:        vip?.active === true && (vip.expiresAt?.toMillis() ?? 0) > Date.now(),
+    activeRejoin:     data.activeRejoin ?? null,
+    ownedCosmetics:   data.ownedCosmetics ?? [],
+  };
+}
 
 export const adminGetUser = onCall<AdminGetUserRequest>(
   { region: REGION },
@@ -48,7 +69,7 @@ export const adminGetUser = onCall<AdminGetUserRequest>(
     await assertAdmin(request.auth!.uid);
 
     const db = getFirestore();
-    const { uid, email } = request.data ?? {};
+    const { uid, email, displayName } = request.data ?? {};
 
     let userSnap;
     if (uid) {
@@ -56,23 +77,61 @@ export const adminGetUser = onCall<AdminGetUserRequest>(
     } else if (email) {
       const q = await db.collection('users').where('email', '==', email.toLowerCase().trim()).limit(1).get();
       userSnap = q.docs[0];
+    } else if (displayName) {
+      const name = displayName.trim();
+      guard(name.length >= 2, 'invalid-argument', 'Nombre demasiado corto');
+      const exact = await db.collection('users').where('displayName', '==', name).limit(1).get();
+      if (!exact.empty) {
+        userSnap = exact.docs[0];
+      } else {
+        const prefix = await db.collection('users')
+          .where('displayName', '>=', name)
+          .where('displayName', '<=', name + '\uf8ff')
+          .limit(1)
+          .get();
+        userSnap = prefix.docs[0];
+      }
     } else {
-      throw new HttpsError('invalid-argument', 'Indicá uid o email');
+      throw new HttpsError('invalid-argument', 'Indicá uid, email o nombre de usuario');
     }
 
     guard(userSnap?.exists, 'not-found', 'Usuario no encontrado');
-    const data = userSnap!.data()!;
-    return {
-      uid:              userSnap!.id,
-      email:            data.email ?? '',
-      displayName:      data.displayName ?? 'Jugador',
-      ceroCoins:        data.ceroCoins ?? 0,
-      wins:             data.wins ?? 0,
-      totalGamesPlayed: data.totalGamesPlayed ?? 0,
-      weeklyWins:       data.weeklyWins ?? 0,
-      vip:              data.vip ?? null,
-      activeRejoin:     data.activeRejoin ?? null,
-    };
+    return userPayload(userSnap!.id, userSnap!.data()!);
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// adminSearchUsers — búsqueda por nick (prefijo)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AdminSearchUsersRequest { query?: string; limit?: number }
+
+export const adminSearchUsers = onCall<AdminSearchUsersRequest>(
+  { region: REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
+    await assertAdmin(request.auth!.uid);
+
+    const q = (request.data?.query ?? '').trim();
+    guard(q.length >= 2, 'invalid-argument', 'Escribí al menos 2 caracteres');
+    const limit = Math.min(request.data?.limit ?? 20, 30);
+    const db = getFirestore();
+
+    const snap = await db.collection('users')
+      .where('displayName', '>=', q)
+      .where('displayName', '<=', q + '\uf8ff')
+      .limit(limit)
+      .get();
+
+    const users = snap.docs.map(d => ({
+      uid:         d.id,
+      displayName: d.data().displayName ?? 'Jugador',
+      email:       d.data().email ?? '',
+      ceroCoins:   d.data().ceroCoins ?? 0,
+      wins:        d.data().wins ?? 0,
+    }));
+
+    return { users };
   },
 );
 
@@ -121,13 +180,66 @@ export const adminSetCeroCoins = onCall<AdminSetCoinsRequest>(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// adminAddCeroCoins — sumar/restar monedas (pruebas, premios)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AdminAddCoinsRequest {
+  uid:    string;
+  amount: number;
+  reason?: string;
+}
+
+export const adminAddCeroCoins = onCall<AdminAddCoinsRequest>(
+  { region: REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
+    const callerUid = request.auth!.uid;
+    await assertAdmin(callerUid);
+
+    const { uid, amount, reason = 'admin_add' } = request.data;
+    guard(typeof uid === 'string' && uid, 'invalid-argument', 'UID inválido');
+    guard(typeof amount === 'number' && Number.isFinite(amount), 'invalid-argument', 'Monto inválido');
+    guard(amount !== 0, 'invalid-argument', 'El monto no puede ser 0');
+
+    const db = getFirestore();
+    const userRef = db.doc(`users/${uid}`);
+    let newBalance = 0;
+
+    await db.runTransaction(async (tx: Transaction) => {
+      const snap = await tx.get(userRef);
+      guard(snap.exists, 'not-found', 'Usuario no encontrado');
+      const current = (snap.data()?.ceroCoins as number | undefined) ?? 0;
+      newBalance = Math.min(5_000_000, Math.max(0, current + amount));
+      tx.update(userRef, { ceroCoins: newBalance });
+    });
+
+    await db.collection('coin_ledger').add({
+      uid,
+      amount,
+      type:      amount > 0 ? 'admin_add' : 'admin_deduct',
+      reason,
+      grantedBy: callerUid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    return { ok: true, uid, ceroCoins: newBalance, delta: amount };
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // adminUpdateUser — nick, stats menores
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AdminUpdateUserRequest {
-  uid:         string;
-  displayName?: string;
-  weeklyWins?: number;
+  uid:              string;
+  displayName?:     string;
+  weeklyWins?:      number;
+  monthlyWins?:     number;
+  wins?:            number;
+  totalGamesPlayed?: number;
+  xp?:              number;
+  countryCode?:     string | null;
+  vipActive?:       boolean;
 }
 
 export const adminUpdateUser = onCall<AdminUpdateUserRequest>(
@@ -136,7 +248,10 @@ export const adminUpdateUser = onCall<AdminUpdateUserRequest>(
     guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
     await assertAdmin(request.auth!.uid);
 
-    const { uid, displayName, weeklyWins } = request.data;
+    const {
+      uid, displayName, weeklyWins, monthlyWins,
+      wins, totalGamesPlayed, xp, countryCode, vipActive,
+    } = request.data;
     guard(typeof uid === 'string' && uid, 'invalid-argument', 'UID inválido');
 
     const patch: Record<string, unknown> = {};
@@ -145,6 +260,29 @@ export const adminUpdateUser = onCall<AdminUpdateUserRequest>(
     }
     if (typeof weeklyWins === 'number' && weeklyWins >= 0 && weeklyWins <= 9999) {
       patch.weeklyWins = weeklyWins;
+    }
+    if (typeof monthlyWins === 'number' && monthlyWins >= 0 && monthlyWins <= 9999) {
+      patch.monthlyWins = monthlyWins;
+    }
+    if (typeof wins === 'number' && wins >= 0 && wins <= 999999) {
+      patch.wins = wins;
+    }
+    if (typeof totalGamesPlayed === 'number' && totalGamesPlayed >= 0 && totalGamesPlayed <= 999999) {
+      patch.totalGamesPlayed = totalGamesPlayed;
+    }
+    if (typeof xp === 'number' && xp >= 0 && xp <= 999999) {
+      patch.xp = xp;
+    }
+    if (countryCode === null || (typeof countryCode === 'string' && countryCode.length <= 2)) {
+      patch.countryCode = countryCode || null;
+    }
+    if (typeof vipActive === 'boolean') {
+      if (vipActive) {
+        const expiresAt = new Date(Date.now() + 30 * 86_400_000);
+        patch.vip = { active: true, expiresAt };
+      } else {
+        patch.vip = { active: false };
+      }
     }
     guard(Object.keys(patch).length > 0, 'invalid-argument', 'Nada que actualizar');
 

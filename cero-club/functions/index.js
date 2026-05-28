@@ -47,7 +47,9 @@ exports.seedWeeklyTournament          = tournModule.seedWeeklyTournament;
 // ── Módulo: admin panel ───────────────────────────────────────────────────────
 const adminModule = require('./compiled/admin');
 exports.adminGetUser          = adminModule.adminGetUser;
+exports.adminSearchUsers      = adminModule.adminSearchUsers;
 exports.adminSetCeroCoins     = adminModule.adminSetCeroCoins;
+exports.adminAddCeroCoins     = adminModule.adminAddCeroCoins;
 exports.adminUpdateUser       = adminModule.adminUpdateUser;
 exports.adminListTournaments  = adminModule.adminListTournaments;
 exports.adminListWaitingMatches = adminModule.adminListWaitingMatches;

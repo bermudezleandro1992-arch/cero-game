@@ -4,18 +4,36 @@
 interface AdminGetUserRequest {
     uid?: string;
     email?: string;
+    displayName?: string;
 }
 export declare const adminGetUser: import("firebase-functions/v2/https").CallableFunction<AdminGetUserRequest, any>;
+interface AdminSearchUsersRequest {
+    query?: string;
+    limit?: number;
+}
+export declare const adminSearchUsers: import("firebase-functions/v2/https").CallableFunction<AdminSearchUsersRequest, any>;
 interface AdminSetCoinsRequest {
     uid: string;
     ceroCoins: number;
     reason?: string;
 }
 export declare const adminSetCeroCoins: import("firebase-functions/v2/https").CallableFunction<AdminSetCoinsRequest, any>;
+interface AdminAddCoinsRequest {
+    uid: string;
+    amount: number;
+    reason?: string;
+}
+export declare const adminAddCeroCoins: import("firebase-functions/v2/https").CallableFunction<AdminAddCoinsRequest, any>;
 interface AdminUpdateUserRequest {
     uid: string;
     displayName?: string;
     weeklyWins?: number;
+    monthlyWins?: number;
+    wins?: number;
+    totalGamesPlayed?: number;
+    xp?: number;
+    countryCode?: string | null;
+    vipActive?: boolean;
 }
 export declare const adminUpdateUser: import("firebase-functions/v2/https").CallableFunction<AdminUpdateUserRequest, any>;
 export declare const adminListTournaments: import("firebase-functions/v2/https").CallableFunction<{

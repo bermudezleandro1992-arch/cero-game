@@ -228,12 +228,71 @@ function fillUserCard(u) {
   $('uName').textContent = u.displayName || 'Jugador';
   $('uEmail').textContent = u.email || '—';
   $('uUid').textContent = u.uid;
+  $('uVip').textContent = u.vipActive ? ' · 👑 VIP' : '';
   $('uCoins').textContent = (u.ceroCoins ?? 0).toLocaleString();
   $('uWins').textContent = u.wins ?? 0;
   $('uGames').textContent = u.totalGamesPlayed ?? 0;
+  $('uXp').textContent = u.xp ?? 0;
+  $('uWeekly').textContent = u.weeklyWins ?? 0;
+  $('uMonthly').textContent = u.monthlyWins ?? 0;
+  $('uCountry').textContent = u.countryCode || '—';
+  $('uGuest').textContent = u.isGuest ? 'Invitado' : 'Registrado';
+
   $('editCoins').value = u.ceroCoins ?? 0;
   $('editName').value = u.displayName || '';
+  $('editCountry').value = u.countryCode || '';
+  $('editWins').value = u.wins ?? 0;
+  $('editGames').value = u.totalGamesPlayed ?? 0;
+  $('editXp').value = u.xp ?? 0;
   $('editWeekly').value = u.weeklyWins ?? 0;
+  $('editMonthly').value = u.monthlyWins ?? 0;
+  $('editVip').value = '';
+}
+
+function renderSearchResults(users) {
+  const box = $('searchResults');
+  if (!users.length) {
+    box.innerHTML = '<p style="color:#a78bfa;font-size:.85rem;margin-top:12px">Sin coincidencias.</p>';
+    return;
+  }
+  box.innerHTML = `<table><thead><tr>
+    <th>Nick</th><th>Email</th><th>CN</th><th>Victorias</th><th></th>
+  </tr></thead><tbody>${users.map((u) => `<tr class="search-row" data-uid="${esc(u.uid)}">
+    <td><b>${esc(u.displayName)}</b></td>
+    <td style="font-size:.75rem;color:#a78bfa">${esc(u.email)}</td>
+    <td>${u.ceroCoins ?? 0}</td>
+    <td>${u.wins ?? 0}</td>
+    <td><button type="button" class="btn-accent btn-sm btn-pick-user" data-uid="${esc(u.uid)}">Abrir</button></td>
+  </tr>`).join('')}</tbody></table>`;
+
+  box.querySelectorAll('.btn-pick-user').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        const u = await callFn('adminGetUser', { uid: btn.dataset.uid });
+        fillUserCard(u);
+        showStatus($('panelStatus'), 'Usuario cargado.', true);
+        $('userCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (err) {
+        showStatus($('panelStatus'), err.message, false);
+      }
+    });
+  });
+}
+
+async function searchUser() {
+  const username = $('searchUsername').value.trim();
+  const email = $('searchEmail').value.trim();
+  const uid = $('searchUid').value.trim();
+  if (!username && !email && !uid) {
+    showStatus($('panelStatus'), 'Indicá nick, email o UID.', false);
+    return;
+  }
+  const payload = uid ? { uid } : email ? { email } : { displayName: username };
+  const u = await callFn('adminGetUser', payload);
+  fillUserCard(u);
+  $('searchResults').innerHTML = '';
+  showStatus($('panelStatus'), 'Usuario encontrado.', true);
+  $('userCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function ensurePanelAccess(user) {
@@ -251,6 +310,25 @@ async function ensurePanelAccess(user) {
   await loadDeposits();
   await loadWaitingRooms();
   return true;
+}
+
+async function addCoins(delta) {
+  if (!selectedUid) {
+    showStatus($('panelStatus'), 'Buscá un jugador primero.', false);
+    return;
+  }
+  try {
+    const r = await callFn('adminAddCeroCoins', {
+      uid: selectedUid,
+      amount: delta,
+      reason: $('editReason').value.trim() || 'admin_panel_quick',
+    });
+    $('uCoins').textContent = r.ceroCoins.toLocaleString();
+    $('editCoins').value = r.ceroCoins;
+    showStatus($('panelStatus'), `Saldo: ${r.ceroCoins} CN (${delta > 0 ? '+' : ''}${delta})`, true);
+  } catch (err) {
+    showStatus($('panelStatus'), err.message, false);
+  }
 }
 
 $('btnLogin').addEventListener('click', async () => {
@@ -302,16 +380,47 @@ $('btnLogout').addEventListener('click', async () => {
 });
 
 $('btnSearch').addEventListener('click', async () => {
-  const email = $('searchEmail').value.trim();
-  const uid = $('searchUid').value.trim();
-  if (!email && !uid) {
-    showStatus($('panelStatus'), 'Indicá email o UID.', false);
+  try {
+    await searchUser();
+  } catch (err) {
+    showStatus($('panelStatus'), err.message, false);
+  }
+});
+
+$('btnSearchList').addEventListener('click', async () => {
+  const q = $('searchUsername').value.trim() || $('searchEmail').value.trim();
+  if (q.length < 2) {
+    showStatus($('panelStatus'), 'Escribí al menos 2 caracteres del nick.', false);
     return;
   }
   try {
-    const u = await callFn('adminGetUser', uid ? { uid } : { email });
-    fillUserCard(u);
-    showStatus($('panelStatus'), 'Usuario encontrado.', true);
+    const data = await callFn('adminSearchUsers', { query: q, limit: 25 });
+    renderSearchResults(data.users || []);
+    showStatus($('panelStatus'), `${(data.users || []).length} coincidencia(s).`, true);
+  } catch (err) {
+    showStatus($('panelStatus'), err.message, false);
+  }
+});
+
+document.querySelectorAll('.btn-add-coins').forEach((btn) => {
+  btn.addEventListener('click', () => addCoins(Number(btn.dataset.delta)));
+});
+
+$('btnZeroCoins').addEventListener('click', async () => {
+  if (!selectedUid) {
+    showStatus($('panelStatus'), 'Buscá un jugador primero.', false);
+    return;
+  }
+  if (!window.confirm('¿Poner saldo en 0 CN? (útil para pruebas)')) return;
+  try {
+    await callFn('adminSetCeroCoins', {
+      uid: selectedUid,
+      ceroCoins: 0,
+      reason: $('editReason').value.trim() || 'admin_zero_test',
+    });
+    $('uCoins').textContent = '0';
+    $('editCoins').value = 0;
+    showStatus($('panelStatus'), 'Saldo en 0 CN.', true);
   } catch (err) {
     showStatus($('panelStatus'), err.message, false);
   }
@@ -333,12 +442,30 @@ $('btnSetCoins').addEventListener('click', async () => {
 $('btnUpdateUser').addEventListener('click', async () => {
   if (!selectedUid) return;
   try {
-    await callFn('adminUpdateUser', {
+    const payload = {
       uid: selectedUid,
       displayName: $('editName').value.trim(),
       weeklyWins: Number($('editWeekly').value),
-    });
+      monthlyWins: Number($('editMonthly').value),
+      wins: Number($('editWins').value),
+      totalGamesPlayed: Number($('editGames').value),
+      xp: Number($('editXp').value),
+      countryCode: $('editCountry').value.trim().toUpperCase() || null,
+    };
+    const vipVal = $('editVip').value;
+    if (vipVal === '1') payload.vipActive = true;
+    if (vipVal === '0') payload.vipActive = false;
+
+    await callFn('adminUpdateUser', payload);
     $('uName').textContent = $('editName').value.trim();
+    $('uWins').textContent = $('editWins').value;
+    $('uGames').textContent = $('editGames').value;
+    $('uXp').textContent = $('editXp').value;
+    $('uWeekly').textContent = $('editWeekly').value;
+    $('uMonthly').textContent = $('editMonthly').value;
+    $('uCountry').textContent = $('editCountry').value.trim().toUpperCase() || '—';
+    if (vipVal === '1') $('uVip').textContent = ' · 👑 VIP';
+    if (vipVal === '0') $('uVip').textContent = '';
     showStatus($('panelStatus'), 'Perfil actualizado.', true);
   } catch (err) {
     showStatus($('panelStatus'), err.message, false);
@@ -394,6 +521,12 @@ $('btnCloseDeposit').addEventListener('click', () => {
 });
 $('btnApproveDeposit').addEventListener('click', () => reviewDeposit('approve'));
 $('btnRejectDeposit').addEventListener('click', () => reviewDeposit('reject'));
+
+['searchUsername', 'searchEmail', 'searchUid'].forEach((id) => {
+  $(id)?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('btnSearch').click();
+  });
+});
 
 onAuthStateChanged(auth, async (user) => {
   if (user) await ensurePanelAccess(user);

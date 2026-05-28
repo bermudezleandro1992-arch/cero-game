@@ -14,6 +14,7 @@ const patches = [
   'patch-app-scroll-fix-v6.js',
   'patch-app-gameplay-fixes-v7.js',
   'patch-app-profile-lobby-v8.js',
+  'patch-app-profile-admin-v9.js',
 ];
 
 for (const p of patches) {
