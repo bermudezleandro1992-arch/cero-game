@@ -283,6 +283,19 @@ $('btnClaimRole').addEventListener('click', async () => {
   }
 });
 
+$('btnSeedMissions').addEventListener('click', async () => {
+  try {
+    if (!auth.currentUser) {
+      showStatus($('loginStatus'), 'Iniciá sesión primero.', false);
+      return;
+    }
+    const res = await callFn('seedMissions', {});
+    showStatus($('panelStatus'), `Misiones sembradas: ${res.seeded ?? 0}`, true);
+  } catch (err) {
+    showStatus($('panelStatus'), err.message, false);
+  }
+});
+
 $('btnLogout').addEventListener('click', async () => {
   await signOut(auth);
   location.reload();

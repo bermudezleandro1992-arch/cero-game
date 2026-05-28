@@ -68,11 +68,63 @@ const CFG = {
   ENTRY_COST_CC:    50,       // Cero Coins por partida paga
   HAND_SIZE:        7,
   TURN_SECONDS:     18,
-  MAX_PLAYERS:      2,
+  MAX_PLAYERS:      2,        // default 1v1
   REGION:           'us-central1',
   REJOIN_MS:        5 * 60 * 1000,   // 5 minutos para reingresar
   WAITING_ROOM_MS:  4 * 60 * 1000,   // cerrar salas waiting colgadas (~4 min)
 } as const;
+
+type MatchFormat = '1v1' | '2v2';
+
+function parseFormat(format: unknown): MatchFormat {
+  return format === '2v2' ? '2v2' : '1v1';
+}
+
+function maxPlayersForFormat(format: MatchFormat): number {
+  return format === '2v2' ? 4 : CFG.MAX_PLAYERS;
+}
+
+function matchMaxPlayers(match: MatchDoc): number {
+  return match.maxPlayers ?? CFG.MAX_PLAYERS;
+}
+
+function resolveTeamOutcome(
+  match: MatchDoc,
+  winnerUid: string,
+): { winnerUids: string[]; loserUids: string[] } {
+  const ids    = uniquePlayerIds(match.playerIds);
+  const format = match.format ?? '1v1';
+
+  if (format !== '2v2' || ids.length < 4) {
+    return {
+      winnerUids: [winnerUid],
+      loserUids:  ids.filter(id => id !== winnerUid),
+    };
+  }
+
+  const winIdx     = ids.indexOf(winnerUid);
+  const partnerIdx = winIdx >= 0 ? (winIdx + 2) % 4 : -1;
+  const partnerUid = partnerIdx >= 0 ? ids[partnerIdx] : undefined;
+  const winnerUids = partnerUid ? [winnerUid, partnerUid] : [winnerUid];
+
+  return {
+    winnerUids,
+    loserUids: ids.filter(id => !winnerUids.includes(id)),
+  };
+}
+
+function primaryWinnerForForfeit(match: MatchDoc, forfeiterUid: string): string {
+  const ids    = uniquePlayerIds(match.playerIds);
+  const format = match.format ?? '1v1';
+
+  if (format !== '2v2' || ids.length < 4) {
+    return ids.find(id => id !== forfeiterUid) ?? '';
+  }
+
+  const idx  = ids.indexOf(forfeiterUid);
+  const team = idx >= 0 ? idx % 2 : 0;
+  return ids[team === 0 ? 1 : 0] ?? ids.find(id => id !== forfeiterUid) ?? '';
+}
 
 // â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 // Tipos Firestore
@@ -114,6 +166,7 @@ interface LastAction {
 export interface MatchDoc {
   status:      'waiting' | 'playing' | 'finished';
   mode:        'classic' | 'cero';
+  format?:     MatchFormat;
   players:     PlayerInfo[];
   playerIds:   string[];
   playerCount: number;
@@ -439,8 +492,9 @@ function _applyMatchEndUpdates(
   reason:    EndReason,
   extraMatchFields: Record<string, unknown> = {},
 ): void {
-  const prize    = match.stakeCC * match.playerIds.length;
-  const loserUid = match.playerIds.find(id => id !== winnerUid) ?? null;
+  const prize = match.stakeCC * match.playerIds.length;
+  const { winnerUids, loserUids } = resolveTeamOutcome(match, winnerUid);
+  const coinRecipient = winnerUids[0] ?? winnerUid;
 
   updateFn(matchRef, {
     status:     'finished',
@@ -448,22 +502,23 @@ function _applyMatchEndUpdates(
     phase:      'game_over' as GamePhase,
     finishedAt: FieldValue.serverTimestamp(),
     endReason:  reason,
+    winningTeam: winnerUids,
     ...extraMatchFields,
   });
 
-  const winnerIsGuest = playerIsGuest(match, winnerUid);
-  if (!winnerIsGuest) {
-    updateFn(db.doc(`users/${winnerUid}`), {
+  for (const wUid of winnerUids) {
+    if (playerIsGuest(match, wUid)) continue;
+    updateFn(db.doc(`users/${wUid}`), {
       wins:             FieldValue.increment(1),
       totalGamesPlayed: FieldValue.increment(1),
-      ...(prize > 0 ? { ceroCoins: FieldValue.increment(prize) } : {}),
+      xp:               FieldValue.increment(25),
+      ...(wUid === coinRecipient && prize > 0 ? { ceroCoins: FieldValue.increment(prize) } : {}),
     });
-  } else if (prize > 0) {
-    // Invitados no reciben premios en CN
   }
 
-  if (loserUid && !playerIsGuest(match, loserUid)) {
-    updateFn(db.doc(`users/${loserUid}`), { totalGamesPlayed: FieldValue.increment(1) });
+  for (const lUid of loserUids) {
+    if (playerIsGuest(match, lUid)) continue;
+    updateFn(db.doc(`users/${lUid}`), { totalGamesPlayed: FieldValue.increment(1) });
   }
 }
 
@@ -502,7 +557,7 @@ export async function startMatch(
   const { playerIds, players } = match;
   const uniqueIds = uniquePlayerIds(playerIds);
   guard(
-    uniqueIds.length >= CFG.MAX_PLAYERS,
+    uniqueIds.length >= matchMaxPlayers(match),
     'failed-precondition',
     'Faltan jugadores para iniciar la partida',
   );
@@ -563,7 +618,7 @@ export async function startMatch(
 
 function matchNeedsStart(match: MatchDoc): boolean {
   const ids = uniquePlayerIds(match.playerIds);
-  return ids.length >= CFG.MAX_PLAYERS &&
+  return ids.length >= matchMaxPlayers(match) &&
     (match.status === 'waiting' ||
       (match.status === 'playing' && match.phase === 'waiting' && !match.topDiscard));
 }
@@ -800,6 +855,8 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
     const uid             = request.auth!.uid;
     const callerIsGuest   = isGuestAuth(request.auth!);
     const mode            = request.data?.mode === 'cero' ? 'cero' : 'classic';
+    const createFormat    = parseFormat(request.data?.format);
+    const createMaxPlayers = maxPlayersForFormat(createFormat);
     const requestedMatchId = typeof request.data?.matchId === 'string' && request.data.matchId.length > 0
       ? request.data.matchId
       : null;
@@ -855,7 +912,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
         await clearPlayerAbsence(db, db.doc(`matches/${existingActive.id}`), uid);
         return finishJoin(existingActive.id, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
       }
-      if (d.status === 'waiting' && ids.length < CFG.MAX_PLAYERS) {
+      if (d.status === 'waiting' && ids.length < matchMaxPlayers(d)) {
         return finishJoin(existingActive.id, ids.indexOf(uid), false, bal, d.stakeCC ?? 0);
       }
     } else if (forceCreate && existingActive) {
@@ -875,7 +932,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
       const d = specificSnap.data() as MatchDoc;
       const ids = uniquePlayerIds(d.playerIds);
       guard(d.status === 'waiting',               'failed-precondition', 'La sala ya comenzÃ³ o terminÃ³');
-      guard(ids.length < CFG.MAX_PLAYERS,         'failed-precondition', 'La sala estÃ¡ llena');
+      guard(ids.length < matchMaxPlayers(d),         'failed-precondition', 'La sala está llena');
       guard(!ids.includes(uid),                   'failed-precondition', 'Ya estÃ¡s en esta sala');
       await assertCanJoinWaitingRoom(db, uid, d, callerIsGuest || await userIsGuest(db, uid));
       matchId     = requestedMatchId;
@@ -903,7 +960,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
         const d    = snap.data() as MatchDoc;
         const ids  = uniquePlayerIds(d.playerIds);
         guard(d.status === 'waiting',                  'failed-precondition', 'Sala ya no disponible');
-        guard(ids.length < CFG.MAX_PLAYERS,            'failed-precondition', 'Sala llena');
+        guard(ids.length < matchMaxPlayers(d),            'failed-precondition', 'Sala llena');
         guard(!ids.includes(uid),                      'failed-precondition', 'Ya estÃ¡s en esta sala');
 
         const newPlayers:  PlayerInfo[] = [...d.players, {
@@ -924,6 +981,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
       } = {
         status:      'waiting',
         mode,
+        format:      createFormat,
         players:     [{
           uid,
           name: request.auth!.token.name ?? 'Jugador',
@@ -932,7 +990,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
         }],
         playerIds:   [uid],
         playerCount: 1,
-        maxPlayers:  CFG.MAX_PLAYERS,
+        maxPlayers:  createMaxPlayers,
         stakeCC:     entryStake,
         guestOnly:   createIsGuest,
         turn:        0,
@@ -1031,6 +1089,14 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
     let finishedWinner: string | null = null;
     let trackWild = false;
     let trackCero = false;
+    const replayBox: { entry: {
+      turn: number;
+      action: LastAction;
+      handCounts: number[];
+      topDiscard: Card | null;
+      phase: GamePhase;
+      current: number | null;
+    } | null } = { entry: null };
 
     await db.runTransaction(async (tx: Transaction) => {
       const [matchSnap, privateSnap] = await Promise.all([
@@ -1178,19 +1244,23 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
       tx.update(matchRef, publicPatch);
 
       // 4. Stats de usuario cuando la partida termina.
-      // publicPatch ya escribiÃ³ status/winner/finishedAt en el match; aquÃ­ solo
-      // actualizamos los contadores de coins y partidas de cada jugador.
       if (isFinished && winnerUid) {
-        const prize    = match.stakeCC * match.playerIds.length;
-        const loserUid = match.playerIds.find(id => id !== winnerUid) ?? null;
+        const prize = match.stakeCC * match.playerIds.length;
+        const { winnerUids, loserUids } = resolveTeamOutcome(match, winnerUid);
+        const coinRecipient = winnerUids[0] ?? winnerUid;
 
-        tx.update(db.doc(`users/${winnerUid}`), {
-          wins:             FieldValue.increment(1),
-          totalGamesPlayed: FieldValue.increment(1),
-          ...(prize > 0 ? { ceroCoins: FieldValue.increment(prize) } : {}),
-        });
-        if (loserUid) {
-          tx.update(db.doc(`users/${loserUid}`), { totalGamesPlayed: FieldValue.increment(1) });
+        for (const wUid of winnerUids) {
+          if (playerIsGuest(match, wUid)) continue;
+          tx.update(db.doc(`users/${wUid}`), {
+            wins:             FieldValue.increment(1),
+            totalGamesPlayed: FieldValue.increment(1),
+            xp:               FieldValue.increment(25),
+            ...(wUid === coinRecipient && prize > 0 ? { ceroCoins: FieldValue.increment(prize) } : {}),
+          });
+        }
+        for (const lUid of loserUids) {
+          if (playerIsGuest(match, lUid)) continue;
+          tx.update(db.doc(`users/${lUid}`), { totalGamesPlayed: FieldValue.increment(1) });
         }
       }
 
@@ -1198,7 +1268,31 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
       resultHand   = [...newSnap.hands[playerIndex]!];
       resultTurn   = newTurn;
       if (isFinished && winnerUid) finishedWinner = winnerUid;
+
+      replayBox.entry = {
+        turn:       newTurn,
+        action:     lastAction,
+        handCounts: [...newSnap.handCounts],
+        topDiscard: newSnap.topDiscard ?? null,
+        phase:      newSnap.phase,
+        current:    newSnap.current,
+      };
     });
+
+    if (replayBox.entry) {
+      try {
+        const entry = replayBox.entry;
+        await db.collection(`matches/${matchId}/replay`).add({
+          turn:       entry.turn,
+          action:     entry.action,
+          handCounts: entry.handCounts,
+          topDiscard: entry.topDiscard,
+          phase:      entry.phase,
+          current:    entry.current,
+          ts:         FieldValue.serverTimestamp(),
+        });
+      } catch { /* replay no bloquea la jugada */ }
+    }
 
     if (finishedWinner) {
       await _onMatchFinishedHooks(matchId, finishedWinner);
@@ -1473,7 +1567,7 @@ export const forfeitMatch = onCall<{ matchId: string }, Promise<ForfeitResponse>
     guard(match.status === 'playing',    'failed-precondition', 'La partida no estÃ¡ en curso');
     guard(match.playerIds.includes(uid), 'permission-denied',   'No sos parte de esta partida');
 
-    const winnerUid = match.playerIds.find(id => id !== uid) ?? '';
+    const winnerUid = primaryWinnerForForfeit(match, uid);
     guard(winnerUid, 'internal', 'No se pudo determinar el ganador');
 
     const batch = db.batch();
@@ -1573,5 +1667,36 @@ export const endMatch = onCall<EndMatchRequest, Promise<ForfeitResponse>>(
     await _onMatchFinishedHooks(matchId, winnerUid);
 
     return { ok: true, winnerUid };
+  },
+);
+
+export const getReplay = onCall<{ matchId: string }, Promise<{ ok: true; actions: unknown[] }>>(
+  { region: CFG.REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+
+    const uid     = request.auth!.uid;
+    const matchId = requireString(request.data as Record<string, unknown>, 'matchId');
+    const db      = getFirestore();
+
+    const matchSnap = await db.doc(`matches/${matchId}`).get();
+    guard(matchSnap.exists, 'not-found', 'Partida no encontrada');
+
+    const match = matchSnap.data() as MatchDoc;
+    guard(
+      match.playerIds.includes(uid) || match.status === 'finished',
+      'permission-denied',
+      'No podés ver este replay',
+    );
+
+    const snap = await db.collection(`matches/${matchId}/replay`)
+      .orderBy('turn', 'asc')
+      .limit(200)
+      .get();
+
+    return {
+      ok: true,
+      actions: snap.docs.map(d => ({ id: d.id, ...d.data() })),
+    };
   },
 );

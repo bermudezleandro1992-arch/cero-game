@@ -386,9 +386,19 @@ export const onMatchFinished = onDocumentUpdated(
       updates.push(_updateMissionProgress(db, uid, 'play'));
     }
 
-    // Acción 'win' para el ganador + actualizar contador semanal (no invitados)
+    // Acción 'win' para el ganador + compañero en 2v2
     if (winnerUid) {
       updates.push(_updateMissionProgress(db, winnerUid, 'win'));
+      const matchFormat = after['format'] as string | undefined;
+      if (matchFormat === '2v2' && playerIds.length >= 4) {
+        const winIdx = playerIds.indexOf(winnerUid);
+        if (winIdx >= 0) {
+          const partnerUid = playerIds[(winIdx + 2) % 4];
+          if (partnerUid && partnerUid !== winnerUid) {
+            updates.push(_updateMissionProgress(db, partnerUid, 'win'));
+          }
+        }
+      }
       updates.push(
         (async () => {
           const userSnap = await db.doc(`users/${winnerUid}`).get();
@@ -505,6 +515,17 @@ export const resetWeeklyMissions = onSchedule(
 // seedMissions — admin: siembra las definiciones en Firestore (una sola vez)
 // ─────────────────────────────────────────────────────────────────────────────
 
+export async function seedMissionsToFirestore(
+  db: FirebaseFirestore.Firestore,
+): Promise<number> {
+  const batch = db.batch();
+  for (const def of MISSION_CATALOG) {
+    batch.set(db.doc(`missions/${def.id}`), def, { merge: true });
+  }
+  await batch.commit();
+  return MISSION_CATALOG.length;
+}
+
 export const seedMissions = onCall<Record<string, never>>(
   { region: REGION },
   async (request) => {
@@ -515,13 +536,8 @@ export const seedMissions = onCall<Record<string, never>>(
     const adminSnap = await db.doc(`admins/${callerUid}`).get();
     guard(adminSnap.exists, 'permission-denied', 'Solo operadores pueden sembrar misiones');
 
-    const batch = db.batch();
-    for (const def of MISSION_CATALOG) {
-      batch.set(db.doc(`missions/${def.id}`), def, { merge: true });
-    }
-    await batch.commit();
-
-    return { ok: true, seeded: MISSION_CATALOG.length };
+    const seeded = await seedMissionsToFirestore(db);
+    return { ok: true, seeded };
   },
 );
 

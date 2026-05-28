@@ -45,6 +45,7 @@
  */
 import { FieldValue } from 'firebase-admin/firestore';
 import type { Card, CardColor, GamePhase } from './CeroEngine';
+type MatchFormat = '1v1' | '2v2';
 interface PlayerInfo {
     uid: string;
     name: string;
@@ -62,6 +63,7 @@ interface LastAction {
 export interface MatchDoc {
     status: 'waiting' | 'playing' | 'finished';
     mode: 'classic' | 'cero';
+    format?: MatchFormat;
     players: PlayerInfo[];
     playerIds: string[];
     playerCount: number;
@@ -225,4 +227,10 @@ interface EndMatchRequest {
  *   · (El Admin SDK llama directamente a _applyMatchEndUpdates sin pasar por aquí)
  */
 export declare const endMatch: import("firebase-functions/v2/https").CallableFunction<EndMatchRequest, Promise<ForfeitResponse>>;
+export declare const getReplay: import("firebase-functions/v2/https").CallableFunction<{
+    matchId: string;
+}, Promise<{
+    ok: true;
+    actions: unknown[];
+}>>;
 export {};

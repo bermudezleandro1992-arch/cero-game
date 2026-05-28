@@ -173,6 +173,11 @@ export const initUserProfile = onCall<Record<string, never>, Promise<InitProfile
         referredBy:        null as string | null,
         referralCount:     0,
         referralBonusClaimed: false,
+        xp:                0,
+        seasonId:          null as string | null,
+        seasonClaimedTiers: [] as number[],
+        fcmTokens:         [] as string[],
+        pushEnabled:       false,
         createdAt:         FieldValue.serverTimestamp(),
       });
     });

@@ -83,6 +83,7 @@ export declare const onMatchFinished: import("firebase-functions/v2/core").Cloud
  */
 export declare const resetDailyMissions: import("firebase-functions/v2/scheduler").ScheduleFunction;
 export declare const resetWeeklyMissions: import("firebase-functions/v2/scheduler").ScheduleFunction;
+export declare function seedMissionsToFirestore(db: FirebaseFirestore.Firestore): Promise<number>;
 export declare const seedMissions: import("firebase-functions/v2/https").CallableFunction<Record<string, never>, any>;
 export declare const checkMissions: import("firebase-functions/v2/https").CallableFunction<{
     matchId: string;

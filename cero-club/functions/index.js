@@ -25,6 +25,7 @@ exports.expireRejoinMatches   = gameModule.expireRejoinMatches;
 exports.expireStaleWaitingMatches = gameModule.expireStaleWaitingMatches;
 exports.ensureMatchStarted = gameModule.ensureMatchStarted;
 exports.cleanupMyRooms = gameModule.cleanupMyRooms;
+exports.getReplay      = gameModule.getReplay;
 
 // ── Módulo: monetización + Mercado Pago ──────────────────────────────────────
 const monetModule = require('./compiled/monetization');
@@ -71,6 +72,16 @@ exports.updateRanking      = engModule.updateRanking;         // snapshot manual
 exports.resetWeeklyRanking = engModule.resetWeeklyRanking;
 exports.purchaseCosmetic   = engModule.purchaseCosmetic;
 exports.equipCosmetic      = engModule.equipCosmetic;
+
+// ── Pase de temporada ─────────────────────────────────────────────────────────
+const seasonModule = require('./compiled/seasonPass');
+exports.getSeasonPassStatus = seasonModule.getSeasonPassStatus;
+exports.claimSeasonTier     = seasonModule.claimSeasonTier;
+
+// ── Push notifications (FCM) ────────────────────────────────────────────────
+const pushModule = require('./compiled/push');
+exports.saveFcmToken  = pushModule.saveFcmToken;
+exports.sendTestPush  = pushModule.sendTestPush;
 
 // ── Módulo: billetera (P2P, referidos, apuestas, espectadores) ────────────────
 const walletModule = require('./compiled/wallet');
@@ -299,6 +310,14 @@ exports.ceroClubSetup = onRequest(
     } catch (err) {
       results.walletQueue.error = err.message;
       console.warn('[ceroClubSetup] wallet backfill:', err.message);
+    }
+
+    try {
+      const { seedMissionsToFirestore } = require('./compiled/missions');
+      results.missions = { seeded: await seedMissionsToFirestore(db) };
+    } catch (err) {
+      results.missions = { error: err.message };
+      console.warn('[ceroClubSetup] missions seed:', err.message);
     }
 
     res.json({ ok: true, ...results });

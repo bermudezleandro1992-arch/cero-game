@@ -35,6 +35,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkMissions = exports.seedMissions = exports.resetWeeklyMissions = exports.resetDailyMissions = exports.onMatchFinished = exports.claimMissionReward = exports.MISSION_CATALOG = void 0;
 exports.trackMissionAction = trackMissionAction;
+exports.seedMissionsToFirestore = seedMissionsToFirestore;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -292,9 +293,19 @@ exports.onMatchFinished = (0, firestore_1.onDocumentUpdated)({ document: 'matche
     for (const uid of playerIds) {
         updates.push(_updateMissionProgress(db, uid, 'play'));
     }
-    // Acción 'win' para el ganador + actualizar contador semanal (no invitados)
+    // Acción 'win' para el ganador + compañero en 2v2
     if (winnerUid) {
         updates.push(_updateMissionProgress(db, winnerUid, 'win'));
+        const matchFormat = after['format'];
+        if (matchFormat === '2v2' && playerIds.length >= 4) {
+            const winIdx = playerIds.indexOf(winnerUid);
+            if (winIdx >= 0) {
+                const partnerUid = playerIds[(winIdx + 2) % 4];
+                if (partnerUid && partnerUid !== winnerUid) {
+                    updates.push(_updateMissionProgress(db, partnerUid, 'win'));
+                }
+            }
+        }
         updates.push((async () => {
             const userSnap = await db.doc(`users/${winnerUid}`).get();
             const isGuest = userSnap.data()?.['isGuest'] === true
@@ -388,18 +399,22 @@ exports.resetWeeklyMissions = (0, scheduler_1.onSchedule)({ schedule: '0 0 * * 1
 // ─────────────────────────────────────────────────────────────────────────────
 // seedMissions — admin: siembra las definiciones en Firestore (una sola vez)
 // ─────────────────────────────────────────────────────────────────────────────
+async function seedMissionsToFirestore(db) {
+    const batch = db.batch();
+    for (const def of exports.MISSION_CATALOG) {
+        batch.set(db.doc(`missions/${def.id}`), def, { merge: true });
+    }
+    await batch.commit();
+    return exports.MISSION_CATALOG.length;
+}
 exports.seedMissions = (0, https_1.onCall)({ region: REGION }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Iniciá sesión');
     const callerUid = request.auth.uid;
     const db = (0, firestore_2.getFirestore)();
     const adminSnap = await db.doc(`admins/${callerUid}`).get();
     guard(adminSnap.exists, 'permission-denied', 'Solo operadores pueden sembrar misiones');
-    const batch = db.batch();
-    for (const def of exports.MISSION_CATALOG) {
-        batch.set(db.doc(`missions/${def.id}`), def, { merge: true });
-    }
-    await batch.commit();
-    return { ok: true, seeded: exports.MISSION_CATALOG.length };
+    const seeded = await seedMissionsToFirestore(db);
+    return { ok: true, seeded };
 });
 // ─────────────────────────────────────────────────────────────────────────────
 // checkMissions — callable: el cliente llama a esta función después de cada

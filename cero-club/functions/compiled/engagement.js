@@ -161,6 +161,11 @@ exports.initUserProfile = (0, https_1.onCall)({ region: REGION }, async (request
             referredBy: null,
             referralCount: 0,
             referralBonusClaimed: false,
+            xp: 0,
+            seasonId: null,
+            seasonClaimedTiers: [],
+            fcmTokens: [],
+            pushEnabled: false,
             createdAt: firestore_1.FieldValue.serverTimestamp(),
         });
     });
