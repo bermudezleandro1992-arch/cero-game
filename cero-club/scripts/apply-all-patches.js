@@ -31,6 +31,7 @@ const patches = [
   'patch-app-quickmatch-v23.js',
   'patch-app-special-cards-v24.js',
   'patch-app-continue-room-v25.js',
+  'patch-app-continue-room-v26.js',
 ];
 
 for (const p of patches) {
