@@ -316,8 +316,9 @@ export const resetWeeklyRanking = onSchedule(
     const year          = weekNum === 1 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
     const weekKey       = `${year}-W${String(prevWeekNum).padStart(2, '0')}`;
 
-    // ── Top 100 por weeklyWins ────────────────────────────────────────────
+    // ── Top 100 por weeklyWins (solo cuentas registradas) ─────────────────
     const topSnap = await db.collection('users')
+      .where('anon', '==', false)
       .orderBy('weeklyWins', 'desc')
       .limit(100)
       .get();
@@ -394,6 +395,7 @@ export const resetMonthlyRanking = onSchedule(
       : `${now.getUTCFullYear()}-${String(now.getUTCMonth()).padStart(2, '0')}`;
 
     const topSnap = await db.collection('users')
+      .where('anon', '==', false)
       .orderBy('monthlyWins', 'desc')
       .limit(50)
       .get();

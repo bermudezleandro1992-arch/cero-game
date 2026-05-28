@@ -409,10 +409,14 @@ export const onMatchFinished = onDocumentUpdated(
       }
       updates.push(
         (async () => {
+          const stakeCC = (after['stakeCC'] as number | undefined) ?? 0;
+          if (stakeCC <= 0) return;
+
           const userSnap = await db.doc(`users/${winnerUid}`).get();
           const isGuest  = userSnap.data()?.['isGuest'] === true
                         || userSnap.data()?.['anon'] === true;
           if (isGuest) return;
+
           await db.doc(`users/${winnerUid}`).update({
             weeklyWins:  FieldValue.increment(1),
             monthlyWins: FieldValue.increment(1),

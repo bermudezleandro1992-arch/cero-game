@@ -24,6 +24,7 @@ const patches = [
   'patch-app-classic-deck-v16.js',
   'patch-app-blackscreen-fix-v17.js',
   'patch-app-gameplay-ux-v18.js',
+  'patch-app-ranking-stake-v19.js',
 ];
 
 for (const p of patches) {
