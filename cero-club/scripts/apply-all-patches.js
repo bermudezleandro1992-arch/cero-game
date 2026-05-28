@@ -16,6 +16,7 @@ const patches = [
   'patch-app-profile-lobby-v8.js',
   'patch-app-profile-admin-v9.js',
   'patch-app-gameplay-fixes-v10.js',
+  'patch-app-full-v11.js',
 ];
 
 for (const p of patches) {

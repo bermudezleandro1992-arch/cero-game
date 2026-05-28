@@ -107,6 +107,17 @@ exports.COSMETIC_CATALOG = {
     deck_classic: { id: 'deck_classic', name: 'Mazo Clásico', category: 'deck_back', price: 150, preview: 'decks/classic' },
     deck_gold: { id: 'deck_gold', name: 'Mazo Dorado', category: 'deck_back', price: 350, preview: 'decks/gold' },
     deck_cyber: { id: 'deck_cyber', name: 'Mazo Cyber', category: 'deck_back', price: 450, preview: 'decks/cyber' },
+    deck_holo: { id: 'deck_holo', name: 'Mazo Holográfico', category: 'deck_back', price: 520, preview: 'decks/cyber' },
+    table_felt: { id: 'table_felt', name: 'Mesa Casino', category: 'table_bg', price: 380, preview: 'tables/neon' },
+    table_galaxy: { id: 'table_galaxy', name: 'Mesa Galaxia', category: 'table_bg', price: 620, preview: 'tables/neon' },
+    table_royal: { id: 'table_royal', name: 'Mesa Real', category: 'table_bg', price: 800, preview: 'tables/marble' },
+    bg_casino: { id: 'bg_casino', name: 'Casino VIP', category: 'room_bg', price: 550, preview: 'rooms/stadium' },
+    bg_neon: { id: 'bg_neon', name: 'Neón Cyber', category: 'room_bg', price: 480, preview: 'rooms/city' },
+    bg_arena: { id: 'bg_arena', name: 'Arena Pro', category: 'room_bg', price: 650, preview: 'rooms/football' },
+    skin_carbon: { id: 'skin_carbon', name: 'Cartas Carbon', category: 'card_skin', price: 280, preview: 'skins/minimal' },
+    skin_rainbow: { id: 'skin_rainbow', name: 'Cartas Arcoíris', category: 'card_skin', price: 420, preview: 'skins/galaxy' },
+    frame_diamond: { id: 'frame_diamond', name: 'Marco Diamante', category: 'avatar_frame', price: 900, preview: 'frames/gold' },
+    frame_legend: { id: 'frame_legend', name: 'Marco Leyenda', category: 'avatar_frame', price: 1200, preview: 'frames/champ' },
 };
 /**
  * Idempotente: si el perfil ya existe, devuelve los datos actuales.
