@@ -23,6 +23,7 @@ const patches = [
   'patch-app-mundial-v15.js',
   'patch-app-classic-deck-v16.js',
   'patch-app-blackscreen-fix-v17.js',
+  'patch-app-gameplay-ux-v18.js',
 ];
 
 for (const p of patches) {
