@@ -225,17 +225,38 @@ class CeroEngine {
         if (cardIdx === -1)
             return this._fail('Esa carta no está en tu mano');
         const card = hand[cardIdx];
-        if (hand.length === 1 && !this._ceroCalled.has(playerIdx))
-            return this._fail('Debés declarar ¡CERO! antes de jugar tu última carta');
         const reason = blockReason(card, this.topDiscard, this._chosenColor, this._drawStack, hand);
         if (reason)
             return this._fail(reason);
+        const forgotCero = hand.length === 1 && !this._ceroCalled.has(playerIdx);
         hand.splice(cardIdx, 1);
+        const newSize = hand.length;
         this._discard.push(card);
         this._ceroCalled.delete(playerIdx);
-        this._applyPatch(applyEffect({ players: this.players, current: playerIdx, direction: this._direction, drawStack: this._drawStack, pendingTurn: this._pendingTurn }, card, hand.length));
+        const effectSize = newSize === 0 && forgotCero ? 1 : newSize;
+        this._applyPatch(applyEffect({ players: this.players, current: playerIdx, direction: this._direction, drawStack: this._drawStack, pendingTurn: this._pendingTurn }, card, effectSize));
         if (!isWild(card))
             this._chosenColor = card.color;
+        return {
+            ok: true,
+            snapshot: this._snapshot(),
+            ...(newSize === 0 && forgotCero ? { ceroViolation: true } : {}),
+        };
+    }
+    // ── penalizeCero() — rival hace robar +2 por no declarar CERO ───────────────
+    penalizeCero(targetIdx) {
+        const hand = this._hands[targetIdx];
+        const drawn = this._drawCards(2);
+        hand.push(...drawn);
+        if (this._winner === targetIdx)
+            this._winner = null;
+        if (this._phase === 'game_over') {
+            this._phase = this._current === targetIdx ? 'my_turn' : 'opp_turn';
+        }
+        if (this._phase === 'color_pick' && this._pendingTurn === targetIdx) {
+            this._pendingTurn = null;
+            this._phase = this._current === targetIdx ? 'my_turn' : 'opp_turn';
+        }
         return { ok: true, snapshot: this._snapshot() };
     }
     // ── draw() ─────────────────────────────────────────────────────────────────
@@ -299,8 +320,6 @@ class CeroEngine {
         const card = hand.find(c => c.id === cardId);
         if (!card)
             return 'Carta no encontrada';
-        if (hand.length === 1 && !this._ceroCalled.has(playerIdx))
-            return 'Declarar CERO primero';
         return blockReason(card, this.topDiscard, this._chosenColor, this._drawStack, hand);
     }
     // ── Serialización completa (para Firestore) ───────────────────────────────

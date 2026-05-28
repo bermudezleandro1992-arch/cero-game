@@ -739,11 +739,14 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
             guard(ids.length < matchMaxPlayers(d), 'failed-precondition', 'Sala llena');
             guard(!ids.includes(uid), 'failed-precondition', 'Ya estás en esta sala');
             assertPrivateJoinAllowed(d, uid, request.data?.joinCode, false);
+            const userSnap = await tx.get(db.doc(`users/${uid}`));
+            const photoURL = userSnap.data()?.photoURL ?? null;
             const newPlayers = [...d.players, {
                     uid,
                     name: request.auth.token.name ?? 'Jugador',
                     index: ids.length,
                     isGuest: joiningUserIsGuest,
+                    photoURL,
                 }];
             const newIds = [...ids, uid];
             tx.update(ref, { players: newPlayers, playerIds: newIds, playerCount: newIds.length });
@@ -753,6 +756,8 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
         // �??�?? 3b. Crear sala nueva �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
         const createIsGuest = callerIsGuest || await userIsGuest(db, uid);
         const roomJoinCode = createPrivate ? makeJoinCode() : null;
+        const creatorSnap = await db.doc(`users/${uid}`).get();
+        const creatorPhoto = creatorSnap.data()?.photoURL ?? null;
         const newMatchData = {
             status: 'waiting',
             mode,
@@ -762,6 +767,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
                     name: request.auth.token.name ?? 'Jugador',
                     index: 0,
                     isGuest: createIsGuest,
+                    photoURL: creatorPhoto,
                 }],
             playerIds: [uid],
             playerCount: 1,
@@ -791,7 +797,7 @@ exports.joinMatch = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30
     }
     return finishJoin(matchId, playerIndex, charged, coinsLeft, entryStake, true);
 });
-const VALID_ACTIONS = new Set(['play', 'draw', 'pickColor', 'declareCero']);
+const VALID_ACTIONS = new Set(['play', 'draw', 'pickColor', 'declareCero', 'penalizeCero']);
 /**
  * Ejecuta una acción de juego dentro de una transacción Firestore.
  *
@@ -829,6 +835,7 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
     let finishedWinner = null;
     let trackWild = false;
     let trackCero = false;
+    let ceroForgotUid = null;
     const replayBox = { entry: null };
     await db.runTransaction(async (tx) => {
         const [matchSnap, privateSnap] = await Promise.all([
@@ -871,8 +878,8 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
         };
         const engine = CeroEngine_1.CeroEngine.fromFullSnapshot(fullSnap);
         const playerIndex = match.playerIds.indexOf(uid);
-        // declareCero no requiere que sea el turno del jugador
-        if (action !== 'declareCero') {
+        // declareCero / penalizeCero no requieren que sea el turno del jugador
+        if (action !== 'declareCero' && action !== 'penalizeCero') {
             guard(engine.current === playerIndex, 'failed-precondition', 'No es tu turno');
         }
         // �??�?? Ejecutar la acción �??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??�??
@@ -882,6 +889,9 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
                 guard(typeof data.cardId === 'number', 'invalid-argument', 'Falta cardId');
                 const playedCard = privHands[playerIndex]?.find(c => c.id === data.cardId);
                 result = engine.play(playerIndex, data.cardId);
+                if (result.ok && result.ceroViolation) {
+                    ceroForgotUid = uid;
+                }
                 if (result.ok && playedCard?.color === 'wild') {
                     trackWild = true;
                 }
@@ -902,6 +912,15 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
                 result = engine.declareCero(playerIndex);
                 if (result.ok)
                     trackCero = true;
+                break;
+            }
+            case 'penalizeCero': {
+                guard(match.ceroForgot, 'failed-precondition', 'Nadie olvid� declarar CERO');
+                guard(match.ceroForgot !== uid, 'failed-precondition', 'No pod�s penalizarte');
+                const targetIdx = match.playerIds.indexOf(match.ceroForgot);
+                guard(targetIdx >= 0, 'failed-precondition', 'Jugador infractor no encontrado');
+                result = engine.penalizeCero(targetIdx);
+                ceroForgotUid = null;
                 break;
             }
         }
@@ -927,8 +946,10 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
             tx.set(pHRef, { cards: [...newSnap.hands[i]], updatedAt: firestore_1.FieldValue.serverTimestamp() });
         }
         // 3. Construir estado público para el cliente
-        const winnerUid = newSnap.winner !== null ? (match.playerIds[newSnap.winner] ?? null) : null;
-        const isFinished = newSnap.phase === 'game_over';
+        const winnerUid = newSnap.winner !== null && !ceroForgotUid
+            ? (match.playerIds[newSnap.winner] ?? null)
+            : null;
+        const isFinished = newSnap.phase === 'game_over' && !ceroForgotUid;
         const lastAction = {
             type: action,
             uid,
@@ -947,6 +968,9 @@ exports.playTurn = (0, https_1.onCall)({ region: CFG.REGION, timeoutSeconds: 30 
             status: isFinished ? 'finished' : 'playing',
             winner: winnerUid,
             lastAction,
+            ...(ceroForgotUid !== null ? { ceroForgot: ceroForgotUid } : {}),
+            ...(action === 'penalizeCero' ? { ceroForgot: null } : {}),
+            ...(action === 'declareCero' && match.ceroForgot === uid ? { ceroForgot: null } : {}),
             ...(isFinished ? { finishedAt: firestore_1.FieldValue.serverTimestamp() } : {}),
         };
         tx.update(matchRef, publicPatch);

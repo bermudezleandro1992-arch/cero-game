@@ -134,6 +134,12 @@ exports.COSMETIC_CATALOG = {
     frame_prism: { id: 'frame_prism', name: 'Prisma Arcoíris', category: 'avatar_frame', price: 1300, preview: 'frames/aurora' },
     deck_mundial: { id: 'deck_mundial', name: 'Mazo Mundial', category: 'deck_back', price: 620, preview: 'decks/mundial' },
     skin_mundial: { id: 'skin_mundial', name: 'Cartas Mundial', category: 'card_skin', price: 480, preview: 'skins/galaxy' },
+    table_beach: { id: 'table_beach', name: 'Mesa Playa', category: 'table_bg', price: 420, preview: 'tables/beach' },
+    table_tropical: { id: 'table_tropical', name: 'Mesa Tropical', category: 'table_bg', price: 480, preview: 'tables/tropical' },
+    table_wood: { id: 'table_wood', name: 'Mesa Madera', category: 'table_bg', price: 360, preview: 'tables/wood' },
+    bg_tropical: { id: 'bg_tropical', name: 'Paraíso Tropical', category: 'room_bg', price: 520, preview: 'rooms/tropical' },
+    bg_sunset: { id: 'bg_sunset', name: 'Atardecer', category: 'room_bg', price: 460, preview: 'rooms/sunset' },
+    bg_jungle: { id: 'bg_jungle', name: 'Selva', category: 'room_bg', price: 440, preview: 'rooms/jungle' },
 };
 /**
  * Idempotente: si el perfil ya existe, devuelve los datos actuales.
@@ -267,8 +273,9 @@ exports.resetWeeklyRanking = (0, scheduler_1.onSchedule)({ schedule: '0 0 * * 1'
     const prevWeekNum = weekNum === 1 ? 52 : weekNum - 1;
     const year = weekNum === 1 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
     const weekKey = `${year}-W${String(prevWeekNum).padStart(2, '0')}`;
-    // ── Top 100 por weeklyWins ────────────────────────────────────────────
+    // ── Top 100 por weeklyWins (solo cuentas registradas) ─────────────────
     const topSnap = await db.collection('users')
+        .where('anon', '==', false)
         .orderBy('weeklyWins', 'desc')
         .limit(100)
         .get();
@@ -328,6 +335,7 @@ exports.resetMonthlyRanking = (0, scheduler_1.onSchedule)({ schedule: '5 0 1 * *
         ? `${now.getUTCFullYear() - 1}-12`
         : `${now.getUTCFullYear()}-${String(now.getUTCMonth()).padStart(2, '0')}`;
     const topSnap = await db.collection('users')
+        .where('anon', '==', false)
         .orderBy('monthlyWins', 'desc')
         .limit(50)
         .get();

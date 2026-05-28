@@ -309,6 +309,9 @@ exports.onMatchFinished = (0, firestore_1.onDocumentUpdated)({ document: 'matche
             }
         }
         updates.push((async () => {
+            const stakeCC = after['stakeCC'] ?? 0;
+            if (stakeCC <= 0)
+                return;
             const userSnap = await db.doc(`users/${winnerUid}`).get();
             const isGuest = userSnap.data()?.['isGuest'] === true
                 || userSnap.data()?.['anon'] === true;

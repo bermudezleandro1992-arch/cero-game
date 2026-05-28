@@ -42,6 +42,7 @@ export interface GameSnapshot {
 export type ActionResult = {
     readonly ok: true;
     readonly snapshot: GameSnapshot;
+    readonly ceroViolation?: boolean;
 } | {
     readonly ok: false;
     readonly error: string;
@@ -87,6 +88,7 @@ export declare class CeroEngine {
     get deckLeft(): number;
     deal(): ActionResult;
     play(playerIdx: number, cardId: number): ActionResult;
+    penalizeCero(targetIdx: number): ActionResult;
     draw(playerIdx: number): DrawResult;
     pickColor(playerIdx: number, color: CardColor): ActionResult;
     declareCero(playerIdx: number): ActionResult;

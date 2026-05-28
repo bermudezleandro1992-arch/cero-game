@@ -151,10 +151,11 @@ interface UserDoc {
 }
 
 interface PlayerInfo {
-  uid:     string;
-  name:    string;
-  index:   number;
-  isGuest?: boolean;
+  uid:       string;
+  name:      string;
+  index:     number;
+  isGuest?:  boolean;
+  photoURL?: string | null;
 }
 
 interface LastAction {
@@ -187,6 +188,7 @@ export interface MatchDoc {
   winner:      string | null;      // UID del ganador
   pendingTurn: number | null;
   ceroCalled?: number[] | null;
+  ceroForgot?: string | null;
   lastAction:  LastAction | null;
   absences?:   Record<string, { rejoinUntil: FirebaseFirestore.Timestamp; leftAt: FirebaseFirestore.Timestamp }>;
   rejoinBanner?: {
@@ -1059,11 +1061,15 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
         guard(!ids.includes(uid),                      'failed-precondition', 'Ya estรกs en esta sala');
         assertPrivateJoinAllowed(d, uid, request.data?.joinCode, false);
 
+        const userSnap = await tx.get(db.doc(`users/${uid}`));
+        const photoURL = (userSnap.data()?.photoURL as string | null | undefined) ?? null;
+
         const newPlayers:  PlayerInfo[] = [...d.players, {
           uid,
           name: request.auth!.token.name ?? 'Jugador',
           index: ids.length,
           isGuest: joiningUserIsGuest,
+          photoURL,
         }];
         const newIds:      string[]     = [...ids, uid];
         tx.update(ref, { players: newPlayers, playerIds: newIds, playerCount: newIds.length });
@@ -1072,6 +1078,8 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
       // โ??โ?? 3b. Crear sala nueva โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??
       const createIsGuest = callerIsGuest || await userIsGuest(db, uid);
       const roomJoinCode  = createPrivate ? makeJoinCode() : null;
+      const creatorSnap   = await db.doc(`users/${uid}`).get();
+      const creatorPhoto  = (creatorSnap.data()?.photoURL as string | null | undefined) ?? null;
       const newMatchData: Omit<MatchDoc, 'lastAction'> & {
         stakeCC: number; createdAt: ReturnType<typeof FieldValue.serverTimestamp>;
         startedAt: null; finishedAt: null; lastAction: null;
@@ -1084,6 +1092,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
           name: request.auth!.token.name ?? 'Jugador',
           index: 0,
           isGuest: createIsGuest,
+          photoURL: creatorPhoto,
         }],
         playerIds:   [uid],
         playerCount: 1,
@@ -1121,7 +1130,7 @@ export const joinMatch = onCall<JoinMatchRequest, Promise<JoinMatchResponse>>(
 // playTurn
 // โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??
 
-type TurnAction = 'play' | 'draw' | 'pickColor' | 'declareCero';
+type TurnAction = 'play' | 'draw' | 'pickColor' | 'declareCero' | 'penalizeCero';
 
 interface PlayTurnRequest {
   matchId:    string;
@@ -1138,7 +1147,7 @@ interface PlayTurnResponse {
   turn:        number;
 }
 
-const VALID_ACTIONS = new Set<TurnAction>(['play', 'draw', 'pickColor', 'declareCero']);
+const VALID_ACTIONS = new Set<TurnAction>(['play', 'draw', 'pickColor', 'declareCero', 'penalizeCero']);
 
 /**
  * Ejecuta una acciรณn de juego dentro de una transacciรณn Firestore.
@@ -1188,6 +1197,7 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
     let finishedWinner: string | null = null;
     let trackWild = false;
     let trackCero = false;
+    let ceroForgotUid: string | null = null;
     const replayBox: { entry: {
       turn: number;
       action: LastAction;
@@ -1251,20 +1261,24 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
       const engine      = CeroEngine.fromFullSnapshot(fullSnap);
       const playerIndex = match.playerIds.indexOf(uid);
 
-      // declareCero no requiere que sea el turno del jugador
-      if (action !== 'declareCero') {
+      // declareCero / penalizeCero no requieren que sea el turno del jugador
+      if (action !== 'declareCero' && action !== 'penalizeCero') {
         guard(engine.current === playerIndex, 'failed-precondition', 'No es tu turno');
       }
 
       // โ??โ?? Ejecutar la acciรณn โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??โ??
       let result: ReturnType<CeroEngine['play']> | ReturnType<CeroEngine['draw']> |
-                  ReturnType<CeroEngine['pickColor']> | ReturnType<CeroEngine['declareCero']>;
+                  ReturnType<CeroEngine['pickColor']> | ReturnType<CeroEngine['declareCero']> |
+                  ReturnType<CeroEngine['penalizeCero']>;
 
       switch (action) {
         case 'play': {
           guard(typeof data.cardId === 'number', 'invalid-argument', 'Falta cardId');
           const playedCard = privHands[playerIndex]?.find(c => c.id === data.cardId);
           result = engine.play(playerIndex, data.cardId);
+          if (result.ok && result.ceroViolation) {
+            ceroForgotUid = uid;
+          }
           if (result.ok && playedCard?.color === 'wild') {
             trackWild = true;
           }
@@ -1284,6 +1298,15 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
         case 'declareCero': {
           result = engine.declareCero(playerIndex);
           if (result.ok) trackCero = true;
+          break;
+        }
+        case 'penalizeCero': {
+          guard(match.ceroForgot, 'failed-precondition', 'Nadie olvid๓ declarar CERO');
+          guard(match.ceroForgot !== uid, 'failed-precondition', 'No pod้s penalizarte');
+          const targetIdx = match.playerIds.indexOf(match.ceroForgot);
+          guard(targetIdx >= 0, 'failed-precondition', 'Jugador infractor no encontrado');
+          result = engine.penalizeCero(targetIdx);
+          ceroForgotUid = null;
           break;
         }
       }
@@ -1315,8 +1338,10 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
       }
 
       // 3. Construir estado pรบblico para el cliente
-      const winnerUid = newSnap.winner !== null ? (match.playerIds[newSnap.winner] ?? null) : null;
-      const isFinished = newSnap.phase === 'game_over';
+      const winnerUid = newSnap.winner !== null && !ceroForgotUid
+        ? (match.playerIds[newSnap.winner] ?? null)
+        : null;
+      const isFinished = newSnap.phase === 'game_over' && !ceroForgotUid;
 
       const lastAction: LastAction = {
         type:      action,
@@ -1337,6 +1362,9 @@ export const playTurn = onCall<PlayTurnRequest, Promise<PlayTurnResponse>>(
         status:     isFinished ? 'finished' : 'playing',
         winner:     winnerUid,
         lastAction,
+        ...(ceroForgotUid !== null ? { ceroForgot: ceroForgotUid } : {}),
+        ...(action === 'penalizeCero' ? { ceroForgot: null } : {}),
+        ...(action === 'declareCero' && match.ceroForgot === uid ? { ceroForgot: null } : {}),
         ...(isFinished ? { finishedAt: FieldValue.serverTimestamp() } : {}),
       };
 

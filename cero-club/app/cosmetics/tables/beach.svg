@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="55%" stop-color="#d97706"/>
+      <stop offset="100%" stop-color="#92400e"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="60" cy="62" rx="52" ry="38" fill="url(#g)" stroke="#fcd34d" stroke-width="2"/>
+  <ellipse cx="60" cy="58" rx="44" ry="28" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/>
+  <text x="60" y="68" text-anchor="middle" font-size="22" font-family="system-ui,sans-serif"><Ö</text>
+</svg>

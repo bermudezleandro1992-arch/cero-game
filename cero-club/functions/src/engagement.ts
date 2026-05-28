@@ -126,6 +126,12 @@ export const COSMETIC_CATALOG: Record<string, {
   frame_prism:      { id: 'frame_prism',    name: 'Prisma Arcoíris', category: 'avatar_frame', price: 1300, preview: 'frames/aurora'  },
   deck_mundial:     { id: 'deck_mundial',   name: 'Mazo Mundial',   category: 'deck_back',    price: 620,  preview: 'decks/mundial'   },
   skin_mundial:     { id: 'skin_mundial',   name: 'Cartas Mundial', category: 'card_skin',    price: 480,  preview: 'skins/galaxy'    },
+  table_beach:      { id: 'table_beach',    name: 'Mesa Playa',     category: 'table_bg',     price: 420,  preview: 'tables/beach'    },
+  table_tropical:   { id: 'table_tropical', name: 'Mesa Tropical',  category: 'table_bg',     price: 480,  preview: 'tables/tropical' },
+  table_wood:       { id: 'table_wood',     name: 'Mesa Madera',    category: 'table_bg',     price: 360,  preview: 'tables/wood'     },
+  bg_tropical:      { id: 'bg_tropical',    name: 'Paraíso Tropical', category: 'room_bg',    price: 520,  preview: 'rooms/tropical'  },
+  bg_sunset:        { id: 'bg_sunset',      name: 'Atardecer',      category: 'room_bg',      price: 460,  preview: 'rooms/sunset'    },
+  bg_jungle:        { id: 'bg_jungle',      name: 'Selva',          category: 'room_bg',      price: 440,  preview: 'rooms/jungle'    },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
