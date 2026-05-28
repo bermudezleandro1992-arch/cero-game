@@ -32,6 +32,7 @@ const patches = [
   'patch-app-special-cards-v24.js',
   'patch-app-continue-room-v25.js',
   'patch-app-continue-room-v26.js',
+  'patch-app-hooks-fix-v27.js',
 ];
 
 for (const p of patches) {
