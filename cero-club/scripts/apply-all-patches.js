@@ -36,6 +36,7 @@ const patches = [
   'patch-app-gameplay-v28.js',
   'patch-app-lobby-v29.js',
   'patch-app-ranking-fix-v30.js',
+  'patch-app-ranking-fix-v31.js',
 ];
 
 for (const p of patches) {
