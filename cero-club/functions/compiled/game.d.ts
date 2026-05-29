@@ -78,6 +78,7 @@ export interface MatchDoc {
     chosenColor: CardColor | null;
     topDiscard: Card | null;
     handCounts: number[] | null;
+    deckLeft?: number | null;
     winner: string | null;
     pendingTurn: number | null;
     ceroCalled?: number[] | null;
@@ -250,6 +251,14 @@ interface SendMatchChatRequest {
     text: string;
 }
 export declare const sendMatchChat: import("firebase-functions/v2/https").CallableFunction<SendMatchChatRequest, Promise<{
+    ok: true;
+}>>;
+interface RateMatchPlayRequest {
+    matchId: string;
+    ratings: Record<string, number>;
+}
+/** Calificaci�n factor play al finalizar (1?5 estrellas por rival). */
+export declare const rateMatchPlay: import("firebase-functions/v2/https").CallableFunction<RateMatchPlayRequest, Promise<{
     ok: true;
 }>>;
 export declare const resolveJoinCode: import("firebase-functions/v2/https").CallableFunction<{

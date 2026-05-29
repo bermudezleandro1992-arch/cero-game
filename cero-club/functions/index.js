@@ -27,6 +27,7 @@ exports.ensureMatchStarted = gameModule.ensureMatchStarted;
 exports.cleanupMyRooms = gameModule.cleanupMyRooms;
 exports.getReplay      = gameModule.getReplay;
 exports.sendMatchChat  = gameModule.sendMatchChat;
+exports.rateMatchPlay  = gameModule.rateMatchPlay;
 exports.resolveJoinCode = gameModule.resolveJoinCode;
 
 // ── Módulo: monetización + Mercado Pago ──────────────────────────────────────

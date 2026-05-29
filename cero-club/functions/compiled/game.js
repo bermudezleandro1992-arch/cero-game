@@ -78,7 +78,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resolveJoinCode = exports.sendMatchChat = exports.getReplay = exports.endMatch = exports.forfeitMatch = exports.getRejoinStatus = exports.expireStaleWaitingMatches = exports.expireRejoinMatches = exports.checkMatchRejoinExpiry = exports.temporaryLeaveMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = exports.cleanupMyRooms = exports.ensureMatchStarted = void 0;
+exports.resolveJoinCode = exports.rateMatchPlay = exports.sendMatchChat = exports.getReplay = exports.endMatch = exports.forfeitMatch = exports.getRejoinStatus = exports.expireStaleWaitingMatches = exports.expireRejoinMatches = exports.checkMatchRejoinExpiry = exports.temporaryLeaveMatch = exports.leaveMatch = exports.playTurn = exports.joinMatch = exports.cleanupMyRooms = exports.ensureMatchStarted = void 0;
 exports.isStuckMatch = isStuckMatch;
 exports.forceCloseMatch = forceCloseMatch;
 exports.closeWaitingRoom = closeWaitingRoom;
@@ -387,6 +387,7 @@ function buildPublicState(snap, playerIds) {
         chosenColor: snap.chosenColor ?? null,
         topDiscard: snap.topDiscard ?? null,
         handCounts: [...snap.handCounts],
+        deckLeft: snap.deckLeft,
         ceroCalled: [...snap.ceroCalled],
         winner: snap.winner !== null ? (playerIds[snap.winner] ?? null) : null,
         pendingTurn: snap.pendingTurn ?? null,
@@ -1332,7 +1333,48 @@ exports.sendMatchChat = (0, https_1.onCall)({ region: CFG.REGION }, async (reque
     });
     return { ok: true };
 });
-// ?? Buscar sala privada por c�digo de 6 d�gitos ?????????????????????????????
+/** Calificaci�n factor play al finalizar (1?5 estrellas por rival). */
+exports.rateMatchPlay = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Ten�s que iniciar sesi�n');
+    const uid = request.auth.uid;
+    const data = request.data ?? {};
+    const matchId = requireString(data, 'matchId');
+    const raw = data.ratings ?? {};
+    const db = (0, firestore_1.getFirestore)();
+    const matchSnap = await db.doc(`matches/${matchId}`).get();
+    guard(matchSnap.exists, 'not-found', 'Partida no encontrada');
+    const match = matchSnap.data();
+    guard(match.status === 'finished' || match.phase === 'game_over', 'failed-precondition', 'La partida a�n no termin�');
+    guard(match.playerIds.includes(uid), 'permission-denied', 'No sos parte de esta partida');
+    const validRatings = {};
+    for (const [targetUid, score] of Object.entries(raw)) {
+        if (targetUid === uid || !match.playerIds.includes(targetUid))
+            continue;
+        const n = Math.round(Number(score));
+        if (n >= 1 && n <= 5)
+            validRatings[targetUid] = n;
+    }
+    guard(Object.keys(validRatings).length > 0, 'invalid-argument', 'Calificaciones inv�lidas');
+    const ratingRef = db.doc(`matches/${matchId}/playRatings/${uid}`);
+    const existing = await ratingRef.get();
+    guard(!existing.exists, 'already-exists', 'Ya calificaste esta partida');
+    const batch = db.batch();
+    batch.set(ratingRef, {
+        raterUid: uid,
+        ratings: validRatings,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    for (const [targetUid, score] of Object.entries(validRatings)) {
+        if (playerIsGuest(match, targetUid))
+            continue;
+        batch.set(db.doc(`users/${targetUid}`), {
+            playRatingSum: firestore_1.FieldValue.increment(score),
+            playRatingCount: firestore_1.FieldValue.increment(1),
+        }, { merge: true });
+    }
+    await batch.commit();
+    return { ok: true };
+});
 exports.resolveJoinCode = (0, https_1.onCall)({ region: CFG.REGION }, async (request) => {
     guard(request.auth?.uid, 'unauthenticated', 'Ten�s que iniciar sesi�n');
     const raw = typeof request.data?.code === 'string' ? request.data.code.trim().replace(/\D/g, '') : '';

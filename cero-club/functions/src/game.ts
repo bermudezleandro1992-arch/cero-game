@@ -185,6 +185,7 @@ export interface MatchDoc {
   chosenColor: CardColor | null;
   topDiscard:  Card | null;
   handCounts:  number[] | null;
+  deckLeft?:   number | null;
   winner:      string | null;      // UID del ganador
   pendingTurn: number | null;
   ceroCalled?: number[] | null;
@@ -544,6 +545,7 @@ function buildPublicState(snap: FullSnapshot, playerIds: string[]): Partial<Matc
     chosenColor: snap.chosenColor ?? null,
     topDiscard:  snap.topDiscard  ?? null,
     handCounts:  [...snap.handCounts],
+    deckLeft:    snap.deckLeft,
     ceroCalled:  [...snap.ceroCalled],
     winner:      snap.winner !== null ? (playerIds[snap.winner] ?? null) : null,
     pendingTurn: snap.pendingTurn ?? null,
@@ -1895,6 +1897,66 @@ export const sendMatchChat = onCall<SendMatchChatRequest, Promise<{ ok: true }>>
 );
 
 // ?? Buscar sala privada por código de 6 dígitos ?????????????????????????????
+
+interface RateMatchPlayRequest {
+  matchId: string;
+  ratings: Record<string, number>;
+}
+
+/** Calificación factor play al finalizar (1?5 estrellas por rival). */
+export const rateMatchPlay = onCall<RateMatchPlayRequest, Promise<{ ok: true }>>(
+  { region: CFG.REGION },
+  async (request) => {
+    guard(request.auth?.uid, 'unauthenticated', 'Tenés que iniciar sesión');
+
+    const uid     = request.auth!.uid;
+    const data    = request.data ?? ({} as RateMatchPlayRequest);
+    const matchId = requireString(data as unknown as Record<string, unknown>, 'matchId');
+    const raw     = data.ratings ?? {};
+    const db      = getFirestore();
+
+    const matchSnap = await db.doc(`matches/${matchId}`).get();
+    guard(matchSnap.exists, 'not-found', 'Partida no encontrada');
+
+    const match = matchSnap.data() as MatchDoc;
+    guard(
+      match.status === 'finished' || match.phase === 'game_over',
+      'failed-precondition',
+      'La partida aún no terminó',
+    );
+    guard(match.playerIds.includes(uid), 'permission-denied', 'No sos parte de esta partida');
+
+    const validRatings: Record<string, number> = {};
+    for (const [targetUid, score] of Object.entries(raw)) {
+      if (targetUid === uid || !match.playerIds.includes(targetUid)) continue;
+      const n = Math.round(Number(score));
+      if (n >= 1 && n <= 5) validRatings[targetUid] = n;
+    }
+    guard(Object.keys(validRatings).length > 0, 'invalid-argument', 'Calificaciones inválidas');
+
+    const ratingRef = db.doc(`matches/${matchId}/playRatings/${uid}`);
+    const existing  = await ratingRef.get();
+    guard(!existing.exists, 'already-exists', 'Ya calificaste esta partida');
+
+    const batch = db.batch();
+    batch.set(ratingRef, {
+      raterUid:  uid,
+      ratings:   validRatings,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    for (const [targetUid, score] of Object.entries(validRatings)) {
+      if (playerIsGuest(match, targetUid)) continue;
+      batch.set(db.doc(`users/${targetUid}`), {
+        playRatingSum:   FieldValue.increment(score),
+        playRatingCount: FieldValue.increment(1),
+      }, { merge: true });
+    }
+
+    await batch.commit();
+    return { ok: true };
+  },
+);
 
 export const resolveJoinCode = onCall<{ code?: string }, Promise<{
   matchId: string;
