@@ -34,6 +34,7 @@ const patches = [
   'patch-app-continue-room-v26.js',
   'patch-app-hooks-fix-v27.js',
   'patch-app-gameplay-v28.js',
+  'patch-app-lobby-v29.js',
 ];
 
 for (const p of patches) {
