@@ -63,6 +63,22 @@
         { "fieldPath": "joinCode", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "anon", "order": "ASCENDING" },
+        { "fieldPath": "weeklyWins", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "anon", "order": "ASCENDING" },
+        { "fieldPath": "monthlyWins", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
