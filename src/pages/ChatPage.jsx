@@ -402,19 +402,20 @@ export default function ChatPage({ onBack }) {
     />
   )
 
-  if (call) return (
-    <CallPage
-      conversationId={activeConversation?.id}
-      myUserId={profile?.id}
-      contact={otherUser}
-      callType={call.type}
-      isIncoming={false}
-      onEnd={() => setCall(null)}
-    />
-  )
-
   return (
     <>
+      {/* Call overlay — renders on top of chat without leaving the page */}
+      {call && (
+        <CallPage
+          conversationId={activeConversation?.id}
+          myUserId={profile?.id}
+          contact={otherUser}
+          callType={call.type}
+          isIncoming={false}
+          onEnd={() => setCall(null)}
+        />
+      )}
+
       {showContact && !isGroup && (
         <ContactPage user={otherUser} onBack={() => setShowContact(false)} onChat={() => setShowContact(false)} />
       )}
