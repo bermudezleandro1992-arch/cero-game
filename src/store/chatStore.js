@@ -32,7 +32,7 @@ export const useChatStore = create((set, get) => ({
     const [membersRes, lastMsgsRes] = await Promise.all([
       supabase
         .from('conversation_members')
-        .select('conversation_id, user_id, users(id, display_name, username, avatar_url)')
+        .select('conversation_id, user_id, member:users!conversation_members_user_id_fkey(id, display_name, username, avatar_url)')
         .in('conversation_id', convIds)
         .neq('user_id', userId),
       supabase
@@ -51,7 +51,7 @@ export const useChatStore = create((set, get) => ({
     const groupMembersMap = {}
     membersRes.data?.forEach(m => {
       if (!groupMembersMap[m.conversation_id]) groupMembersMap[m.conversation_id] = []
-      groupMembersMap[m.conversation_id].push(m.users)
+      groupMembersMap[m.conversation_id].push(m.member)
     })
 
     // Count unread per conversation
@@ -147,7 +147,7 @@ export const useChatStore = create((set, get) => ({
     set({ loadingMessages: true })
     const { data } = await supabase
       .from('messages')
-      .select('*, users(id, display_name, username, avatar_url)')
+      .select('*, sender:users!messages_sender_id_fkey(id, display_name, username, avatar_url)')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true })
       .limit(100)
@@ -158,7 +158,7 @@ export const useChatStore = create((set, get) => ({
     const { data, error } = await supabase
       .from('messages')
       .insert({ conversation_id: conversationId, sender_id: senderId, content, type })
-      .select('*, users(id, display_name, username, avatar_url)')
+      .select('*, sender:users!messages_sender_id_fkey(id, display_name, username, avatar_url)')
       .single()
     if (error) {
       console.error('sendMessage error:', error)
@@ -189,7 +189,7 @@ export const useChatStore = create((set, get) => ({
       }, async (payload) => {
         const { data: msg } = await supabase
           .from('messages')
-          .select('*, users(id, display_name, username, avatar_url)')
+          .select('*, sender:users!messages_sender_id_fkey(id, display_name, username, avatar_url)')
           .eq('id', payload.new.id)
           .single()
         if (msg) {
