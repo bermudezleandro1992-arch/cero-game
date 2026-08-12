@@ -1,20 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-
-const ONLINE_THRESHOLD_MS = 90000 // 90s — presence updates every 30s
-
-function isRecentlySeen(lastSeenAt) {
-  if (!lastSeenAt) return false
-  return Date.now() - new Date(lastSeenAt).getTime() < ONLINE_THRESHOLD_MS
-}
 
 // Returns online status, last seen, and typing state for a contact in a conversation
 export function useContactStatus(contactId, conversationId, myUserId) {
   const [lastSeen, setLastSeen] = useState(null)
+  const [isOnline, setIsOnline] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [otherLastRead, setOtherLastRead] = useState(null)
-
-  const isOnline = isRecentlySeen(lastSeen)
+  const presenceTimer = useRef(null)
 
   useEffect(() => {
     if (!contactId) return
@@ -23,7 +16,7 @@ export function useContactStatus(contactId, conversationId, myUserId) {
     supabase.from('users').select('last_seen_at').eq('id', contactId).single()
       .then(({ data }) => { if (data) setLastSeen(data.last_seen_at) })
 
-    // Subscribe to their row updates (last_seen_at changes) — unique channel per contact
+    // Subscribe to last_seen_at updates
     const userChannel = supabase.channel(`contact-user:${contactId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${contactId}` },
         (payload) => { if (payload.new.last_seen_at) setLastSeen(payload.new.last_seen_at) })
@@ -43,11 +36,21 @@ export function useContactStatus(contactId, conversationId, myUserId) {
       .single()
       .then(({ data }) => { if (data) setOtherLastRead(data.last_read_at) })
 
-    // Unique channel name to avoid conflicts with subscribeToMessages
+    // Listen on the channel that the OTHER user broadcasts their presence to
+    // They broadcast to contact-conv:{convId}:{their own id}
     const convChannel = supabase.channel(`contact-conv:${conversationId}:${contactId}`)
     let typingTimer = null
 
     convChannel
+      .on('broadcast', { event: 'chat-presence' }, () => {
+        setIsOnline(true)
+        clearTimeout(presenceTimer.current)
+        presenceTimer.current = setTimeout(() => setIsOnline(false), 30000)
+      })
+      .on('broadcast', { event: 'chat-leave' }, () => {
+        setIsOnline(false)
+        clearTimeout(presenceTimer.current)
+      })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         if (payload.user_id !== myUserId) {
           setIsTyping(true)
@@ -67,6 +70,7 @@ export function useContactStatus(contactId, conversationId, myUserId) {
 
     return () => {
       clearTimeout(typingTimer)
+      clearTimeout(presenceTimer.current)
       supabase.removeChannel(convChannel)
     }
   }, [conversationId, contactId, myUserId])
