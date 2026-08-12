@@ -105,9 +105,17 @@ function ComunidadPage() {
 export default function App() {
   const { user, profile, loading, setUser, setLoading, fetchProfile } = useAuthStore()
   const { incomingCall, setIncomingCall, clearCall } = useCallStore()
-  const { conversations, activeConversation, setActiveConversation, fetchConversations } = useChatStore()
+  const { conversations, activeConversation, setActiveConversation, fetchConversations, subscribeToConversations } = useChatStore()
   const [tab, setTab] = useState('chats')
   usePresence(user?.id)
+
+  // Single subscription for conversation list (avoids duplicate channels from dual layout)
+  useEffect(() => {
+    if (!profile?.id) return
+    fetchConversations(profile.id)
+    const unsub = subscribeToConversations(profile.id)
+    return unsub
+  }, [profile?.id])
 
   // Global incoming call listener
   useEffect(() => {
