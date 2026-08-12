@@ -69,34 +69,31 @@ export default function ChatListPage() {
           )}
         </div>
 
-        {/* Resultados de búsqueda */}
-        {searchResults.length > 0 && (
-          <div className="mt-1 rounded-xl overflow-hidden" style={{ background: '#2a3942' }}>
-            {searchResults.map(u => (
-              <button key={u.id} onClick={() => openChat(u.id)}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:brightness-110 transition-all"
-                style={{ background: '#2a3942' }}>
-                <Avatar user={u} size={36} />
-                <div>
-                  <p className="text-sm font-medium text-white">{u.display_name}</p>
-                  <p className="text-xs" style={{ color: '#8696a0' }}>@{u.username}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
         {searching && <p className="text-xs mt-1 px-1" style={{ color: '#8696a0' }}>Buscando...</p>}
       </div>
 
-      {/* Lista de conversaciones */}
+      {/* Lista de conversaciones / resultados */}
       <div className="flex-1 overflow-y-auto">
+        {/* Resultados de búsqueda */}
+        {searchResults.length > 0 && searchResults.map(u => (
+          <button key={u.id} onClick={() => openChat(u.id)}
+            className="w-full flex items-center gap-3 px-4 py-3 border-b text-left"
+            style={{ borderColor: '#2a3942', background: '#111b21' }}>
+            <Avatar user={u} size={48} />
+            <div>
+              <p className="font-medium text-white text-sm">{u.display_name}</p>
+              <p className="text-xs" style={{ color: '#8696a0' }}>@{u.username}</p>
+            </div>
+          </button>
+        ))}
+
         {conversations.length === 0 && !search && (
           <div className="flex flex-col items-center justify-center h-full gap-2" style={{ color: '#8696a0' }}>
             <div className="text-4xl">💬</div>
             <p className="text-sm">Buscá un usuario por @usuario para comenzar</p>
           </div>
         )}
-        {conversations.map(conv => (
+        {!search && conversations.map(conv => (
           <button key={conv.id}
             onClick={() => setActiveConversation(conv)}
             className="w-full flex items-center gap-3 px-4 py-3 border-b text-left transition-all hover:brightness-110"
