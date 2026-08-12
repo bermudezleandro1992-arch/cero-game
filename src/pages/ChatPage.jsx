@@ -271,7 +271,7 @@ export default function ChatPage({ onBack, hideBackButton }) {
     {showContact && !isGroup && (
       <ContactPage user={otherUser} onBack={() => setShowContact(false)} onChat={() => setShowContact(false)} />
     )}
-    <div style={{ height: hideBackButton ? '100%' : '100dvh', display: 'flex', flexDirection: 'column', background: '#0b141a', overflow: 'hidden' }}
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0b141a', overflow: 'hidden' }}
       onClick={() => { setLongPressMsg(null); setShowEmoji(false) }}>
 
       {/* HEADER */}
