@@ -256,6 +256,84 @@ export const useChatStore = create((set, get) => ({
     return conv.id
   },
 
+  deleteMessage: async (messageId) => {
+    await supabase.from('messages').update({ is_deleted: true, content: '' }).eq('id', messageId)
+    set(state => ({
+      messages: state.messages.map(m =>
+        m.id === messageId ? { ...m, is_deleted: true, content: '' } : m
+      )
+    }))
+  },
+
+  reactToMessage: async (messageId, userId, emoji) => {
+    // Toggle: if already reacted with this emoji, remove it
+    const { data: existing } = await supabase
+      .from('message_reactions')
+      .select('id')
+      .eq('message_id', messageId)
+      .eq('user_id', userId)
+      .eq('emoji', emoji)
+      .maybeSingle()
+
+    if (existing) {
+      await supabase.from('message_reactions').delete().eq('id', existing.id)
+    } else {
+      await supabase.from('message_reactions').insert({ message_id: messageId, user_id: userId, emoji })
+    }
+
+    // Reload reactions for this message
+    const { data: reactions } = await supabase
+      .from('message_reactions')
+      .select('emoji, user_id')
+      .eq('message_id', messageId)
+
+    set(state => ({
+      messages: state.messages.map(m =>
+        m.id === messageId ? { ...m, reactions: reactions || [] } : m
+      )
+    }))
+  },
+
+  pinMessage: async (conversationId, text) => {
+    await supabase.from('conversations').update({ pinned_message: text }).eq('id', conversationId)
+    set(state => ({
+      conversations: state.conversations.map(c =>
+        c.id === conversationId ? { ...c, pinned_message: text } : c
+      ),
+      activeConversation: state.activeConversation?.id === conversationId
+        ? { ...state.activeConversation, pinned_message: text }
+        : state.activeConversation,
+    }))
+  },
+
+  leaveGroup: async (conversationId, userId) => {
+    await supabase.from('conversation_members')
+      .delete()
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+    set(state => ({
+      conversations: state.conversations.filter(c => c.id !== conversationId),
+      activeConversation: state.activeConversation?.id === conversationId ? null : state.activeConversation,
+    }))
+  },
+
+  fetchReactions: async (messageIds) => {
+    if (!messageIds?.length) return
+    const { data } = await supabase
+      .from('message_reactions')
+      .select('message_id, emoji, user_id')
+      .in('message_id', messageIds)
+    if (!data) return
+    const byMsg = {}
+    data.forEach(r => {
+      if (!byMsg[r.message_id]) byMsg[r.message_id] = []
+      byMsg[r.message_id].push(r)
+    })
+    set(state => ({
+      messages: state.messages.map(m => ({ ...m, reactions: byMsg[m.id] || m.reactions || [] }))
+    }))
+  },
+
   createGroup: async (name, memberIds, createdBy) => {
     const { data: conv } = await supabase
       .from('conversations')
