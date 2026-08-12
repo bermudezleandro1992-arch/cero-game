@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { C } from '../App'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -35,10 +36,11 @@ export default function LoginPage() {
     setLoading(false)
   }
 
+  const disabled = loading || !email
   const inp = {
     width: '100%', padding: '13px 16px', borderRadius: 12, outline: 'none',
-    background: '#111e17', border: '1px solid #1c2e23',
-    color: '#c8ddd0', fontSize: 15, boxSizing: 'border-box',
+    background: C.panel2, border: `1px solid ${C.border}`,
+    color: C.text, fontSize: 15, boxSizing: 'border-box',
     transition: 'border-color .15s',
   }
 
@@ -46,23 +48,27 @@ export default function LoginPage() {
     <div style={{
       minHeight: '100dvh', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      background: '#0a1409', padding: '24px 20px',
+      background: C.bg, padding: '24px 20px',
     }}>
       <div style={{ width: '100%', maxWidth: 380 }}>
 
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+        {/* Logo / Hero */}
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{
-            width: 72, height: 72, borderRadius: 20,
-            background: 'linear-gradient(135deg, #00e676 0%, #00a854 100%)',
+            width: 80, height: 80, borderRadius: 24,
+            background: `radial-gradient(circle at 35% 35%, ${C.green}22 0%, ${C.greenDk}44 100%)`,
+            border: `1.5px solid ${C.green}44`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 34, margin: '0 auto 16px',
-            boxShadow: '0 8px 32px rgba(0,230,118,0.3)',
-          }}>💬</div>
-          <h1 style={{ color: '#c8ddd0', fontWeight: 800, fontSize: 22, margin: '0 0 4px', letterSpacing: '-0.3px' }}>
+            fontSize: 38, margin: '0 auto 20px',
+            boxShadow: `0 0 40px ${C.green}22`,
+          }}>⚡</div>
+          <h1 style={{ color: C.text, fontWeight: 800, fontSize: 24, margin: '0 0 6px', letterSpacing: '-0.5px' }}>
             Mi Mensajero
           </h1>
-          <p style={{ color: '#5f7a6a', fontSize: 13, margin: 0 }}>
+          <p style={{ color: C.textDim, fontSize: 11, margin: '0 0 4px', letterSpacing: '2.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+            COMPETÍ · CONECTÁ · GANÁ
+          </p>
+          <p style={{ color: C.textDim, fontSize: 13, margin: '12px 0 0' }}>
             {sent
               ? (mode === 'register' ? 'Revisá tu email para confirmar' : 'Revisá tu email')
               : mode === 'login' ? 'Ingresá para continuar'
@@ -92,47 +98,47 @@ export default function LoginPage() {
 
             {error && (
               <div style={{
-                background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+                background: `${C.red}18`, border: `1px solid ${C.red}44`,
                 borderRadius: 10, padding: '10px 14px',
-                color: '#fca5a5', fontSize: 13, textAlign: 'center',
+                color: C.red, fontSize: 13, textAlign: 'center',
               }}>{error}</div>
             )}
 
-            <button type="submit" disabled={loading || !email} style={{
+            <button type="submit" disabled={disabled} style={{
               width: '100%', padding: '14px', borderRadius: 12,
-              background: loading || !email ? '#1a2e22' : 'linear-gradient(135deg, #00e676 0%, #00c864 100%)',
-              border: 'none', cursor: loading || !email ? 'not-allowed' : 'pointer',
-              color: loading || !email ? '#3d5949' : '#0a1409',
-              fontSize: 15, fontWeight: 700, marginTop: 4,
-              boxShadow: loading || !email ? 'none' : '0 4px 20px rgba(0,230,118,0.25)',
+              background: disabled ? C.panel2 : C.green,
+              border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+              color: disabled ? C.textDim : C.bg,
+              fontSize: 15, fontWeight: 800, marginTop: 4,
+              boxShadow: disabled ? 'none' : `0 4px 24px ${C.green}44`,
               transition: 'all .2s',
+              letterSpacing: '.3px',
             }}>
               {loading ? '...' : mode === 'login' ? 'Entrar' : mode === 'register' ? 'Crear cuenta' : 'Enviar link'}
             </button>
 
-            {/* Mode switchers */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
               {mode === 'login' && (
                 <>
                   <button type="button" onClick={() => { setMode('register'); setError('') }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#00e676', fontSize: 13, fontWeight: 600, padding: '4px 0' }}>
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.green, fontSize: 13, fontWeight: 600, padding: '4px 0' }}>
                     ¿No tenés cuenta? Registrate
                   </button>
                   <button type="button" onClick={() => { setMode('magic'); setError('') }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5f7a6a', fontSize: 12, padding: '4px 0' }}>
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 12, padding: '4px 0' }}>
                     Entrar con link por email
                   </button>
                 </>
               )}
               {mode === 'register' && (
                 <button type="button" onClick={() => { setMode('login'); setError('') }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5f7a6a', fontSize: 12, padding: '4px 0' }}>
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 12, padding: '4px 0' }}>
                   Ya tengo cuenta — Iniciar sesión
                 </button>
               )}
               {mode === 'magic' && (
                 <button type="button" onClick={() => { setMode('login'); setError('') }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5f7a6a', fontSize: 12, padding: '4px 0' }}>
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 12, padding: '4px 0' }}>
                   Volver
                 </button>
               )}
@@ -143,19 +149,19 @@ export default function LoginPage() {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
             <div style={{
               width: 64, height: 64, borderRadius: '50%',
-              background: 'rgba(0,230,118,0.1)', border: '1.5px solid rgba(0,230,118,0.2)',
+              background: `${C.green}18`, border: `1.5px solid ${C.green}33`,
               display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
             }}>📩</div>
-            <p style={{ color: '#c8ddd0', fontSize: 15, margin: 0 }}>
-              Email enviado a <span style={{ color: '#00e676', fontWeight: 600 }}>{email}</span>
+            <p style={{ color: C.text, fontSize: 15, margin: 0 }}>
+              Email enviado a <span style={{ color: C.green, fontWeight: 600 }}>{email}</span>
             </p>
-            <p style={{ color: '#5f7a6a', fontSize: 12, margin: 0 }}>
+            <p style={{ color: C.textDim, fontSize: 12, margin: 0 }}>
               {mode === 'register'
                 ? 'Confirmá tu cuenta desde el email y después volvé a iniciar sesión.'
                 : 'Hacé click en el link para entrar.'}
             </p>
             <button onClick={() => { setSent(false); setEmail(''); setPassword(''); setName('') }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#00e676', fontSize: 13, fontWeight: 600, marginTop: 4 }}>
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.green, fontSize: 13, fontWeight: 600, marginTop: 4 }}>
               Volver
             </button>
           </div>
