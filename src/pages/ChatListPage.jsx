@@ -65,14 +65,15 @@ function Ticks({ read }) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatListPage({ onProfileClick, initialFilter }) {
-  const props = { initialFilter }
   const { profile, signOut } = useAuthStore()
   const { conversations, fetchConversations, findOrCreateConversation, setActiveConversation, activeConversation } = useChatStore()
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [showNewGroup, setShowNewGroup] = useState(false)
-  const [filter, setFilter] = useState(props.initialFilter || 'todos')
+  const [filter, setFilter] = useState(initialFilter || 'todos')
+
+  useEffect(() => { setFilter(initialFilter || 'todos') }, [initialFilter])
   const [showFab, setShowFab] = useState(false)
   const [loadingConvs, setLoadingConvs] = useState(true)
 

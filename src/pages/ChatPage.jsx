@@ -609,7 +609,7 @@ export default function ChatPage({ onBack }) {
                           {isMine && (
                             <CtxBtn label="🗑 Eliminar" danger onClick={() => {
                               if (confirm('¿Eliminar este mensaje?')) {
-                                deleteMessage(msg.id)
+                                deleteMessage(msg.id, activeConversation.id)
                                 setLongPressMsg(null)
                               }
                             }} />
