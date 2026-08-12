@@ -114,54 +114,96 @@ function DateSeparator({ dateStr }) {
 function AudioPlayer({ src, isMine }) {
   const [playing, setPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
-  const audio = useRef(null)
+  const [speed, setSpeed] = useState(1)
+  const audioRef = useRef(null)
+  // Static waveform bars (decorative — real waveform requires Web Audio decoding)
+  const bars = [0.3,0.6,0.9,0.5,1,0.7,0.4,0.8,0.6,1,0.5,0.7,0.9,0.4,0.6,0.8,0.5,1,0.3,0.7,0.9,0.5,0.6,0.4,0.8,1,0.6,0.4,0.7,0.5]
 
   useEffect(() => {
-    audio.current = new Audio(src)
-    audio.current.onloadedmetadata = () => setDuration(Math.round(audio.current.duration))
-    audio.current.ontimeupdate = () => {
-      const p = (audio.current.currentTime / audio.current.duration) * 100
-      setProgress(isNaN(p) ? 0 : p)
+    const a = new Audio(src)
+    audioRef.current = a
+    a.onloadedmetadata = () => setDuration(a.duration || 0)
+    a.ontimeupdate = () => {
+      setCurrent(a.currentTime)
+      setProgress(a.duration ? (a.currentTime / a.duration) * 100 : 0)
     }
-    audio.current.onended = () => { setPlaying(false); setProgress(0) }
-    return () => { audio.current.pause(); audio.current = null }
+    a.onended = () => { setPlaying(false); setProgress(0); setCurrent(0); a.currentTime = 0 }
+    return () => { a.pause(); audioRef.current = null }
   }, [src])
 
   function toggle() {
-    if (!audio.current) return
-    if (playing) { audio.current.pause(); setPlaying(false) }
-    else { audio.current.play(); setPlaying(true) }
+    const a = audioRef.current
+    if (!a) return
+    if (playing) { a.pause(); setPlaying(false) }
+    else { a.play(); setPlaying(true) }
   }
 
-  const btnColor = isMine ? C.green : C.text2
+  function seek(e) {
+    const a = audioRef.current
+    if (!a || !a.duration) return
+    const r = e.currentTarget.getBoundingClientRect()
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left
+    a.currentTime = (x / r.width) * a.duration
+  }
+
+  function cycleSpeed() {
+    const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1
+    setSpeed(next)
+    if (audioRef.current) audioRef.current.playbackRate = next
+  }
+
+  const accent = isMine ? C.green : '#60a5fa'
+  const playedBars = Math.floor((progress / 100) * bars.length)
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 190, padding: '2px 0' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 210, padding: '2px 0' }}>
+      {/* Play/pause */}
       <button onClick={toggle} style={{
-        background: isMine ? `${C.green}22` : `${C.text2}18`,
-        border: `1px solid ${btnColor}44`, borderRadius: '50%',
-        width: 34, height: 34, display: 'flex', alignItems: 'center',
-        justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
-      }}>
+        width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+        background: `${accent}22`, border: `1.5px solid ${accent}55`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+        transition: 'transform .12s',
+      }}
+        onTouchStart={e => e.currentTarget.style.transform = 'scale(0.9)'}
+        onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
+      >
         {playing
-          ? <svg width="11" height="11" viewBox="0 0 24 24" fill={btnColor}><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-          : <svg width="11" height="11" viewBox="0 0 24 24" fill={btnColor}><path d="M8 5v14l11-7z"/></svg>
+          ? <svg width="12" height="12" viewBox="0 0 24 24" fill={accent}><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          : <svg width="13" height="13" viewBox="0 0 24 24" fill={accent}><path d="M8 5v14l11-7z"/></svg>
         }
       </button>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {/* Waveform bars + scrub */}
         <div
-          style={{ height: 3, background: `${btnColor}30`, borderRadius: 2, cursor: 'pointer', position: 'relative' }}
-          onClick={e => {
-            const r = e.currentTarget.getBoundingClientRect()
-            if (audio.current) audio.current.currentTime = ((e.clientX - r.left) / r.width) * audio.current.duration
-          }}>
-          <div style={{ width: `${progress}%`, height: '100%', background: btnColor, borderRadius: 2, transition: 'width .1s' }} />
+          style={{ display: 'flex', alignItems: 'center', gap: 2, height: 28, cursor: 'pointer' }}
+          onClick={seek} onTouchStart={seek}
+        >
+          {bars.map((h, i) => (
+            <div key={i} style={{
+              flex: 1, borderRadius: 2,
+              height: `${Math.max(20, h * 100)}%`,
+              background: i < playedBars ? accent : `${accent}35`,
+              transition: 'background .1s',
+              animation: playing && i >= playedBars ? `wfPlay ${0.6 + i * 0.04}s ease-in-out ${i * 0.03}s infinite alternate` : 'none',
+            }} />
+          ))}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 9, color: C.textDim }}>🎤 Audio</span>
-          <span style={{ fontSize: 9, color: C.textDim }}>{fmtDuration(duration)}</span>
+        {/* Timer + speed */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 10, color: C.textDim, fontVariantNumeric: 'tabular-nums' }}>
+            {fmtDuration(playing || current > 0 ? Math.floor(current) : Math.floor(duration))}
+          </span>
+          <button onClick={cycleSpeed} style={{
+            fontSize: 10, color: accent, background: `${accent}15`,
+            border: `1px solid ${accent}30`, borderRadius: 8,
+            padding: '1px 6px', cursor: 'pointer', fontWeight: 700,
+          }}>{speed}×</button>
         </div>
       </div>
+      <style>{`@keyframes wfPlay{0%{transform:scaleY(.7)}100%{transform:scaleY(1)}}`}</style>
     </div>
   )
 }
@@ -248,11 +290,17 @@ export default function ChatPage({ onBack }) {
   const [editText, setEditText] = useState('')
   const [forwardMsg, setForwardMsg] = useState(null) // message to forward
   const [viewOncePending, setViewOncePending] = useState(null) // { file, type } waiting for view count pick
-  const [recording, setRecording] = useState(false)
+  const [recording, setRecording] = useState(false) // 'hold' | 'locked' | false
   const [recDuration, setRecDuration] = useState(0)
+  const [recCancelling, setRecCancelling] = useState(false)
+  const [recLocked, setRecLocked] = useState(false)
   const recorderRef = useRef(null)
   const recChunks = useRef([])
   const recTimer = useRef(null)
+  const recStartY = useRef(0)
+  const recStartX = useRef(0)
+  const recCancelledRef = useRef(false)
+  const micBtnRef = useRef(null)
 
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
@@ -366,17 +414,24 @@ export default function ChatPage({ onBack }) {
     setUploadingImage(false)
   }
 
-  async function startRecording() {
+  async function startRecording(e) {
+    e?.preventDefault()
+    if (recording) return
+    recCancelledRef.current = false
+    const touch = e?.touches?.[0]
+    recStartX.current = touch?.clientX ?? e?.clientX ?? 0
+    recStartY.current = touch?.clientY ?? e?.clientY ?? 0
+    try { navigator.vibrate?.(30) } catch (_) {}
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      // Pick best supported mimeType
       const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
         .find(t => MediaRecorder.isTypeSupported(t)) || ''
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {})
       recChunks.current = []
-      recorder.ondataavailable = e => { if (e.data.size > 0) recChunks.current.push(e.data) }
+      recorder.ondataavailable = ev => { if (ev.data.size > 0) recChunks.current.push(ev.data) }
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop())
+        if (recCancelledRef.current) return // cancelled — discard
         const type = recorder.mimeType || mimeType || 'audio/webm'
         const blob = new Blob(recChunks.current, { type })
         if (blob.size < 500) return
@@ -390,18 +445,48 @@ export default function ChatPage({ onBack }) {
         } catch (err) { alert(`Error al enviar audio: ${err.message}`) }
         setUploadingImage(false)
       }
-      recorder.start(250) // 250ms chunks — more stable on mobile than 100ms
+      recorder.start(250)
       recorderRef.current = recorder
-      setRecording(true)
+      setRecording(true); setRecLocked(false); setRecCancelling(false); setRecDuration(0)
       let s = 0
       recTimer.current = setInterval(() => setRecDuration(++s), 1000)
-    } catch (e) { alert('No se pudo acceder al micrófono.') }
+    } catch (_) { alert('No se pudo acceder al micrófono.') }
+  }
+
+  function onRecordingMove(e) {
+    if (!recording || recLocked) return
+    const touch = e?.touches?.[0]
+    const cx = touch?.clientX ?? e?.clientX ?? 0
+    const cy = touch?.clientY ?? e?.clientY ?? 0
+    const dx = recStartX.current - cx  // swipe left → cancel
+    const dy = recStartY.current - cy  // swipe up → lock
+    if (dy > 60) { lockRecording(); return }
+    setRecCancelling(dx > 40)
+  }
+
+  function lockRecording() {
+    try { navigator.vibrate?.(40) } catch (_) {}
+    setRecLocked(true); setRecCancelling(false)
+  }
+
+  function cancelRecording() {
+    try { navigator.vibrate?.(60) } catch (_) {}
+    recCancelledRef.current = true
+    recorderRef.current?.stop()
+    clearInterval(recTimer.current)
+    setRecording(false); setRecLocked(false); setRecCancelling(false); setRecDuration(0)
   }
 
   function stopRecording() {
     recorderRef.current?.stop()
     clearInterval(recTimer.current)
-    setRecording(false); setRecDuration(0)
+    setRecording(false); setRecLocked(false); setRecCancelling(false); setRecDuration(0)
+  }
+
+  function onRecordingEnd() {
+    // released finger without locking
+    if (recLocked) return
+    if (recCancelling) { cancelRecording() } else { stopRecording() }
   }
 
   const grouped = groupByDate(messages.filter(m => !deletedForMe.has(m.id)))
@@ -1007,28 +1092,65 @@ export default function ChatPage({ onBack }) {
         })()}
         <style>{`@keyframes emojiSlideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`}</style>
 
-        {/* ── RECORDING BAR ── */}
-        {recording && (
+        {/* ── RECORDING BAR (locked mode) ── */}
+        {recLocked && (
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
             background: C.panel, borderTop: `1px solid ${C.border}`, flexShrink: 0,
+            animation: 'recSlideUp .2s ease',
           }} onClick={e => e.stopPropagation()}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.red, animation: 'recPulse 1s ease infinite' }} />
-            <span style={{ color: C.text, fontSize: 14, flex: 1 }}>Grabando... {fmtDuration(recDuration)}</span>
+            {/* Cancel */}
+            <button onClick={cancelRecording} style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px',
+              color: C.red, fontSize: 13, fontWeight: 600, borderRadius: 8,
+              transition: 'background .15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = `${C.red}15`}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >✕ Cancelar</button>
+
+            {/* Waveform + timer */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.red, flexShrink: 0, animation: 'recPulse 1s ease infinite' }} />
+              <span style={{ color: C.red, fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', minWidth: 36 }}>
+                {fmtDuration(recDuration)}
+              </span>
+              {/* Animated bars */}
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 2, height: 24, overflow: 'hidden' }}>
+                {Array.from({ length: 20 }).map((_, i) => (
+                  <div key={i} style={{
+                    flex: 1, borderRadius: 2, background: C.red,
+                    opacity: 0.6,
+                    animation: `recWave ${0.5 + Math.random() * 0.4}s ease-in-out ${i * 0.05}s infinite alternate`,
+                    height: `${30 + Math.random() * 70}%`,
+                  }} />
+                ))}
+              </div>
+            </div>
+
+            {/* Send */}
             <button onClick={stopRecording} style={{
-              background: C.green, border: 'none', borderRadius: '50%',
-              width: 38, height: 38, cursor: 'pointer',
+              width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
+              background: C.green, border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: `0 4px 12px ${C.green}55`,
-            }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill={C.bg}><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+              boxShadow: `0 4px 16px ${C.green}55`,
+              transition: 'transform .12s',
+            }}
+              onTouchStart={e => e.currentTarget.style.transform = 'scale(0.9)'}
+              onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill={C.bg}><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
             </button>
-            <style>{`@keyframes recPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.8)}}`}</style>
           </div>
         )}
+        <style>{`
+          @keyframes recPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.8)}}
+          @keyframes recWave{0%{transform:scaleY(.3)}100%{transform:scaleY(1)}}
+          @keyframes recSlideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+        `}</style>
 
         {/* ── INPUT BAR ── */}
-        {!recording && (
+        {!recLocked && (
           <form onSubmit={handleSend} style={{
             display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 12px 10px',
             background: C.panel, borderTop: `1px solid ${C.border}`, flexShrink: 0,
@@ -1059,23 +1181,33 @@ export default function ChatPage({ onBack }) {
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>😊</button>
 
-            {/* Text input */}
+            {/* Text input / recording indicator */}
             <div style={{
-              flex: 1, background: C.panel2, borderRadius: 22,
+              flex: 1, background: recording ? `${C.red}10` : C.panel2, borderRadius: 22,
               display: 'flex', alignItems: 'center', padding: '0 14px',
-              minHeight: 42, border: `1px solid ${C.border}`,
-              transition: 'border-color .2s',
+              minHeight: 42, border: `1px solid ${recording ? C.red + '60' : C.border}`,
+              transition: 'border-color .2s, background .2s',
+              overflow: 'hidden',
             }}>
-              <input
-                ref={inputRef} type="text" placeholder="Escribe un mensaje..." value={text}
-                onChange={e => { setText(e.target.value); handleTyping() }}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSend(e) }}
-                style={{
-                  flex: 1, background: 'none', border: 'none', outline: 'none',
-                  color: C.text, fontSize: 14, padding: '9px 0',
-                }}
-                autoFocus
-              />
+              {recording ? (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.red, animation: 'recPulse 1s ease infinite', flexShrink: 0 }} />
+                  <span style={{ color: C.red, fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtDuration(recDuration)}</span>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1.5, height: 20 }}>
+                    {Array.from({ length: 16 }).map((_, i) => (
+                      <div key={i} style={{ flex: 1, borderRadius: 2, background: recCancelling ? C.red : C.green, opacity: 0.7, animation: `recWave ${0.4 + i * 0.06}s ease-in-out ${i * 0.04}s infinite alternate`, height: `${25 + (i % 3) * 25}%` }} />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <input
+                  ref={inputRef} type="text" placeholder="Escribe un mensaje..." value={text}
+                  onChange={e => { setText(e.target.value); handleTyping() }}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSend(e) }}
+                  style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 14, padding: '9px 0' }}
+                  autoFocus
+                />
+              )}
             </div>
 
             {/* Send / media / mic */}
@@ -1106,18 +1238,67 @@ export default function ChatPage({ onBack }) {
                     : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                   }
                 </button>
-                <button type="button"
-                  onMouseDown={startRecording} onTouchStart={startRecording}
-                  style={{
-                    width: 42, height: 42, borderRadius: '50%',
-                    background: C.green, border: 'none', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: `0 4px 16px ${C.green}55`,
-                  }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill={C.bg}>
-                    <path d="M12 1c-1.66 0-3 1.34-3 3v8c0 1.66 1.34 3 3 3s3-1.34 3-3V4c0-1.66-1.34-3-3-3zm5.3 9c0 3-2.54 5.1-5.3 5.1S6.7 13 6.7 10H5c0 3.41 2.72 6.23 6 6.72V20h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
-                  </svg>
-                </button>
+                {/* Mic button — hold to record */}
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  {/* Slide-to-cancel / lock hints (shown while holding) */}
+                  {recording && !recLocked && (
+                    <div style={{
+                      position: 'absolute', right: 52, top: '50%', transform: 'translateY(-50%)',
+                      display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+                      background: C.panel, border: `1px solid ${C.border}`,
+                      borderRadius: 20, padding: '5px 12px',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                      animation: 'recHintIn .2s ease',
+                      pointerEvents: 'none',
+                    }}>
+                      <span style={{ fontSize: 12, color: recCancelling ? C.red : C.textDim }}>
+                        {recCancelling ? '🗑 Soltá para cancelar' : '← Deslizá para cancelar'}
+                      </span>
+                    </div>
+                  )}
+                  {recording && !recLocked && (
+                    <div style={{
+                      position: 'absolute', bottom: 52, right: 0,
+                      background: C.panel, border: `1px solid ${C.border}`,
+                      borderRadius: 20, padding: '6px 10px',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                      pointerEvents: 'none',
+                      animation: 'recHintIn .2s ease',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    }}>
+                      <span style={{ fontSize: 14 }}>🔒</span>
+                      <span style={{ fontSize: 10, color: C.textDim }}>↑ Fijar</span>
+                    </div>
+                  )}
+                  <button
+                    ref={micBtnRef}
+                    type="button"
+                    onMouseDown={startRecording}
+                    onMouseUp={onRecordingEnd}
+                    onMouseLeave={e => { if (recording && !recLocked) onRecordingEnd() }}
+                    onMouseMove={onRecordingMove}
+                    onTouchStart={startRecording}
+                    onTouchMove={onRecordingMove}
+                    onTouchEnd={onRecordingEnd}
+                    style={{
+                      width: 42, height: 42, borderRadius: '50%',
+                      background: recording ? (recCancelling ? C.red : `${C.green}dd`) : C.green,
+                      border: 'none', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: recording ? `0 0 0 8px ${recCancelling ? C.red : C.green}22, 0 4px 16px ${C.green}55` : `0 4px 16px ${C.green}55`,
+                      transform: recording ? 'scale(1.12)' : 'scale(1)',
+                      transition: 'background .15s, box-shadow .15s, transform .15s',
+                      userSelect: 'none', WebkitUserSelect: 'none',
+                    }}>
+                    {recording
+                      ? <div style={{ width: 8, height: 8, borderRadius: 2, background: '#fff', animation: 'recPulse .8s ease infinite' }} />
+                      : <svg width="15" height="15" viewBox="0 0 24 24" fill={C.bg}>
+                          <path d="M12 1c-1.66 0-3 1.34-3 3v8c0 1.66 1.34 3 3 3s3-1.34 3-3V4c0-1.66-1.34-3-3-3zm5.3 9c0 3-2.54 5.1-5.3 5.1S6.7 13 6.7 10H5c0 3.41 2.72 6.23 6 6.72V20h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                        </svg>
+                    }
+                  </button>
+                </div>
+                <style>{`@keyframes recHintIn{from{opacity:0;transform:translateY(-50%) scale(.9)}to{opacity:1;transform:translateY(-50%) scale(1)}}`}</style>
               </div>
             )}
           </form>
