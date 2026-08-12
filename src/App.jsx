@@ -104,8 +104,8 @@ function ComunidadPage() {
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const { user, profile, loading, setUser, setLoading, fetchProfile } = useAuthStore()
-  const { incomingCall, activeCall, setIncomingCall, clearCall } = useCallStore()
-  const { conversations, activeConversation } = useChatStore()
+  const { incomingCall, setIncomingCall, clearCall } = useCallStore()
+  const { conversations, activeConversation, setActiveConversation, fetchConversations } = useChatStore()
   const [tab, setTab] = useState('chats')
   usePresence(user?.id)
 
@@ -147,19 +147,9 @@ export default function App() {
     return <ProfileSheet onClose={() => fetchProfile(user.id)} forceSetup />
   }
 
-  // Active call
-  if (activeCall) {
-    return (
-      <CallPage
-        conversationId={activeCall.convId}
-        myUserId={profile.id}
-        contact={activeCall.contact}
-        callType={activeCall.callType}
-        isIncoming={activeCall.isIncoming}
-        incomingOffer={activeCall.offer}
-        onEnd={clearCall}
-      />
-    )
+  function goBack() {
+    setActiveConversation(null)
+    fetchConversations(profile.id)
   }
 
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0)
@@ -194,7 +184,7 @@ export default function App() {
         {/* Main content panel */}
         <div className="main-panel">
           {activeConversation
-            ? <ChatPage onBack={() => {}} hideBackButton />
+            ? <ChatPage onBack={goBack} hideBackButton />
             : <DesktopEmpty />}
         </div>
       </div>
@@ -204,7 +194,7 @@ export default function App() {
         <div style={{ flex: 1, overflow: 'hidden' }}>
           {tab === 'chats' && (
             activeConversation
-              ? <ChatPage onBack={() => {}} />
+              ? <ChatPage onBack={goBack} />
               : <ChatListPage />
           )}
           {tab === 'comunidad' && <ComunidadPage />}
