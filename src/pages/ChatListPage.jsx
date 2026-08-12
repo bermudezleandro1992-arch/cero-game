@@ -68,7 +68,7 @@ function Ticks({ read }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatListPage({ desktopMode }) {
   const { profile, signOut } = useAuthStore()
-  const { conversations, fetchConversations, findOrCreateConversation, setActiveConversation, activeConversation, subscribeToConversations } = useChatStore()
+  const { conversations, fetchConversations, findOrCreateConversation, setActiveConversation, activeConversation } = useChatStore()
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -79,8 +79,6 @@ export default function ChatListPage({ desktopMode }) {
   useEffect(() => {
     if (!profile?.id) return
     fetchConversations(profile.id)
-    const unsub = subscribeToConversations(profile.id)
-    return unsub
   }, [profile?.id])
 
   // Close FAB when clicking outside
