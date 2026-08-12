@@ -51,7 +51,7 @@ export default function ChatPage({ onBack }) {
   const typingTimeout = useRef(null)
   function handleTyping() {
     if (!activeConversation?.id || !profile?.id) return
-    supabase.channel(`conv:${activeConversation.id}`).send({
+    supabase.channel(`contact-conv:${activeConversation.id}:${otherUser?.id}`).send({
       type: 'broadcast', event: 'typing', payload: { user_id: profile.id }
     })
     clearTimeout(typingTimeout.current)

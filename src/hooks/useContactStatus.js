@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
+const ONLINE_THRESHOLD_MS = 90000 // 90s — presence updates every 30s
+
+function isRecentlySeen(lastSeenAt) {
+  if (!lastSeenAt) return false
+  return Date.now() - new Date(lastSeenAt).getTime() < ONLINE_THRESHOLD_MS
+}
+
 // Returns online status, last seen, and typing state for a contact in a conversation
 export function useContactStatus(contactId, conversationId, myUserId) {
-  const [isOnline, setIsOnline] = useState(false)
   const [lastSeen, setLastSeen] = useState(null)
   const [isTyping, setIsTyping] = useState(false)
   const [otherLastRead, setOtherLastRead] = useState(null)
+
+  const isOnline = isRecentlySeen(lastSeen)
 
   useEffect(() => {
     if (!contactId) return
@@ -15,25 +23,13 @@ export function useContactStatus(contactId, conversationId, myUserId) {
     supabase.from('users').select('last_seen_at').eq('id', contactId).single()
       .then(({ data }) => { if (data) setLastSeen(data.last_seen_at) })
 
-    // Subscribe to their row updates (last_seen_at changes)
-    const userChannel = supabase.channel(`contact-status:${contactId}`)
+    // Subscribe to their row updates (last_seen_at changes) — unique channel per contact
+    const userChannel = supabase.channel(`contact-user:${contactId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${contactId}` },
-        (payload) => { setLastSeen(payload.new.last_seen_at) })
+        (payload) => { if (payload.new.last_seen_at) setLastSeen(payload.new.last_seen_at) })
       .subscribe()
 
-    // Presence: detect if they're online right now
-    const presenceChannel = supabase.channel('global-presence')
-    presenceChannel.on('presence', { event: 'sync' }, () => {
-      const state = presenceChannel.presenceState()
-      const online = Object.values(state).flat().some(u => u.user_id === contactId)
-      setIsOnline(online)
-      if (online) setLastSeen(new Date().toISOString())
-    }).subscribe()
-
-    return () => {
-      supabase.removeChannel(userChannel)
-      supabase.removeChannel(presenceChannel)
-    }
+    return () => { supabase.removeChannel(userChannel) }
   }, [contactId])
 
   useEffect(() => {
@@ -47,8 +43,8 @@ export function useContactStatus(contactId, conversationId, myUserId) {
       .single()
       .then(({ data }) => { if (data) setOtherLastRead(data.last_read_at) })
 
-    // Subscribe to typing broadcasts + read receipt updates
-    const convChannel = supabase.channel(`conv:${conversationId}`)
+    // Unique channel name to avoid conflicts with subscribeToMessages
+    const convChannel = supabase.channel(`contact-conv:${conversationId}:${contactId}`)
     let typingTimer = null
 
     convChannel

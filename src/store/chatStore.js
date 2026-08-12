@@ -176,7 +176,7 @@ export const useChatStore = create((set, get) => ({
 
   subscribeToMessages: (conversationId) => {
     const channel = supabase
-      .channel(`conv:${conversationId}`)
+      .channel(`msgs:${conversationId}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
