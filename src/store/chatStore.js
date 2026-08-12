@@ -204,6 +204,19 @@ export const useChatStore = create((set, get) => ({
           })
         }
       })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${conversationId}`,
+      }, (payload) => {
+        const updated = payload.new
+        set(state => ({
+          messages: state.messages.map(m =>
+            m.id === updated.id ? { ...m, ...updated } : m
+          )
+        }))
+      })
       .subscribe()
     return () => supabase.removeChannel(channel)
   },

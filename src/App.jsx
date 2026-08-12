@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage'
 import ChatListPage from './pages/ChatListPage'
 import ChatPage from './pages/ChatPage'
 import CallPage from './pages/CallPage'
+import LlamadasPage from './pages/LlamadasPage'
 import ProfileSheet from './components/ProfileSheet'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
@@ -143,6 +144,10 @@ export default function App() {
         <div className={`slfa-left${showChat ? ' slfa-left--hidden' : ''}`}>
           {showProfile
             ? <ProfileSheet onClose={() => setShowProfile(false)} />
+            : tab === 'llamadas'
+            ? <LlamadasPage />
+            : tab === 'grupos'
+            ? <ChatListPage onProfileClick={() => setShowProfile(true)} initialFilter="grupos" />
             : <ChatListPage onProfileClick={() => setShowProfile(true)} />
           }
         </div>
