@@ -3,13 +3,14 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { supabase } from '../lib/supabase'
 import NewGroupPage from './NewGroupPage'
+import { C } from '../App'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const COLORS = ['#e91e63','#9c27b0','#2196f3','#00bcd4','#4caf50','#ff9800','#f44336']
-function userColor(id) {
-  if (!id) return '#1a2e22'
+const AVATAR_COLORS = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100','#c62828']
+function avatarColor(id) {
+  if (!id) return C.panel2
   let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff
-  return COLORS[Math.abs(h) % COLORS.length]
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
 function formatTime(ts) {
@@ -17,71 +18,68 @@ function formatTime(ts) {
   const d = new Date(ts), now = new Date()
   if (d.toDateString() === now.toDateString())
     return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-  const yest = new Date(now); yest.setDate(yest.getDate() - 1)
-  if (d.toDateString() === yest.toDateString()) return 'Ayer'
+  const y = new Date(now); y.setDate(y.getDate() - 1)
+  if (d.toDateString() === y.toDateString()) return 'Ayer'
   return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
 }
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
-function Avatar({ name, size = 48, color, avatarUrl, unread }) {
-  const letters = name?.slice(0, 2).toUpperCase() || '?'
+function Avatar({ name, size = 48, color, url }) {
+  return url
+    ? <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+    : (
+      <div style={{
+        width: size, height: size, borderRadius: '50%', flexShrink: 0,
+        background: color || C.panel2,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size * 0.34, fontWeight: 700, color: '#fff',
+        border: `1.5px solid ${C.border}`,
+      }}>
+        {name?.slice(0, 2).toUpperCase() || '?'}
+      </div>
+    )
+}
+
+// ── Skeleton row ──────────────────────────────────────────────────────────────
+function SkeletonRow() {
   return (
-    <div style={{ position: 'relative', flexShrink: 0 }}>
-      {avatarUrl
-        ? <img src={avatarUrl} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />
-        : (
-          <div style={{
-            width: size, height: size, borderRadius: '50%',
-            background: color || '#1a2e22',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: size * 0.35, fontWeight: 700, color: '#fff',
-          }}>{letters}</div>
-        )
-      }
-      {unread > 0 && (
-        <span style={{
-          position: 'absolute', top: -2, right: -4,
-          minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9,
-          background: '#00e676', color: '#0a1409', fontSize: 10, fontWeight: 800,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          border: '2px solid #0a1409',
-        }}>{unread > 99 ? '99+' : unread}</span>
-      )}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' }}>
+      <div className="skeleton" style={{ width: 50, height: 50, borderRadius: '50%' }} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="skeleton" style={{ height: 13, width: '55%' }} />
+        <div className="skeleton" style={{ height: 11, width: '80%' }} />
+      </div>
     </div>
   )
 }
 
-// ── Check ticks ───────────────────────────────────────────────────────────────
+// ── Ticks ─────────────────────────────────────────────────────────────────────
 function Ticks({ read }) {
   return (
-    <svg width="14" height="10" viewBox="0 0 14 10" fill="none" style={{ flexShrink: 0 }}>
-      {read
-        ? <><path d="M1 5l3 3 6-7" stroke="#00e676" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M5 5l3 3 6-7" stroke="#00e676" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></>
-        : <><path d="M1 5l3 3 6-7" stroke="#5f7a6a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M5 5l3 3 6-7" stroke="#5f7a6a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></>
-      }
+    <svg width="14" height="9" viewBox="0 0 16 11" fill="none" style={{ flexShrink: 0 }}>
+      <path d="M1 5.5L5 9.5L11 2" stroke={read ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 5.5L9 9.5L15 2" stroke={read ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function ChatListPage({ desktopMode }) {
+export default function ChatListPage({ onProfileClick }) {
   const { profile, signOut } = useAuthStore()
   const { conversations, fetchConversations, findOrCreateConversation, setActiveConversation, activeConversation } = useChatStore()
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [showNewGroup, setShowNewGroup] = useState(false)
-  const [filter, setFilter] = useState('todos') // todos | directos | grupos
+  const [filter, setFilter] = useState('todos')
   const [showFab, setShowFab] = useState(false)
+  const [loadingConvs, setLoadingConvs] = useState(true)
 
   useEffect(() => {
     if (!profile?.id) return
-    fetchConversations(profile.id)
+    fetchConversations(profile.id).then(() => setLoadingConvs(false))
   }, [profile?.id])
 
-  // Close FAB when clicking outside
   useEffect(() => {
     if (!showFab) return
     const h = () => setShowFab(false)
@@ -103,7 +101,6 @@ export default function ChatListPage({ desktopMode }) {
   async function openChat(userId) {
     const convId = await findOrCreateConversation(profile.id, userId)
     const user = searchResults.find(u => u.id === userId)
-      || conversations.find(c => c.user?.id === userId)?.user
     setActiveConversation({ id: convId, user, isGroup: false })
     setSearch(''); setSearchResults([])
     fetchConversations(profile.id)
@@ -124,68 +121,77 @@ export default function ChatListPage({ desktopMode }) {
   })
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0a1409', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', position: 'relative' }}>
 
       {/* ── HEADER ── */}
-      <div style={{ background: '#0e1a14', padding: '14px 16px 0', flexShrink: 0 }}>
-        {/* Top row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+
+        {/* Top bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: '#00e676', boxShadow: '0 0 8px #00e676',
-            }} />
-            <h1 style={{ color: '#c8ddd0', fontWeight: 800, fontSize: 18, margin: 0, letterSpacing: '-0.3px' }}>
+            {/* Logo dot */}
+            <div style={{ position: 'relative' }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.green, boxShadow: `0 0 10px ${C.green}, 0 0 20px ${C.green}66` }} />
+            </div>
+            <span style={{ color: C.text, fontWeight: 800, fontSize: 17, letterSpacing: '-0.3px' }}>
               Mi Mensajero
-            </h1>
+            </span>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {!desktopMode && (
-              <button
-                onClick={signOut}
-                style={{ background: 'none', border: '1px solid #1c2e23', cursor: 'pointer', color: '#5f7a6a', fontSize: 11, padding: '4px 10px', borderRadius: 8 }}>
-                Salir
-              </button>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button onClick={() => onProfileClick?.()} style={{
+              width: 32, height: 32, borderRadius: '50%', background: C.panel2,
+              border: `1px solid ${C.border}`, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+            </button>
+            <button onClick={signOut} style={{
+              background: 'none', border: `1px solid ${C.border}`, cursor: 'pointer',
+              color: C.textDim, fontSize: 11, padding: '4px 10px', borderRadius: 8,
+            }}>Salir</button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div style={{ padding: '0 16px 10px' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: C.panel2, border: `1px solid ${C.border}`,
+            borderRadius: 12, padding: '0 12px',
+            transition: 'border-color .2s',
+          }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" style={{ flexShrink: 0 }}>
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" strokeLinecap="round"/>
+            </svg>
+            <input
+              type="text" placeholder="Buscar chats o usuarios..." value={search}
+              onChange={e => { setSearch(e.target.value); searchUsers(e.target.value) }}
+              style={{
+                flex: 1, background: 'none', border: 'none', outline: 'none',
+                color: C.text, fontSize: 14, padding: '10px 0',
+              }}
+            />
+            {search && (
+              <button onClick={() => { setSearch(''); setSearchResults([]) }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 16, lineHeight: 1 }}>✕</button>
             )}
           </div>
         </div>
 
-        {/* Search bar */}
-        <div style={{
-          display: 'flex', alignItems: 'center',
-          background: '#111e17', border: '1px solid #1c2e23',
-          borderRadius: 12, padding: '0 12px', gap: 8, marginBottom: 12,
-        }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5f7a6a" strokeWidth="2" style={{ flexShrink: 0 }}>
-            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" strokeLinecap="round"/>
-          </svg>
-          <input
-            type="text"
-            placeholder="Buscar usuarios..."
-            value={search}
-            onChange={e => { setSearch(e.target.value); searchUsers(e.target.value) }}
-            style={{
-              flex: 1, background: 'none', border: 'none', outline: 'none',
-              color: '#c8ddd0', fontSize: 14, padding: '9px 0',
-            }}
-          />
-          {search && (
-            <button onClick={() => { setSearch(''); setSearchResults([]) }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5f7a6a', fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
-          )}
-        </div>
-
-        {/* Category tabs */}
+        {/* Filter tabs */}
         {!search && (
-          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #1c2e23', marginLeft: -16, marginRight: -16, paddingLeft: 16 }}>
+          <div style={{ display: 'flex', borderTop: `1px solid ${C.border}` }}>
             {[['todos','Todos'],['directos','Directos'],['grupos','Grupos']].map(([id, label]) => (
               <button key={id} onClick={() => setFilter(id)} style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                padding: '8px 16px 10px',
-                color: filter === id ? '#00e676' : '#5f7a6a',
-                fontSize: 13, fontWeight: filter === id ? 700 : 500,
-                borderBottom: filter === id ? '2px solid #00e676' : '2px solid transparent',
+                flex: 1, background: 'none', border: 'none', cursor: 'pointer',
+                padding: '9px 8px 10px',
+                color: filter === id ? C.green : C.textDim,
+                fontSize: 12, fontWeight: filter === id ? 700 : 400,
+                borderBottom: filter === id ? `2px solid ${C.green}` : '2px solid transparent',
                 marginBottom: -1, transition: 'color .15s',
+                letterSpacing: '.3px',
               }}>{label}</button>
             ))}
           </div>
@@ -195,29 +201,44 @@ export default function ChatListPage({ desktopMode }) {
       {/* ── LIST ── */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
 
+        {/* Skeleton loading */}
+        {loadingConvs && !search && (
+          <>{[...Array(5)].map((_, i) => <SkeletonRow key={i} />)}</>
+        )}
+
         {/* Search results */}
         {search && (
           <>
             {searching && (
-              <p style={{ color: '#5f7a6a', fontSize: 12, margin: '8px 16px 0' }}>Buscando...</p>
+              <div style={{ padding: '20px 16px', display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div className="skeleton" style={{ width: 44, height: 44, borderRadius: '50%' }} />
+                <div style={{ flex: 1 }}>
+                  <div className="skeleton" style={{ height: 12, width: '50%', marginBottom: 6 }} />
+                  <div className="skeleton" style={{ height: 10, width: '70%' }} />
+                </div>
+              </div>
             )}
             {!searching && searchResults.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#5f7a6a' }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
-                <p style={{ margin: 0, fontSize: 14 }}>No se encontraron usuarios</p>
-                <p style={{ margin: '4px 0 0', fontSize: 12 }}>Probá con otro nombre o @usuario</p>
+              <div style={{ textAlign: 'center', padding: '48px 24px', color: C.textDim }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🔍</div>
+                <p style={{ margin: '0 0 4px', fontSize: 14, color: C.text2 }}>Sin resultados</p>
+                <p style={{ margin: 0, fontSize: 12 }}>Probá con otro nombre o @usuario</p>
               </div>
             )}
             {searchResults.map(u => (
               <button key={u.id} onClick={() => openChat(u.id)} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                 padding: '10px 16px', background: 'none', border: 'none',
-                borderBottom: '1px solid #111e17', cursor: 'pointer', textAlign: 'left',
-              }}>
-                <Avatar name={u.display_name} size={46} color={userColor(u.id)} avatarUrl={u.avatar_url} />
+                borderBottom: `1px solid ${C.border}22`, cursor: 'pointer', textAlign: 'left',
+                transition: 'background .15s',
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = C.panel}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <Avatar name={u.display_name} size={46} color={avatarColor(u.id)} url={u.avatar_url} />
                 <div>
-                  <p style={{ margin: 0, color: '#c8ddd0', fontWeight: 600, fontSize: 14 }}>{u.display_name}</p>
-                  <p style={{ margin: '2px 0 0', color: '#5f7a6a', fontSize: 12 }}>@{u.username}</p>
+                  <p style={{ margin: 0, color: C.text, fontWeight: 600, fontSize: 14 }}>{u.display_name}</p>
+                  <p style={{ margin: '2px 0 0', color: C.textDim, fontSize: 12 }}>@{u.username}</p>
                 </div>
               </button>
             ))}
@@ -225,73 +246,91 @@ export default function ChatListPage({ desktopMode }) {
         )}
 
         {/* Empty state */}
-        {!search && filtered.length === 0 && (
+        {!search && !loadingConvs && filtered.length === 0 && (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', height: '100%', color: '#5f7a6a',
+            justifyContent: 'center', height: '100%', color: C.textDim,
             padding: '0 32px', textAlign: 'center', gap: 12,
           }}>
             <div style={{
-              width: 72, height: 72, borderRadius: '50%',
-              background: 'rgba(0,230,118,0.06)', border: '1.5px solid rgba(0,230,118,0.12)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30,
+              width: 68, height: 68, borderRadius: '50%',
+              background: `${C.green}0A`, border: `1.5px solid ${C.green}20`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
             }}>💬</div>
-            <p style={{ margin: 0, fontSize: 15, color: '#c8ddd0', fontWeight: 600 }}>Sin conversaciones</p>
-            <p style={{ margin: 0, fontSize: 12 }}>Buscá un usuario o tocá el botón + para crear un grupo</p>
+            <p style={{ margin: 0, fontSize: 14, color: C.text2, fontWeight: 600 }}>Sin conversaciones</p>
+            <p style={{ margin: 0, fontSize: 12 }}>Buscá un usuario o tocá + para crear un grupo</p>
           </div>
         )}
 
-        {/* Conversation list */}
-        {!search && filtered.map(conv => {
-          const isGroup  = conv.isGroup
-          const name     = isGroup ? conv.name : conv.user?.display_name
-          const avatarColor = isGroup ? '#1a4a35' : userColor(conv.user?.id)
-          const lastMsg  = conv.lastMessage
-          const isMine   = lastMsg?.sender_id === profile?.id
-          const preview  = lastMsg?.type === 'image' ? '📷 Imagen'
+        {/* Conversations */}
+        {!search && filtered.map((conv, idx) => {
+          const isGroup   = conv.isGroup
+          const name      = isGroup ? conv.name : conv.user?.display_name
+          const color     = isGroup ? C.greenDk : avatarColor(conv.user?.id)
+          const lastMsg   = conv.lastMessage
+          const isMine    = lastMsg?.sender_id === profile?.id
+          const isActive  = activeConversation?.id === conv.id
+          const preview   = lastMsg?.type === 'image' ? '📷 Imagen'
             : lastMsg?.type === 'audio' ? '🎤 Audio'
             : lastMsg?.content?.startsWith('[↩ ') ? '↩ ' + (lastMsg.content.split('\n')[1] || lastMsg.content)
             : lastMsg?.content || ''
-          const isActive = activeConversation?.id === conv.id
 
           return (
-            <button key={conv.id} onClick={() => setActiveConversation(conv)} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-              padding: '10px 16px',
-              background: isActive ? 'rgba(0,230,118,0.06)' : 'none',
-              border: 'none',
-              borderLeft: isActive ? '3px solid #00e676' : '3px solid transparent',
-              borderBottom: '1px solid #0d1a11',
-              cursor: 'pointer', textAlign: 'left',
-              transition: 'background .15s',
-            }}>
-              <Avatar
-                name={name} size={50}
-                color={avatarColor}
-                avatarUrl={!isGroup ? conv.user?.avatar_url : null}
-                unread={conv.unread}
-              />
+            <button key={conv.id} onClick={() => setActiveConversation(conv)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                padding: '10px 16px',
+                background: isActive ? `${C.green}0C` : 'none',
+                border: 'none',
+                borderLeft: isActive ? `3px solid ${C.green}` : '3px solid transparent',
+                borderBottom: `1px solid ${C.border}22`,
+                cursor: 'pointer', textAlign: 'left',
+                transition: 'background .15s',
+                animation: `msgIn .2s ease-out ${idx * 0.03}s both`,
+              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = C.panel }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none' }}
+            >
+              {/* Avatar with online dot */}
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <Avatar name={name} size={50} color={color} url={!isGroup ? conv.user?.avatar_url : null} />
+                {conv.unread > 0 && (
+                  <span style={{
+                    position: 'absolute', top: -3, right: -4,
+                    minWidth: 18, height: 18, borderRadius: 9, padding: '0 5px',
+                    background: C.green, color: C.bg, fontSize: 10, fontWeight: 800,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: `2px solid ${C.bg}`,
+                    boxShadow: `0 0 8px ${C.green}88`,
+                  }}>{conv.unread > 99 ? '99+' : conv.unread}</span>
+                )}
+              </div>
+
+              {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
                   <p style={{
-                    margin: 0, color: '#c8ddd0', fontWeight: 600, fontSize: 14,
+                    margin: 0, color: conv.unread > 0 ? C.text : C.text2,
+                    fontWeight: conv.unread > 0 ? 700 : 600, fontSize: 14,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
                   }}>{name}</p>
                   {lastMsg && (
                     <span style={{
                       fontSize: 11, flexShrink: 0, marginLeft: 8,
-                      color: conv.unread > 0 ? '#00e676' : '#3d5949',
+                      color: conv.unread > 0 ? C.green : C.textDim,
+                      fontWeight: conv.unread > 0 ? 600 : 400,
                     }}>{formatTime(lastMsg.created_at)}</span>
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {isMine && lastMsg && <Ticks read={lastMsg.read_at != null} />}
+                  {isMine && lastMsg && <Ticks read={!!lastMsg.read_at} />}
                   <p style={{
-                    margin: 0, fontSize: 12, color: conv.unread > 0 ? '#7fa98d' : '#3d5949',
+                    margin: 0, fontSize: 12,
+                    color: conv.unread > 0 ? C.text2 : C.textDim,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
                     fontWeight: conv.unread > 0 ? 500 : 400,
                   }}>
-                    {isMine && <span style={{ color: '#3d5949' }}>Vos: </span>}
+                    {isMine && <span style={{ color: C.textDim }}>Vos: </span>}
                     {preview || 'Conversación iniciada'}
                   </p>
                 </div>
@@ -302,7 +341,7 @@ export default function ChatListPage({ desktopMode }) {
       </div>
 
       {/* ── FAB ── */}
-      <div style={{ position: 'absolute', bottom: desktopMode ? 24 : 80, right: 16, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, zIndex: 30 }}>
+      <div style={{ position: 'absolute', bottom: 20, right: 16, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, zIndex: 30 }}>
         {showFab && (
           <>
             <FabItem label="Nuevo grupo" icon="👥" onClick={() => { setShowFab(false); setShowNewGroup(true) }} />
@@ -312,15 +351,15 @@ export default function ChatListPage({ desktopMode }) {
         <button
           onClick={e => { e.stopPropagation(); setShowFab(v => !v) }}
           style={{
-            width: 52, height: 52, borderRadius: '50%',
-            background: '#00e676', border: 'none', cursor: 'pointer',
-            boxShadow: '0 4px 20px rgba(0,230,118,0.35)',
+            width: 50, height: 50, borderRadius: '50%',
+            background: C.green, border: 'none', cursor: 'pointer',
+            boxShadow: `0 4px 20px ${C.green}55`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transform: showFab ? 'rotate(45deg)' : 'none',
             transition: 'transform .2s, box-shadow .2s',
           }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M12 5v14M5 12h14" stroke="#0a1409" strokeWidth="2.5" strokeLinecap="round"/>
+            <path d="M12 5v14M5 12h14" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round"/>
           </svg>
         </button>
       </div>
@@ -332,12 +371,12 @@ function FabItem({ label, icon, onClick }) {
   return (
     <button onClick={e => { e.stopPropagation(); onClick() }} style={{
       display: 'flex', alignItems: 'center', gap: 10,
-      padding: '9px 16px', background: '#0e1a14',
-      border: '1px solid #1c2e23', borderRadius: 24, cursor: 'pointer',
-      boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+      padding: '9px 16px', background: C.panel,
+      border: `1px solid ${C.border}`, borderRadius: 24, cursor: 'pointer',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
     }}>
       <span style={{ fontSize: 16 }}>{icon}</span>
-      <span style={{ color: '#c8ddd0', fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ color: C.text2, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap' }}>{label}</span>
     </button>
   )
 }
