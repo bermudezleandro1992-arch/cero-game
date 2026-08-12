@@ -345,25 +345,28 @@ export default function ChatPage({ onBack }) {
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/mp4'
-      const recorder = new MediaRecorder(stream, { mimeType })
+      // Pick best supported mimeType
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+        .find(t => MediaRecorder.isTypeSupported(t)) || ''
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {})
       recChunks.current = []
       recorder.ondataavailable = e => { if (e.data.size > 0) recChunks.current.push(e.data) }
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop())
-        const blob = new Blob(recChunks.current, { type: mimeType })
+        const type = recorder.mimeType || mimeType || 'audio/webm'
+        const blob = new Blob(recChunks.current, { type })
         if (blob.size < 500) return
         setUploadingImage(true)
         try {
-          const ext = mimeType.includes('mp4') ? 'm4a' : 'webm'
-          const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mimeType })
+          const ext = type.includes('mp4') || type.includes('m4a') ? 'm4a' : 'webm'
+          const file = new File([blob], `voice-${Date.now()}.${ext}`, { type })
           const url = await uploadImage(file, profile.id)
           await sendMessage(activeConversation.id, profile.id, url, 'audio')
           sounds.msgSent()
         } catch (err) { alert(`Error al enviar audio: ${err.message}`) }
         setUploadingImage(false)
       }
-      recorder.start(100)
+      recorder.start(250) // 250ms chunks — more stable on mobile than 100ms
       recorderRef.current = recorder
       setRecording(true)
       let s = 0
