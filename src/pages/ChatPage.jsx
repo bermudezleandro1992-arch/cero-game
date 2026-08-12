@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
+import ContactPage from './ContactPage'
+import { useContactStatus, formatLastSeen } from '../hooks/useContactStatus'
+import { supabase } from '../lib/supabase'
 
 const EMOJIS = ['😀','😂','❤️','👍','🔥','😍','🥺','😭','🙏','✅','💯','😎','🤣','😊','🎉','👏','🤔','😅','😢','💪','🫡','😆','🤩','😮','🥳','👀','💀','🙌','🤝','⚡']
 
@@ -16,6 +19,7 @@ export default function ChatPage({ onBack }) {
   const [showEmoji, setShowEmoji] = useState(false)
   const [replyTo, setReplyTo] = useState(null)
   const [longPressMsg, setLongPressMsg] = useState(null)
+  const [showContact, setShowContact] = useState(false)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const fileRef = useRef(null)
@@ -24,6 +28,12 @@ export default function ChatPage({ onBack }) {
   const isGroup = activeConversation?.isGroup
   const otherUser = activeConversation?.user
   const groupName = activeConversation?.name
+
+  const { isOnline, lastSeen, isTyping, otherLastRead } = useContactStatus(
+    isGroup ? null : otherUser?.id,
+    activeConversation?.id,
+    profile?.id
+  )
 
   useEffect(() => {
     if (!activeConversation?.id) return
@@ -37,6 +47,15 @@ export default function ChatPage({ onBack }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     if (messages.length > 0) markAsRead(activeConversation?.id, profile?.id)
   }, [messages])
+
+  const typingTimeout = useRef(null)
+  function handleTyping() {
+    if (!activeConversation?.id || !profile?.id) return
+    supabase.channel(`conv:${activeConversation.id}`).send({
+      type: 'broadcast', event: 'typing', payload: { user_id: profile.id }
+    })
+    clearTimeout(typingTimeout.current)
+  }
 
   async function handleSend(e) {
     e?.preventDefault()
@@ -77,6 +96,11 @@ export default function ChatPage({ onBack }) {
   const grouped = groupByDate(messages)
 
   return (
+    <>
+    {showContact && !isGroup && (
+      <ContactPage user={otherUser} onBack={() => setShowContact(false)} onChat={() => setShowContact(false)} />
+    )}
+
     <div className="h-screen flex flex-col" style={{ background: '#0b141a' }}
       onClick={() => { setLongPressMsg(null); setShowEmoji(false) }}>
       {/* Header */}
@@ -94,11 +118,17 @@ export default function ChatPage({ onBack }) {
           <p className="font-semibold text-white text-sm leading-tight truncate">
             {isGroup ? groupName : otherUser?.display_name}
           </p>
-          <p className="text-xs truncate" style={{ color: '#8696a0' }}>
-            {isGroup
-              ? `${(activeConversation?.members?.length || 0) + 1} participantes`
-              : `@${otherUser?.username}`}
-          </p>
+          {isGroup ? (
+            <p className="text-xs" style={{ color: '#8696a0' }}>
+              {`${(activeConversation?.members?.length || 0) + 1} participantes`}
+            </p>
+          ) : isTyping ? (
+            <p className="text-xs font-medium" style={{ color: '#00a884' }}>Escribiendo...</p>
+          ) : (
+            <p className="text-xs" style={{ color: isOnline ? '#00a884' : '#8696a0' }}>
+              {formatLastSeen(lastSeen, isOnline)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -171,8 +201,8 @@ export default function ChatPage({ onBack }) {
                             style={{ maxHeight: 280, objectFit: 'cover' }}
                             loading="lazy"
                             onClick={() => window.open(msg.content, '_blank')} />
-                          <span className="text-right block text-xs" style={{ color: isMine ? '#a8d5c8' : '#8696a0' }}>
-                            {formatTime(msg.created_at)} {isMine && <Ticks />}
+                          <span className="text-right block text-xs" style={{ color: '#a8d5c8' }}>
+                            {formatTime(msg.created_at)} {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} />}
                           </span>
                         </div>
                       ) : !isReply ? (
@@ -180,13 +210,13 @@ export default function ChatPage({ onBack }) {
                           <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
                           <span className="inline-flex items-center gap-0.5 ml-2 align-bottom"
                             style={{ fontSize: 10, color: isMine ? '#a8d5c8' : '#8696a0' }}>
-                            {formatTime(msg.created_at)} {isMine && <Ticks />}
+                            {formatTime(msg.created_at)} {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} />}
                           </span>
                         </>
                       ) : (
                         <span className="inline-flex items-center gap-0.5 ml-2 align-bottom"
                           style={{ fontSize: 10, color: isMine ? '#a8d5c8' : '#8696a0' }}>
-                          {formatTime(msg.created_at)} {isMine && <Ticks />}
+                          {formatTime(msg.created_at)} {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} />}
                         </span>
                       )}
                     </div>
@@ -267,7 +297,7 @@ export default function ChatPage({ onBack }) {
           type="text"
           placeholder="Escribe un mensaje"
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={e => { setText(e.target.value); handleTyping() }}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSend(e) }}
           className="flex-1 px-4 py-2.5 rounded-full text-sm text-white outline-none"
           style={{ background: '#2a3942' }}
@@ -300,6 +330,7 @@ export default function ChatPage({ onBack }) {
         )}
       </form>
     </div>
+    </>
   )
 }
 
@@ -320,11 +351,12 @@ function senderColor(id) {
   return SENDER_COLORS[Math.abs(h) % SENDER_COLORS.length]
 }
 
-function Ticks() {
+function Ticks({ read }) {
+  const color = read ? '#53bdeb' : '#a8d5c8'
   return (
     <svg width="14" height="9" viewBox="0 0 16 11" fill="none" style={{ display: 'inline', verticalAlign: 'middle' }}>
-      <path d="M1 5.5L5 9.5L11 2" stroke="#a8d5c8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M5 5.5L9 9.5L15 2" stroke="#a8d5c8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M1 5.5L5 9.5L11 2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 5.5L9 9.5L15 2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
