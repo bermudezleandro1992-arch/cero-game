@@ -12,6 +12,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const defaultUser = (!profile?.username || profile.username.startsWith('user_')) ? '' : profile.username
   const [name, setName] = useState(defaultName)
   const [username, setUsername] = useState(defaultUser)
+  const [bio, setBio] = useState(profile?.bio || '')
   const [soundOn, setSoundOn] = useState(soundSettings.isEnabled())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -55,6 +56,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
     const err = await updateProfile(profile.id, {
       display_name: name.trim(),
       username: cleanUser || profile.username,
+      bio: bio.trim(),
     })
     if (err) setError(err)
     else {
@@ -204,6 +206,27 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
           <p style={{ fontSize: 12, color: C.textDim, margin: '8px 0 0' }}>
             Solo letras minúsculas, números y guión bajo
           </p>
+        </div>
+
+        {/* Bio */}
+        <div style={{ padding: '0 24px 20px' }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 12 }}>
+            Bio
+          </label>
+          <textarea
+            value={bio}
+            onChange={e => setBio(e.target.value)}
+            maxLength={160}
+            placeholder="Algo sobre vos..."
+            rows={3}
+            style={{
+              width: '100%', background: 'transparent', border: 'none',
+              borderBottom: `1px solid ${C.border}`, color: C.text,
+              fontSize: 15, padding: '4px 0 8px', outline: 'none',
+              resize: 'none', lineHeight: 1.5, boxSizing: 'border-box',
+            }}
+          />
+          <p style={{ fontSize: 12, color: C.textDim, margin: '4px 0 0', textAlign: 'right' }}>{bio.length}/160</p>
         </div>
 
         {/* Status messages */}

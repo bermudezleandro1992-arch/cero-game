@@ -194,7 +194,7 @@ const REACTION_EMOJIS = ['👍','❤️','😂','🔥','⚽','🏆','😮','👏
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatPage({ onBack }) {
   const { profile } = useAuthStore()
-  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions } = useChatStore()
+  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage } = useChatStore()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -206,7 +206,9 @@ export default function ChatPage({ onBack }) {
   const [call, setCall] = useState(null)
   const [pinnedDismissed, setPinnedDismissed] = useState(false)
   const [showReactionPicker, setShowReactionPicker] = useState(null) // messageId
-  // Recording
+  const [editingMsg, setEditingMsg] = useState(null) // { id, content }
+  const [editText, setEditText] = useState('')
+  const [forwardMsg, setForwardMsg] = useState(null) // message to forward
   const [viewOncePending, setViewOncePending] = useState(null) // { file, type } waiting for view count pick
   const [recording, setRecording] = useState(false)
   const [recDuration, setRecDuration] = useState(0)
@@ -284,6 +286,19 @@ export default function ChatPage({ onBack }) {
     } catch (err) { alert(`Error: ${err.message}`); setText(content) }
     setSending(false)
     inputRef.current?.focus()
+  }
+
+  async function handleEditSave() {
+    if (!editingMsg || !editText.trim()) return
+    await editMessage(editingMsg.id, editText.trim())
+    setEditingMsg(null); setEditText('')
+  }
+
+  async function handleForward(conv) {
+    if (!forwardMsg || !conv) return
+    await forwardMessage(forwardMsg.conversation_id, conv.id, profile.id, forwardMsg.content, forwardMsg.type || 'text')
+    setForwardMsg(null)
+    sounds.msgSent()
   }
 
   async function handleImagePick(e) {
@@ -440,6 +455,50 @@ export default function ChatPage({ onBack }) {
           </div>
         </div>
       )}
+      {/* ── Edit message modal ── */}
+      {editingMsg && (
+        <div onClick={() => setEditingMsg(null)} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#141E24', borderRadius: 20, padding: '24px 20px', width: 320, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>✏️ Editar mensaje</div>
+            <textarea
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              autoFocus
+              rows={3}
+              style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, fontSize: 14, padding: '10px 12px', resize: 'none', outline: 'none', lineHeight: 1.5 }}
+            />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setEditingMsg(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 12, border: `1px solid ${C.border}`, background: 'transparent', color: C.textDim, cursor: 'pointer', fontSize: 14 }}>Cancelar</button>
+              <button onClick={handleEditSave} style={{ flex: 1, padding: '10px 0', borderRadius: 12, border: 'none', background: C.green, color: C.bg, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Forward message modal ── */}
+      {forwardMsg && (
+        <div onClick={() => setForwardMsg(null)} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#141E24', borderRadius: '20px 20px 0 0', padding: '20px 16px', width: '100%', maxWidth: 480, border: `1px solid ${C.border}`, maxHeight: '70vh', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>↗ Reenviar a...</div>
+            <div style={{ overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {useChatStore.getState().conversations.filter(c => c.id !== activeConversation?.id).map(conv => (
+                <button key={conv.id} onClick={() => handleForward(conv)} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px',
+                  background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 12,
+                  cursor: 'pointer', color: C.text, textAlign: 'left',
+                }}>
+                  <div style={{ width: 38, height: 38, borderRadius: conv.isGroup ? 10 : '50%', background: C.greenDk, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                    {(conv.name || conv.user?.display_name || '?').slice(0, 2).toUpperCase()}
+                  </div>
+                  <span style={{ fontSize: 14 }}>{conv.name || conv.user?.display_name || conv.user?.username}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setForwardMsg(null)} style={{ padding: '10px 0', borderRadius: 12, border: `1px solid ${C.border}`, background: 'transparent', color: C.textDim, cursor: 'pointer', fontSize: 14 }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
       <div
         style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg2, overflow: 'hidden' }}
         onClick={() => { setLongPressMsg(null); setShowEmoji(false) }}
@@ -666,22 +725,24 @@ export default function ChatPage({ onBack }) {
                         >
                           <CtxBtn label="😀 Reaccionar" onClick={() => { setShowReactionPicker(msg.id); setLongPressMsg(null) }} />
                           <CtxBtn label="↩ Responder" onClick={() => { setReplyTo(msg); setLongPressMsg(null); inputRef.current?.focus() }} />
+                          {isMine && !msg.is_deleted && (msg.type === 'text' || !msg.type) && (
+                            <CtxBtn label="✏️ Editar" onClick={() => { setEditingMsg(msg); setEditText(msg.content); setLongPressMsg(null) }} />
+                          )}
+                          <CtxBtn label="↗ Reenviar" onClick={() => { setForwardMsg(msg); setLongPressMsg(null) }} />
                           <CtxBtn label="📋 Copiar" onClick={() => { navigator.clipboard.writeText(msg.content); setLongPressMsg(null) }} />
                           {isGroup && (
                             <CtxBtn label="📌 Fijar mensaje" onClick={() => {
-                              if (confirm('¿Fijar este mensaje en el grupo?')) {
-                                useChatStore.getState().pinMessage(activeConversation.id, msg.content?.slice(0, 200))
-                                setLongPressMsg(null)
-                              }
+                              useChatStore.getState().pinMessage(activeConversation.id, msg.content?.slice(0, 200))
+                              setLongPressMsg(null)
                             }} />
                           )}
-                          {isMine && (
-                            <CtxBtn label="🗑 Eliminar" danger onClick={() => {
-                              if (confirm('¿Eliminar este mensaje?')) {
-                                deleteMessage(msg.id, activeConversation.id)
-                                setLongPressMsg(null)
-                              }
-                            }} />
+                          {isMine ? (
+                            <>
+                              <CtxBtn label="🙈 Eliminar para mí" onClick={() => { deleteForMe(msg.id); setLongPressMsg(null) }} />
+                              <CtxBtn label="🗑 Eliminar para todos" danger onClick={() => { deleteMessage(msg.id, activeConversation.id); setLongPressMsg(null) }} />
+                            </>
+                          ) : (
+                            <CtxBtn label="🙈 Eliminar para mí" onClick={() => { deleteForMe(msg.id); setLongPressMsg(null) }} />
                           )}
                         </div>
                       )}
@@ -907,6 +968,7 @@ function MsgBody({ msg, isMine, otherLastRead }) {
       marginLeft: 6, whiteSpace: 'nowrap',
       display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'bottom',
     }}>
+      {msg.edited_at && <span style={{ fontSize: 9, opacity: 0.7 }}>editado · </span>}
       {formatTime(msg.created_at)}
       {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} />}
     </span>
