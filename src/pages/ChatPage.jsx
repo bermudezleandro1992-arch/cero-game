@@ -202,6 +202,26 @@ export default function ChatPage({ onBack }) {
   const [replyTo, setReplyTo] = useState(null)
   const [longPressMsg, setLongPressMsg] = useState(null)
   const [hoveredMsg, setHoveredMsg] = useState(null)
+  const [deleteMenuMsg, setDeleteMenuMsg] = useState(null) // messageId showing delete submenu
+
+  // "Delete for me" stored in localStorage per user
+  const deletedForMeKey = `dfm_${profile?.id}`
+  const [deletedForMe, setDeletedForMe] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(`dfm_${profile?.id}`) || '[]')) }
+    catch { return new Set() }
+  })
+  function deleteForMe(msgId) {
+    setDeletedForMe(prev => {
+      const next = new Set(prev); next.add(msgId)
+      localStorage.setItem(deletedForMeKey, JSON.stringify([...next]))
+      return next
+    })
+    setDeleteMenuMsg(null); setLongPressMsg(null)
+  }
+  function deleteForAll(msgId) {
+    deleteMessage(msgId, activeConversation.id)
+    setDeleteMenuMsg(null); setLongPressMsg(null)
+  }
   const [showContact, setShowContact] = useState(false)
   const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [call, setCall] = useState(null)
@@ -334,7 +354,7 @@ export default function ChatPage({ onBack }) {
     setRecording(false); setRecDuration(0)
   }
 
-  const grouped = groupByDate(messages)
+  const grouped = groupByDate(messages.filter(m => !deletedForMe.has(m.id)))
   const memberMap = {}
   activeConversation?.members?.forEach(m => { if (m) memberMap[m.id] = m })
   if (otherUser) memberMap[otherUser.id] = otherUser
@@ -374,7 +394,7 @@ export default function ChatPage({ onBack }) {
       )}
       <div
         style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg2, overflow: 'hidden' }}
-        onClick={() => { setLongPressMsg(null); setShowEmoji(false) }}
+        onClick={() => { setLongPressMsg(null); setShowEmoji(false); setDeleteMenuMsg(null) }}
       >
 
         {/* ── HEADER ── */}
@@ -513,18 +533,27 @@ export default function ChatPage({ onBack }) {
                     onTouchEnd={() => clearTimeout(longPressTimer.current)}
                     onClick={e => e.stopPropagation()}
                   >
-                    {/* Hover action buttons — desktop */}
+                    {/* Hover action buttons — desktop (mis mensajes) */}
                     {isMine && hoveredMsg === msg.id && !msg.is_deleted && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, position: 'relative' }}>
                         <HoverBtn title="Responder" onClick={() => { setReplyTo(msg); inputRef.current?.focus() }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H5v-4"/><path d="M5 13A10 10 0 0 1 19 13"/></svg>
                         </HoverBtn>
                         <HoverBtn title="Reaccionar" onClick={() => setShowReactionPicker(msg.id)}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
                         </HoverBtn>
-                        <HoverBtn title="Eliminar" danger onClick={() => { if (confirm('¿Eliminar este mensaje?')) deleteMessage(msg.id, activeConversation.id) }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                        </HoverBtn>
+                        <div style={{ position: 'relative' }}>
+                          <HoverBtn title="Eliminar" danger onClick={() => setDeleteMenuMsg(deleteMenuMsg === msg.id ? null : msg.id)}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                          </HoverBtn>
+                          {deleteMenuMsg === msg.id && (
+                            <DeleteMenu
+                              onForMe={() => deleteForMe(msg.id)}
+                              onForAll={() => deleteForAll(msg.id)}
+                              right
+                            />
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -624,13 +653,9 @@ export default function ChatPage({ onBack }) {
                               }
                             }} />
                           )}
+                          <CtxBtn label="🗑 Eliminar para mí" danger onClick={() => deleteForMe(msg.id)} />
                           {isMine && (
-                            <CtxBtn label="🗑 Eliminar" danger onClick={() => {
-                              if (confirm('¿Eliminar este mensaje?')) {
-                                deleteMessage(msg.id, activeConversation.id)
-                                setLongPressMsg(null)
-                              }
-                            }} />
+                            <CtxBtn label="🗑 Eliminar para todos" danger onClick={() => deleteForAll(msg.id)} />
                           )}
                         </div>
                       )}
@@ -665,13 +690,24 @@ export default function ChatPage({ onBack }) {
 
                     {/* Hover action buttons — ajenos */}
                     {!isMine && hoveredMsg === msg.id && !msg.is_deleted && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, position: 'relative' }}>
                         <HoverBtn title="Responder" onClick={() => { setReplyTo(msg); inputRef.current?.focus() }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H5v-4"/><path d="M5 13A10 10 0 0 1 19 13"/></svg>
                         </HoverBtn>
                         <HoverBtn title="Reaccionar" onClick={() => setShowReactionPicker(msg.id)}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
                         </HoverBtn>
+                        <div style={{ position: 'relative' }}>
+                          <HoverBtn title="Eliminar para mí" danger onClick={() => setDeleteMenuMsg(deleteMenuMsg === msg.id ? null : msg.id)}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                          </HoverBtn>
+                          {deleteMenuMsg === msg.id && (
+                            <DeleteMenu
+                              onForMe={() => deleteForMe(msg.id)}
+                              onlyForMe
+                            />
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -899,6 +935,60 @@ function HdrBtn({ children, onClick, title }) {
       onMouseEnter={e => e.currentTarget.style.background = C.panel2}
       onMouseLeave={e => e.currentTarget.style.background = 'none'}
     >{children}</button>
+  )
+}
+
+function DeleteMenu({ onForMe, onForAll, onlyForMe, right }) {
+  return (
+    <div
+      onClick={e => e.stopPropagation()}
+      style={{
+        position: 'absolute', zIndex: 50,
+        bottom: 'calc(100% + 6px)',
+        [right ? 'right' : 'left']: 0,
+        background: '#141E24',
+        borderRadius: 14, overflow: 'hidden',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+        border: '1px solid #1C292F',
+        minWidth: 200,
+      }}
+    >
+      <div style={{ padding: '8px 14px 6px', borderBottom: '1px solid #1C292F22' }}>
+        <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#667078', letterSpacing: '1px', textTransform: 'uppercase' }}>
+          Eliminar mensaje
+        </p>
+      </div>
+      <button onClick={onForMe} style={{
+        width: '100%', padding: '11px 16px', background: 'none', border: 'none',
+        cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
+        transition: 'background .1s',
+      }}
+        onMouseEnter={e => e.currentTarget.style.background = '#FF3B3015'}
+        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+      >
+        <span style={{ fontSize: 16 }}>🙈</span>
+        <div>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#FF3B30' }}>Eliminar para mí</p>
+          <p style={{ margin: '1px 0 0', fontSize: 11, color: '#667078' }}>Solo vos dejás de verlo</p>
+        </div>
+      </button>
+      {!onlyForMe && (
+        <button onClick={onForAll} style={{
+          width: '100%', padding: '11px 16px', background: 'none', border: 'none',
+          cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
+          transition: 'background .1s', borderTop: '1px solid #1C292F22',
+        }}
+          onMouseEnter={e => e.currentTarget.style.background = '#FF3B3015'}
+          onMouseLeave={e => e.currentTarget.style.background = 'none'}
+        >
+          <span style={{ fontSize: 16 }}>🗑</span>
+          <div>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#FF3B30' }}>Eliminar para todos</p>
+            <p style={{ margin: '1px 0 0', fontSize: 11, color: '#667078' }}>Se borra para todos los participantes</p>
+          </div>
+        </button>
+      )}
+    </div>
   )
 }
 
