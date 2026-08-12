@@ -48,9 +48,27 @@ export const sounds = {
 
 let ringHandle = null
 export const ringtone = {
+  // Incoming ring: two rising tones, repeating
   start() {
-    const r = () => { tone(880, 0.22, 0.4); tone(880, 0.22, 0.4, 0.38) }
-    r(); ringHandle = setInterval(r, 2000)
+    const r = () => {
+      tone(523, 0.18, 0.45)           // C5
+      tone(659, 0.18, 0.45, 0.22)     // E5
+      tone(784, 0.22, 0.45, 0.44)     // G5
+    }
+    r(); ringHandle = setInterval(r, 2200)
   },
   stop() { if (ringHandle) { clearInterval(ringHandle); ringHandle = null } },
+}
+
+let outRingHandle = null
+export const outgoingRing = {
+  // Outgoing ring: steady "tuuu" like a phone dial tone
+  start() {
+    const r = () => {
+      tone(440, 0.8, 0.2)             // A4 steady
+      tone(480, 0.8, 0.1, 0)
+    }
+    r(); outRingHandle = setInterval(r, 3000)
+  },
+  stop() { if (outRingHandle) { clearInterval(outRingHandle); outRingHandle = null } },
 }

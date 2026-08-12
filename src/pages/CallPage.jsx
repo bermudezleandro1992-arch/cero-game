@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { sounds, ringtone } from '../lib/sounds'
+import { sounds, ringtone, outgoingRing } from '../lib/sounds'
 
 const ICE_SERVERS = {
   iceServers: [
@@ -55,11 +55,12 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
       .on('broadcast', { event: 'call-reject' }, () => hangup(false))
       .subscribe()
 
-    if (!isIncoming) startOutgoing()
+    if (!isIncoming) { startOutgoing(); outgoingRing.start() }
     else ringtone.start()
 
     return () => {
       ringtone.stop()
+      outgoingRing.stop()
       clearInterval(elapsedRef.current)
       if (sessionCh.current) supabase.removeChannel(sessionCh.current)
     }
@@ -134,6 +135,7 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
   }
 
   function goActive() {
+    outgoingRing.stop()
     setPhase('active')
     sounds.callConnect()
     elapsedRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
@@ -147,6 +149,7 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
 
   function hangup(sendSignal = true) {
     ringtone.stop()
+    outgoingRing.stop()
     clearInterval(elapsedRef.current)
     sounds.callEnd()
     if (sendSignal) sessionCh.current?.send({ type: 'broadcast', event: 'call-end', payload: {} })

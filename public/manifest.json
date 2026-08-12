@@ -3,18 +3,16 @@
   "short_name": "Mensajero",
   "description": "Mensajería moderna con comunidades y bots",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#05080A",
-  "theme_color": "#0D151A",
-  "orientation": "portrait",
+  "theme_color": "#05080A",
+  "orientation": "portrait-primary",
   "categories": ["social", "communication"],
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
-  ],
-  "share_target": {
-    "action": "/",
-    "method": "GET",
-    "params": { "text": "share" }
-  }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.svg",     "sizes": "any",      "type": "image/svg+xml", "purpose": "any" }
+  ]
 }

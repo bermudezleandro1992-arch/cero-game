@@ -3,13 +3,16 @@ import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
 import { C } from '../App'
 import { soundSettings } from '../lib/sounds'
+import LegalPage from '../pages/LegalPage'
 
 export default function ProfileSheet({ onClose, forceSetup = false }) {
   const { profile, updateProfile } = useAuthStore()
+  const [showLegal, setShowLegal] = useState(false)
   const defaultName = (!profile?.display_name || profile.display_name === 'Usuario' || profile.display_name.startsWith('user_')) ? '' : profile.display_name
   const defaultUser = (!profile?.username || profile.username.startsWith('user_')) ? '' : profile.username
   const [name, setName] = useState(defaultName)
   const [username, setUsername] = useState(defaultUser)
+  const [bio, setBio] = useState(profile?.bio || '')
   const [soundOn, setSoundOn] = useState(soundSettings.isEnabled())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -53,6 +56,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
     const err = await updateProfile(profile.id, {
       display_name: name.trim(),
       username: cleanUser || profile.username,
+      bio: bio.trim(),
     })
     if (err) setError(err)
     else {
@@ -65,9 +69,11 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const initials = (name || profile?.display_name || '?').slice(0, 2).toUpperCase()
   const disabled = saving || !name.trim()
 
+  if (showLegal) return <LegalPage onBack={() => setShowLegal(false)} />
+
   return (
     <div style={{
-      height: '100%',
+      flex: 1, minHeight: 0,
       display: 'flex', flexDirection: 'column',
       background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
       overflowY: 'auto',
@@ -202,6 +208,27 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
           </p>
         </div>
 
+        {/* Bio */}
+        <div style={{ padding: '0 24px 20px' }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 12 }}>
+            Bio
+          </label>
+          <textarea
+            value={bio}
+            onChange={e => setBio(e.target.value)}
+            maxLength={160}
+            placeholder="Algo sobre vos..."
+            rows={3}
+            style={{
+              width: '100%', background: 'transparent', border: 'none',
+              borderBottom: `1px solid ${C.border}`, color: C.text,
+              fontSize: 15, padding: '4px 0 8px', outline: 'none',
+              resize: 'none', lineHeight: 1.5, boxSizing: 'border-box',
+            }}
+          />
+          <p style={{ fontSize: 12, color: C.textDim, margin: '4px 0 0', textAlign: 'right' }}>{bio.length}/160</p>
+        </div>
+
         {/* Status messages */}
         {error && (
           <div style={{ margin: '0 24px', padding: '10px 14px', background: `${C.red}18`, border: `1px solid ${C.red}44`, borderRadius: 10, color: C.red, fontSize: 13 }}>
@@ -251,6 +278,26 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
                 }} />
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Legal link */}
+        {!forceSetup && (
+          <div style={{ padding: '0 24px 4px' }}>
+            <button type="button" onClick={() => setShowLegal(true)} style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+              background: 'none', border: `1px solid ${C.border}`, borderRadius: 12,
+              padding: '12px 16px', cursor: 'pointer', color: C.textDim,
+            }}>
+              <span style={{ fontSize: 18 }}>⚖️</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ color: C.text2, fontSize: 14, fontWeight: 600 }}>Legal y Privacidad</div>
+                <div style={{ fontSize: 11, color: C.textDim }}>Términos, privacidad y reglamento</div>
+              </div>
+              <svg style={{ marginLeft: 'auto' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </button>
           </div>
         )}
 
