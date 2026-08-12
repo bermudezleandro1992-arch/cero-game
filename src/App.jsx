@@ -11,11 +11,11 @@ import ProfileSheet from './components/ProfileSheet'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
 
-// ── Icons ────────────────────────────────────────────────────────────────────
+// ── Icons ─────────────────────────────────────────────────────────────────────
 function IconChat({ active }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#00e676' : '#5f7a6a'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      stroke={active ? '#00e676' : '#4a6358'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
     </svg>
   )
@@ -23,93 +23,32 @@ function IconChat({ active }) {
 function IconUsers({ active }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#00e676' : '#5f7a6a'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      stroke={active ? '#00e676' : '#4a6358'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
       <circle cx="9" cy="7" r="4"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
     </svg>
   )
 }
 function IconProfile({ active }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#00e676' : '#5f7a6a'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      stroke={active ? '#00e676' : '#4a6358'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
       <circle cx="12" cy="7" r="4"/>
     </svg>
   )
 }
 
-// ── BottomNav ─────────────────────────────────────────────────────────────────
-function BottomNav({ tab, setTab, totalUnread }) {
-  const tabs = [
-    { id: 'chats',    label: 'Chats',     Icon: IconChat },
-    { id: 'comunidad',label: 'Comunidad', Icon: IconUsers },
-    { id: 'perfil',   label: 'Perfil',    Icon: IconProfile },
-  ]
-  return (
-    <nav style={{
-      display: 'flex', height: 58, background: '#0e1a14',
-      borderTop: '1px solid #1c2e23', flexShrink: 0,
-    }}>
-      {tabs.map(({ id, label, Icon }) => {
-        const active = tab === id
-        return (
-          <button key={id} onClick={() => setTab(id)} style={{
-            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', gap: 3, border: 'none', background: 'none',
-            cursor: 'pointer', position: 'relative',
-          }}>
-            {id === 'chats' && totalUnread > 0 && (
-              <span style={{
-                position: 'absolute', top: 6, right: '28%',
-                minWidth: 16, height: 16, borderRadius: 8, padding: '0 4px',
-                background: '#00e676', color: '#0a1409', fontSize: 10, fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>{totalUnread > 99 ? '99+' : totalUnread}</span>
-            )}
-            <Icon active={active} />
-            <span style={{
-              fontSize: 10, fontWeight: active ? 700 : 500,
-              color: active ? '#00e676' : '#5f7a6a',
-            }}>{label}</span>
-            {active && (
-              <div style={{
-                position: 'absolute', bottom: 0, left: '25%', right: '25%',
-                height: 2, borderRadius: 2, background: '#00e676',
-              }} />
-            )}
-          </button>
-        )
-      })}
-    </nav>
-  )
-}
-
-// ── ComunidadPage placeholder ─────────────────────────────────────────────────
-function ComunidadPage() {
-  return (
-    <div style={{
-      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', color: '#5f7a6a', gap: 12, padding: '0 32px', textAlign: 'center',
-    }}>
-      <div style={{ fontSize: 52 }}>🏆</div>
-      <p style={{ margin: 0, fontSize: 16, color: '#c8ddd0', fontWeight: 600 }}>Comunidad</p>
-      <p style={{ margin: 0, fontSize: 13 }}>Torneos, resultados y anuncios próximamente</p>
-    </div>
-  )
-}
-
-// ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const { user, profile, loading, setUser, setLoading, fetchProfile } = useAuthStore()
   const { incomingCall, setIncomingCall, clearCall } = useCallStore()
   const { conversations, activeConversation, setActiveConversation, fetchConversations, subscribeToConversations } = useChatStore()
   const [tab, setTab] = useState('chats')
+  const [showProfile, setShowProfile] = useState(false)
   usePresence(user?.id)
 
-  // Single subscription for conversation list (avoids duplicate channels from dual layout)
+  // Conversations subscription — only once at root level
   useEffect(() => {
     if (!profile?.id) return
     fetchConversations(profile.id)
@@ -121,9 +60,7 @@ export default function App() {
   useEffect(() => {
     if (!profile?.id) return
     const ch = supabase.channel(`user-calls:${profile.id}`)
-      .on('broadcast', { event: 'call-offer' }, ({ payload }) => {
-        setIncomingCall(payload)
-      })
+      .on('broadcast', { event: 'call-offer' }, ({ payload }) => setIncomingCall(payload))
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [profile?.id])
@@ -145,15 +82,9 @@ export default function App() {
   if (!user) return <LoginPage />
   if (!profile) return <Splash />
 
-  const needsProfileSetup = !profile.display_name
-    || profile.display_name === 'Usuario'
-    || profile.display_name.startsWith('user_')
-    || !profile.username
-    || profile.username.startsWith('user_')
-
-  if (needsProfileSetup) {
-    return <ProfileSheet onClose={() => fetchProfile(user.id)} forceSetup />
-  }
+  const needsSetup = !profile.display_name || profile.display_name === 'Usuario'
+    || profile.display_name.startsWith('user_') || !profile.username || profile.username.startsWith('user_')
+  if (needsSetup) return <ProfileSheet onClose={() => fetchProfile(user.id)} forceSetup />
 
   function goBack() {
     setActiveConversation(null)
@@ -161,14 +92,13 @@ export default function App() {
   }
 
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0)
+  const showChat = !!activeConversation
 
-  // Desktop: >= 768px → sidebar layout
-  // Mobile: one panel at a time with bottom nav
   return (
     <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: '#0a1409', overflow: 'hidden' }}>
       <UpdateBanner />
 
-      {/* Incoming call overlay */}
+      {/* Incoming call — fixed overlay */}
       {incomingCall && (
         <CallPage
           conversationId={incomingCall.convId}
@@ -181,63 +111,100 @@ export default function App() {
         />
       )}
 
-      {/* ── DESKTOP LAYOUT (≥768px) ── */}
-      <div className="desktop-layout" style={{ flex: 1, overflow: 'hidden' }}>
+      {/* Profile sheet — tab Perfil */}
+      {showProfile && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#0a1409' }}>
+          <ProfileSheet onClose={() => setShowProfile(false)} />
+        </div>
+      )}
 
-        {/* Sidebar list */}
-        <div className="sidebar-panel">
-          <ChatListPage desktopMode />
+      {/* ── Shell ── */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+
+        {/* LEFT PANEL — chat list */}
+        <div className={`app-panel-left${showChat ? ' slide-out' : ''}`}>
+          <ChatListPage onProfileClick={() => setShowProfile(true)} />
         </div>
 
-        {/* Main content panel */}
-        <div className="main-panel">
+        {/* RIGHT PANEL — chat or empty */}
+        <div className={`app-panel-right${showChat ? ' slide-in' : ''}`}>
           {activeConversation
-            ? <ChatPage onBack={goBack} hideBackButton />
+            ? <ChatPage onBack={goBack} />
             : <DesktopEmpty />}
         </div>
       </div>
 
-      {/* ── MOBILE LAYOUT (<768px) ── */}
-      <div className="mobile-layout" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          {tab === 'chats' && (
-            activeConversation
-              ? <ChatPage onBack={goBack} />
-              : <ChatListPage />
-          )}
-          {tab === 'comunidad' && <ComunidadPage />}
-          {tab === 'perfil' && <ProfileSheet onClose={() => setTab('chats')} />}
-        </div>
-        {!activeConversation && (
-          <BottomNav tab={tab} setTab={setTab} totalUnread={totalUnread} />
-        )}
-      </div>
+      {/* ── Bottom nav (mobile only, hidden when chat open) ── */}
+      {!showChat && (
+        <nav style={{ display: 'flex', height: 58, background: '#0e1a14', borderTop: '1px solid #1a2e20', flexShrink: 0 }}
+          className="mobile-nav">
+          {[
+            { id: 'chats',     label: 'Chats',     Icon: IconChat,    badge: totalUnread },
+            { id: 'comunidad', label: 'Comunidad', Icon: IconUsers,   badge: 0 },
+            { id: 'perfil',    label: 'Perfil',    Icon: IconProfile, badge: 0, action: () => setShowProfile(true) },
+          ].map(({ id, label, Icon, badge, action }) => {
+            const active = tab === id
+            return (
+              <button key={id} onClick={() => { action ? action() : setTab(id) }} style={{
+                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                justifyContent: 'center', gap: 3, border: 'none', background: 'none',
+                cursor: 'pointer', position: 'relative',
+              }}>
+                {badge > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 6, right: '26%',
+                    minWidth: 16, height: 16, borderRadius: 8, padding: '0 4px',
+                    background: '#00e676', color: '#0a1409', fontSize: 10, fontWeight: 800,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>{badge > 99 ? '99+' : badge}</span>
+                )}
+                <Icon active={active} />
+                <span style={{ fontSize: 10, fontWeight: active ? 700 : 400, color: active ? '#00e676' : '#4a6358' }}>{label}</span>
+                {active && <div style={{ position: 'absolute', bottom: 0, left: '20%', right: '20%', height: 2, background: '#00e676', borderRadius: 2 }} />}
+              </button>
+            )
+          })}
+        </nav>
+      )}
 
       <style>{`
-        .desktop-layout { display: none !important; }
-        .mobile-layout  { display: flex !important; }
+        /* Mobile: panels are absolute, full size, slide in/out */
+        .app-panel-left, .app-panel-right {
+          position: absolute; inset: 0;
+          transition: transform .25s cubic-bezier(.4,0,.2,1);
+          background: #0a1409;
+          overflow: hidden;
+        }
+        .app-panel-left               { transform: translateX(0); }
+        .app-panel-left.slide-out     { transform: translateX(-100%); }
+        .app-panel-right              { transform: translateX(100%); }
+        .app-panel-right.slide-in     { transform: translateX(0); }
+
+        /* Desktop: side by side, no slide, no absolute */
         @media (min-width: 768px) {
-          .desktop-layout { display: flex !important; }
-          .mobile-layout  { display: none !important; }
-        }
-        .sidebar-panel {
-          width: 360px; flex-shrink: 0;
-          border-right: 1px solid #1c2e23;
-          height: 100%; overflow: hidden;
-        }
-        .main-panel {
-          flex: 1; height: 100%; overflow: hidden;
+          .mobile-nav { display: none !important; }
+          .app-panel-left, .app-panel-right {
+            position: relative !important;
+            transform: none !important;
+          }
+          .app-panel-left {
+            width: 340px;
+            flex-shrink: 0;
+            border-right: 1px solid #1a2e20;
+          }
+          .app-panel-right { flex: 1; }
         }
       `}</style>
     </div>
   )
 }
 
+
 function Splash() {
   return (
     <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a1409' }}>
-      <div style={{ fontSize: 48, animation: 'pulse 1.2s ease-in-out infinite' }}>💬</div>
-      <style>{`@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}`}</style>
+      <div style={{ fontSize: 48, animation: 'sp 1.2s ease-in-out infinite' }}>💬</div>
+      <style>{`@keyframes sp{0%,100%{opacity:.3;transform:scale(.9)}50%{opacity:1;transform:scale(1)}}`}</style>
     </div>
   )
 }
@@ -247,18 +214,26 @@ function DesktopEmpty() {
     <div style={{
       height: '100%', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      background: '#0a1409', color: '#5f7a6a', gap: 16, textAlign: 'center', padding: '0 40px',
+      color: '#4a6358', gap: 20, textAlign: 'center', padding: '0 40px',
     }}>
       <div style={{
-        width: 100, height: 100, borderRadius: '50%',
-        background: 'rgba(0,230,118,0.06)', border: '2px solid rgba(0,230,118,0.15)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44,
+        width: 96, height: 96, borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(0,230,118,0.08) 0%, transparent 70%)',
+        border: '1.5px solid rgba(0,230,118,0.12)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40,
       }}>💬</div>
       <div>
-        <p style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700, color: '#c8ddd0' }}>Mi Mensajero</p>
-        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
-          Seleccioná una conversación para empezar<br />o buscá un usuario para chatear
+        <p style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 800, color: '#c8ddd0', letterSpacing: '-0.5px' }}>
+          Mi Mensajero
         </p>
+        <p style={{ margin: 0, fontSize: 13, color: '#4a6358', lineHeight: 1.7 }}>
+          Seleccioná una conversación<br />o buscá un usuario para chatear
+        </p>
+      </div>
+      <div style={{ display: 'flex', gap: 24, marginTop: 8 }}>
+        {['🔒 Cifrado', '⚡ Tiempo real', '📞 Llamadas'].map(f => (
+          <span key={f} style={{ fontSize: 11, color: '#2a4035', background: '#0e1a14', padding: '5px 10px', borderRadius: 20, border: '1px solid #1a2e20' }}>{f}</span>
+        ))}
       </div>
     </div>
   )
