@@ -115,7 +115,7 @@ function AudioPlayer({ src, isMine }) {
   )
 }
 
-export default function ChatPage({ onBack }) {
+export default function ChatPage({ onBack, hideBackButton }) {
   const { profile } = useAuthStore()
   const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage } = useChatStore()
   const [text, setText] = useState('')
@@ -271,29 +271,29 @@ export default function ChatPage({ onBack }) {
     {showContact && !isGroup && (
       <ContactPage user={otherUser} onBack={() => setShowContact(false)} onChat={() => setShowContact(false)} />
     )}
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: '#0b141a', overflow: 'hidden' }}
+    <div style={{ height: hideBackButton ? '100%' : '100dvh', display: 'flex', flexDirection: 'column', background: '#0b141a', overflow: 'hidden' }}
       onClick={() => { setLongPressMsg(null); setShowEmoji(false) }}>
 
       {/* HEADER */}
-      <div style={{ background: '#202c33', display: 'flex', alignItems: 'center', padding: '8px 12px', gap: 10, flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
-        <button onClick={onBack} style={{ color: '#aebac1', padding: 6, background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+      <div style={{ background: '#0e1a14', display: 'flex', alignItems: 'center', padding: '8px 12px', gap: 10, flexShrink: 0, borderBottom: '1px solid #1c2e23' }}>
+        {!hideBackButton && <button onClick={onBack} style={{ color: '#5f7a6a', padding: 6, background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-        </button>
+        </button>}
         <button onClick={() => !isGroup && setShowContact(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
           <div style={{ position: 'relative' }}>
             <Avatar name={isGroup ? groupName : otherUser?.display_name} size={40} color={isGroup ? '#1f6b5c' : senderColor(otherUser?.id)} />
             {isOnline && !isGroup && (
-              <span style={{ position: 'absolute', bottom: 1, right: 1, width: 10, height: 10, borderRadius: '50%', background: '#00a884', border: '2px solid #202c33' }} />
+              <span style={{ position: 'absolute', bottom: 1, right: 1, width: 10, height: 10, borderRadius: '50%', background: '#00e676', border: '2px solid #0e1a14', boxShadow: '0 0 6px #00e676' }} />
             )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ color: '#e9edef', fontWeight: 600, fontSize: 15, margin: 0, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {isGroup ? groupName : otherUser?.display_name}
             </p>
-            <p style={{ margin: 0, fontSize: 12, marginTop: 1, color: isTyping ? '#00a884' : (isOnline ? '#00a884' : '#8696a0') }}>
+            <p style={{ margin: 0, fontSize: 12, marginTop: 1, color: isTyping ? '#00e676' : (isOnline ? '#00e676' : '#5f7a6a') }}>
               {isGroup ? `${(activeConversation?.members?.length || 0) + 1} participantes`
                 : isTyping ? 'Escribiendo...' : formatLastSeen(lastSeen, isOnline)}
             </p>
