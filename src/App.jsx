@@ -140,6 +140,34 @@ export default function App() {
       {/* Shell */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
 
+        {/* DESKTOP sidebar nav */}
+        <nav className="slfa-side-nav">
+          {NAV.map(({ id, label, icon }) => {
+            const active = (id === 'ajustes' ? showProfile : !showProfile && tab === id)
+            return (
+              <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : (setShowProfile(false), setTab(id))} style={{
+                width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                justifyContent: 'center', gap: 4, border: 'none',
+                background: active ? `${C.green}12` : 'none',
+                cursor: 'pointer', padding: '14px 0', position: 'relative',
+                borderLeft: `3px solid ${active ? C.green : 'transparent'}`,
+                transition: 'background .15s',
+              }}>
+                {id === 'chats' && totalUnread > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 10, right: '12%',
+                    minWidth: 16, height: 16, borderRadius: 8, padding: '0 4px',
+                    background: C.green, color: C.bg, fontSize: 9, fontWeight: 800,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>{totalUnread > 99 ? '99+' : totalUnread}</span>
+                )}
+                {icon(active)}
+                <span style={{ fontSize: 10, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>{label}</span>
+              </button>
+            )
+          })}
+        </nav>
+
         {/* LEFT — list or profile */}
         <div className={`slfa-left${showChat ? ' slfa-left--hidden' : ''}`}>
           {showProfile
@@ -168,9 +196,9 @@ export default function App() {
           paddingBottom: 'env(safe-area-inset-bottom)',
         }} className="slfa-bottom-nav">
           {NAV.map(({ id, label, icon }) => {
-            const active = tab === id
+            const active = (id === 'ajustes' ? showProfile : !showProfile && tab === id)
             return (
-              <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : setTab(id)} style={{
+              <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : (setShowProfile(false), setTab(id))} style={{
                 flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
                 justifyContent: 'center', gap: 4, border: 'none', background: 'none',
                 cursor: 'pointer', position: 'relative', transition: 'opacity .15s',
@@ -199,6 +227,7 @@ export default function App() {
 
       <style>{`
         /* Mobile: full-screen sliding panels */
+        .slfa-side-nav { display: none; }
         .slfa-left, .slfa-right {
           position: absolute; inset: 0;
           transition: transform .28s cubic-bezier(.4,0,.2,1);
@@ -213,11 +242,16 @@ export default function App() {
         /* Desktop ≥768px: sidebar layout */
         @media (min-width: 768px) {
           .slfa-bottom-nav { display: none !important; }
+          .slfa-side-nav {
+            display: flex; flex-direction: column;
+            width: 68px; flex-shrink: 0;
+            background: ${C.panel}; border-right: 1px solid ${C.border};
+          }
           .slfa-left, .slfa-right {
             position: relative !important;
             transform: none !important;
           }
-          .slfa-left  { width: 340px; flex-shrink: 0; border-right: 1px solid ${C.border}; }
+          .slfa-left  { width: 300px; flex-shrink: 0; border-right: 1px solid ${C.border}; }
           .slfa-right { flex: 1; }
         }
 
