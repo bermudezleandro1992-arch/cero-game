@@ -2,14 +2,22 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
+import { C } from '../App'
+
+const AVATAR_COLORS = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100','#c62828']
+function avatarColor(id) {
+  if (!id) return C.panel2
+  let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
+}
 
 export default function NewGroupPage({ onBack, onCreated }) {
   const { profile } = useAuthStore()
   const { createGroup } = useChatStore()
-  const [step, setStep] = useState(1) // 1=select members, 2=name
+  const [step, setStep] = useState(1)
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState([])
-  const [selected, setSelected] = useState([]) // [{id, display_name, username}]
+  const [selected, setSelected] = useState([])
   const [groupName, setGroupName] = useState('')
   const [creating, setCreating] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -43,30 +51,43 @@ export default function NewGroupPage({ onBack, onCreated }) {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col" style={{ background: '#111b21' }}>
+    <div style={{
+      height: '100%', display: 'flex', flexDirection: 'column',
+      background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    }}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-4" style={{ background: '#202c33' }}>
-        <button onClick={step === 1 ? onBack : () => setStep(1)} className="text-white p-1">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '14px 16px', background: C.panel,
+        borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+      }}>
+        <button onClick={step === 1 ? onBack : () => setStep(1)} style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: C.text2, padding: 4, display: 'flex',
+        }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
           </svg>
         </button>
-        <div>
-          <h2 className="text-white font-semibold text-base">
+        <div style={{ flex: 1 }}>
+          <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>
             {step === 1 ? 'Nuevo grupo' : 'Nombre del grupo'}
           </h2>
           {step === 1 && (
-            <p className="text-xs" style={{ color: '#8696a0' }}>
-              {selected.length} de {selected.length > 0 ? selected.length : '?'} participantes
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>
+              {selected.length} participante{selected.length !== 1 ? 's' : ''} seleccionado{selected.length !== 1 ? 's' : ''}
             </p>
           )}
         </div>
         {step === 1 && selected.length > 0 && (
-          <button onClick={() => setStep(2)}
-            className="ml-auto w-10 h-10 rounded-full flex items-center justify-center"
-            style={{ background: '#00a884' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-              <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/>
+          <button onClick={() => setStep(2)} style={{
+            width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+            background: C.green, border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: `0 2px 12px ${C.green}44`,
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18l6-6-6-6"/>
             </svg>
           </button>
         )}
@@ -76,62 +97,101 @@ export default function NewGroupPage({ onBack, onCreated }) {
         <>
           {/* Selected chips */}
           {selected.length > 0 && (
-            <div className="flex gap-2 px-4 py-3 overflow-x-auto" style={{ background: '#202c33' }}>
+            <div style={{
+              display: 'flex', gap: 10, padding: '12px 16px', overflowX: 'auto',
+              background: C.panel2, borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+            }}>
               {selected.map(u => (
-                <button key={u.id} onClick={() => toggleUser(u)}
-                  className="flex flex-col items-center gap-1 flex-shrink-0">
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white"
-                      style={{ background: '#2a3942' }}>
+                <button key={u.id} onClick={() => toggleUser(u)} style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  gap: 4, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer',
+                }}>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{
+                      width: 46, height: 46, borderRadius: '50%',
+                      background: avatarColor(u.id),
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 16, fontWeight: 700, color: '#fff',
+                    }}>
                       {u.display_name.slice(0, 2).toUpperCase()}
                     </div>
-                    <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center"
-                      style={{ background: '#ef4444' }}>
-                      <span className="text-white text-xs font-bold leading-none">✕</span>
-                    </div>
+                    <div style={{
+                      position: 'absolute', top: -2, right: -2,
+                      width: 18, height: 18, borderRadius: '50%',
+                      background: C.red, border: `2px solid ${C.bg}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 10, color: '#fff', fontWeight: 800,
+                    }}>✕</div>
                   </div>
-                  <span className="text-xs text-white truncate max-w-12">{u.display_name.split(' ')[0]}</span>
+                  <span style={{ fontSize: 10, color: C.text2, maxWidth: 50, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {u.display_name.split(' ')[0]}
+                  </span>
                 </button>
               ))}
             </div>
           )}
 
           {/* Search */}
-          <div className="px-4 py-2" style={{ background: '#202c33', borderBottom: '1px solid #2a3942' }}>
-            <input
-              type="text"
-              placeholder="Buscar por nombre o @usuario"
-              value={search}
-              onChange={e => { setSearch(e.target.value); searchUsers(e.target.value) }}
-              autoFocus
-              className="w-full px-4 py-2 rounded-xl text-white text-sm outline-none"
-              style={{ background: '#2a3942' }}
-            />
+          <div style={{ padding: '10px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: C.panel2, border: `1px solid ${C.border}`,
+              borderRadius: 12, padding: '0 12px',
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" strokeLinecap="round"/>
+              </svg>
+              <input
+                type="text" placeholder="Buscar por nombre o @usuario"
+                value={search}
+                onChange={e => { setSearch(e.target.value); searchUsers(e.target.value) }}
+                autoFocus
+                style={{
+                  flex: 1, background: 'none', border: 'none', outline: 'none',
+                  color: C.text, fontSize: 14, padding: '10px 0',
+                }}
+              />
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-            {searching && <p className="text-sm text-center py-4" style={{ color: '#8696a0' }}>Buscando...</p>}
+          {/* Results */}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {searching && (
+              <p style={{ textAlign: 'center', padding: '20px', color: C.textDim, fontSize: 13 }}>Buscando...</p>
+            )}
             {!search && !searching && (
-              <p className="text-sm text-center py-8" style={{ color: '#8696a0' }}>
-                Buscá a las personas para agregar al grupo
-              </p>
+              <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>👥</div>
+                <p style={{ color: C.text2, fontSize: 14, margin: '0 0 4px', fontWeight: 600 }}>Agregar participantes</p>
+                <p style={{ color: C.textDim, fontSize: 12, margin: 0 }}>Buscá a las personas para agregar al grupo</p>
+              </div>
             )}
             {searchResults.map(u => {
-              const isSelected = selected.find(s => s.id === u.id)
+              const isSel = selected.find(s => s.id === u.id)
               return (
-                <button key={u.id} onClick={() => toggleUser(u)}
-                  className="w-full flex items-center gap-3 px-4 py-3 border-b text-left"
-                  style={{ borderColor: '#2a3942', background: '#111b21' }}>
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white flex-shrink-0"
-                    style={{ background: isSelected ? '#00a884' : '#2a3942' }}>
-                    {isSelected
-                      ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <button key={u.id} onClick={() => toggleUser(u)} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 16px', background: isSel ? `${C.green}0C` : 'none',
+                  border: 'none', borderBottom: `1px solid ${C.border}22`,
+                  cursor: 'pointer', textAlign: 'left',
+                  transition: 'background .15s',
+                }}>
+                  <div style={{
+                    width: 46, height: 46, borderRadius: '50%', flexShrink: 0,
+                    background: isSel ? C.green : avatarColor(u.id),
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 16, fontWeight: 700,
+                    color: isSel ? C.bg : '#fff',
+                    transition: 'background .15s',
+                  }}>
+                    {isSel
+                      ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
                       : u.display_name.slice(0, 2).toUpperCase()
                     }
                   </div>
                   <div>
-                    <p className="font-medium text-white text-sm">{u.display_name}</p>
-                    <p className="text-xs" style={{ color: '#8696a0' }}>@{u.username}</p>
+                    <p style={{ margin: 0, color: C.text, fontWeight: 600, fontSize: 14 }}>{u.display_name}</p>
+                    <p style={{ margin: '2px 0 0', color: C.textDim, fontSize: 12 }}>@{u.username}</p>
                   </div>
                 </button>
               )
@@ -141,43 +201,70 @@ export default function NewGroupPage({ onBack, onCreated }) {
       )}
 
       {step === 2 && (
-        <div className="flex flex-col items-center px-6 pt-8 gap-6">
-          {/* Group avatar placeholder */}
-          <div className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold text-white"
-            style={{ background: '#2a3942' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 24px', gap: 24 }}>
+          {/* Group avatar preview */}
+          <div style={{
+            width: 90, height: 90, borderRadius: '50%',
+            background: groupName ? `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})` : C.panel2,
+            border: `2px solid ${groupName ? C.green : C.border}44`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: groupName ? 28 : 36, fontWeight: 800, color: C.text,
+            boxShadow: groupName ? `0 0 24px ${C.green}22` : 'none',
+            transition: 'all .2s',
+          }}>
             {groupName ? groupName.slice(0, 2).toUpperCase() : '👥'}
           </div>
 
-          <input
-            type="text"
-            placeholder="Nombre del grupo"
-            value={groupName}
-            onChange={e => setGroupName(e.target.value)}
-            maxLength={50}
-            autoFocus
-            className="w-full py-2 text-white text-base outline-none border-b text-center"
-            style={{ background: 'transparent', borderColor: '#00a884' }}
-          />
+          {/* Name input */}
+          <div style={{ width: '100%' }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+              Nombre del grupo
+            </label>
+            <input
+              type="text" placeholder="Ej: Equipo Relámpago ⚡"
+              value={groupName}
+              onChange={e => setGroupName(e.target.value)}
+              maxLength={50} autoFocus
+              style={{
+                width: '100%', background: 'transparent',
+                border: 'none', borderBottom: `1.5px solid ${C.green}`,
+                color: C.text, fontSize: 18, padding: '6px 0 10px',
+                outline: 'none', textAlign: 'center', boxSizing: 'border-box',
+              }}
+            />
+            <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{groupName.length}/50</p>
+          </div>
 
-          <div className="w-full">
-            <p className="text-xs mb-2" style={{ color: '#8696a0' }}>
-              Participantes: {profile?.display_name}{selected.map(u => `, ${u.display_name}`).join('')}
+          {/* Members preview */}
+          <div style={{ width: '100%', background: C.panel, borderRadius: 12, padding: '12px 16px', border: `1px solid ${C.border}` }}>
+            <p style={{ margin: '0 0 8px', fontSize: 11, color: C.textDim, fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase' }}>
+              {selected.length + 1} participantes
+            </p>
+            <p style={{ margin: 0, fontSize: 13, color: C.text2, lineHeight: 1.6 }}>
+              {profile?.display_name}{selected.map(u => `, ${u.display_name}`).join('')}
             </p>
           </div>
 
+          {/* Create button */}
           <button
             onClick={handleCreate}
             disabled={creating || !groupName.trim()}
-            className="w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-50"
-            style={{ background: '#00a884' }}>
+            style={{
+              width: 60, height: 60, borderRadius: '50%', border: 'none',
+              background: creating || !groupName.trim() ? C.panel2 : C.green,
+              cursor: creating || !groupName.trim() ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: !groupName.trim() ? 'none' : `0 4px 20px ${C.green}44`,
+              transition: 'all .2s',
+            }}>
             {creating
-              ? <span className="text-white text-lg">...</span>
-              : <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-                  <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/>
+              ? <span style={{ color: C.textDim, fontSize: 20 }}>⏳</span>
+              : <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={!groupName.trim() ? C.textDim : C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6L9 17l-5-5"/>
                 </svg>
             }
           </button>
-          <p className="text-xs" style={{ color: '#8696a0' }}>Crear grupo</p>
+          <p style={{ margin: '-16px 0 0', fontSize: 12, color: C.textDim }}>Crear grupo</p>
         </div>
       )}
     </div>

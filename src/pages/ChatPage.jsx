@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import ContactPage from './ContactPage'
 import CallPage from './CallPage'
+import GroupInfoPage from './GroupInfoPage'
 import { useContactStatus, formatLastSeen } from '../hooks/useContactStatus'
 import { supabase } from '../lib/supabase'
 import { sounds } from '../lib/sounds'
@@ -188,10 +189,12 @@ function MsgSkeleton() {
   )
 }
 
+const REACTION_EMOJIS = ['👍','❤️','😂','🔥','⚽','🏆','😮','👏']
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatPage({ onBack }) {
   const { profile } = useAuthStore()
-  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage } = useChatStore()
+  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions } = useChatStore()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -199,8 +202,10 @@ export default function ChatPage({ onBack }) {
   const [replyTo, setReplyTo] = useState(null)
   const [longPressMsg, setLongPressMsg] = useState(null)
   const [showContact, setShowContact] = useState(false)
+  const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [call, setCall] = useState(null)
   const [pinnedDismissed, setPinnedDismissed] = useState(false)
+  const [showReactionPicker, setShowReactionPicker] = useState(null) // messageId
   // Recording
   const [recording, setRecording] = useState(false)
   const [recDuration, setRecDuration] = useState(0)
@@ -242,7 +247,10 @@ export default function ChatPage({ onBack }) {
 
   useEffect(() => {
     if (!activeConversation?.id) return
-    fetchMessages(activeConversation.id)
+    fetchMessages(activeConversation.id).then(() => {
+      const ids = messages.map(m => m.id)
+      if (ids.length) fetchReactions(ids)
+    })
     const unsub = subscribeToMessages(activeConversation.id)
     markAsRead(activeConversation.id, profile.id)
     return unsub
@@ -339,6 +347,14 @@ export default function ChatPage({ onBack }) {
   // Pinned message (first pinned message in conversation metadata)
   const pinnedText = activeConversation?.pinned_message || null
 
+  if (showGroupInfo && isGroup) return (
+    <GroupInfoPage
+      conversation={activeConversation}
+      onBack={() => setShowGroupInfo(false)}
+      onLeft={() => { setShowGroupInfo(false); onBack() }}
+    />
+  )
+
   if (call) return (
     <CallPage
       conversationId={activeConversation?.id}
@@ -381,7 +397,7 @@ export default function ChatPage({ onBack }) {
           </button>
 
           <button
-            onClick={() => !isGroup && setShowContact(true)}
+            onClick={() => isGroup ? setShowGroupInfo(true) : setShowContact(true)}
             style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
           >
             <div style={{ position: 'relative' }}>
@@ -453,6 +469,16 @@ export default function ChatPage({ onBack }) {
                 const senderName = senderInfo?.display_name || 'Usuario'
                 const senderRole = senderInfo?.role
                 const isReply = msg.content?.startsWith('[↩ ')
+
+                if (msg.is_deleted) return (
+                  <div key={msg.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: 4 }}>
+                    <span style={{
+                      fontSize: 12, fontStyle: 'italic', color: C.textDim,
+                      padding: '5px 12px', background: C.panel, borderRadius: 10,
+                      border: `1px solid ${C.border}`,
+                    }}>🚫 Mensaje eliminado</span>
+                  </div>
+                )
 
                 if (isSystem) return (
                   <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', margin: '6px 0' }}>
@@ -530,6 +556,30 @@ export default function ChatPage({ onBack }) {
                         {!isReply && <MsgBody msg={msg} isMine={isMine} otherLastRead={otherLastRead} />}
                       </div>
 
+                      {/* Reaction picker */}
+                      {showReactionPicker === msg.id && (
+                        <div
+                          style={{
+                            position: 'absolute', zIndex: 40,
+                            bottom: 'calc(100% + 4px)',
+                            [isMine ? 'right' : 'left']: 0,
+                            background: C.panel, borderRadius: 40,
+                            display: 'flex', gap: 2, padding: '6px 10px',
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                            border: `1px solid ${C.border}`,
+                          }}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {REACTION_EMOJIS.map(em => (
+                            <button key={em} onClick={() => { reactToMessage(msg.id, profile.id, em); setShowReactionPicker(null); setLongPressMsg(null) }}
+                              style={{ fontSize: 22, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 3px', borderRadius: 8, transition: 'transform .1s' }}
+                              onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.3)'}
+                              onMouseLeave={e => e.currentTarget.style.transform = 'none'}
+                            >{em}</button>
+                          ))}
+                        </div>
+                      )}
+
                       {/* Context menu */}
                       {longPressMsg?.id === msg.id && (
                         <div
@@ -538,17 +588,62 @@ export default function ChatPage({ onBack }) {
                             bottom: 'calc(100% + 6px)',
                             [isMine ? 'right' : 'left']: 0,
                             background: C.panel, borderRadius: 12,
-                            display: 'flex', gap: 4, padding: '5px 7px',
+                            display: 'flex', flexDirection: 'column', gap: 2, padding: '6px',
                             boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
                             border: `1px solid ${C.border}`,
+                            minWidth: 160,
                           }}
                           onClick={e => e.stopPropagation()}
                         >
+                          <CtxBtn label="😀 Reaccionar" onClick={() => { setShowReactionPicker(msg.id); setLongPressMsg(null) }} />
                           <CtxBtn label="↩ Responder" onClick={() => { setReplyTo(msg); setLongPressMsg(null); inputRef.current?.focus() }} />
                           <CtxBtn label="📋 Copiar" onClick={() => { navigator.clipboard.writeText(msg.content); setLongPressMsg(null) }} />
+                          {isGroup && (
+                            <CtxBtn label="📌 Fijar mensaje" onClick={() => {
+                              if (confirm('¿Fijar este mensaje en el grupo?')) {
+                                import('../store/chatStore').then(({ useChatStore }) => {
+                                  useChatStore.getState().pinMessage(activeConversation.id, msg.content?.slice(0, 200))
+                                })
+                                setLongPressMsg(null)
+                              }
+                            }} />
+                          )}
+                          {isMine && (
+                            <CtxBtn label="🗑 Eliminar" danger onClick={() => {
+                              if (confirm('¿Eliminar este mensaje?')) {
+                                deleteMessage(msg.id)
+                                setLongPressMsg(null)
+                              }
+                            }} />
+                          )}
                         </div>
                       )}
                     </div>
+
+                    {/* Reactions display */}
+                    {msg.reactions?.length > 0 && (() => {
+                      const grouped = msg.reactions.reduce((acc, r) => {
+                        acc[r.emoji] = (acc[r.emoji] || 0) + 1
+                        return acc
+                      }, {})
+                      return (
+                        <div style={{
+                          display: 'flex', flexWrap: 'wrap', gap: 4,
+                          marginTop: 4, justifyContent: isMine ? 'flex-end' : 'flex-start',
+                        }}>
+                          {Object.entries(grouped).map(([em, count]) => (
+                            <button key={em} onClick={() => reactToMessage(msg.id, profile.id, em)} style={{
+                              background: `${C.green}18`, border: `1px solid ${C.green}33`,
+                              borderRadius: 12, padding: '2px 7px', cursor: 'pointer',
+                              fontSize: 13, display: 'flex', alignItems: 'center', gap: 3,
+                              color: C.text2,
+                            }}>
+                              {em} <span style={{ fontSize: 11 }}>{count}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )
+                    })()}
 
                     {isMine && <div style={{ width: 30, flexShrink: 0 }} />}
                   </div>
@@ -764,16 +859,19 @@ function HdrBtn({ children, onClick, title }) {
   )
 }
 
-function CtxBtn({ label, onClick }) {
+function CtxBtn({ label, onClick, danger }) {
+  const col = danger ? C.red : C.text2
+  const hov = danger ? C.red : C.green
   return (
     <button onClick={onClick} style={{
-      fontSize: 12, padding: '6px 10px', borderRadius: 8,
-      color: C.text2, background: C.panel2,
-      border: `1px solid ${C.border}`, cursor: 'pointer', whiteSpace: 'nowrap',
-      transition: 'color .15s, border-color .15s',
+      fontSize: 13, padding: '8px 12px', borderRadius: 8,
+      color: col, background: 'none',
+      border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+      textAlign: 'left', width: '100%',
+      transition: 'background .1s',
     }}
-      onMouseEnter={e => { e.currentTarget.style.color = C.green; e.currentTarget.style.borderColor = C.green }}
-      onMouseLeave={e => { e.currentTarget.style.color = C.text2; e.currentTarget.style.borderColor = C.border }}
+      onMouseEnter={e => { e.currentTarget.style.background = danger ? `${C.red}15` : `${C.green}10`; e.currentTarget.style.color = hov }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = col }}
     >{label}</button>
   )
 }
