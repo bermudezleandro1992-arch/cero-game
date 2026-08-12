@@ -1,15 +1,30 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import { useAuthStore } from './store/authStore'
+import { useCallStore } from './store/callStore'
 import LoginPage from './pages/LoginPage'
 import ChatListPage from './pages/ChatListPage'
+import CallPage from './pages/CallPage'
 import UpdateBanner from './components/UpdateBanner'
 import ProfileSheet from './components/ProfileSheet'
 import { usePresence } from './hooks/usePresence'
+import { ringtone } from './lib/sounds'
 
 export default function App() {
   const { user, profile, loading, setUser, setLoading, fetchProfile } = useAuthStore()
+  const { incomingCall, activeCall, setIncomingCall, setActiveCall, clearCall } = useCallStore()
   usePresence(user?.id)
+
+  // Global incoming call listener
+  useEffect(() => {
+    if (!profile?.id) return
+    const ch = supabase.channel(`user-calls:${profile.id}`)
+      .on('broadcast', { event: 'call-offer' }, ({ payload }) => {
+        setIncomingCall(payload)
+      })
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [profile?.id])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -52,6 +67,40 @@ export default function App() {
 
   if (needsProfileSetup) {
     return <ProfileSheet onClose={() => fetchProfile(user.id)} forceSetup />
+  }
+
+  // Show active call page
+  if (activeCall) {
+    return (
+      <CallPage
+        conversationId={activeCall.convId}
+        myUserId={profile.id}
+        contact={activeCall.contact}
+        callType={activeCall.callType}
+        isIncoming={activeCall.isIncoming}
+        incomingOffer={activeCall.offer}
+        onEnd={clearCall}
+      />
+    )
+  }
+
+  // Show incoming call banner
+  if (incomingCall) {
+    return (
+      <>
+        <UpdateBanner />
+        <ChatListPage />
+        <CallPage
+          conversationId={incomingCall.convId}
+          myUserId={profile.id}
+          contact={{ id: incomingCall.from, display_name: incomingCall.fromName || 'Usuario' }}
+          callType={incomingCall.callType}
+          isIncoming={true}
+          incomingOffer={incomingCall.offer}
+          onEnd={clearCall}
+        />
+      </>
+    )
   }
 
   return (
