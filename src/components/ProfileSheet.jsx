@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { C } from '../App'
+import { soundSettings } from '../lib/sounds'
 
 export default function ProfileSheet({ onClose, forceSetup = false }) {
   const { profile, updateProfile } = useAuthStore()
@@ -8,6 +9,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const defaultUser = (!profile?.username || profile.username.startsWith('user_')) ? '' : profile.username
   const [name, setName] = useState(defaultName)
   const [username, setUsername] = useState(defaultUser)
+  const [soundOn, setSoundOn] = useState(soundSettings.isEnabled())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
@@ -151,6 +153,46 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
         {success && (
           <div style={{ margin: '0 24px', padding: '10px 14px', background: `${C.green}18`, border: `1px solid ${C.green}44`, borderRadius: 10, color: C.green, fontSize: 13, textAlign: 'center', fontWeight: 600 }}>
             ¡Perfil actualizado!
+          </div>
+        )}
+
+        {/* Sound settings */}
+        {!forceSetup && (
+          <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${C.border}` }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', margin: '0 0 16px' }}>
+              Configuración
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 20 }}>{soundOn ? '🔔' : '🔕'}</span>
+                <div>
+                  <p style={{ margin: 0, fontSize: 14, color: C.text, fontWeight: 600 }}>Sonidos</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>
+                    {soundOn ? 'Activados' : 'Silenciados'}
+                  </p>
+                </div>
+              </div>
+              {/* Toggle switch */}
+              <button
+                type="button"
+                onClick={() => { const next = soundSettings.toggle(); setSoundOn(next) }}
+                style={{
+                  width: 48, height: 26, borderRadius: 13, border: 'none',
+                  background: soundOn ? C.green : C.border,
+                  cursor: 'pointer', position: 'relative',
+                  transition: 'background .2s',
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 3,
+                  left: soundOn ? 25 : 3,
+                  width: 20, height: 20, borderRadius: '50%',
+                  background: soundOn ? C.bg : C.text2,
+                  transition: 'left .2s',
+                }} />
+              </button>
+            </div>
           </div>
         )}
 

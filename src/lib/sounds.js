@@ -4,6 +4,18 @@ function ac() {
   return audioCtx
 }
 
+// ── Sound settings ────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'mm_sound_enabled'
+export const soundSettings = {
+  isEnabled: () => localStorage.getItem(STORAGE_KEY) !== 'false',
+  setEnabled: (v) => localStorage.setItem(STORAGE_KEY, v ? 'true' : 'false'),
+  toggle: () => {
+    const next = !soundSettings.isEnabled()
+    soundSettings.setEnabled(next)
+    return next
+  },
+}
+
 function tone(hz, dur, vol = 0.3, delay = 0, type = 'sine') {
   try {
     const c = ac()
@@ -19,8 +31,8 @@ function tone(hz, dur, vol = 0.3, delay = 0, type = 'sine') {
 }
 
 export const sounds = {
-  msgReceived() { tone(800, 0.08, 0.18); tone(1050, 0.1, 0.18, 0.1) },
-  msgSent()     { tone(600, 0.06, 0.12) },
+  msgReceived() { if (!soundSettings.isEnabled()) return; tone(800, 0.08, 0.18); tone(1050, 0.1, 0.18, 0.1) },
+  msgSent()     { if (!soundSettings.isEnabled()) return; tone(600, 0.06, 0.12) },
   callConnect() { tone(900, 0.1, 0.3); tone(1100, 0.15, 0.3, 0.13) },
   callEnd()     { tone(280, 0.5, 0.25) },
 }

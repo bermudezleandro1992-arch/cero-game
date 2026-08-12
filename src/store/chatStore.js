@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
+import { sounds } from '../lib/sounds'
 
 export const useChatStore = create((set, get) => ({
   conversations: [],
@@ -121,13 +122,16 @@ export const useChatStore = create((set, get) => ({
         set(state => {
           const idx = state.conversations.findIndex(c => c.id === msg.conversation_id)
           if (idx === -1) return state
+          const isActive = state.activeConversation?.id === msg.conversation_id
+          const isOwn = msg.sender_id === userId
+          // Play sound for any incoming message from someone else
+          if (!isOwn) sounds.msgReceived()
           const updated = state.conversations.map(c => {
             if (c.id !== msg.conversation_id) return c
-            const isActive = state.activeConversation?.id === c.id
             return {
               ...c,
               lastMessage: msg,
-              unread: isActive || msg.sender_id === userId ? c.unread : c.unread + 1,
+              unread: isActive || isOwn ? c.unread : c.unread + 1,
             }
           })
           return {
