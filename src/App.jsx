@@ -93,9 +93,9 @@ export default function App() {
   }, [profile?.id])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
+      if (session?.user) await fetchProfile(session.user.id)
       setLoading(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -301,12 +301,22 @@ function EmptyState() {
       background: `radial-gradient(ellipse at 50% 60%, ${C.greenDk}18 0%, transparent 65%)`,
     }}>
       <div style={{
-        width: 90, height: 90, borderRadius: '50%',
-        border: `1.5px solid ${C.green}30`,
-        background: `radial-gradient(circle, ${C.green}10 0%, transparent 70%)`,
+        width: 96, height: 96, borderRadius: 24,
+        background: `linear-gradient(145deg, ${C.greenDk}cc 0%, #071a0c 100%)`,
+        border: `1.5px solid ${C.green}40`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 38, boxShadow: `0 0 40px ${C.green}18`,
-      }}>⚡</div>
+        boxShadow: `0 0 48px ${C.green}22, inset 0 1px 0 ${C.green}30`,
+      }}>
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="none">
+          <defs>
+            <linearGradient id="boltGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor={C.green}/>
+              <stop offset="100%" stopColor={C.green2}/>
+            </linearGradient>
+          </defs>
+          <path d="M13 2L4.5 13.5H11L10 22L20.5 10H14L13 2Z" fill="url(#boltGrad)"/>
+        </svg>
+      </div>
       <div>
         <p style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>
           Mi Mensajero
