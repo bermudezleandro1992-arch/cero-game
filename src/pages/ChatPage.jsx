@@ -194,7 +194,7 @@ const REACTION_EMOJIS = ['👍','❤️','😂','🔥','⚽','🏆','😮','👏
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatPage({ onBack }) {
   const { profile } = useAuthStore()
-  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions } = useChatStore()
+  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage } = useChatStore()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -227,7 +227,10 @@ export default function ChatPage({ onBack }) {
   const [call, setCall] = useState(null)
   const [pinnedDismissed, setPinnedDismissed] = useState(false)
   const [showReactionPicker, setShowReactionPicker] = useState(null) // messageId
-  // Recording
+  const [editingMsg, setEditingMsg] = useState(null) // { id, content }
+  const [editText, setEditText] = useState('')
+  const [forwardMsg, setForwardMsg] = useState(null) // message to forward
+  const [viewOncePending, setViewOncePending] = useState(null) // { file, type } waiting for view count pick
   const [recording, setRecording] = useState(false)
   const [recDuration, setRecDuration] = useState(0)
   const recorderRef = useRef(null)
@@ -306,17 +309,37 @@ export default function ChatPage({ onBack }) {
     inputRef.current?.focus()
   }
 
+  async function handleEditSave() {
+    if (!editingMsg || !editText.trim()) return
+    await editMessage(editingMsg.id, editText.trim())
+    setEditingMsg(null); setEditText('')
+  }
+
+  async function handleForward(conv) {
+    if (!forwardMsg || !conv) return
+    await forwardMessage(forwardMsg.conversation_id, conv.id, profile.id, forwardMsg.content, forwardMsg.type || 'text')
+    setForwardMsg(null)
+    sounds.msgSent()
+  }
+
   async function handleImagePick(e) {
     const file = e.target.files?.[0]; if (!file) return
     if (file.size > 10 * 1024 * 1024) { alert('Máximo 10MB'); return }
+    fileRef.current.value = ''
+    // Show view-once picker before uploading
+    const type = file.type.startsWith('video/') ? 'video' : 'image'
+    setViewOncePending({ file, type })
+  }
+
+  async function sendWithViewCount(file, type, maxViews) {
+    setViewOncePending(null)
     setUploadingImage(true)
     try {
       const url = await uploadImage(file, profile.id)
-      const type = file.type.startsWith('video/') ? 'video' : 'image'
-      await sendMessage(activeConversation.id, profile.id, url, type)
+      await sendMessage(activeConversation.id, profile.id, url, type, maxViews || null)
       sounds.msgSent()
     } catch (err) { alert(`Error: ${err.message}`) }
-    setUploadingImage(false); fileRef.current.value = ''
+    setUploadingImage(false)
   }
 
   async function startRecording() {
@@ -392,8 +415,113 @@ export default function ChatPage({ onBack }) {
       {showContact && !isGroup && (
         <ContactPage user={otherUser} onBack={() => setShowContact(false)} onChat={() => setShowContact(false)} />
       )}
+
+      {/* ── View-once picker modal ── */}
+      {viewOncePending && (
+        <div onClick={() => setViewOncePending(null)} style={{
+          position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: '#141E24', borderRadius: 22, padding: '28px 24px', width: 300,
+            boxShadow: '0 12px 48px rgba(0,0,0,0.7)', border: `1px solid ${C.border}`,
+            display: 'flex', flexDirection: 'column', gap: 16,
+          }}>
+            {/* Preview thumbnail */}
+            {viewOncePending.type === 'image' && (
+              <img src={URL.createObjectURL(viewOncePending.file)} alt="preview"
+                style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 12, opacity: 0.9 }} />
+            )}
+            {viewOncePending.type === 'video' && (
+              <div style={{ textAlign: 'center', padding: '16px 0', color: C.textDim, fontSize: 13 }}>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill={C.green}><path d="M8 5v14l11-7z"/></svg>
+                <div>{viewOncePending.file.name}</div>
+              </div>
+            )}
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 16, textAlign: 'center' }}>
+              ¿Cuántas veces se puede ver?
+            </div>
+            <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', lineHeight: 1.5 }}>
+              Después de verlo {'{n}'} vez, se borra para siempre.
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[1, 2, 3].map(n => (
+                <button key={n} onClick={() => sendWithViewCount(viewOncePending.file, viewOncePending.type, n)} style={{
+                  flex: 1, padding: '14px 0', borderRadius: 14, border: `1.5px solid ${C.green}`,
+                  background: 'transparent', color: C.green, fontWeight: 700, fontSize: 18, cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'background .15s',
+                }}
+                  onMouseEnter={e => e.currentTarget.style.background = `${C.green}22`}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  {n}
+                  <span style={{ fontSize: 10, color: C.textDim, fontWeight: 400 }}>
+                    {n === 1 ? 'vez' : 'veces'}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => sendWithViewCount(viewOncePending.file, viewOncePending.type, null)} style={{
+              background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 12,
+              color: C.textDim, fontSize: 13, padding: '10px 0', cursor: 'pointer',
+            }}>
+              Sin límite de vistas
+            </button>
+            <button onClick={() => setViewOncePending(null)} style={{
+              background: 'transparent', border: 'none', color: C.textDim, fontSize: 13, cursor: 'pointer',
+            }}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+      {/* ── Edit message modal ── */}
+      {editingMsg && (
+        <div onClick={() => setEditingMsg(null)} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#141E24', borderRadius: 20, padding: '24px 20px', width: 320, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>✏️ Editar mensaje</div>
+            <textarea
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              autoFocus
+              rows={3}
+              style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, fontSize: 14, padding: '10px 12px', resize: 'none', outline: 'none', lineHeight: 1.5 }}
+            />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setEditingMsg(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 12, border: `1px solid ${C.border}`, background: 'transparent', color: C.textDim, cursor: 'pointer', fontSize: 14 }}>Cancelar</button>
+              <button onClick={handleEditSave} style={{ flex: 1, padding: '10px 0', borderRadius: 12, border: 'none', background: C.green, color: C.bg, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Forward message modal ── */}
+      {forwardMsg && (
+        <div onClick={() => setForwardMsg(null)} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#141E24', borderRadius: '20px 20px 0 0', padding: '20px 16px', width: '100%', maxWidth: 480, border: `1px solid ${C.border}`, maxHeight: '70vh', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>↗ Reenviar a...</div>
+            <div style={{ overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {useChatStore.getState().conversations.filter(c => c.id !== activeConversation?.id).map(conv => (
+                <button key={conv.id} onClick={() => handleForward(conv)} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px',
+                  background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 12,
+                  cursor: 'pointer', color: C.text, textAlign: 'left',
+                }}>
+                  <div style={{ width: 38, height: 38, borderRadius: conv.isGroup ? 10 : '50%', background: C.greenDk, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                    {(conv.name || conv.user?.display_name || '?').slice(0, 2).toUpperCase()}
+                  </div>
+                  <span style={{ fontSize: 14 }}>{conv.name || conv.user?.display_name || conv.user?.username}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setForwardMsg(null)} style={{ padding: '10px 0', borderRadius: 12, border: `1px solid ${C.border}`, background: 'transparent', color: C.textDim, cursor: 'pointer', fontSize: 14 }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
       <div
-        style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg2, overflow: 'hidden' }}
+        style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: C.bg2, overflow: 'hidden' }}
         onClick={() => { setLongPressMsg(null); setShowEmoji(false); setDeleteMenuMsg(null) }}
       >
 
@@ -644,18 +772,24 @@ export default function ChatPage({ onBack }) {
                         >
                           <CtxBtn label="😀 Reaccionar" onClick={() => { setShowReactionPicker(msg.id); setLongPressMsg(null) }} />
                           <CtxBtn label="↩ Responder" onClick={() => { setReplyTo(msg); setLongPressMsg(null); inputRef.current?.focus() }} />
+                          {isMine && !msg.is_deleted && (msg.type === 'text' || !msg.type) && (
+                            <CtxBtn label="✏️ Editar" onClick={() => { setEditingMsg(msg); setEditText(msg.content); setLongPressMsg(null) }} />
+                          )}
+                          <CtxBtn label="↗ Reenviar" onClick={() => { setForwardMsg(msg); setLongPressMsg(null) }} />
                           <CtxBtn label="📋 Copiar" onClick={() => { navigator.clipboard.writeText(msg.content); setLongPressMsg(null) }} />
                           {isGroup && (
                             <CtxBtn label="📌 Fijar mensaje" onClick={() => {
-                              if (confirm('¿Fijar este mensaje en el grupo?')) {
-                                useChatStore.getState().pinMessage(activeConversation.id, msg.content?.slice(0, 200))
-                                setLongPressMsg(null)
-                              }
+                              useChatStore.getState().pinMessage(activeConversation.id, msg.content?.slice(0, 200))
+                              setLongPressMsg(null)
                             }} />
                           )}
-                          <CtxBtn label="🗑 Eliminar para mí" danger onClick={() => deleteForMe(msg.id)} />
-                          {isMine && (
-                            <CtxBtn label="🗑 Eliminar para todos" danger onClick={() => deleteForAll(msg.id)} />
+                          {isMine ? (
+                            <>
+                              <CtxBtn label="🙈 Eliminar para mí" onClick={() => { deleteForMe(msg.id); setLongPressMsg(null) }} />
+                              <CtxBtn label="🗑 Eliminar para todos" danger onClick={() => { deleteMessage(msg.id, activeConversation.id); setLongPressMsg(null) }} />
+                            </>
+                          ) : (
+                            <CtxBtn label="🙈 Eliminar para mí" onClick={() => { deleteForMe(msg.id); setLongPressMsg(null) }} />
                           )}
                         </div>
                       )}
@@ -904,6 +1038,7 @@ function MsgBody({ msg, isMine, otherLastRead }) {
       marginLeft: 6, whiteSpace: 'nowrap',
       display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'bottom',
     }}>
+      {msg.edited_at && <span style={{ fontSize: 9, opacity: 0.7 }}>editado · </span>}
       {formatTime(msg.created_at)}
       {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} />}
     </span>

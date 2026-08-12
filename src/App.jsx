@@ -79,6 +79,20 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false)
   usePresence(user?.id)
 
+  // Fix keyboard overlap — shrink root height when keyboard opens (iOS + Android)
+  useEffect(() => {
+    const root = document.getElementById('root')
+    const vv = window.visualViewport
+    if (!vv || !root) return
+    const update = () => {
+      root.style.height = `${vv.height}px`
+      document.documentElement.style.setProperty('--vvh', `${vv.height}px`)
+    }
+    update()
+    vv.addEventListener('resize', update)
+    return () => vv.removeEventListener('resize', update)
+  }, [])
+
   useEffect(() => {
     if (!profile?.id) return
     fetchConversations(profile.id)
@@ -124,7 +138,7 @@ export default function App() {
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0)
 
   return (
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }}>
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }}>
       <UpdateBanner />
 
       {incomingCall && (
@@ -235,6 +249,8 @@ export default function App() {
           transition: transform .28s cubic-bezier(.4,0,.2,1);
           overflow: hidden;
           background: ${C.bg};
+          display: flex;
+          flex-direction: column;
         }
         .slfa-left               { transform: translateX(0); }
         .slfa-left--hidden       { transform: translateX(-100%); }
