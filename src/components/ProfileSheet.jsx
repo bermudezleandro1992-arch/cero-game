@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuthStore } from '../store/authStore'
+import { C } from '../App'
 
 export default function ProfileSheet({ onClose, forceSetup = false }) {
   const { profile, updateProfile } = useAuthStore()
@@ -29,34 +30,72 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
     setSaving(false)
   }
 
-  const initials = (profile?.display_name || '?').slice(0, 2).toUpperCase()
+  const initials = (name || profile?.display_name || '?').slice(0, 2).toUpperCase()
+  const disabled = saving || !name.trim()
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#111b21' }}>
-      <div className="flex items-center gap-4 px-4 py-4" style={{ background: '#202c33' }}>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      display: 'flex', flexDirection: 'column',
+      background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '16px 20px', background: C.panel,
+        borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+      }}>
         {!forceSetup && (
-          <button onClick={onClose} className="text-white p-1">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: C.text2, padding: 4, display: 'flex',
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
         )}
-        <h2 className="text-white font-semibold text-base">
+        <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>
           {forceSetup ? '¡Bienvenido! Completá tu perfil' : 'Editar perfil'}
         </h2>
       </div>
 
-      <div className="flex flex-col items-center py-8 gap-2" style={{ background: '#202c33' }}>
-        <div className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold text-white"
-          style={{ background: '#2a3942' }}>
+      {/* Avatar hero */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        padding: '40px 20px 32px',
+        background: `radial-gradient(ellipse at 50% 0%, ${C.greenDk}22 0%, transparent 60%)`,
+        borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+      }}>
+        <div style={{
+          width: 96, height: 96, borderRadius: '50%',
+          background: `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})`,
+          border: `2px solid ${C.green}44`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 34, fontWeight: 800, color: C.text,
+          boxShadow: `0 0 32px ${C.green}22`,
+          letterSpacing: '-1px',
+        }}>
           {initials}
         </div>
-        <p className="text-xs" style={{ color: '#8696a0' }}>Foto de perfil próximamente</p>
+        {profile?.username && (
+          <p style={{ margin: '10px 0 0', color: C.green, fontSize: 13, fontWeight: 600 }}>
+            @{profile.username}
+          </p>
+        )}
+        <p style={{ margin: '4px 0 0', color: C.textDim, fontSize: 12 }}>
+          Foto de perfil próximamente
+        </p>
       </div>
 
-      <form onSubmit={handleSave} className="flex flex-col gap-6 px-6 pt-8">
-        <div>
-          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#00a884' }}>
+      {/* Form */}
+      <form onSubmit={handleSave} style={{
+        display: 'flex', flexDirection: 'column', gap: 0,
+        padding: '8px 0', overflowY: 'auto', flex: 1,
+      }}>
+        {/* Name field */}
+        <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${C.border}` }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 12 }}>
             Tu nombre
           </label>
           <input
@@ -65,44 +104,75 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
             onChange={e => setName(e.target.value)}
             maxLength={50}
             autoFocus
-            className="w-full py-2 mt-2 text-white text-base outline-none border-b"
-            style={{ background: 'transparent', borderColor: '#00a884' }}
+            placeholder="Cómo querés que te vean"
+            style={{
+              width: '100%', background: 'transparent',
+              border: 'none', borderBottom: `1.5px solid ${C.green}`,
+              color: C.text, fontSize: 16, padding: '4px 0 8px',
+              outline: 'none', boxSizing: 'border-box',
+            }}
           />
-          <p className="text-right text-xs mt-1" style={{ color: '#8696a0' }}>{name.length}/50</p>
+          <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '6px 0 0' }}>
+            {name.length}/50
+          </p>
         </div>
 
-        <div>
-          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#00a884' }}>
+        {/* Username field */}
+        <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${C.border}` }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 12 }}>
             Nombre de usuario
           </label>
-          <div className="flex items-center border-b mt-2" style={{ borderColor: '#2a3942' }}>
-            <span className="text-base" style={{ color: '#8696a0' }}>@</span>
+          <div style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
+            <span style={{ color: C.textDim, fontSize: 16, marginRight: 2 }}>@</span>
             <input
               type="text"
               value={username}
               onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
               maxLength={30}
-              className="flex-1 px-1 py-2 text-white text-base outline-none"
-              style={{ background: 'transparent' }}
+              placeholder="tu_usuario"
+              style={{
+                flex: 1, background: 'transparent', border: 'none',
+                color: C.text, fontSize: 16, padding: '4px 0',
+                outline: 'none',
+              }}
             />
           </div>
-          <p className="text-xs mt-1" style={{ color: '#8696a0' }}>
+          <p style={{ fontSize: 12, color: C.textDim, margin: '8px 0 0' }}>
             Solo letras minúsculas, números y guión bajo
           </p>
         </div>
 
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-        {success && <p className="text-center text-sm font-medium" style={{ color: '#00a884' }}>
-          ¡Perfil actualizado!
-        </p>}
+        {/* Status messages */}
+        {error && (
+          <div style={{ margin: '0 24px', padding: '10px 14px', background: `${C.red}18`, border: `1px solid ${C.red}44`, borderRadius: 10, color: C.red, fontSize: 13 }}>
+            {error}
+          </div>
+        )}
+        {success && (
+          <div style={{ margin: '0 24px', padding: '10px 14px', background: `${C.green}18`, border: `1px solid ${C.green}44`, borderRadius: 10, color: C.green, fontSize: 13, textAlign: 'center', fontWeight: 600 }}>
+            ¡Perfil actualizado!
+          </div>
+        )}
 
-        <button
-          type="submit"
-          disabled={saving || !name.trim()}
-          className="w-full py-3 rounded-2xl font-semibold text-white disabled:opacity-50 mt-2"
-          style={{ background: '#00a884' }}>
-          {saving ? 'Guardando...' : forceSetup ? 'Entrar al chat' : 'Guardar cambios'}
-        </button>
+        {/* Save button */}
+        <div style={{ padding: '24px 24px', marginTop: 'auto' }}>
+          <button
+            type="submit"
+            disabled={disabled}
+            style={{
+              width: '100%', padding: '15px',
+              borderRadius: 14, border: 'none',
+              background: disabled ? C.panel2 : C.green,
+              color: disabled ? C.textDim : C.bg,
+              fontSize: 15, fontWeight: 800,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              boxShadow: disabled ? 'none' : `0 4px 24px ${C.green}44`,
+              transition: 'all .2s',
+              letterSpacing: '.3px',
+            }}>
+            {saving ? 'Guardando...' : forceSetup ? 'Entrar al chat' : 'Guardar cambios'}
+          </button>
+        </div>
       </form>
     </div>
   )
