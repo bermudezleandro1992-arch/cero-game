@@ -601,9 +601,7 @@ export default function ChatPage({ onBack }) {
                           {isGroup && (
                             <CtxBtn label="📌 Fijar mensaje" onClick={() => {
                               if (confirm('¿Fijar este mensaje en el grupo?')) {
-                                import('../store/chatStore').then(({ useChatStore }) => {
-                                  useChatStore.getState().pinMessage(activeConversation.id, msg.content?.slice(0, 200))
-                                })
+                                useChatStore.getState().pinMessage(activeConversation.id, msg.content?.slice(0, 200))
                                 setLongPressMsg(null)
                               }
                             }} />
