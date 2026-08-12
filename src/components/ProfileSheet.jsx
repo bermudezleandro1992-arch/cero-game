@@ -37,9 +37,10 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 50,
+      height: '100%',
       display: 'flex', flexDirection: 'column',
       background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      overflowY: 'auto',
     }}>
       {/* Header */}
       <div style={{
