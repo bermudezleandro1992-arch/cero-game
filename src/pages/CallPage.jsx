@@ -26,99 +26,125 @@ function fmtTime(s) {
   return `${m}:${String(s % 60).padStart(2, '0')}`
 }
 
-function nameToHue(name = '') {
+function nameToColor(name = '') {
+  const colors = [
+    ['#1a4a2e','#39FF14'],['#1a2a4a','#4A9EFF'],['#3a1a4a','#C084FC'],
+    ['#4a1a1a','#F87171'],['#2a3a1a','#86EFAC'],['#3a2a1a','#FBB86A'],
+  ]
   let h = 0
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360
-  return h
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % colors.length
+  return colors[h]
 }
 
-function vibrate(pattern) {
-  try { navigator.vibrate?.(pattern) } catch (e) {}
-}
+function vibrate(p) { try { navigator.vibrate?.(p) } catch (e) {} }
 
-// Animated audio waveform
-function AudioWave({ active }) {
-  const bars = [0.5, 1, 0.7, 1.4, 0.6, 1.2, 0.4, 1, 0.8]
+// Animated waveform bars
+function Waveform({ active, color = '#39FF14', bars = 9, height = 40 }) {
+  const hs = [0.4, 0.9, 0.6, 1.3, 0.5, 1.1, 0.4, 0.95, 0.65]
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, height: 44 }}>
-      {bars.map((h, i) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, height }}>
+      {hs.slice(0, bars).map((h, i) => (
         <div key={i} style={{
-          width: 3.5, borderRadius: 4,
-          background: active ? '#39FF14' : 'rgba(255,255,255,0.2)',
-          height: active ? `${h * 32}px` : '5px',
-          animation: active ? `wave ${0.7 + i * 0.08}s ease-in-out ${i * 0.06}s infinite alternate` : 'none',
-          transition: 'height .4s ease, background .4s ease',
-          boxShadow: active ? '0 0 6px #39FF1488' : 'none',
+          width: 3.5, borderRadius: 4, background: active ? color : 'rgba(255,255,255,0.18)',
+          height: active ? `${h * (height * 0.75)}px` : '4px',
+          animation: active ? `wfWave ${0.65 + i * 0.09}s ease-in-out ${i * 0.055}s infinite alternate` : 'none',
+          transition: 'height .35s ease, background .35s',
+          boxShadow: active ? `0 0 5px ${color}88` : 'none',
         }} />
       ))}
     </div>
   )
 }
 
-// Minimized floating pill
-function MiniCall({ name, elapsed, avatar_url, initials, hue, isVideo, onExpand, onHangup }) {
+// Avatar circle
+function Avatar({ name, avatar_url, size = 120, active, colors }) {
+  const [bg, accent] = colors
+  return (
+    <div style={{ position: 'relative', width: size, height: size }}>
+      {active && (
+        <div style={{
+          position: 'absolute', inset: -10, borderRadius: '50%',
+          background: `radial-gradient(circle, ${accent}20 0%, transparent 70%)`,
+          animation: 'avPulse 2.2s ease-in-out infinite',
+        }} />
+      )}
+      <div style={{
+        width: size, height: size, borderRadius: '50%',
+        background: avatar_url ? `url(${avatar_url}) center/cover` : `linear-gradient(145deg, ${bg}, #0a0f0d)`,
+        border: active ? `3px solid ${accent}90` : '3px solid rgba(255,255,255,0.12)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size * 0.34, fontWeight: 800, color: '#fff',
+        letterSpacing: '-1px',
+        boxShadow: active
+          ? `0 0 0 8px ${accent}15, 0 20px 60px rgba(0,0,0,0.6)`
+          : '0 20px 60px rgba(0,0,0,0.55)',
+        transition: 'border .4s, box-shadow .4s',
+        overflow: 'hidden',
+      }}>
+        {!avatar_url && (name || '?').slice(0, 2).toUpperCase()}
+      </div>
+    </div>
+  )
+}
+
+// Floating mini pill when minimized
+function MiniPill({ name, elapsed, avatar_url, colors, isVideo, onExpand, onHangup }) {
+  const [, accent] = colors
+  const [bg] = colors
   return (
     <div style={{
-      position: 'fixed', top: 12, left: 12, right: 12, zIndex: 200,
-      background: 'rgba(10,20,14,0.92)',
-      backdropFilter: 'blur(24px)',
-      borderRadius: 20,
-      border: '1px solid rgba(57,255,20,0.25)',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(57,255,20,0.1)',
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '10px 14px',
+      position: 'fixed', top: 10, left: 10, right: 10, zIndex: 300,
+      background: 'rgba(8,16,11,0.95)',
+      backdropFilter: 'blur(30px)',
+      borderRadius: 22,
+      border: `1px solid ${accent}35`,
+      boxShadow: `0 8px 40px rgba(0,0,0,0.65), 0 0 0 1px ${accent}15`,
+      display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px',
+      animation: 'slideDown .3s cubic-bezier(.34,1.56,.64,1)',
       cursor: 'pointer',
     }} onClick={onExpand}>
-      {/* Avatar */}
       <div style={{
-        width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-        background: avatar_url ? `url(${avatar_url}) center/cover` : `hsl(${hue},60%,25%)`,
-        border: '2px solid #39FF1460',
+        width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+        background: avatar_url ? `url(${avatar_url}) center/cover` : `linear-gradient(135deg, ${bg}, #0a0f0d)`,
+        border: `2px solid ${accent}60`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 13, fontWeight: 700, color: '#fff',
-        boxShadow: '0 0 8px #39FF1440',
-        animation: 'miniPulse 2s ease-in-out infinite',
+        animation: 'avPulse 2s ease-in-out infinite',
       }}>
-        {!avatar_url && initials}
+        {!avatar_url && (name || '?').slice(0, 2).toUpperCase()}
       </div>
-
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ color: '#fff', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
-        <div style={{ color: '#39FF14', fontSize: 12, fontWeight: 500 }}>{fmtTime(elapsed)} · {isVideo ? 'Video' : 'Llamada'}</div>
+        <div style={{ color: accent, fontSize: 11.5, fontWeight: 500, marginTop: 1 }}>{fmtTime(elapsed)} · {isVideo ? 'Video' : 'Audio'}</div>
       </div>
-
-      {/* Wave */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
-        {[1, 1.5, 0.8].map((h, i) => (
-          <div key={i} style={{
-            width: 3, borderRadius: 2, background: '#39FF14',
-            animation: `wave ${0.8 + i * 0.15}s ease-in-out ${i * 0.1}s infinite alternate`,
-            height: `${h * 12}px`,
-          }} />
-        ))}
-      </div>
-
-      {/* Hang up */}
-      <button
-        onClick={e => { e.stopPropagation(); vibrate(50); onHangup() }}
-        style={{
-          width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-          background: 'linear-gradient(135deg, #c0392b, #e74c3c)',
-          border: 'none', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 4px 12px #ef444460',
-        }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 2 2 0 0 1-.47-.43"/>
-          <path d="M6.37 6.37a16 16 0 0 0-2.6 3.41L5.04 11.05a2 2 0 0 1 .45 2.11c-.339.907-.573 1.85-.7 2.81A2 2 0 0 1 3.08 18H.08A2 2 0 0 1-1.9 15.82a19.79 19.79 0 0 1 3.07-8.63"/>
-          <line x1="1" y1="1" x2="23" y2="23"/>
-        </svg>
+      <Waveform active bars={3} height={24} color={accent} />
+      <button onClick={e => { e.stopPropagation(); vibrate(50); onHangup() }} style={{
+        width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+        background: 'linear-gradient(135deg, #7f1d1d, #ef4444)',
+        border: 'none', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 4px 16px #ef444460',
+      }}>
+        <HangupIcon size={15} />
       </button>
     </div>
   )
 }
 
-export default function CallPage({ conversationId, myUserId, contact, callType: initType, isIncoming, incomingOffer, onEnd }) {
+function HangupIcon({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 2 2 0 0 1-.47-.43"/>
+      <path d="M6.37 6.37a16 16 0 0 0-2.6 3.41L5.04 11.05a2 2 0 0 1 .45 2.11c-.339.907-.573 1.85-.7 2.81A2 2 0 0 1 3.08 18H.08A2 2 0 0 1-1.9 15.82a19.79 19.79 0 0 1 3.07-8.63"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  )
+}
+
+export default function CallPage({
+  conversationId, myUserId, contact,
+  callType: initType, isIncoming, incomingOffer, onEnd,
+}) {
   const [phase, setPhase] = useState(isIncoming ? 'incoming' : 'connecting')
   const [callType] = useState(initType || 'audio')
   const [muted, setMuted] = useState(false)
@@ -126,25 +152,28 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
   const [speaker, setSpeaker] = useState(true)
   const [elapsed, setElapsed] = useState(0)
   const [minimized, setMinimized] = useState(false)
+  const [visible, setVisible] = useState(false)
   const [dragY, setDragY] = useState(0)
   const [dragging, setDragging] = useState(false)
 
   const pc = useRef(null)
   const localStream = useRef(null)
   const sessionCh = useRef(null)
-  const elapsedRef = useRef(null)
+  const timerRef = useRef(null)
   const localVid = useRef(null)
   const remoteVid = useRef(null)
   const remoteAudio = useRef(null)
   const pendingIce = useRef([])
-  const touchStartY = useRef(0)
-  const containerRef = useRef(null)
+  const touchY0 = useRef(0)
 
   const name = contact?.display_name || 'Usuario'
   const avatar_url = contact?.avatar_url || null
-  const initials = name.slice(0, 2).toUpperCase()
-  const hue = nameToHue(name)
+  const colors = nameToColor(name)
+  const [, accent] = colors
   const isVideo = callType === 'video'
+
+  // Entrance animation
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
 
   useEffect(() => {
     sessionCh.current = supabase.channel(`call-session:${conversationId}`)
@@ -152,39 +181,37 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
         if (!pc.current) return
         await pc.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
         for (const c of pendingIce.current) {
-          try { await pc.current.addIceCandidate(new RTCIceCandidate(c)) } catch (e) {}
+          try { await pc.current.addIceCandidate(new RTCIceCandidate(c)) } catch (_) {}
         }
         pendingIce.current = []
       })
       .on('broadcast', { event: 'call-ice' }, async ({ payload }) => {
         if (payload.from === myUserId) return
-        const candidate = new RTCIceCandidate(payload.candidate)
+        const cand = new RTCIceCandidate(payload.candidate)
         if (pc.current?.remoteDescription) {
-          try { await pc.current.addIceCandidate(candidate) } catch (e) {}
-        } else {
-          pendingIce.current.push(payload.candidate)
-        }
+          try { await pc.current.addIceCandidate(cand) } catch (_) {}
+        } else { pendingIce.current.push(payload.candidate) }
       })
       .on('broadcast', { event: 'call-end' }, () => hangup(false))
       .on('broadcast', { event: 'call-reject' }, () => hangup(false))
       .subscribe()
 
     if (!isIncoming) { startOutgoing(); outgoingRing.start() }
-    else ringtone.start()
+    else { ringtone.start(); vibrate([0, 400, 200, 400, 200, 400]) }
 
     return () => {
-      ringtone.stop()
-      outgoingRing.stop()
-      clearInterval(elapsedRef.current)
+      ringtone.stop(); outgoingRing.stop()
+      clearInterval(timerRef.current)
       if (sessionCh.current) supabase.removeChannel(sessionCh.current)
     }
   }, [])
 
   async function getMedia() {
-    const constraints = callType === 'video'
-      ? { audio: true, video: { facingMode: 'user', width: 640, height: 480 } }
-      : { audio: true }
-    const stream = await navigator.mediaDevices.getUserMedia(constraints)
+    const stream = await navigator.mediaDevices.getUserMedia(
+      callType === 'video'
+        ? { audio: true, video: { facingMode: 'user', width: 640, height: 480 } }
+        : { audio: true }
+    )
     localStream.current = stream
     if (localVid.current) { localVid.current.srcObject = stream; localVid.current.muted = true }
     return stream
@@ -195,19 +222,11 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
     stream.getTracks().forEach(t => conn.addTrack(t, stream))
     conn.ontrack = e => {
       const s = e.streams[0]
-      if (remoteAudio.current) {
-        remoteAudio.current.srcObject = s
-        remoteAudio.current.play().catch(() => {})
-      }
-      if (remoteVid.current) {
-        remoteVid.current.srcObject = s
-        remoteVid.current.play().catch(() => {})
-      }
+      if (remoteAudio.current) { remoteAudio.current.srcObject = s; remoteAudio.current.play().catch(() => {}) }
+      if (remoteVid.current) { remoteVid.current.srcObject = s; remoteVid.current.play().catch(() => {}) }
     }
     conn.onicecandidate = e => {
-      if (e.candidate) {
-        sessionCh.current?.send({ type: 'broadcast', event: 'call-ice', payload: { candidate: e.candidate, from: myUserId } })
-      }
+      if (e.candidate) sessionCh.current?.send({ type: 'broadcast', event: 'call-ice', payload: { candidate: e.candidate, from: myUserId } })
     }
     conn.onconnectionstatechange = () => {
       if (conn.connectionState === 'connected') goActive()
@@ -223,21 +242,15 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
       const conn = makePc(stream)
       const offer = await conn.createOffer()
       await conn.setLocalDescription(offer)
-      const callCh = supabase.channel(`user-calls:${contact.id}`)
-      await new Promise(r => callCh.subscribe(s => s === 'SUBSCRIBED' && r()))
-      await callCh.send({
-        type: 'broadcast', event: 'call-offer',
-        payload: { from: myUserId, fromName: contact?.display_name || '', convId: conversationId, callType, offer },
-      })
-      supabase.removeChannel(callCh)
-    } catch (e) {
-      alert(`Error al iniciar llamada: ${e.message}`)
-      onEnd()
-    }
+      const ch = supabase.channel(`user-calls:${contact.id}`)
+      await new Promise(r => ch.subscribe(s => s === 'SUBSCRIBED' && r()))
+      await ch.send({ type: 'broadcast', event: 'call-offer', payload: { from: myUserId, fromName: contact?.display_name || '', convId: conversationId, callType, offer } })
+      supabase.removeChannel(ch)
+    } catch (e) { alert(`Error: ${e.message}`); onEnd() }
   }
 
   async function acceptCall() {
-    vibrate([40, 30, 40])
+    vibrate([30, 20, 60])
     ringtone.stop()
     setPhase('connecting')
     try {
@@ -245,518 +258,423 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
       const conn = makePc(stream)
       await conn.setRemoteDescription(new RTCSessionDescription(incomingOffer))
       for (const c of pendingIce.current) {
-        try { await conn.addIceCandidate(new RTCIceCandidate(c)) } catch (e) {}
+        try { await conn.addIceCandidate(new RTCIceCandidate(c)) } catch (_) {}
       }
       pendingIce.current = []
       const answer = await conn.createAnswer()
       await conn.setLocalDescription(answer)
       sessionCh.current?.send({ type: 'broadcast', event: 'call-answer', payload: { answer } })
-    } catch (e) {
-      alert(`Error al aceptar llamada: ${e.message}`)
-      hangup(true)
-    }
+    } catch (e) { alert(`Error: ${e.message}`); hangup(true) }
   }
 
   function goActive() {
     outgoingRing.stop()
     setPhase('active')
     sounds.callConnect()
-    vibrate([0, 80])
-    elapsedRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
+    vibrate([0, 60])
+    timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
   }
 
   function rejectCall() {
-    vibrate(60)
+    vibrate(80)
     ringtone.stop()
     sessionCh.current?.send({ type: 'broadcast', event: 'call-reject', payload: {} })
     hangup(false)
   }
 
   function hangup(sendSignal = true) {
-    vibrate(80)
-    ringtone.stop()
-    outgoingRing.stop()
-    clearInterval(elapsedRef.current)
+    vibrate([0, 80])
+    ringtone.stop(); outgoingRing.stop()
+    clearInterval(timerRef.current)
     sounds.callEnd()
     if (sendSignal) sessionCh.current?.send({ type: 'broadcast', event: 'call-end', payload: {} })
     localStream.current?.getTracks().forEach(t => t.stop())
     pc.current?.close()
     setPhase('ended')
-    setTimeout(onEnd, 800)
+    setTimeout(onEnd, 900)
   }
 
-  function toggleMute() {
-    vibrate(30)
-    const t = localStream.current?.getAudioTracks()[0]
-    if (t) { t.enabled = !t.enabled; setMuted(m => !m) }
-  }
-
-  function toggleCam() {
-    vibrate(30)
-    const t = localStream.current?.getVideoTracks()[0]
-    if (t) { t.enabled = !t.enabled; setCamOff(c => !c) }
-  }
-
+  function toggleMute() { vibrate(25); const t = localStream.current?.getAudioTracks()[0]; if (t) { t.enabled = !t.enabled; setMuted(m => !m) } }
+  function toggleCam() { vibrate(25); const t = localStream.current?.getVideoTracks()[0]; if (t) { t.enabled = !t.enabled; setCamOff(c => !c) } }
   function toggleSpeaker() {
-    vibrate(30)
-    const next = !speaker
-    setSpeaker(next)
-    const el = remoteAudio.current
-    if (!el) return
-    if (typeof el.setSinkId === 'function') {
-      el.setSinkId(next ? 'default' : '').catch(() => {})
-    }
+    vibrate(25)
+    const next = !speaker; setSpeaker(next)
+    if (remoteAudio.current && typeof remoteAudio.current.setSinkId === 'function')
+      remoteAudio.current.setSinkId(next ? 'default' : '').catch(() => {})
   }
 
-  // Swipe down to minimize
-  const onTouchStart = useCallback(e => {
-    touchStartY.current = e.touches[0].clientY
-    setDragging(true)
-  }, [])
-
-  const onTouchMove = useCallback(e => {
-    const dy = Math.max(0, e.touches[0].clientY - touchStartY.current)
-    setDragY(dy)
-  }, [])
-
-  const onTouchEnd = useCallback(() => {
+  // Swipe-down-to-minimize
+  const onTS = useCallback(e => { touchY0.current = e.touches[0].clientY; setDragging(true) }, [])
+  const onTM = useCallback(e => { setDragY(Math.max(0, e.touches[0].clientY - touchY0.current)) }, [])
+  const onTE = useCallback(() => {
     setDragging(false)
-    if (dragY > 80) {
-      setMinimized(true)
-      setDragY(0)
-    } else {
-      setDragY(0)
-    }
+    if (dragY > 90) { setMinimized(true); setDragY(0) } else { setDragY(0) }
   }, [dragY])
 
   if (minimized && phase === 'active') {
     return (
       <>
-        <MiniCall
-          name={name} elapsed={elapsed} avatar_url={avatar_url}
-          initials={initials} hue={hue} isVideo={isVideo}
-          onExpand={() => setMinimized(false)}
-          onHangup={() => hangup(true)}
-        />
-        <style>{`@keyframes miniPulse { 0%,100%{box-shadow:0 0 8px #39FF1440} 50%{box-shadow:0 0 16px #39FF1480} }`}</style>
+        <MiniPill name={name} elapsed={elapsed} avatar_url={avatar_url} colors={colors} isVideo={isVideo} onExpand={() => setMinimized(false)} onHangup={() => hangup(true)} />
+        <CallStyles />
       </>
     )
   }
 
-  const slideStyle = dragging && dragY > 0 ? {
-    transform: `translateY(${dragY * 0.6}px)`,
-    opacity: 1 - dragY / 300,
+  // ─── Incoming call: WhatsApp-style panel from bottom ───
+  if (phase === 'incoming') {
+    return (
+      <>
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 200,
+          background: 'rgba(0,0,0,0.55)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'flex-end',
+          animation: 'fadeIn .25s ease',
+        }}>
+          <div style={{
+            width: '100%',
+            background: 'linear-gradient(180deg, #0a1410 0%, #060e0a 100%)',
+            borderRadius: '28px 28px 0 0',
+            padding: '12px 0 0',
+            boxShadow: '0 -12px 60px rgba(0,0,0,0.7)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            borderBottom: 'none',
+            animation: 'slideUp .4s cubic-bezier(.34,1.3,.64,1)',
+            overflow: 'hidden',
+          }}>
+            {/* Pull handle */}
+            <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 16 }}>
+              <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.18)' }} />
+            </div>
+
+            {/* Blurred background strip */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 220, overflow: 'hidden', zIndex: 0 }}>
+              {avatar_url
+                ? <img src={avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(40px) brightness(0.15) saturate(2)', transform: 'scale(1.3)' }} />
+                : <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at 50% 0%, ${accent}30 0%, transparent 70%)` }} />
+              }
+            </div>
+
+            {/* Content */}
+            <div style={{ position: 'relative', zIndex: 1, padding: '0 28px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+              {/* Label */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                background: `${accent}15`, border: `1px solid ${accent}30`,
+                borderRadius: 20, padding: '5px 14px',
+              }}>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: accent, animation: 'blink 1.2s ease-in-out infinite' }} />
+                <span style={{ color: accent, fontSize: 12, fontWeight: 600 }}>
+                  {isVideo ? 'Videollamada entrante' : 'Llamada de voz entrante'}
+                </span>
+              </div>
+
+              {/* Avatar */}
+              <div style={{ position: 'relative' }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{
+                    position: 'absolute',
+                    inset: -(18 + i * 14), borderRadius: '50%',
+                    border: `1.5px solid ${accent}${['40','28','16'][i]}`,
+                    animation: `ring 2.2s ease-out ${i * 0.45}s infinite`,
+                  }} />
+                ))}
+                <Avatar name={name} avatar_url={avatar_url} size={110} colors={colors} />
+              </div>
+
+              {/* Name + subtext */}
+              <div style={{ textAlign: 'center' }}>
+                <h2 style={{ color: '#fff', fontSize: 26, fontWeight: 700, margin: '0 0 4px', letterSpacing: '-0.5px' }}>{name}</h2>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, margin: 0 }}>
+                  {isVideo ? '📹 quiere hacer una videollamada' : '📞 te está llamando'}
+                </p>
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 52, paddingTop: 8 }}>
+                {/* Reject */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <button onClick={rejectCall} style={{
+                    width: 68, height: 68, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                    background: 'rgba(239,68,68,0.15)',
+                    border: '1.5px solid rgba(239,68,68,0.35)',
+                    backdropFilter: 'blur(12px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 4px 24px rgba(239,68,68,0.2)',
+                    transition: 'transform .15s',
+                  }}
+                    onTouchStart={e => e.currentTarget.style.transform = 'scale(0.92)'}
+                    onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                  <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>Rechazar</span>
+                </div>
+
+                {/* Accept */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <button onClick={acceptCall} style={{
+                    width: 68, height: 68, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                    background: 'linear-gradient(145deg, #14532d, #22c55e)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 4px 32px rgba(34,197,94,0.45), 0 0 0 8px rgba(34,197,94,0.1)',
+                    animation: 'acceptPulse 1.5s ease-in-out infinite alternate',
+                    transition: 'transform .15s',
+                  }}
+                    onTouchStart={e => e.currentTarget.style.transform = 'scale(0.92)'}
+                    onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.8a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    </svg>
+                  </button>
+                  <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>Aceptar</span>
+                </div>
+              </div>
+
+              {/* Safe area */}
+              <div style={{ height: 'env(safe-area-inset-bottom, 16px)' }} />
+            </div>
+          </div>
+        </div>
+        <CallStyles />
+      </>
+    )
+  }
+
+  // ─── Outgoing / Active / Ended: full-screen overlay ───
+  const slideBase = dragging ? {
+    transform: `translateY(${dragY * 0.55}px)`,
+    opacity: Math.max(0, 1 - dragY / 280),
     transition: 'none',
   } : {
-    transform: 'translateY(0)',
-    opacity: 1,
-    transition: 'transform .3s ease, opacity .3s ease',
+    transform: visible ? 'translateY(0)' : 'translateY(100%)',
+    opacity: visible ? 1 : 0,
+    transition: dragging ? 'none' : 'transform .45s cubic-bezier(.34,1.2,.64,1), opacity .35s ease',
   }
 
   return (
-    <div ref={containerRef} style={{
-      position: 'fixed', inset: 0, zIndex: 100,
-      fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-      userSelect: 'none', overflow: 'hidden',
-      ...slideStyle,
-    }}
-      onTouchStart={phase === 'active' ? onTouchStart : undefined}
-      onTouchMove={phase === 'active' ? onTouchMove : undefined}
-      onTouchEnd={phase === 'active' ? onTouchEnd : undefined}
-    >
-      {/* ── BACKGROUND ── */}
-      {isVideo && phase === 'active' ? (
-        <video ref={remoteVid} autoPlay playsInline
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
-      ) : (
+    <>
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+        userSelect: 'none', overflow: 'hidden',
+        ...slideBase,
+      }}
+        onTouchStart={phase === 'active' ? onTS : undefined}
+        onTouchMove={phase === 'active' ? onTM : undefined}
+        onTouchEnd={phase === 'active' ? onTE : undefined}
+      >
+        {/* ── BACKGROUND ── */}
         <div style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden' }}>
-          {/* Base dark */}
-          <div style={{ position: 'absolute', inset: 0, background: '#050c09' }} />
-          {/* Avatar color orbs */}
+          <div style={{ position: 'absolute', inset: 0, background: '#050c08' }} />
           {avatar_url ? (
             <img src={avatar_url} alt="" style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'cover', filter: 'blur(60px) brightness(0.25) saturate(1.5)',
-              transform: 'scale(1.2)',
+              objectFit: 'cover',
+              filter: 'blur(60px) brightness(0.2) saturate(1.8)',
+              transform: 'scale(1.3)',
             }} />
           ) : (
             <>
               <div style={{
-                position: 'absolute', top: '-10%', left: '-10%',
-                width: '70%', paddingBottom: '70%', borderRadius: '50%',
-                background: `radial-gradient(circle, hsl(${hue},70%,30%) 0%, transparent 70%)`,
-                opacity: 0.5,
-                animation: 'orbFloat 8s ease-in-out infinite',
+                position: 'absolute', top: '-15%', left: '-15%', width: '75%', paddingBottom: '75%',
+                borderRadius: '50%',
+                background: `radial-gradient(circle, ${colors[0]}cc 0%, transparent 70%)`,
+                opacity: 0.6, animation: 'orbFloat 9s ease-in-out infinite',
               }} />
               <div style={{
-                position: 'absolute', bottom: '-20%', right: '-15%',
-                width: '80%', paddingBottom: '80%', borderRadius: '50%',
-                background: `radial-gradient(circle, hsl(${(hue + 40) % 360},60%,20%) 0%, transparent 70%)`,
-                opacity: 0.4,
-                animation: 'orbFloat 10s ease-in-out 2s infinite reverse',
-              }} />
-              <div style={{
-                position: 'absolute', top: '30%', right: '-20%',
-                width: '60%', paddingBottom: '60%', borderRadius: '50%',
-                background: `radial-gradient(circle, #39FF1415 0%, transparent 70%)`,
-                animation: 'orbFloat 12s ease-in-out 4s infinite',
+                position: 'absolute', bottom: '-25%', right: '-15%', width: '80%', paddingBottom: '80%',
+                borderRadius: '50%',
+                background: `radial-gradient(circle, ${accent}22 0%, transparent 70%)`,
+                opacity: 0.5, animation: 'orbFloat 11s ease-in-out 3s infinite reverse',
               }} />
             </>
           )}
-          {/* Dark overlay for readability */}
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} />
-          {/* Noise texture */}
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.52)' }} />
+          {/* Subtle vignette */}
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)' }} />
+        </div>
+
+        {/* Remote video (video calls) */}
+        {isVideo && phase === 'active' && (
+          <video ref={remoteVid} autoPlay playsInline
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }} />
+        )}
+
+        {/* Local PiP (video) */}
+        {isVideo && phase === 'active' && (
           <div style={{
-            position: 'absolute', inset: 0, opacity: 0.03,
-            backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")',
-          }} />
-        </div>
-      )}
+            position: 'absolute', top: 60, right: 16, width: 88, height: 132,
+            borderRadius: 20, overflow: 'hidden', zIndex: 20,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+            border: '2px solid rgba(255,255,255,0.18)',
+          }}>
+            <video ref={localVid} autoPlay playsInline muted
+              style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+          </div>
+        )}
 
-      {/* Local video PiP */}
-      {isVideo && phase === 'active' && (
+        {/* ── MAIN CONTENT ── */}
         <div style={{
-          position: 'absolute', top: 56, right: 16, width: 90, height: 130,
-          borderRadius: 18, overflow: 'hidden', zIndex: 20,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.7), 0 0 0 2px rgba(255,255,255,0.15)',
+          position: 'relative', zIndex: 10, height: '100%',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
         }}>
-          <video ref={localVid} autoPlay playsInline muted
-            style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
-        </div>
-      )}
 
-      {/* ── CONTENT ── */}
-      <div style={{
-        position: 'relative', zIndex: 10,
-        height: '100%', display: 'flex', flexDirection: 'column',
-        alignItems: 'center',
-      }}>
+          {/* Top bar */}
+          <div style={{ width: '100%', padding: '54px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* Drag handle */}
+            {phase === 'active' && (
+              <div style={{ position: 'absolute', top: 14, left: 0, right: 0, display: 'flex', justifyContent: 'center' }}>
+                <div style={{ width: 38, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.25)' }} />
+              </div>
+            )}
 
-        {/* ── TOP BAR ── */}
-        <div style={{
-          width: '100%', display: 'flex', alignItems: 'center',
-          padding: '52px 20px 0',
-          justifyContent: 'space-between',
-        }}>
-          {/* Drag handle (visible when active) */}
-          {phase === 'active' && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', position: 'absolute', top: 12, left: 0 }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.3)' }} />
+            {/* HD badge */}
+            {phase === 'active' && (
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 20, padding: '4px 10px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2 }}>
+                  {[4, 7, 10, 13].map((h, i) => (
+                    <div key={i} style={{ width: 3, height: h, borderRadius: 2, background: i < 3 ? accent : 'rgba(255,255,255,0.2)' }} />
+                  ))}
+                </div>
+                <span style={{ color: accent, fontSize: 11, fontWeight: 600 }}>HD</span>
+              </div>
+            )}
+          </div>
+
+          {/* Center: avatar + info */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0, paddingBottom: 8 }}>
+            <div style={{ marginBottom: 30 }}>
+              <Avatar name={name} avatar_url={avatar_url} size={128} active={phase === 'active'} colors={colors} />
             </div>
-          )}
 
-          {/* Signal badge */}
-          {phase === 'active' && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              background: 'rgba(255,255,255,0.08)',
-              backdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 20, padding: '4px 10px',
-              marginLeft: 'auto',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2 }}>
-                {[4, 7, 10, 13].map((h, i) => (
-                  <div key={i} style={{
-                    width: 3, height: h, borderRadius: 2,
-                    background: i < 3 ? '#39FF14' : 'rgba(255,255,255,0.2)',
-                  }} />
+            <h2 style={{
+              color: '#fff', fontSize: 30, fontWeight: 700, margin: '0 0 8px',
+              letterSpacing: '-0.6px', textShadow: '0 2px 16px rgba(0,0,0,0.5)',
+            }}>{name}</h2>
+
+            {/* Status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 22 }}>
+              {phase === 'active' && (
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: accent, boxShadow: `0 0 8px ${accent}`, animation: 'blink 2s ease-in-out infinite' }} />
+              )}
+              <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 17, letterSpacing: '0.1px' }}>
+                {phase === 'connecting' ? 'Llamando...' : phase === 'active' ? fmtTime(elapsed) : 'Llamada finalizada'}
+              </span>
+            </div>
+
+            {/* Waveform when active */}
+            {phase === 'active' && !isVideo && <Waveform active={!muted} color={accent} />}
+
+            {/* Connecting dots */}
+            {phase === 'connecting' && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: accent, animation: `dot 1.4s ease-in-out ${i * 0.22}s infinite` }} />
                 ))}
               </div>
-              <span style={{ color: '#39FF14', fontSize: 11, fontWeight: 600 }}>HD</span>
-            </div>
-          )}
-        </div>
-
-        {/* ── AVATAR + NAME ── */}
-        <div style={{
-          flex: 1, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-          gap: 0, paddingBottom: 16,
-        }}>
-          {/* Avatar */}
-          <div style={{ position: 'relative', marginBottom: 28 }}>
-            {/* Rings for incoming/connecting */}
-            {(phase === 'incoming' || phase === 'connecting') && [0, 1, 2].map(i => (
-              <div key={i} style={{
-                position: 'absolute',
-                inset: -(20 + i * 16),
-                borderRadius: '50%',
-                border: `1.5px solid rgba(57,255,20,${0.3 - i * 0.08})`,
-                animation: `ring 2.4s ease-out ${i * 0.5}s infinite`,
-              }} />
-            ))}
-
-            {/* Active pulse */}
-            {phase === 'active' && (
-              <div style={{
-                position: 'absolute', inset: -8, borderRadius: '50%',
-                background: `radial-gradient(circle, rgba(57,255,20,0.15) 0%, transparent 70%)`,
-                animation: 'activePulse 2s ease-in-out infinite',
-              }} />
             )}
 
-            {/* Avatar circle */}
+            {/* Encrypted badge */}
             <div style={{
-              width: 120, height: 120, borderRadius: '50%',
-              background: avatar_url
-                ? `url(${avatar_url}) center/cover`
-                : `linear-gradient(145deg, hsl(${hue},55%,28%), hsl(${hue},40%,14%))`,
-              border: phase === 'active'
-                ? '3px solid rgba(57,255,20,0.6)'
-                : '3px solid rgba(255,255,255,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 42, fontWeight: 800, color: '#fff',
-              letterSpacing: '-1px',
-              boxShadow: phase === 'active'
-                ? '0 0 0 6px rgba(57,255,20,0.1), 0 24px 48px rgba(0,0,0,0.5)'
-                : '0 24px 48px rgba(0,0,0,0.5)',
-              transition: 'border .5s, box-shadow .5s',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              marginTop: 20, padding: '5px 14px',
+              background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20,
             }}>
-              {!avatar_url && initials}
+              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>🔐</span>
+              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, fontWeight: 500 }}>
+                {isVideo ? 'Videollamada' : 'Llamada de voz'} · Cifrada extremo a extremo
+              </span>
             </div>
 
-            {/* Ended indicator */}
-            {phase === 'ended' && (
-              <div style={{
-                position: 'absolute', inset: 0, borderRadius: '50%',
-                background: 'rgba(0,0,0,0.5)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </div>
-            )}
-          </div>
-
-          {/* Name */}
-          <h2 style={{
-            color: '#fff', fontSize: 28, fontWeight: 700,
-            margin: '0 0 8px', letterSpacing: '-0.5px',
-            textShadow: '0 2px 12px rgba(0,0,0,0.5)',
-          }}>{name}</h2>
-
-          {/* Status */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             {phase === 'active' && (
-              <div style={{
-                width: 7, height: 7, borderRadius: '50%',
-                background: '#39FF14',
-                boxShadow: '0 0 8px #39FF1499',
-                animation: 'blink 2s ease-in-out infinite',
-              }} />
+              <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: 11, marginTop: 10 }}>
+                Deslizá hacia abajo para minimizar
+              </p>
             )}
-            <span style={{
-              color: phase === 'ended' ? '#ef4444' : 'rgba(255,255,255,0.7)',
-              fontSize: 16, letterSpacing: '0.1px',
-              textShadow: '0 1px 8px rgba(0,0,0,0.5)',
-            }}>
-              {phase === 'incoming'
-                ? (isVideo ? '📹 Videollamada entrante' : '📞 Llamada entrante')
-                : phase === 'connecting' ? 'Conectando...'
-                : phase === 'active' ? fmtTime(elapsed)
-                : 'Llamada finalizada'}
-            </span>
           </div>
 
-          {/* Waveform (active audio) or dots (connecting) */}
-          {phase === 'active' && !isVideo && (
-            <AudioWave active={!muted} />
-          )}
-          {phase === 'connecting' && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[0, 1, 2].map(i => (
-                <div key={i} style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: '#39FF14',
-                  animation: `dot 1.4s ease-in-out ${i * 0.22}s infinite`,
-                }} />
-              ))}
-            </div>
-          )}
-
-          {/* Type badge */}
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            marginTop: 20, padding: '5px 14px',
-            background: 'rgba(255,255,255,0.07)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 20,
-          }}>
-            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>🔐</span>
-            <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: 500 }}>
-              {isVideo ? 'Videollamada' : 'Llamada de voz'} · Cifrada
-            </span>
-          </div>
-
-          {/* Minimize hint when active */}
-          {phase === 'active' && (
-            <div style={{ marginTop: 12, color: 'rgba(255,255,255,0.25)', fontSize: 11 }}>
-              Deslizá hacia abajo para minimizar
-            </div>
-          )}
-        </div>
-
-        {/* ── CONTROLS AREA ── */}
-        <div style={{ width: '100%', padding: '0 16px 40px' }}>
-
-          {phase === 'incoming' ? (
-            /* Incoming call buttons */
-            <div style={{
-              display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 56,
-            }}>
-              {/* Reject */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                <button onClick={rejectCall} style={{
-                  width: 72, height: 72, borderRadius: '50%', border: 'none', cursor: 'pointer',
-                  background: 'linear-gradient(145deg, #991b1b, #ef4444)',
-                  boxShadow: '0 8px 32px rgba(239,68,68,0.45), 0 0 0 8px rgba(239,68,68,0.12)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  animation: 'incomingShake 0.5s ease-in-out infinite alternate',
-                }}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
-                </button>
-                <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 500 }}>Rechazar</span>
-              </div>
-
-              {/* Accept */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                <button onClick={acceptCall} style={{
-                  width: 72, height: 72, borderRadius: '50%', border: 'none', cursor: 'pointer',
-                  background: 'linear-gradient(145deg, #166534, #22c55e)',
-                  boxShadow: '0 8px 32px rgba(34,197,94,0.45), 0 0 0 8px rgba(34,197,94,0.12)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  animation: 'incomingPulse 1s ease-in-out infinite alternate',
-                }}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.8a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-                  </svg>
-                </button>
-                <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 500 }}>Aceptar</span>
-              </div>
-            </div>
-          ) : phase === 'ended' ? null : (
-            /* Active / connecting controls */
-            <>
-              {/* Secondary row */}
+          {/* ── CONTROLS ── */}
+          {phase !== 'ended' && (
+            <div style={{ width: '100%', padding: '0 20px 44px' }}>
+              {/* Row 1: secondary buttons */}
               <div style={{
-                display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 24,
+                display: 'flex', justifyContent: 'center', gap: 18, marginBottom: 28,
               }}>
-                <SmallBtn icon={
-                  muted
-                    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-                } label={muted ? 'Mic off' : 'Micrófono'} active={muted} danger onClick={toggleMute} />
-
-                <SmallBtn icon={
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <RoundBtn
+                  icon={muted
+                    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                  }
+                  label={muted ? 'Mic apagado' : 'Micrófono'}
+                  state={muted ? 'danger' : 'off'}
+                  onClick={toggleMute}
+                />
+                <RoundBtn
+                  icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
                     {speaker
                       ? <><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></>
-                      : <line x1="23" y1="9" x2="17" y2="15"/>}
-                  </svg>
-                } label="Altavoz" active={speaker} green onClick={toggleSpeaker} />
-
+                      : <line x1="23" y1="9" x2="17" y2="15"/>
+                    }
+                  </svg>}
+                  label="Altavoz"
+                  state={speaker ? 'on' : 'off'}
+                  accent={accent}
+                  onClick={toggleSpeaker}
+                />
                 {isVideo && (
-                  <SmallBtn icon={
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <RoundBtn
+                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
                       {camOff && <line x1="1" y1="1" x2="23" y2="23"/>}
-                    </svg>
-                  } label={camOff ? 'Cam off' : 'Cámara'} active={camOff} danger onClick={toggleCam} />
+                    </svg>}
+                    label={camOff ? 'Cam apagada' : 'Cámara'}
+                    state={camOff ? 'danger' : 'off'}
+                    onClick={toggleCam}
+                  />
                 )}
               </div>
 
-              {/* Hang up — big centered */}
+              {/* Row 2: hang up */}
               <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                   <button onClick={() => hangup(true)} style={{
-                    width: 68, height: 68, borderRadius: '50%', border: 'none', cursor: 'pointer',
-                    background: 'linear-gradient(145deg, #991b1b, #ef4444)',
-                    boxShadow: '0 8px 32px rgba(239,68,68,0.4), 0 0 0 6px rgba(239,68,68,0.1)',
+                    width: 70, height: 70, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                    background: 'linear-gradient(145deg, #7f1d1d, #ef4444)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'transform .15s, box-shadow .15s',
+                    boxShadow: '0 8px 32px rgba(239,68,68,0.45), 0 0 0 8px rgba(239,68,68,0.1)',
+                    transition: 'transform .15s',
                   }}
-                    onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.07)'}
-                    onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                    onTouchStart={e => e.currentTarget.style.transform = 'scale(0.92)'}
+                    onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
                   >
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 2 2 0 0 1-.47-.43"/>
-                      <path d="M6.37 6.37a16 16 0 0 0-2.6 3.41L5.04 11.05a2 2 0 0 1 .45 2.11c-.339.907-.573 1.85-.7 2.81A2 2 0 0 1 3.08 18H.08A2 2 0 0 1-1.9 15.82a19.79 19.79 0 0 1 3.07-8.63"/>
-                      <line x1="1" y1="1" x2="23" y2="23"/>
-                    </svg>
+                    <HangupIcon size={26} />
                   </button>
-                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: 500 }}>Colgar</span>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 500 }}>Colgar</span>
                 </div>
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Hidden audio — always mounted */}
       <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
-
-      <style>{`
-        @keyframes ring {
-          0% { transform: scale(1); opacity: .7 }
-          100% { transform: scale(1.6); opacity: 0 }
-        }
-        @keyframes dot {
-          0%,80%,100% { transform: scale(0.5); opacity: .3 }
-          40% { transform: scale(1); opacity: 1 }
-        }
-        @keyframes blink {
-          0%,100% { opacity: 1 }
-          50% { opacity: .3 }
-        }
-        @keyframes wave {
-          0% { transform: scaleY(0.4) }
-          100% { transform: scaleY(1) }
-        }
-        @keyframes orbFloat {
-          0%,100% { transform: translate(0,0) scale(1) }
-          33% { transform: translate(3%,4%) scale(1.04) }
-          66% { transform: translate(-2%,2%) scale(0.97) }
-        }
-        @keyframes activePulse {
-          0%,100% { transform: scale(1); opacity: .7 }
-          50% { transform: scale(1.15); opacity: 1 }
-        }
-        @keyframes incomingShake {
-          0% { transform: rotate(-4deg) }
-          100% { transform: rotate(4deg) }
-        }
-        @keyframes incomingPulse {
-          0% { box-shadow: 0 8px 32px rgba(34,197,94,0.45), 0 0 0 8px rgba(34,197,94,0.12) }
-          100% { box-shadow: 0 8px 32px rgba(34,197,94,0.6), 0 0 0 14px rgba(34,197,94,0.06) }
-        }
-        @keyframes miniPulse {
-          0%,100% { box-shadow: 0 0 8px #39FF1440 }
-          50% { box-shadow: 0 0 20px #39FF1470 }
-        }
-      `}</style>
-    </div>
+      <CallStyles />
+    </>
   )
 }
 
-function SmallBtn({ icon, label, active, danger, green, onClick }) {
-  const color = danger && active ? '#ef4444' : green && active ? '#39FF14' : 'rgba(255,255,255,0.85)'
-  const bg = danger && active
-    ? 'rgba(239,68,68,0.18)'
-    : green && active
-    ? 'rgba(57,255,20,0.15)'
-    : 'rgba(255,255,255,0.08)'
-  const border = danger && active
-    ? '1.5px solid rgba(239,68,68,0.35)'
-    : green && active
-    ? '1.5px solid rgba(57,255,20,0.3)'
-    : '1.5px solid rgba(255,255,255,0.1)'
-
+function RoundBtn({ icon, label, state = 'off', accent = '#39FF14', onClick }) {
+  const isOn = state === 'on'
+  const isDanger = state === 'danger'
+  const color = isDanger ? '#ef4444' : isOn ? accent : 'rgba(255,255,255,0.85)'
+  const bg = isDanger ? 'rgba(239,68,68,0.15)' : isOn ? `${accent}18` : 'rgba(255,255,255,0.08)'
+  const border = isDanger ? '1.5px solid rgba(239,68,68,0.3)' : isOn ? `1.5px solid ${accent}35` : '1.5px solid rgba(255,255,255,0.1)'
   return (
     <button onClick={onClick} style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
@@ -764,19 +682,36 @@ function SmallBtn({ icon, label, active, danger, green, onClick }) {
     }}>
       <div style={{
         width: 58, height: 58, borderRadius: '50%',
-        background: bg, border, backdropFilter: 'blur(12px)',
+        background: bg, border, backdropFilter: 'blur(16px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color, transition: 'transform .15s, background .2s',
-        boxShadow: active && green ? '0 0 16px rgba(57,255,20,0.25)' : active && danger ? '0 0 16px rgba(239,68,68,0.2)' : 'none',
+        color, transition: 'transform .12s, background .2s',
+        boxShadow: isOn ? `0 0 20px ${accent}30` : isDanger ? '0 0 16px rgba(239,68,68,0.25)' : 'none',
       }}
-        onTouchStart={e => e.currentTarget.style.transform = 'scale(0.93)'}
+        onTouchStart={e => e.currentTarget.style.transform = 'scale(0.9)'}
         onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
-        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.06)'}
+        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.07)'}
         onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
       >
         {icon}
       </div>
-      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: 500 }}>{label}</span>
+      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>{label}</span>
     </button>
+  )
+}
+
+function CallStyles() {
+  return (
+    <style>{`
+      @keyframes ring { 0%{transform:scale(1);opacity:.7} 100%{transform:scale(1.7);opacity:0} }
+      @keyframes dot { 0%,80%,100%{transform:scale(.5);opacity:.3} 40%{transform:scale(1);opacity:1} }
+      @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+      @keyframes wfWave { 0%{transform:scaleY(.35)} 100%{transform:scaleY(1)} }
+      @keyframes orbFloat { 0%,100%{transform:translate(0,0) scale(1)} 40%{transform:translate(3%,5%) scale(1.05)} 70%{transform:translate(-2%,2%) scale(.97)} }
+      @keyframes avPulse { 0%,100%{transform:scale(1);opacity:.7} 50%{transform:scale(1.12);opacity:1} }
+      @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+      @keyframes slideDown { from{transform:translateY(-40px);opacity:0} to{transform:translateY(0);opacity:1} }
+      @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+      @keyframes acceptPulse { 0%{box-shadow:0 4px 32px rgba(34,197,94,0.45),0 0 0 8px rgba(34,197,94,0.1)} 100%{box-shadow:0 4px 32px rgba(34,197,94,0.65),0 0 0 16px rgba(34,197,94,0.06)} }
+    `}</style>
   )
 }
