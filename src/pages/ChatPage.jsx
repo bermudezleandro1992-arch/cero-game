@@ -76,7 +76,7 @@ export default function ChatPage({ onBack }) {
     if (!text.trim() || sending) return
     setSending(true)
     const content = replyTo
-      ? `[↩ ${replyTo.users?.display_name}: ${replyTo.content?.slice(0, 40)}${replyTo.content?.length > 40 ? '…' : ''}]\n${text.trim()}`
+      ? `[↩ ${replyTo.sender?.display_name}: ${replyTo.content?.slice(0, 40)}${replyTo.content?.length > 40 ? '…' : ''}]\n${text.trim()}`
       : text.trim()
     setReplyTo(null)
     setText('')
@@ -99,7 +99,7 @@ export default function ChatPage({ onBack }) {
       const url = await uploadImage(file, profile.id)
       await sendMessage(activeConversation.id, profile.id, url, 'image')
     } catch (err) {
-      alert('Error al subir la imagen. Asegurate de crear el bucket "attachments" en Supabase → Storage.')
+      alert(`Error al subir imagen: ${err.message}`)
     }
     setUploadingImage(false)
     fileRef.current.value = ''
@@ -113,6 +113,9 @@ export default function ChatPage({ onBack }) {
   }
 
   const grouped = groupByDate(messages)
+  const avatarLetters = isGroup
+    ? (groupName?.slice(0, 2).toUpperCase() || '👥')
+    : (otherUser?.display_name?.slice(0, 2).toUpperCase() || '?')
 
   return (
     <>
@@ -122,37 +125,69 @@ export default function ChatPage({ onBack }) {
 
     <div className="h-screen flex flex-col" style={{ background: '#0b141a' }}
       onClick={() => { setLongPressMsg(null); setShowEmoji(false) }}>
+
       {/* Header */}
-      <div className="flex items-center gap-3 px-3 py-2.5 flex-shrink-0" style={{ background: '#202c33' }}>
-        <button onClick={onBack} className="text-white p-1">
+      <div className="flex items-center gap-3 px-3 py-2.5 flex-shrink-0 shadow-lg"
+        style={{ background: '#202c33', borderBottom: '1px solid #1a2530' }}>
+        <button onClick={onBack} className="text-white p-1 flex-shrink-0">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
-        <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
-          style={{ background: isGroup ? '#1f6b5c' : '#2a3942' }}>
-          {isGroup ? (groupName?.slice(0, 2).toUpperCase() || '👥') : (otherUser?.display_name?.slice(0, 2).toUpperCase() || '?')}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-white text-sm leading-tight truncate">
-            {isGroup ? groupName : otherUser?.display_name}
-          </p>
-          {isGroup ? (
-            <p className="text-xs" style={{ color: '#8696a0' }}>
-              {`${(activeConversation?.members?.length || 0) + 1} participantes`}
+
+        <button className="flex items-center gap-3 flex-1 min-w-0 text-left" onClick={() => !isGroup && setShowContact(true)}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0 relative"
+            style={{ background: isGroup ? '#1f6b5c' : '#2a3942' }}>
+            {avatarLetters}
+            {isOnline && !isGroup && (
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2"
+                style={{ background: '#00a884', borderColor: '#202c33' }} />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-white text-sm leading-tight truncate">
+              {isGroup ? groupName : otherUser?.display_name}
             </p>
-          ) : isTyping ? (
-            <p className="text-xs font-medium" style={{ color: '#00a884' }}>Escribiendo...</p>
-          ) : (
-            <p className="text-xs" style={{ color: isOnline ? '#00a884' : '#8696a0' }}>
-              {formatLastSeen(lastSeen, isOnline)}
-            </p>
-          )}
+            {isGroup ? (
+              <p className="text-xs" style={{ color: '#8696a0' }}>
+                {`${(activeConversation?.members?.length || 0) + 1} participantes`}
+              </p>
+            ) : isTyping ? (
+              <p className="text-xs font-medium" style={{ color: '#00a884' }}>Escribiendo...</p>
+            ) : (
+              <p className="text-xs" style={{ color: isOnline ? '#00a884' : '#8696a0' }}>
+                {formatLastSeen(lastSeen, isOnline)}
+              </p>
+            )}
+          </div>
+        </button>
+
+        {/* Call buttons */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button onClick={() => alert('Llamadas de voz próximamente')}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+            style={{ color: '#8696a0' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#2a3942'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+            </svg>
+          </button>
+          <button onClick={() => alert('Videollamadas próximamente')}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+            style={{ color: '#8696a0' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#2a3942'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+            </svg>
+          </button>
         </div>
       </div>
 
       {/* Mensajes */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 flex flex-col" style={{ overscrollBehavior: 'contain' }}>
+      <div className="flex-1 overflow-y-auto px-3 py-2 flex flex-col"
+        style={{ overscrollBehavior: 'contain', backgroundImage: 'radial-gradient(circle at 1px 1px, #1a2a34 1px, transparent 0)', backgroundSize: '20px 20px' }}>
         {loadingMessages && (
           <div className="flex justify-center pt-8">
             <span className="text-sm" style={{ color: '#8696a0' }}>Cargando...</span>
@@ -188,15 +223,16 @@ export default function ChatPage({ onBack }) {
                   <div className="max-w-[80%] relative">
                     {showName && (
                       <p className="text-xs font-semibold px-3 mb-0.5" style={{ color: senderColor(msg.sender_id) }}>
-                        {msg.users?.display_name}
+                        {msg.sender?.display_name}
                       </p>
                     )}
-                    <div className="px-3 py-1.5 text-sm"
+                    <div className="px-3 py-1.5 text-sm shadow-md"
                       style={{
                         background: isMine ? '#005c4b' : '#202c33',
                         color: '#e9edef',
-                        borderRadius: isMine ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                        borderRadius: isMine ? '12px 2px 12px 12px' : '2px 12px 12px 12px',
                       }}>
+
                       {/* Reply preview */}
                       {isReply && (() => {
                         const lines = msg.content.split('\n')
@@ -208,7 +244,11 @@ export default function ChatPage({ onBack }) {
                               style={{ background: 'rgba(0,0,0,0.2)', color: '#a8d5c8' }}>
                               {replyLine}
                             </div>
-                            <span>{mainText}</span>
+                            <span style={{ whiteSpace: 'pre-wrap' }}>{mainText}</span>
+                            <span className="inline-flex items-center gap-0.5 ml-2 align-bottom"
+                              style={{ fontSize: 10, color: isMine ? '#a8d5c8' : '#8696a0' }}>
+                              {formatTime(msg.created_at)} {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} />}
+                            </span>
                           </>
                         )
                       })()}
@@ -232,12 +272,7 @@ export default function ChatPage({ onBack }) {
                             {formatTime(msg.created_at)} {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} />}
                           </span>
                         </>
-                      ) : (
-                        <span className="inline-flex items-center gap-0.5 ml-2 align-bottom"
-                          style={{ fontSize: 10, color: isMine ? '#a8d5c8' : '#8696a0' }}>
-                          {formatTime(msg.created_at)} {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} />}
-                        </span>
-                      )}
+                      ) : null}
                     </div>
 
                     {/* Long press menu */}
@@ -245,7 +280,7 @@ export default function ChatPage({ onBack }) {
                       <div className="absolute z-30 flex gap-1 py-1 px-2 rounded-xl shadow-lg"
                         style={{
                           background: '#2a3942',
-                          bottom: '100%', mb: 4,
+                          bottom: '100%', marginBottom: 4,
                           [isMine ? 'right' : 'left']: 0,
                         }}
                         onClick={e => e.stopPropagation()}>
@@ -262,7 +297,12 @@ export default function ChatPage({ onBack }) {
 
         {messages.length === 0 && !loadingMessages && (
           <div className="flex flex-col items-center justify-center flex-1 gap-2 pt-16" style={{ color: '#8696a0' }}>
-            <p className="text-sm">{isGroup ? 'Nadie escribió aún. ¡Rompé el hielo!' : 'Comenzá la conversación'}</p>
+            <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-2"
+              style={{ background: '#1a2530' }}>
+              💬
+            </div>
+            <p className="text-sm">{isGroup ? '¡Rompé el hielo!' : 'Comenzá la conversación'}</p>
+            <p className="text-xs" style={{ color: '#4a5568' }}>Los mensajes son en tiempo real</p>
           </div>
         )}
         <div ref={bottomRef} />
@@ -273,7 +313,7 @@ export default function ChatPage({ onBack }) {
         <div className="flex items-center gap-2 px-4 py-2 border-l-4 border-green-500 flex-shrink-0"
           style={{ background: '#1f2c34' }}>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold" style={{ color: '#00a884' }}>{replyTo.users?.display_name}</p>
+            <p className="text-xs font-semibold" style={{ color: '#00a884' }}>{replyTo.sender?.display_name}</p>
             <p className="text-xs truncate" style={{ color: '#8696a0' }}>
               {replyTo.type === 'image' ? '📷 Foto' : replyTo.content}
             </p>
@@ -288,11 +328,12 @@ export default function ChatPage({ onBack }) {
 
       {/* Emoji picker */}
       {showEmoji && (
-        <div className="flex flex-wrap gap-2 px-4 py-3 flex-shrink-0" style={{ background: '#202c33' }}
+        <div className="flex flex-wrap gap-2 px-4 py-3 flex-shrink-0 border-t"
+          style={{ background: '#202c33', borderColor: '#2a3942' }}
           onClick={e => e.stopPropagation()}>
           {EMOJIS.map(em => (
             <button key={em} onClick={() => { setText(t => t + em); setShowEmoji(false); inputRef.current?.focus() }}
-              className="text-2xl">
+              className="text-2xl hover:scale-125 transition-transform">
               {em}
             </button>
           ))}
@@ -300,14 +341,16 @@ export default function ChatPage({ onBack }) {
       )}
 
       {/* Input bar */}
-      <form onSubmit={handleSend} className="flex items-center gap-2 px-3 py-3 flex-shrink-0"
-        style={{ background: '#202c33' }}
+      <form onSubmit={handleSend}
+        className="flex items-center gap-2 px-3 py-3 flex-shrink-0"
+        style={{ background: '#202c33', borderTop: '1px solid #1a2530' }}
         onClick={e => e.stopPropagation()}>
         <input type="file" accept="image/*,video/*" ref={fileRef} onChange={handleImagePick} className="hidden" />
 
-        <button type="button" onClick={() => { setShowEmoji(v => !v); setLongPressMsg(null) }}
-          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-xl"
-          style={{ background: '#2a3942' }}>
+        <button type="button"
+          onClick={() => { setShowEmoji(v => !v); setLongPressMsg(null) }}
+          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-xl transition-colors"
+          style={{ background: showEmoji ? '#00a884' : '#2a3942' }}>
           😊
         </button>
 
@@ -325,7 +368,7 @@ export default function ChatPage({ onBack }) {
 
         {text.trim() ? (
           <button type="submit" disabled={sending}
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-transform active:scale-95"
             style={{ background: '#00a884' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
               <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -335,7 +378,7 @@ export default function ChatPage({ onBack }) {
           <button type="button"
             onClick={() => fileRef.current?.click()}
             disabled={uploadingImage}
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 disabled:opacity-50"
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 disabled:opacity-50 transition-colors"
             style={{ background: '#2a3942' }}>
             {uploadingImage
               ? <span className="text-xs" style={{ color: '#8696a0' }}>...</span>
@@ -391,7 +434,7 @@ function DateSeparator({ dateStr }) {
   else label = d.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })
   return (
     <div className="flex justify-center my-3">
-      <span className="text-xs px-3 py-1 rounded-full" style={{ background: '#182229', color: '#8696a0' }}>{label}</span>
+      <span className="text-xs px-3 py-1 rounded-full shadow-sm" style={{ background: '#182229', color: '#8696a0' }}>{label}</span>
     </div>
   )
 }
