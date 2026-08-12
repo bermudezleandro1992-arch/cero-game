@@ -19,6 +19,8 @@ export default function NewGroupPage({ onBack, onCreated }) {
   const [searchResults, setSearchResults] = useState([])
   const [selected, setSelected] = useState([])
   const [groupName, setGroupName] = useState('')
+  const [groupType, setGroupType] = useState('group') // 'group' | 'community'
+  const [description, setDescription] = useState('')
   const [creating, setCreating] = useState(false)
   const [searching, setSearching] = useState(false)
 
@@ -45,7 +47,7 @@ export default function NewGroupPage({ onBack, onCreated }) {
   async function handleCreate() {
     if (!groupName.trim() || selected.length === 0) return
     setCreating(true)
-    const convId = await createGroup(groupName.trim(), selected.map(u => u.id), profile.id)
+    const convId = await createGroup(groupName.trim(), selected.map(u => u.id), profile.id, groupType, description.trim())
     setCreating(false)
     onCreated(convId, groupName.trim(), selected)
   }
@@ -71,7 +73,7 @@ export default function NewGroupPage({ onBack, onCreated }) {
         </button>
         <div style={{ flex: 1 }}>
           <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>
-            {step === 1 ? 'Nuevo grupo' : 'Nombre del grupo'}
+            {step === 1 ? 'Nuevo grupo / comunidad' : groupType === 'community' ? 'Nueva comunidad' : 'Nuevo grupo'}
           </h2>
           {step === 1 && (
             <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>
@@ -201,27 +203,49 @@ export default function NewGroupPage({ onBack, onCreated }) {
       )}
 
       {step === 2 && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 24px', gap: 24 }}>
-          {/* Group avatar preview */}
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 24px', gap: 24 }}>
+
+          {/* Type selector */}
+          <div style={{ width: '100%', display: 'flex', gap: 10 }}>
+            {[
+              { value: 'group', label: 'Grupo', desc: 'Conversación privada entre miembros', icon: '👥' },
+              { value: 'community', label: 'Comunidad', desc: 'Canal público con descripción y reglas', icon: '🏆' },
+            ].map(opt => (
+              <button key={opt.value} onClick={() => setGroupType(opt.value)} style={{
+                flex: 1, padding: '14px 10px', borderRadius: 14, border: `2px solid`,
+                borderColor: groupType === opt.value ? C.green : C.border,
+                background: groupType === opt.value ? `${C.green}0D` : C.panel,
+                cursor: 'pointer', textAlign: 'center', transition: 'all .15s',
+              }}>
+                <div style={{ fontSize: 24, marginBottom: 6 }}>{opt.icon}</div>
+                <p style={{ margin: '0 0 4px', color: groupType === opt.value ? C.green : C.text, fontWeight: 700, fontSize: 14 }}>{opt.label}</p>
+                <p style={{ margin: 0, color: C.textDim, fontSize: 11, lineHeight: 1.4 }}>{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+
+          {/* Avatar preview */}
           <div style={{
-            width: 90, height: 90, borderRadius: '50%',
+            width: 90, height: 90,
+            borderRadius: groupType === 'community' ? 24 : '50%',
             background: groupName ? `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})` : C.panel2,
             border: `2px solid ${groupName ? C.green : C.border}44`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: groupName ? 28 : 36, fontWeight: 800, color: C.text,
+            fontSize: groupName ? 28 : 32, fontWeight: 800, color: C.text,
             boxShadow: groupName ? `0 0 24px ${C.green}22` : 'none',
             transition: 'all .2s',
           }}>
-            {groupName ? groupName.slice(0, 2).toUpperCase() : '👥'}
+            {groupName ? groupName.slice(0, 2).toUpperCase() : (groupType === 'community' ? '🏆' : '👥')}
           </div>
 
-          {/* Name input */}
+          {/* Name */}
           <div style={{ width: '100%' }}>
             <label style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
-              Nombre del grupo
+              {groupType === 'community' ? 'Nombre de la comunidad' : 'Nombre del grupo'}
             </label>
             <input
-              type="text" placeholder="Ej: Equipo Relámpago ⚡"
+              type="text"
+              placeholder={groupType === 'community' ? 'Ej: SomosLFA Oficial' : 'Ej: Equipo Relámpago ⚡'}
               value={groupName}
               onChange={e => setGroupName(e.target.value)}
               maxLength={50} autoFocus
@@ -234,6 +258,29 @@ export default function NewGroupPage({ onBack, onCreated }) {
             />
             <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{groupName.length}/50</p>
           </div>
+
+          {/* Description (communities) */}
+          {groupType === 'community' && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                Descripción (opcional)
+              </label>
+              <textarea
+                placeholder="De qué trata esta comunidad..."
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                maxLength={200}
+                rows={3}
+                style={{
+                  width: '100%', background: C.panel, border: `1px solid ${C.border}`,
+                  borderRadius: 10, color: C.text, fontSize: 14, padding: '10px 12px',
+                  outline: 'none', resize: 'none', boxSizing: 'border-box',
+                  lineHeight: 1.5,
+                }}
+              />
+              <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{description.length}/200</p>
+            </div>
+          )}
 
           {/* Members preview */}
           <div style={{ width: '100%', background: C.panel, borderRadius: 12, padding: '12px 16px', border: `1px solid ${C.border}` }}>
@@ -258,15 +305,18 @@ export default function NewGroupPage({ onBack, onCreated }) {
               transition: 'all .2s',
             }}>
             {creating
-              ? <span style={{ color: C.textDim, fontSize: 20 }}>⏳</span>
+              ? <div style={{ width: 20, height: 20, border: `2px solid ${C.bg}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
               : <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={!groupName.trim() ? C.textDim : C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 6L9 17l-5-5"/>
                 </svg>
             }
           </button>
-          <p style={{ margin: '-16px 0 0', fontSize: 12, color: C.textDim }}>Crear grupo</p>
+          <p style={{ margin: '-16px 0 0', fontSize: 12, color: C.textDim }}>
+            {groupType === 'community' ? 'Crear comunidad' : 'Crear grupo'}
+          </p>
         </div>
       )}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }

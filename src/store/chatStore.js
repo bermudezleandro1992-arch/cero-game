@@ -23,7 +23,7 @@ export const useChatStore = create((set, get) => ({
     let convMeta = {}
     const { data: metaRows } = await supabase
       .from('conversations')
-      .select('id, name, is_group, created_by, avatar_url')
+      .select('id, name, is_group, created_by, avatar_url, group_type, description')
       .in('id', convIds0)
     metaRows?.forEach(r => { convMeta[r.id] = r })
 
@@ -79,7 +79,9 @@ export const useChatStore = create((set, get) => ({
         return {
           id: convId,
           isGroup,
+          isCommunity: meta?.group_type === 'community',
           name: isGroup ? meta?.name : null,
+          description: meta?.description,
           avatarUrl: meta?.avatar_url,
           user: isGroup ? null : members[0],  // for 1-on-1
           members,                              // for groups
@@ -368,12 +370,39 @@ export const useChatStore = create((set, get) => ({
     }))
   },
 
-  createGroup: async (name, memberIds, createdBy) => {
-    const { data: conv } = await supabase
+  createGroup: async (name, memberIds, createdBy, type = 'group', description = '') => {
+    const isCommunity = type === 'community'
+    const insertData = { name, is_group: true, created_by: createdBy }
+    // Attach extra fields if columns exist (migration 009)
+    if (isCommunity) {
+      insertData.group_type = 'community'
+    }
+    if (description) {
+      insertData.description = description
+    }
+    const { data: conv, error } = await supabase
       .from('conversations')
-      .insert({ name, is_group: true, created_by: createdBy })
+      .insert(insertData)
       .select()
       .single()
+
+    if (error) {
+      // Fallback without new columns if migration not run
+      const { data: conv2 } = await supabase
+        .from('conversations')
+        .insert({ name, is_group: true, created_by: createdBy })
+        .select()
+        .single()
+      if (!conv2) return null
+      await supabase.from('conversation_members').insert(
+        [createdBy, ...memberIds].map(uid => ({ conversation_id: conv2.id, user_id: uid }))
+      )
+      await supabase.from('messages').insert({
+        conversation_id: conv2.id, sender_id: createdBy, type: 'system',
+        content: `${isCommunity ? 'Comunidad' : 'Grupo'} "${name}" creado`,
+      })
+      return conv2.id
+    }
 
     await supabase.from('conversation_members').insert(
       [createdBy, ...memberIds].map(uid => ({
@@ -382,12 +411,11 @@ export const useChatStore = create((set, get) => ({
       }))
     )
 
-    // System message
     await supabase.from('messages').insert({
       conversation_id: conv.id,
       sender_id: createdBy,
       type: 'system',
-      content: `Grupo "${name}" creado`,
+      content: `${isCommunity ? 'Comunidad' : 'Grupo'} "${name}" creado`,
     })
 
     return conv.id
