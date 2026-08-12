@@ -5,9 +5,11 @@ import LoginPage from './pages/LoginPage'
 import ChatListPage from './pages/ChatListPage'
 import UpdateBanner from './components/UpdateBanner'
 import ProfileSheet from './components/ProfileSheet'
+import { usePresence } from './hooks/usePresence'
 
 export default function App() {
   const { user, profile, loading, setUser, setLoading, fetchProfile } = useAuthStore()
+  usePresence(user?.id)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
