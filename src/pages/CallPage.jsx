@@ -119,7 +119,7 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
       await new Promise(r => callCh.subscribe(s => s === 'SUBSCRIBED' && r()))
       await callCh.send({
         type: 'broadcast', event: 'call-offer',
-        payload: { from: myUserId, fromName: '', convId: conversationId, callType, offer },
+        payload: { from: myUserId, fromName: contact?.display_name || '', convId: conversationId, callType, offer },
       })
       supabase.removeChannel(callCh)
     } catch (e) {
