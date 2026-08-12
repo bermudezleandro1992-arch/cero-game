@@ -6,9 +6,20 @@ const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
+    // Public TURN servers (metered.ca free tier) — enables calls behind strict NAT/mobile 4G
+    {
+      urls: [
+        'turn:a.relay.metered.ca:80',
+        'turn:a.relay.metered.ca:80?transport=tcp',
+        'turn:a.relay.metered.ca:443',
+        'turn:a.relay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
+  iceCandidatePoolSize: 10,
 }
 
 function fmtTime(s) {
@@ -89,7 +100,8 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
     }
     conn.onconnectionstatechange = () => {
       if (conn.connectionState === 'connected') goActive()
-      if (['failed', 'disconnected'].includes(conn.connectionState)) hangup(true)
+      if (conn.connectionState === 'failed') hangup(true)
+      // 'disconnected' is transient on mobile (screen off, network switch) — don't hang up
     }
     pc.current = conn
     return conn
