@@ -201,6 +201,7 @@ export default function ChatPage({ onBack }) {
   const [showEmoji, setShowEmoji] = useState(false)
   const [replyTo, setReplyTo] = useState(null)
   const [longPressMsg, setLongPressMsg] = useState(null)
+  const [hoveredMsg, setHoveredMsg] = useState(null)
   const [showContact, setShowContact] = useState(false)
   const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [call, setCall] = useState(null)
@@ -503,13 +504,30 @@ export default function ChatPage({ onBack }) {
                   <div
                     key={msg.id}
                     className="msg-in"
-                    style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: isLast ? 8 : 2, alignItems: 'flex-end', gap: 7 }}
-                    onMouseDown={() => { longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 400) }}
+                    style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: isLast ? 8 : 2, alignItems: 'flex-end', gap: 7, position: 'relative' }}
+                    onMouseEnter={() => setHoveredMsg(msg.id)}
+                    onMouseLeave={() => { setHoveredMsg(null) }}
+                    onMouseDown={() => { longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 500) }}
                     onMouseUp={() => clearTimeout(longPressTimer.current)}
-                    onTouchStart={() => { longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 400) }}
+                    onTouchStart={() => { longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 500) }}
                     onTouchEnd={() => clearTimeout(longPressTimer.current)}
                     onClick={e => e.stopPropagation()}
                   >
+                    {/* Hover action buttons — desktop */}
+                    {isMine && hoveredMsg === msg.id && !msg.is_deleted && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <HoverBtn title="Responder" onClick={() => { setReplyTo(msg); inputRef.current?.focus() }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H5v-4"/><path d="M5 13A10 10 0 0 1 19 13"/></svg>
+                        </HoverBtn>
+                        <HoverBtn title="Reaccionar" onClick={() => setShowReactionPicker(msg.id)}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                        </HoverBtn>
+                        <HoverBtn title="Eliminar" danger onClick={() => { if (confirm('¿Eliminar este mensaje?')) deleteMessage(msg.id, activeConversation.id) }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        </HoverBtn>
+                      </div>
+                    )}
+
                     {!isMine && (
                       <div style={{ width: 30, flexShrink: 0 }}>
                         {isLast && <Avatar name={senderName} size={30} color={senderColor(msg.sender_id)} url={senderInfo?.avatar_url} />}
@@ -644,6 +662,18 @@ export default function ChatPage({ onBack }) {
                     })()}
 
                     {isMine && <div style={{ width: 30, flexShrink: 0 }} />}
+
+                    {/* Hover action buttons — ajenos */}
+                    {!isMine && hoveredMsg === msg.id && !msg.is_deleted && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <HoverBtn title="Responder" onClick={() => { setReplyTo(msg); inputRef.current?.focus() }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17H5v-4"/><path d="M5 13A10 10 0 0 1 19 13"/></svg>
+                        </HoverBtn>
+                        <HoverBtn title="Reaccionar" onClick={() => setShowReactionPicker(msg.id)}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                        </HoverBtn>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -868,6 +898,23 @@ function HdrBtn({ children, onClick, title }) {
     }}
       onMouseEnter={e => e.currentTarget.style.background = C.panel2}
       onMouseLeave={e => e.currentTarget.style.background = 'none'}
+    >{children}</button>
+  )
+}
+
+function HoverBtn({ children, onClick, danger, title }) {
+  return (
+    <button
+      title={title}
+      onClick={e => { e.stopPropagation(); onClick() }}
+      style={{
+        width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.border}`,
+        background: C.panel, cursor: 'pointer', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        color: danger ? C.red : C.text2, transition: 'all .1s', flexShrink: 0,
+      }}
+      onMouseEnter={e => { e.currentTarget.style.background = danger ? `${C.red}20` : C.panel2; e.currentTarget.style.color = danger ? C.red : C.green }}
+      onMouseLeave={e => { e.currentTarget.style.background = C.panel; e.currentTarget.style.color = danger ? C.red : C.text2 }}
     >{children}</button>
   )
 }
