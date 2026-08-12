@@ -739,7 +739,22 @@ export default function ChatPage({ onBack }) {
             background: C.panel, borderTop: `1px solid ${C.border}`, flexShrink: 0,
             paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
           }} onClick={e => e.stopPropagation()}>
-            <input type="file" accept="image/*,video/*" ref={fileRef} onChange={handleImagePick} style={{ display: 'none' }} />
+            <input type="file" accept="image/*,video/*,application/pdf,application/zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" ref={fileRef} onChange={handleImagePick} style={{ display: 'none' }} />
+
+            {/* Attach btn */}
+            <button type="button" onClick={() => fileRef.current?.click()} style={{
+              width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+              background: C.panel2, border: `1px solid ${C.border}`,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'border-color .15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = C.green}
+              onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+              </svg>
+            </button>
 
             {/* Emoji btn */}
             <button type="button" onClick={() => { setShowEmoji(v => !v); setLongPressMsg(null) }} style={{
