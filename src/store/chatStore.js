@@ -158,10 +158,12 @@ export const useChatStore = create((set, get) => ({
     set({ messages: data || [], loadingMessages: false })
   },
 
-  sendMessage: async (conversationId, senderId, content, type = 'text') => {
+  sendMessage: async (conversationId, senderId, content, type = 'text', maxViews = null) => {
+    const row = { conversation_id: conversationId, sender_id: senderId, content, type }
+    if (maxViews) row.max_views = maxViews
     const { data, error } = await supabase
       .from('messages')
-      .insert({ conversation_id: conversationId, sender_id: senderId, content, type })
+      .insert(row)
       .select('*, sender:users!messages_sender_id_fkey(id, display_name, username, avatar_url)')
       .single()
     if (error) {

@@ -3,9 +3,11 @@ import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
 import { C } from '../App'
 import { soundSettings } from '../lib/sounds'
+import LegalPage from '../pages/LegalPage'
 
 export default function ProfileSheet({ onClose, forceSetup = false }) {
   const { profile, updateProfile } = useAuthStore()
+  const [showLegal, setShowLegal] = useState(false)
   const defaultName = (!profile?.display_name || profile.display_name === 'Usuario' || profile.display_name.startsWith('user_')) ? '' : profile.display_name
   const defaultUser = (!profile?.username || profile.username.startsWith('user_')) ? '' : profile.username
   const [name, setName] = useState(defaultName)
@@ -64,6 +66,8 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
 
   const initials = (name || profile?.display_name || '?').slice(0, 2).toUpperCase()
   const disabled = saving || !name.trim()
+
+  if (showLegal) return <LegalPage onBack={() => setShowLegal(false)} />
 
   return (
     <div style={{
@@ -251,6 +255,26 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
                 }} />
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Legal link */}
+        {!forceSetup && (
+          <div style={{ padding: '0 24px 4px' }}>
+            <button type="button" onClick={() => setShowLegal(true)} style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+              background: 'none', border: `1px solid ${C.border}`, borderRadius: 12,
+              padding: '12px 16px', cursor: 'pointer', color: C.textDim,
+            }}>
+              <span style={{ fontSize: 18 }}>⚖️</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ color: C.text2, fontSize: 14, fontWeight: 600 }}>Legal y Privacidad</div>
+                <div style={{ fontSize: 11, color: C.textDim }}>Términos, privacidad y reglamento</div>
+              </div>
+              <svg style={{ marginLeft: 'auto' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </button>
           </div>
         )}
 

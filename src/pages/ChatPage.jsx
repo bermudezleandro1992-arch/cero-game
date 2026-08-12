@@ -207,6 +207,7 @@ export default function ChatPage({ onBack }) {
   const [pinnedDismissed, setPinnedDismissed] = useState(false)
   const [showReactionPicker, setShowReactionPicker] = useState(null) // messageId
   // Recording
+  const [viewOncePending, setViewOncePending] = useState(null) // { file, type } waiting for view count pick
   const [recording, setRecording] = useState(false)
   const [recDuration, setRecDuration] = useState(0)
   const recorderRef = useRef(null)
@@ -288,14 +289,21 @@ export default function ChatPage({ onBack }) {
   async function handleImagePick(e) {
     const file = e.target.files?.[0]; if (!file) return
     if (file.size > 10 * 1024 * 1024) { alert('Máximo 10MB'); return }
+    fileRef.current.value = ''
+    // Show view-once picker before uploading
+    const type = file.type.startsWith('video/') ? 'video' : 'image'
+    setViewOncePending({ file, type })
+  }
+
+  async function sendWithViewCount(file, type, maxViews) {
+    setViewOncePending(null)
     setUploadingImage(true)
     try {
       const url = await uploadImage(file, profile.id)
-      const type = file.type.startsWith('video/') ? 'video' : 'image'
-      await sendMessage(activeConversation.id, profile.id, url, type)
+      await sendMessage(activeConversation.id, profile.id, url, type, maxViews || null)
       sounds.msgSent()
     } catch (err) { alert(`Error: ${err.message}`) }
-    setUploadingImage(false); fileRef.current.value = ''
+    setUploadingImage(false)
   }
 
   async function startRecording() {
@@ -370,6 +378,67 @@ export default function ChatPage({ onBack }) {
     <>
       {showContact && !isGroup && (
         <ContactPage user={otherUser} onBack={() => setShowContact(false)} onChat={() => setShowContact(false)} />
+      )}
+
+      {/* ── View-once picker modal ── */}
+      {viewOncePending && (
+        <div onClick={() => setViewOncePending(null)} style={{
+          position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: '#141E24', borderRadius: 22, padding: '28px 24px', width: 300,
+            boxShadow: '0 12px 48px rgba(0,0,0,0.7)', border: `1px solid ${C.border}`,
+            display: 'flex', flexDirection: 'column', gap: 16,
+          }}>
+            {/* Preview thumbnail */}
+            {viewOncePending.type === 'image' && (
+              <img src={URL.createObjectURL(viewOncePending.file)} alt="preview"
+                style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 12, opacity: 0.9 }} />
+            )}
+            {viewOncePending.type === 'video' && (
+              <div style={{ textAlign: 'center', padding: '16px 0', color: C.textDim, fontSize: 13 }}>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill={C.green}><path d="M8 5v14l11-7z"/></svg>
+                <div>{viewOncePending.file.name}</div>
+              </div>
+            )}
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 16, textAlign: 'center' }}>
+              ¿Cuántas veces se puede ver?
+            </div>
+            <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', lineHeight: 1.5 }}>
+              Después de verlo {'{n}'} vez, se borra para siempre.
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[1, 2, 3].map(n => (
+                <button key={n} onClick={() => sendWithViewCount(viewOncePending.file, viewOncePending.type, n)} style={{
+                  flex: 1, padding: '14px 0', borderRadius: 14, border: `1.5px solid ${C.green}`,
+                  background: 'transparent', color: C.green, fontWeight: 700, fontSize: 18, cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'background .15s',
+                }}
+                  onMouseEnter={e => e.currentTarget.style.background = `${C.green}22`}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  {n}
+                  <span style={{ fontSize: 10, color: C.textDim, fontWeight: 400 }}>
+                    {n === 1 ? 'vez' : 'veces'}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => sendWithViewCount(viewOncePending.file, viewOncePending.type, null)} style={{
+              background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 12,
+              color: C.textDim, fontSize: 13, padding: '10px 0', cursor: 'pointer',
+            }}>
+              Sin límite de vistas
+            </button>
+            <button onClick={() => setViewOncePending(null)} style={{
+              background: 'transparent', border: 'none', color: C.textDim, fontSize: 13, cursor: 'pointer',
+            }}>
+              Cancelar
+            </button>
+          </div>
+        </div>
       )}
       <div
         style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg2, overflow: 'hidden' }}
