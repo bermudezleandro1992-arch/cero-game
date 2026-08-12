@@ -274,9 +274,10 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
         {/* Conversations */}
         {!search && filtered.map((conv, idx) => {
-          const isGroup   = conv.isGroup
-          const name      = isGroup ? conv.name : conv.user?.display_name
-          const color     = isGroup ? C.greenDk : avatarColor(conv.user?.id)
+          const isGroup      = conv.isGroup
+          const isCommunity  = conv.isCommunity
+          const name         = isGroup ? conv.name : conv.user?.display_name
+          const color        = isCommunity ? '#7c3aed' : isGroup ? C.greenDk : avatarColor(conv.user?.id)
           const lastMsg   = conv.lastMessage
           const isMine    = lastMsg?.sender_id === profile?.id
           const isActive  = activeConversation?.id === conv.id
@@ -319,11 +320,21 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
               {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                  <p style={{
-                    margin: 0, color: conv.unread > 0 ? C.text : C.text2,
-                    fontWeight: conv.unread > 0 ? 700 : 600, fontSize: 14,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
-                  }}>{name}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      margin: 0, color: conv.unread > 0 ? C.text : C.text2,
+                      fontWeight: conv.unread > 0 ? 700 : 600, fontSize: 14,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>{name}</p>
+                    {isCommunity && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, color: '#a78bfa', flexShrink: 0,
+                        background: '#7c3aed22', border: '1px solid #7c3aed44',
+                        borderRadius: 4, padding: '1px 5px', letterSpacing: '0.5px',
+                        textTransform: 'uppercase',
+                      }}>Comunidad</span>
+                    )}
+                  </div>
                   {lastMsg && (
                     <span style={{
                       fontSize: 11, flexShrink: 0, marginLeft: 8,

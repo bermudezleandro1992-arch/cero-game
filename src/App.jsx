@@ -8,6 +8,7 @@ import ChatListPage from './pages/ChatListPage'
 import ChatPage from './pages/ChatPage'
 import CallPage from './pages/CallPage'
 import LlamadasPage from './pages/LlamadasPage'
+import ContactsListPage from './pages/ContactsListPage'
 import ProfileSheet from './components/ProfileSheet'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
@@ -40,10 +41,11 @@ const NAV = [
     ),
   },
   {
-    id: 'llamadas', label: 'Llamadas',
+    id: 'contactos', label: 'Contactos',
     icon: (a) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.8a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
       </svg>
     ),
   },
@@ -172,8 +174,8 @@ export default function App() {
         <div className={`slfa-left${showChat ? ' slfa-left--hidden' : ''}`}>
           {showProfile
             ? <ProfileSheet onClose={() => setShowProfile(false)} />
-            : tab === 'llamadas'
-            ? <LlamadasPage />
+            : tab === 'contactos'
+            ? <ContactsListPage />
             : tab === 'grupos'
             ? <ChatListPage onProfileClick={() => setShowProfile(true)} initialFilter="grupos" />
             : <ChatListPage onProfileClick={() => setShowProfile(true)} />
