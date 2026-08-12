@@ -9,7 +9,19 @@ import { supabase } from '../lib/supabase'
 import { sounds } from '../lib/sounds'
 import { C } from '../App'
 
-const EMOJIS = ['😀','😂','❤️','👍','🔥','😍','🥺','😭','🙏','✅','💯','😎','🤣','😊','🎉','👏','🤔','😅','😢','💪','🫡','⚡','🏆','⚽','🎮','🔥','💀','🙌','🤝','🎯','👀']
+const EMOJI_CATS = [
+  { id: 'recientes', label: '🕐', title: 'Recientes', emojis: [] },
+  { id: 'caritas',   label: '😀', title: 'Caritas',   emojis: ['😀','😁','😂','🤣','😃','😄','😅','😆','😇','😈','😉','😊','😋','😌','😍','😎','😏','😐','😑','😒','😓','😔','😕','😖','😗','😘','😙','😚','😛','😜','😝','😞','😟','😠','😡','😢','😣','😤','😥','😦','😧','😨','😩','😪','😫','😬','😭','😮','😯','😰','😱','😲','😳','😴','😵','😶','😷','🤐','🤑','🤒','🤓','🤔','🤕','🤗','🤘','🤙','🤚','🤛','🤜','🤝','🤞','🤟','🤠','🤡','🤢','🤣','🤤','🤥','🤦','🤧','🤨','🤩','🤪','🤫','🤬','🤭','🤮','🤯','🥰','🥱','🥲','🥳','🥴','🥵','🥶','🥸','🥹','🥺','🫠','🫡','🫣','🫤','🫥','🫦','🫨','🙂','🙃','🙄','🙁','🙂‍↔️','☺️','😺','😸','😹','😻','😼','😽','🙀','😿','😾'] },
+  { id: 'gente',     label: '👋', title: 'Gente',     emojis: ['👋','🤚','🖐','✋','🖖','🫱','🫲','🫳','🫴','👌','🤌','🤏','✌️','🤞','🫰','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','🫵','👍','👎','✊','👊','🤛','🤜','👏','🙌','🫶','👐','🤲','🙏','🤝','💅','🤳','💪','🦾','🦵','🦶','👂','🦻','👃','👣','👀','👁','🫦','👄','🦷','👅','🫀','🫁','🧠','🦴','💋','👶','🧒','👦','👧','🧑','👱','👨','🧔','👩','🧕','👮','🕵','💂','🥷','👷','🫅','🤴','👸','👳','👲','🧙','🧚','🧛','🧜','🧝','🧞','🧟','🧌','💆','💇','🚶','🧍','🧎','🏃','💃','🕺','🧖','🧗','🏇','🏋','🤸','🤼','🤽','🤾','🤺','🏊','🏄','🚴','🧘'] },
+  { id: 'natura',    label: '🌱', title: 'Naturaleza', emojis: ['🌱','🌲','🌳','🌴','🌵','🌾','🌿','☘️','🍀','🍁','🍂','🍃','🪨','🪵','🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🪲','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐈‍⬛','🪶','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿','🌸','🌺','🌻','🌹','🌷','🌼','💐','🍄','🌰','🦔'] },
+  { id: 'comida',    label: '🍔', title: 'Comida',    emojis: ['🍎','🍊','🍋','🍇','🍓','🫐','🍈','🍉','🍑','🍒','🍍','🥭','🍌','🍐','🍏','🫒','🥑','🍅','🥝','🍆','🥦','🥬','🥒','🌶','🫑','🧄','🧅','🥔','🌽','🥕','🧇','🍞','🥐','🥖','🫓','🥨','🧀','🍳','🥚','🥓','🥞','🧈','🍗','🍖','🦴','🌭','🍔','🍟','🍕','🌮','🌯','🫔','🥙','🧆','🥚','🍜','🍝','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥮','🍢','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🫘','🍯','🧃','🥤','🧋','☕','🍵','🫖','🍺','🍻','🥂','🍷','🫗','🥃','🍸','🍹','🧉','🍾'] },
+  { id: 'viajes',    label: '✈️', title: 'Viajes',    emojis: ['🚗','🚕','🚙','🚌','🚎','🏎','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🏍','🛵','🚲','🛴','🛹','🛼','🚁','🛸','✈️','🛩','🚀','🛶','⛵','🚤','🛥','🚢','⚓','🚂','🚃','🚄','🚅','🚆','🚇','🚈','🚉','🚊','🚝','🚞','🚋','🚌','🚍','🚎','🚐','🚑','🚒','🛑','🚗','🚙','🏎','🚓','🚕','🚖','🚘','🚔','🛻','🌍','🌎','🌏','🗺','🧭','🏔','⛰','🌋','🗻','🏕','🏖','🏜','🏝','🏞','🏟','🏛','🏗','🧱','🏘','🏚','🏠','🏡','🏢','🏣','🏤','🏥','🏦','🏨','🏩','🏪','🏫','🏬','🏭','🏯','🏰','💒','🗼','🗽','⛪','🕌','🕍','⛩','🕋','⛲','⛺','🌁','🌃','🌄','🌅','🌆','🌇','🌉','♨️','🎠','🛝','🎡','🎢','🌌','🌠','🎆','🎇','🗿'] },
+  { id: 'deporte',   label: '⚽', title: 'Deporte',   emojis: ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🏓','🏸','🏒','🥍','🏑','🏏','🪃','🥅','⛳','🪁','🎿','🛷','🥌','🎯','🪀','🪁','🎱','🏆','🥇','🥈','🥉','🏅','🎖','🏵','🎗','🎫','🎟','🎪','🤹','🎭','🎨','🎬','🎤','🎧','🎼','🎹','🥁','🪘','🎷','🎺','🎸','🪕','🎻','🎲','♟','🎮','🎰','🧩','🪄','🎳','🎣','🤿','🎽','🥊','🥋','🤸','⛷','🏂','🪂','🏋','🤼','🤺','🏇','🚵','🏌','🧗','🏄','🚴','🤾','🏊','🧘','🏄'] },
+  { id: 'objetos',   label: '💡', title: 'Objetos',   emojis: ['💡','🔦','🕯','🪔','🧯','🛢','💰','💴','💵','💶','💷','💸','💳','🪙','💹','📈','📉','📊','📋','📌','📍','🗂','📁','📂','🗃','🗄','🗑','🔒','🔓','🔏','🔐','🔑','🗝','🔨','🪓','⛏','⚒','🛠','🗡','⚔','🛡','🪚','🔧','🪛','🔩','⚙️','🗜','⚖️','🦯','🔗','⛓','🪝','🧲','🔫','💣','🪤','🧨','🪬','🪄','🔮','🎱','🧿','🪬','🧸','🪆','🖼','🪞','🪟','🛋','🪑','🚽','🪠','🚿','🛁','🪤','🧹','🧺','🧻','🪣','🧼','🫧','🪥','🧴','🧷','🧹','🧺','✂️','🪡','🧵','🧶','📿','💎','👓','🕶','🥽','🌂','☂️','🧵','🧶','🪡'] },
+  { id: 'simbolos',  label: '❤️', title: 'Símbolos',  emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉','☸️','✡️','🔯','🕎','☯️','☦️','🛐','⛎','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','🆔','⚛️','🉑','☢️','☣️','📴','📳','🈶','🈚','🈸','🈺','🈷️','✴️','🆚','💮','🉐','㊙️','㊗️','🈴','🈵','🈹','🈲','🅰️','🅱️','🆎','🆑','🅾️','🆘','❌','⭕','🛑','⛔','📛','🚫','💯','❗','❓','‼️','⁉️','🔅','🔆','✅','☑️','✔️','❎','🔱','⚜️','🔰','♻️','✅','🔄','🔃','☀️','🌟','⭐','🌙','⚡','🌈','🎵','🎶','💫','✨','🎊','🎉','🎈'] },
+]
+// flat default for backwards compat
+const EMOJIS = EMOJI_CATS[1].emojis.slice(0, 31)
 
 const SENDER_COLORS = ['#e91e63','#ab47bc','#1e88e5','#00acc1','#43a047','#fb8c00','#e53935']
 function senderColor(id) {
@@ -199,6 +211,11 @@ export default function ChatPage({ onBack }) {
   const [sending, setSending] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
+  const [emojiCat, setEmojiCat] = useState('caritas')
+  const [emojiSearch, setEmojiSearch] = useState('')
+  const [recentEmojis, setRecentEmojis] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('recentEmojis') || '[]') } catch { return [] }
+  })
   const [replyTo, setReplyTo] = useState(null)
   const [longPressMsg, setLongPressMsg] = useState(null)
   const [hoveredMsg, setHoveredMsg] = useState(null)
@@ -291,6 +308,13 @@ export default function ChatPage({ onBack }) {
     supabase.channel(`contact-conv:${activeConversation.id}:${profile.id}`)
       .send({ type: 'broadcast', event: 'typing', payload: { user_id: profile.id } })
     clearTimeout(typingTimer.current)
+  }
+
+  function insertEmoji(em) {
+    setText(t => t + em)
+    const next = [em, ...recentEmojis.filter(x => x !== em)].slice(0, 24)
+    setRecentEmojis(next)
+    try { localStorage.setItem('recentEmojis', JSON.stringify(next)) } catch {}
   }
 
   async function handleSend(e) {
@@ -891,28 +915,97 @@ export default function ChatPage({ onBack }) {
           </div>
         )}
 
-        {/* ── EMOJI PICKER ── */}
-        {showEmoji && (
-          <div
-            style={{
-              display: 'flex', flexWrap: 'wrap', gap: 6, padding: '12px 14px',
-              background: C.panel, borderTop: `1px solid ${C.border}`, flexShrink: 0,
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            {EMOJIS.map(em => (
-              <button key={em}
-                onClick={() => { setText(t => t + em); setShowEmoji(false); inputRef.current?.focus() }}
-                style={{
-                  fontSize: 21, background: 'none', border: 'none', cursor: 'pointer',
-                  padding: '3px', borderRadius: 6, transition: 'transform .1s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.25)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'none'}
-              >{em}</button>
-            ))}
+        {/* ── EMOJI PICKER (WhatsApp style) ── */}
+        {showEmoji && (() => {
+          const activeCat = EMOJI_CATS.find(c => c.id === emojiCat) || EMOJI_CATS[1]
+          const emojisToShow = emojiSearch.trim()
+            ? EMOJI_CATS.flatMap(c => c.emojis).filter(e => true) // simple: show all on search
+                .filter((e, i, a) => a.indexOf(e) === i) // dedupe
+            : emojiCat === 'recientes'
+              ? recentEmojis
+              : activeCat.emojis
+          const filtered = emojiSearch.trim()
+            ? EMOJI_CATS.flatMap(c => c.emojis).filter((e, i, a) => a.indexOf(e) === i)
+            : emojisToShow
+          return (
+          <div style={{
+            background: C.panel, borderTop: `1px solid ${C.border}`,
+            flexShrink: 0, display: 'flex', flexDirection: 'column',
+            height: 280, animation: 'emojiSlideUp .22s ease',
+          }} onClick={e => e.stopPropagation()}>
+
+            {/* Search bar */}
+            <div style={{ padding: '8px 12px 4px', flexShrink: 0 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: C.panel2, borderRadius: 12, padding: '7px 12px',
+                border: `1px solid ${C.border}`,
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input
+                  value={emojiSearch}
+                  onChange={e => setEmojiSearch(e.target.value)}
+                  placeholder="Buscar emoji..."
+                  style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 13 }}
+                />
+                {emojiSearch && <button onClick={() => setEmojiSearch('')} style={{ background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', fontSize: 14, padding: 0 }}>✕</button>}
+              </div>
+            </div>
+
+            {/* Category tabs */}
+            {!emojiSearch && (
+              <div style={{ display: 'flex', gap: 2, padding: '4px 10px', flexShrink: 0, overflowX: 'auto', scrollbarWidth: 'none' }}>
+                {EMOJI_CATS.map(cat => (
+                  <button key={cat.id} onClick={() => setEmojiCat(cat.id)} style={{
+                    flexShrink: 0, fontSize: 18, padding: '5px 7px', borderRadius: 10,
+                    background: emojiCat === cat.id ? `${C.green}20` : 'none',
+                    border: emojiCat === cat.id ? `1.5px solid ${C.green}50` : '1.5px solid transparent',
+                    cursor: 'pointer', transition: 'background .15s',
+                    lineHeight: 1,
+                  }} title={cat.title}>{cat.label}</button>
+                ))}
+              </div>
+            )}
+
+            {/* Category label */}
+            {!emojiSearch && (
+              <div style={{ padding: '2px 14px 4px', flexShrink: 0 }}>
+                <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {activeCat.title}
+                </span>
+              </div>
+            )}
+
+            {/* Emoji grid */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px 8px', scrollbarWidth: 'thin' }}>
+              {filtered.length === 0 ? (
+                <div style={{ textAlign: 'center', color: C.textDim, fontSize: 13, paddingTop: 24 }}>
+                  {emojiCat === 'recientes' ? 'No hay emojis recientes' : 'Sin resultados'}
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 2 }}>
+                  {filtered.map((em, i) => (
+                    <button key={em + i}
+                      onClick={() => { insertEmoji(em); inputRef.current?.focus() }}
+                      style={{
+                        fontSize: 22, padding: '6px 4px', borderRadius: 10,
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        transition: 'background .1s, transform .1s',
+                        lineHeight: 1.2,
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = C.panel2; e.currentTarget.style.transform = 'scale(1.2)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.transform = 'none' }}
+                      onTouchStart={e => e.currentTarget.style.background = C.panel2}
+                      onTouchEnd={e => e.currentTarget.style.background = 'none'}
+                    >{em}</button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        )}
+          )
+        })()}
+        <style>{`@keyframes emojiSlideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`}</style>
 
         {/* ── RECORDING BAR ── */}
         {recording && (
