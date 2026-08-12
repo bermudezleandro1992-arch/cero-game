@@ -35,6 +35,20 @@ export default function ChatPage({ onBack }) {
     profile?.id
   )
 
+  // Broadcast our presence in this chat so the other user sees "En línea"
+  useEffect(() => {
+    if (!activeConversation?.id || !profile?.id || isGroup) return
+    const ch = supabase.channel(`contact-conv:${activeConversation.id}:${profile.id}`)
+    const broadcastPresence = () => ch.send({ type: 'broadcast', event: 'chat-presence', payload: { user_id: profile.id } })
+    ch.subscribe(() => { broadcastPresence() })
+    const interval = setInterval(broadcastPresence, 20000)
+    return () => {
+      ch.send({ type: 'broadcast', event: 'chat-leave', payload: { user_id: profile.id } })
+      clearInterval(interval)
+      supabase.removeChannel(ch)
+    }
+  }, [activeConversation?.id, profile?.id])
+
   useEffect(() => {
     if (!activeConversation?.id) return
     fetchMessages(activeConversation.id)
@@ -51,7 +65,7 @@ export default function ChatPage({ onBack }) {
   const typingTimeout = useRef(null)
   function handleTyping() {
     if (!activeConversation?.id || !profile?.id) return
-    supabase.channel(`contact-conv:${activeConversation.id}:${otherUser?.id}`).send({
+    supabase.channel(`contact-conv:${activeConversation.id}:${profile.id}`).send({
       type: 'broadcast', event: 'typing', payload: { user_id: profile.id }
     })
     clearTimeout(typingTimeout.current)
@@ -66,7 +80,12 @@ export default function ChatPage({ onBack }) {
       : text.trim()
     setReplyTo(null)
     setText('')
-    await sendMessage(activeConversation.id, profile.id, content, 'text')
+    try {
+      await sendMessage(activeConversation.id, profile.id, content, 'text')
+    } catch (err) {
+      alert(`Error al enviar: ${err.message}`)
+      setText(content)
+    }
     setSending(false)
     inputRef.current?.focus()
   }

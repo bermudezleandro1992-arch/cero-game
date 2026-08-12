@@ -155,11 +155,15 @@ export const useChatStore = create((set, get) => ({
   },
 
   sendMessage: async (conversationId, senderId, content, type = 'text') => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('messages')
       .insert({ conversation_id: conversationId, sender_id: senderId, content, type })
       .select('*, users(id, display_name, username, avatar_url)')
       .single()
+    if (error) {
+      console.error('sendMessage error:', error)
+      throw error
+    }
     if (data) {
       set(state => ({ messages: [...state.messages, data] }))
     }
