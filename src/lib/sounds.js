@@ -1,7 +1,16 @@
 let audioCtx = null
 function ac() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  if (audioCtx.state === 'suspended') audioCtx.resume()
   return audioCtx
+}
+
+// Pre-warm AudioContext on first user interaction so it's ready for incoming messages
+if (typeof window !== 'undefined') {
+  const warm = () => { try { ac() } catch(e) {} }
+  window.addEventListener('click', warm, { once: true })
+  window.addEventListener('touchstart', warm, { once: true })
+  window.addEventListener('keydown', warm, { once: true })
 }
 
 // ── Sound settings ────────────────────────────────────────────────────────────
