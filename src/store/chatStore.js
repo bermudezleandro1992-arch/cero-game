@@ -301,6 +301,31 @@ export const useChatStore = create((set, get) => ({
     }))
   },
 
+  editMessage: async (messageId, newContent) => {
+    const now = new Date().toISOString()
+    await supabase.from('messages').update({ content: newContent, edited_at: now }).eq('id', messageId)
+    set(state => ({
+      messages: state.messages.map(m =>
+        m.id === messageId ? { ...m, content: newContent, edited_at: now } : m
+      )
+    }))
+  },
+
+  forwardMessage: async (fromConvId, toConvId, senderId, content, type) => {
+    const row = { conversation_id: toConvId, sender_id: senderId, content, type }
+    const { data } = await supabase.from('messages').insert(row)
+      .select('*, sender:users!messages_sender_id_fkey(id, display_name, username, avatar_url)').single()
+    return data
+  },
+
+  blockUser: async (blockerId, blockedId) => {
+    await supabase.from('blocks').upsert({ blocker_id: blockerId, blocked_id: blockedId })
+  },
+
+  unblockUser: async (blockerId, blockedId) => {
+    await supabase.from('blocks').delete().eq('blocker_id', blockerId).eq('blocked_id', blockedId)
+  },
+
   reactToMessage: async (messageId, userId, emoji) => {
     // Toggle: if already reacted with this emoji, remove it
     const { data: existing } = await supabase
