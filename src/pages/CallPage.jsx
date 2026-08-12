@@ -160,6 +160,7 @@ export default function CallPage({
   const localStream = useRef(null)
   const sessionCh = useRef(null)
   const timerRef = useRef(null)
+  const connectTimeoutRef = useRef(null)
   const localVid = useRef(null)
   const remoteVid = useRef(null)
   const remoteAudio = useRef(null)
@@ -202,6 +203,7 @@ export default function CallPage({
     return () => {
       ringtone.stop(); outgoingRing.stop()
       clearInterval(timerRef.current)
+      clearTimeout(connectTimeoutRef.current)
       if (sessionCh.current) supabase.removeChannel(sessionCh.current)
     }
   }, [])
@@ -229,9 +231,17 @@ export default function CallPage({
       if (e.candidate) sessionCh.current?.send({ type: 'broadcast', event: 'call-ice', payload: { candidate: e.candidate, from: myUserId } })
     }
     conn.onconnectionstatechange = () => {
-      if (conn.connectionState === 'connected') goActive()
+      if (conn.connectionState === 'connected') {
+        clearTimeout(connectTimeoutRef.current)
+        goActive()
+      }
       if (conn.connectionState === 'failed') hangup(true)
+      // 'disconnected' is transient on mobile — don't hang up immediately
     }
+    // 60 second timeout if ICE never connects
+    connectTimeoutRef.current = setTimeout(() => {
+      if (pc.current && pc.current.connectionState !== 'connected') hangup(true)
+    }, 60000)
     pc.current = conn
     return conn
   }
@@ -324,6 +334,8 @@ export default function CallPage({
   if (phase === 'incoming') {
     return (
       <>
+        {/* Audio always mounted so ontrack can fire */}
+        <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
           background: 'rgba(0,0,0,0.55)',
@@ -601,7 +613,8 @@ export default function CallPage({
           {/* ── CONTROLS ── */}
           {phase !== 'ended' && (
             <div style={{ width: '100%', padding: '0 20px 44px' }}>
-              {/* Row 1: secondary buttons */}
+              {/* Secondary buttons — only when call is active */}
+              {phase === 'active' && (
               <div style={{
                 display: 'flex', justifyContent: 'center', gap: 18, marginBottom: 28,
               }}>
@@ -639,8 +652,9 @@ export default function CallPage({
                   />
                 )}
               </div>
+              )} {/* end phase === active secondary controls */}
 
-              {/* Row 2: hang up */}
+              {/* Row 2: hang up — always visible (connecting + active) */}
               <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                   <button onClick={() => hangup(true)} style={{
