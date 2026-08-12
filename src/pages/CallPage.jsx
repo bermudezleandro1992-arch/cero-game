@@ -2,23 +2,25 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { sounds, ringtone, outgoingRing } from '../lib/sounds'
 
+const TURN_USER = import.meta.env.VITE_TURN_USERNAME || 'openrelayproject'
+const TURN_CRED = import.meta.env.VITE_TURN_CREDENTIAL || 'openrelayproject'
+const TURN_HOST = import.meta.env.VITE_TURN_USERNAME ? 'a.relay.metered.ca' : 'a.relay.metered.ca'
+
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    {
-      urls: [
-        'turn:a.relay.metered.ca:80',
-        'turn:a.relay.metered.ca:80?transport=tcp',
-        'turn:a.relay.metered.ca:443',
-        'turn:a.relay.metered.ca:443?transport=tcp',
-      ],
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
+    // UDP — fastest path
+    { urls: `turn:${TURN_HOST}:80`, username: TURN_USER, credential: TURN_CRED },
+    // TCP fallback — penetrates strict firewalls
+    { urls: `turn:${TURN_HOST}:80?transport=tcp`, username: TURN_USER, credential: TURN_CRED },
+    // TLS — works on networks that block non-HTTPS
+    { urls: `turns:${TURN_HOST}:443?transport=tcp`, username: TURN_USER, credential: TURN_CRED },
   ],
   iceCandidatePoolSize: 10,
+  iceTransportPolicy: 'all', // try P2P first, TURN as fallback
+  bundlePolicy: 'max-bundle',
 }
 
 function fmtTime(s) {
