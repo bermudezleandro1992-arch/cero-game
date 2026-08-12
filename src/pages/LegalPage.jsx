@@ -61,7 +61,7 @@ const SECTIONS = [
 
 export default function LegalPage({ onBack }) {
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
       {/* Header */}
       <div style={{
         background: C.panel, borderBottom: `1px solid ${C.border}`,

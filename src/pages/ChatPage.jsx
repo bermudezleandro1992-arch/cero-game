@@ -500,7 +500,7 @@ export default function ChatPage({ onBack }) {
       )}
 
       <div
-        style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg2, overflow: 'hidden' }}
+        style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: C.bg2, overflow: 'hidden' }}
         onClick={() => { setLongPressMsg(null); setShowEmoji(false) }}
       >
 
