@@ -218,7 +218,23 @@ export const useChatStore = create((set, get) => ({
         }))
       })
       .subscribe()
-    return () => supabase.removeChannel(channel)
+
+    // Separate broadcast channel for instant delete propagation
+    const evtChannel = supabase
+      .channel(`conv-events:${conversationId}`)
+      .on('broadcast', { event: 'msg-deleted' }, ({ payload }) => {
+        set(state => ({
+          messages: state.messages.map(m =>
+            m.id === payload.messageId ? { ...m, is_deleted: true, content: '' } : m
+          )
+        }))
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+      supabase.removeChannel(evtChannel)
+    }
   },
 
   findOrCreateConversation: async (myId, otherUserId) => {
@@ -269,8 +285,13 @@ export const useChatStore = create((set, get) => ({
     return conv.id
   },
 
-  deleteMessage: async (messageId) => {
+  deleteMessage: async (messageId, conversationId) => {
     await supabase.from('messages').update({ is_deleted: true, content: '' }).eq('id', messageId)
+    // Broadcast deletion so all participants update instantly
+    if (conversationId) {
+      supabase.channel(`conv-events:${conversationId}`)
+        .send({ type: 'broadcast', event: 'msg-deleted', payload: { messageId } })
+    }
     set(state => ({
       messages: state.messages.map(m =>
         m.id === messageId ? { ...m, is_deleted: true, content: '' } : m

@@ -25,9 +25,10 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
     setUploadingAvatar(true)
     setError('')
     try {
-      const ext = file.name.split('.').pop()
-      const path = `avatars/${profile.id}.${ext}`
-      const { error: upErr } = await supabase.storage.from('attachments').upload(path, file, { upsert: true })
+      const ext = file.name.split('.').pop().toLowerCase()
+      // Unique path per upload avoids upsert permission issues
+      const path = `${profile.id}/avatar-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
       if (upErr) throw upErr
       const { data } = supabase.storage.from('attachments').getPublicUrl(path)
       const url = data.publicUrl
@@ -35,7 +36,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
       if (err) throw new Error(err)
       setAvatarUrl(url)
     } catch (err) {
-      setError('No se pudo subir la foto. Intentá de nuevo.')
+      setError(`No se pudo subir la foto: ${err.message || 'Intentá de nuevo.'}`)
       console.error(err)
     } finally {
       setUploadingAvatar(false)
