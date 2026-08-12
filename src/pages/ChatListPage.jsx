@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { supabase } from '../lib/supabase'
 import NewGroupPage from './NewGroupPage'
+import { StoriesBar } from './StoriesPage'
 import { C } from '../App'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -199,6 +200,9 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
           </div>
         )}
       </div>
+
+      {/* ── STORIES BAR ── */}
+      <StoriesBar />
 
       {/* ── LIST ── */}
       <div style={{ flex: 1, overflowY: 'auto' }}>

@@ -77,6 +77,20 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false)
   usePresence(user?.id)
 
+  // Fix keyboard overlap on mobile — track visual viewport height
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => {
+      document.documentElement.style.setProperty('--vvh', `${vv.height}px`)
+      document.documentElement.style.setProperty('--vvw', `${vv.width}px`)
+    }
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) }
+  }, [])
+
   useEffect(() => {
     if (!profile?.id) return
     fetchConversations(profile.id)
@@ -122,7 +136,7 @@ export default function App() {
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0)
 
   return (
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }}>
+    <div style={{ height: 'var(--vvh, 100dvh)', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }}>
       <UpdateBanner />
 
       {incomingCall && (
