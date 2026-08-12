@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 
-export default function ProfileSheet({ onClose }) {
+export default function ProfileSheet({ onClose, forceSetup = false }) {
   const { profile, updateProfile } = useAuthStore()
-  const [name, setName] = useState(profile?.display_name || '')
-  const [username, setUsername] = useState(profile?.username || '')
+  const defaultName = (!profile?.display_name || profile.display_name === 'Usuario' || profile.display_name.startsWith('user_')) ? '' : profile.display_name
+  const defaultUser = (!profile?.username || profile.username.startsWith('user_')) ? '' : profile.username
+  const [name, setName] = useState(defaultName)
+  const [username, setUsername] = useState(defaultUser)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
@@ -32,12 +34,16 @@ export default function ProfileSheet({ onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#111b21' }}>
       <div className="flex items-center gap-4 px-4 py-4" style={{ background: '#202c33' }}>
-        <button onClick={onClose} className="text-white p-1">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-        <h2 className="text-white font-semibold text-base">Editar perfil</h2>
+        {!forceSetup && (
+          <button onClick={onClose} className="text-white p-1">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        )}
+        <h2 className="text-white font-semibold text-base">
+          {forceSetup ? '¡Bienvenido! Completá tu perfil' : 'Editar perfil'}
+        </h2>
       </div>
 
       <div className="flex flex-col items-center py-8 gap-2" style={{ background: '#202c33' }}>
@@ -95,7 +101,7 @@ export default function ProfileSheet({ onClose }) {
           disabled={saving || !name.trim()}
           className="w-full py-3 rounded-2xl font-semibold text-white disabled:opacity-50 mt-2"
           style={{ background: '#00a884' }}>
-          {saving ? 'Guardando...' : 'Guardar cambios'}
+          {saving ? 'Guardando...' : forceSetup ? 'Entrar al chat' : 'Guardar cambios'}
         </button>
       </form>
     </div>

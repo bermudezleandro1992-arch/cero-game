@@ -4,9 +4,10 @@ import { useAuthStore } from './store/authStore'
 import LoginPage from './pages/LoginPage'
 import ChatListPage from './pages/ChatListPage'
 import UpdateBanner from './components/UpdateBanner'
+import ProfileSheet from './components/ProfileSheet'
 
 export default function App() {
-  const { user, loading, setUser, setLoading, fetchProfile } = useAuthStore()
+  const { user, profile, loading, setUser, setLoading, fetchProfile } = useAuthStore()
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -31,10 +32,30 @@ export default function App() {
     )
   }
 
+  if (!user) return <LoginPage />
+
+  // Profile not loaded yet
+  if (!profile) return (
+    <div className="h-full flex items-center justify-center" style={{ background: '#111b21' }}>
+      <div className="text-3xl animate-pulse">💬</div>
+    </div>
+  )
+
+  // First-time user: has default name or no real username → force profile setup
+  const needsProfileSetup = !profile.display_name
+    || profile.display_name === 'Usuario'
+    || profile.display_name.startsWith('user_')
+    || !profile.username
+    || profile.username.startsWith('user_')
+
+  if (needsProfileSetup) {
+    return <ProfileSheet onClose={() => fetchProfile(user.id)} forceSetup />
+  }
+
   return (
     <>
       <UpdateBanner />
-      {user ? <ChatListPage /> : <LoginPage />}
+      <ChatListPage />
     </>
   )
 }
