@@ -136,18 +136,15 @@ export default function App() {
         />
       )}
 
-      {showProfile && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: C.bg }}>
-          <ProfileSheet onClose={() => setShowProfile(false)} />
-        </div>
-      )}
-
       {/* Shell */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
 
-        {/* LEFT — list */}
+        {/* LEFT — list or profile */}
         <div className={`slfa-left${showChat ? ' slfa-left--hidden' : ''}`}>
-          <ChatListPage onProfileClick={() => setShowProfile(true)} />
+          {showProfile
+            ? <ProfileSheet onClose={() => setShowProfile(false)} />
+            : <ChatListPage onProfileClick={() => setShowProfile(true)} />
+          }
         </div>
 
         {/* RIGHT — chat */}
