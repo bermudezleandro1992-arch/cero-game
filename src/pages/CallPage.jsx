@@ -41,6 +41,7 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
   const elapsedRef = useRef(null)
   const localVid = useRef(null)
   const remoteVid = useRef(null)
+  const remoteAudio = useRef(null)
   const pendingIce = useRef([])
 
   useEffect(() => {
@@ -91,7 +92,15 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
     const conn = new RTCPeerConnection(ICE_SERVERS)
     stream.getTracks().forEach(t => conn.addTrack(t, stream))
     conn.ontrack = e => {
-      if (remoteVid.current) remoteVid.current.srcObject = e.streams[0]
+      const stream = e.streams[0]
+      if (remoteAudio.current) {
+        remoteAudio.current.srcObject = stream
+        remoteAudio.current.play().catch(() => {})
+      }
+      if (remoteVid.current) {
+        remoteVid.current.srcObject = stream
+        remoteVid.current.play().catch(() => {})
+      }
     }
     conn.onicecandidate = e => {
       if (e.candidate) {
@@ -179,6 +188,18 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
   function toggleCam() {
     const t = localStream.current?.getVideoTracks()[0]
     if (t) { t.enabled = !t.enabled; setCamOff(c => !c) }
+  }
+
+  function toggleSpeaker() {
+    const next = !speaker
+    setSpeaker(next)
+    const el = remoteAudio.current
+    if (!el) return
+    if (typeof el.setSinkId === 'function') {
+      // Use setSinkId where supported (Chrome desktop, some Android)
+      el.setSinkId(next ? 'default' : '').catch(() => {})
+    }
+    // On Android Chrome setSinkId is not available — audio routes via system call audio
   }
 
   const name = contact?.display_name || 'Usuario'
@@ -310,8 +331,8 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
         </div>
       </div>
 
-      {/* Hidden audio */}
-      {!isVideo && <audio ref={remoteVid} autoPlay style={{ display: 'none' }} />}
+      {/* Hidden audio element — always rendered so remote stream plays in all call types */}
+      <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
 
       {/* ── CONTROLS ── */}
       <div style={{ zIndex: 10, position: 'relative', width: '100%', maxWidth: 340, padding: '0 24px' }}>
@@ -369,7 +390,7 @@ export default function CallPage({ conversationId, myUserId, contact, callType: 
                 active={speaker}
                 activeColor="#39FF14"
                 size={56}
-                onClick={() => setSpeaker(s => !s)}
+                onClick={toggleSpeaker}
               />
             </div>
 
