@@ -197,20 +197,19 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
         )}
 
         {/* Save button */}
-        <div style={{ padding: '24px 24px', marginTop: 'auto' }}>
+        <div style={{ padding: '20px 24px' }}>
           <button
             type="submit"
             disabled={disabled}
             style={{
-              width: '100%', padding: '15px',
-              borderRadius: 14, border: 'none',
+              padding: '11px 28px',
+              borderRadius: 10, border: 'none',
               background: disabled ? C.panel2 : C.green,
               color: disabled ? C.textDim : C.bg,
-              fontSize: 15, fontWeight: 800,
+              fontSize: 14, fontWeight: 700,
               cursor: disabled ? 'not-allowed' : 'pointer',
-              boxShadow: disabled ? 'none' : `0 4px 24px ${C.green}44`,
+              boxShadow: disabled ? 'none' : `0 2px 16px ${C.green}33`,
               transition: 'all .2s',
-              letterSpacing: '.3px',
             }}>
             {saving ? 'Guardando...' : forceSetup ? 'Entrar al chat' : 'Guardar cambios'}
           </button>
