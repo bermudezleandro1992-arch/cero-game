@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
+import { supabase } from '../lib/supabase'
 import { C } from '../App'
 import { soundSettings } from '../lib/sounds'
 
@@ -13,6 +14,34 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '')
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const avatarInputRef = useRef(null)
+
+  async function handleAvatarChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { setError('La imagen debe pesar menos de 5 MB'); return }
+    setUploadingAvatar(true)
+    setError('')
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `avatars/${profile.id}.${ext}`
+      const { error: upErr } = await supabase.storage.from('attachments').upload(path, file, { upsert: true })
+      if (upErr) throw upErr
+      const { data } = supabase.storage.from('attachments').getPublicUrl(path)
+      const url = data.publicUrl
+      const err = await updateProfile(profile.id, { avatar_url: url })
+      if (err) throw new Error(err)
+      setAvatarUrl(url)
+    } catch (err) {
+      setError('No se pudo subir la foto. Intentá de nuevo.')
+      console.error(err)
+    } finally {
+      setUploadingAvatar(false)
+      e.target.value = ''
+    }
+  }
 
   async function handleSave(e) {
     e.preventDefault()
@@ -70,25 +99,52 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
         background: `radial-gradient(ellipse at 50% 0%, ${C.greenDk}22 0%, transparent 60%)`,
         borderBottom: `1px solid ${C.border}`, flexShrink: 0,
       }}>
-        <div style={{
-          width: 96, height: 96, borderRadius: '50%',
-          background: `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})`,
-          border: `2px solid ${C.green}44`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 34, fontWeight: 800, color: C.text,
-          boxShadow: `0 0 32px ${C.green}22`,
-          letterSpacing: '-1px',
-        }}>
-          {initials}
-        </div>
+        <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
+        <button
+          type="button"
+          onClick={() => avatarInputRef.current?.click()}
+          disabled={uploadingAvatar}
+          style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          {avatarUrl
+            ? <img src={avatarUrl} alt="avatar" style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${C.green}44`, boxShadow: `0 0 32px ${C.green}22` }} />
+            : (
+              <div style={{
+                width: 96, height: 96, borderRadius: '50%',
+                background: `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})`,
+                border: `2px solid ${C.green}44`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 34, fontWeight: 800, color: C.text,
+                boxShadow: `0 0 32px ${C.green}22`,
+                letterSpacing: '-1px',
+              }}>
+                {initials}
+              </div>
+            )
+          }
+          {/* Camera overlay */}
+          <div style={{
+            position: 'absolute', bottom: 2, right: 2,
+            width: 28, height: 28, borderRadius: '50%',
+            background: uploadingAvatar ? C.panel2 : C.green,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: `2px solid ${C.bg}`,
+          }}>
+            {uploadingAvatar
+              ? <div style={{ width: 12, height: 12, border: `2px solid ${C.bg}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            }
+          </div>
+        </button>
         {profile?.username && (
           <p style={{ margin: '10px 0 0', color: C.green, fontSize: 13, fontWeight: 600 }}>
             @{profile.username}
           </p>
         )}
         <p style={{ margin: '4px 0 0', color: C.textDim, fontSize: 12 }}>
-          Foto de perfil próximamente
+          {uploadingAvatar ? 'Subiendo foto...' : 'Tocá para cambiar la foto'}
         </p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
 
       {/* Form */}
