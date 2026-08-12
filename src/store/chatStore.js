@@ -12,14 +12,22 @@ export const useChatStore = create((set, get) => ({
   fetchConversations: async (userId) => {
     const { data: memberships } = await supabase
       .from('conversation_members')
-      .select('conversation_id, last_read_at, conversations(id, name, is_group, created_by, avatar_url, created_at)')
+      .select('conversation_id, last_read_at, conversations(id, created_at)')
       .eq('user_id', userId)
 
     if (!memberships?.length) { set({ conversations: [] }); return }
 
-    const convIds = memberships.map(m => m.conversation_id)
+    // Try to get group metadata (only available after migration 003)
+    const convIds0 = memberships.map(m => m.conversation_id)
+    let convMeta = {}
+    const { data: metaRows } = await supabase
+      .from('conversations')
+      .select('id, name, is_group, created_by, avatar_url')
+      .in('id', convIds0)
+    metaRows?.forEach(r => { convMeta[r.id] = r })
+
+    const convIds = convIds0
     const lastReadMap = Object.fromEntries(memberships.map(m => [m.conversation_id, m.last_read_at]))
-    const convMetaMap = Object.fromEntries(memberships.map(m => [m.conversation_id, m.conversations]))
 
     const [membersRes, lastMsgsRes] = await Promise.all([
       supabase
@@ -64,7 +72,7 @@ export const useChatStore = create((set, get) => ({
 
     const conversations = convIds
       .map(convId => {
-        const meta = convMetaMap[convId]
+        const meta = convMeta[convId]
         const members = groupMembersMap[convId] || []
         const isGroup = meta?.is_group || false
         return {
@@ -193,28 +201,44 @@ export const useChatStore = create((set, get) => ({
   },
 
   findOrCreateConversation: async (myId, otherUserId) => {
+    // Get all conversations both users share
     const { data: myConvs } = await supabase
       .from('conversation_members')
-      .select('conversation_id, conversations!inner(is_group)')
+      .select('conversation_id')
       .eq('user_id', myId)
 
-    const myDMIds = myConvs?.filter(c => !c.conversations?.is_group).map(c => c.conversation_id) || []
-
-    if (myDMIds.length) {
+    if (myConvs?.length) {
+      const myIds = myConvs.map(c => c.conversation_id)
       const { data: shared } = await supabase
         .from('conversation_members')
         .select('conversation_id')
         .eq('user_id', otherUserId)
-        .in('conversation_id', myDMIds)
+        .in('conversation_id', myIds)
 
       if (shared?.length) return shared[0].conversation_id
     }
 
-    const { data: conv } = await supabase
+    // Create new conversation — try with is_group first, fall back without it
+    let conv = null
+    const { data: d1, error: e1 } = await supabase
       .from('conversations')
       .insert({ is_group: false })
       .select()
       .single()
+
+    if (e1) {
+      // Column might not exist yet, insert without it
+      const { data: d2 } = await supabase
+        .from('conversations')
+        .insert({})
+        .select()
+        .single()
+      conv = d2
+    } else {
+      conv = d1
+    }
+
+    if (!conv) return null
 
     await supabase.from('conversation_members').insert([
       { conversation_id: conv.id, user_id: myId },
