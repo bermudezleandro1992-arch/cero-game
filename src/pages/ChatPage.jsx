@@ -45,7 +45,9 @@ function formatTime(ts) {
   return new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
 }
 function fmtDuration(s) {
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  if (!isFinite(s) || isNaN(s) || s < 0) return '--:--'
+  const sec = Math.floor(s)
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
 }
 
 // ── Role badge ────────────────────────────────────────────────────────────────
@@ -124,10 +126,30 @@ function AudioPlayer({ src, isMine }) {
   useEffect(() => {
     const a = new Audio(src)
     audioRef.current = a
-    a.onloadedmetadata = () => setDuration(a.duration || 0)
+    const fixDuration = () => {
+      if (isFinite(a.duration)) { setDuration(a.duration); return }
+      // WebM from MediaRecorder has Infinity duration — seek to end to force calculation
+      a.currentTime = 1e9
+    }
+    a.onloadedmetadata = fixDuration
     a.ontimeupdate = () => {
+      // After seeking to end, browser updates duration; reset to 0
+      if (!isFinite(a.duration) && a.currentTime > 0) return
+      if (isFinite(a.duration) && a.currentTime >= a.duration - 0.1 && a.duration > 0 && !playing) {
+        // we were seeking to fix duration — reset
+        setDuration(a.duration)
+        a.currentTime = 0
+        return
+      }
       setCurrent(a.currentTime)
-      setProgress(a.duration ? (a.currentTime / a.duration) * 100 : 0)
+      setProgress(a.duration && isFinite(a.duration) ? (a.currentTime / a.duration) * 100 : 0)
+    }
+    a.ondurationchange = () => {
+      if (isFinite(a.duration) && a.duration > 0) {
+        setDuration(a.duration)
+        // if we were seeking to force duration, reset position
+        if (a.currentTime > 1000) a.currentTime = 0
+      }
     }
     a.onended = () => { setPlaying(false); setProgress(0); setCurrent(0); a.currentTime = 0 }
     return () => { a.pause(); audioRef.current = null }
@@ -194,7 +216,7 @@ function AudioPlayer({ src, isMine }) {
         {/* Timer + speed */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 10, color: C.textDim, fontVariantNumeric: 'tabular-nums' }}>
-            {fmtDuration(playing || current > 0 ? Math.floor(current) : Math.floor(duration))}
+            {fmtDuration(playing || current > 0 ? current : duration)}
           </span>
           <button onClick={cycleSpeed} style={{
             fontSize: 10, color: accent, background: `${accent}15`,
@@ -426,7 +448,9 @@ export default function ChatPage({ onBack }) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
         .find(t => MediaRecorder.isTypeSupported(t)) || ''
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {})
+      const recOpts = { audioBitsPerSecond: 128000 }
+      if (mimeType) recOpts.mimeType = mimeType
+      const recorder = new MediaRecorder(stream, recOpts)
       recChunks.current = []
       recorder.ondataavailable = ev => { if (ev.data.size > 0) recChunks.current.push(ev.data) }
       recorder.onstop = async () => {
