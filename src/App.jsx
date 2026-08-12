@@ -77,13 +77,17 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false)
   usePresence(user?.id)
 
-  // Fix keyboard overlap on mobile — track visual viewport height
+  // Fix keyboard overlap — use position:fixed + visualViewport for iOS
   useEffect(() => {
+    const root = document.getElementById('root')
     const vv = window.visualViewport
-    if (!vv) return
+    if (!vv || !root) return
     const update = () => {
-      document.documentElement.style.setProperty('--vvh', `${vv.height}px`)
-      document.documentElement.style.setProperty('--vvw', `${vv.width}px`)
+      const h = vv.height
+      const t = vv.offsetTop
+      root.style.top = `${t}px`
+      root.style.height = `${h}px`
+      document.documentElement.style.setProperty('--vvh', `${h}px`)
     }
     update()
     vv.addEventListener('resize', update)
@@ -136,7 +140,7 @@ export default function App() {
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0)
 
   return (
-    <div style={{ height: 'var(--vvh, 100dvh)', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }}>
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }}>
       <UpdateBanner />
 
       {incomingCall && (
