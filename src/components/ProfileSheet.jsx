@@ -73,7 +73,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
 
   return (
     <div style={{
-      height: '100%',
+      flex: 1, minHeight: 0,
       display: 'flex', flexDirection: 'column',
       background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
       overflowY: 'auto',

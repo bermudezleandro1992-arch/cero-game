@@ -124,7 +124,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   })
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', position: 'relative' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', position: 'relative' }}>
 
       {/* ── HEADER ── */}
       <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>

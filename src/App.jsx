@@ -77,22 +77,18 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false)
   usePresence(user?.id)
 
-  // Fix keyboard overlap — use position:fixed + visualViewport for iOS
+  // Fix keyboard overlap — shrink root height when keyboard opens (iOS + Android)
   useEffect(() => {
     const root = document.getElementById('root')
     const vv = window.visualViewport
     if (!vv || !root) return
     const update = () => {
-      const h = vv.height
-      const t = vv.offsetTop
-      root.style.top = `${t}px`
-      root.style.height = `${h}px`
-      document.documentElement.style.setProperty('--vvh', `${h}px`)
+      root.style.height = `${vv.height}px`
+      document.documentElement.style.setProperty('--vvh', `${vv.height}px`)
     }
     update()
     vv.addEventListener('resize', update)
-    vv.addEventListener('scroll', update)
-    return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) }
+    return () => vv.removeEventListener('resize', update)
   }, [])
 
   useEffect(() => {
@@ -222,6 +218,8 @@ export default function App() {
           transition: transform .28s cubic-bezier(.4,0,.2,1);
           overflow: hidden;
           background: ${C.bg};
+          display: flex;
+          flex-direction: column;
         }
         .slfa-left               { transform: translateX(0); }
         .slfa-left--hidden       { transform: translateX(-100%); }
