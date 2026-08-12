@@ -19,6 +19,13 @@ export const useAuthStore = create((set) => ({
     set({ profile: data })
   },
 
+  updateProfile: async (userId, updates) => {
+    const { error } = await supabase.from('users').update(updates).eq('id', userId)
+    if (error) return error.message
+    set(state => ({ profile: { ...state.profile, ...updates } }))
+    return null
+  },
+
   signOut: async () => {
     await supabase.auth.signOut()
     set({ user: null, profile: null })

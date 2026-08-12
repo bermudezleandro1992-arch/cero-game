@@ -12,11 +12,7 @@ export const useChatStore = create((set, get) => ({
   fetchConversations: async (userId) => {
     const { data } = await supabase
       .from('conversation_members')
-      .select(`
-        conversation_id,
-        conversations (id, created_at),
-        last_read_at
-      `)
+      .select('conversation_id, last_read_at')
       .eq('user_id', userId)
 
     if (!data) return
@@ -24,36 +20,120 @@ export const useChatStore = create((set, get) => ({
     const convIds = data.map(d => d.conversation_id)
     if (convIds.length === 0) { set({ conversations: [] }); return }
 
-    // Para cada conversación, buscar el otro miembro
-    const { data: members } = await supabase
-      .from('conversation_members')
-      .select('conversation_id, user_id, users(id, display_name, username, avatar_url)')
-      .in('conversation_id', convIds)
-      .neq('user_id', userId)
+    const lastReadMap = {}
+    data.forEach(d => { lastReadMap[d.conversation_id] = d.last_read_at })
 
-    // Último mensaje de cada conversación
-    const { data: lastMsgs } = await supabase
-      .from('messages')
-      .select('conversation_id, content, created_at, type')
-      .in('conversation_id', convIds)
-      .order('created_at', { ascending: false })
+    const [membersRes, lastMsgsRes] = await Promise.all([
+      supabase
+        .from('conversation_members')
+        .select('conversation_id, user_id, users(id, display_name, username, avatar_url)')
+        .in('conversation_id', convIds)
+        .neq('user_id', userId),
+      supabase
+        .from('messages')
+        .select('conversation_id, content, created_at, type, sender_id')
+        .in('conversation_id', convIds)
+        .order('created_at', { ascending: false }),
+    ])
 
     const lastMsgMap = {}
-    lastMsgs?.forEach(m => {
+    lastMsgsRes.data?.forEach(m => {
       if (!lastMsgMap[m.conversation_id]) lastMsgMap[m.conversation_id] = m
     })
 
-    const conversations = data.map(d => {
-      const other = members?.find(m => m.conversation_id === d.conversation_id)
-      return {
-        id: d.conversation_id,
-        user: other?.users,
-        lastMessage: lastMsgMap[d.conversation_id],
-        lastReadAt: d.last_read_at,
-      }
-    }).filter(c => c.user)
+    // Count unread per conversation
+    const unreadCounts = await Promise.all(
+      convIds.map(async (convId) => {
+        const lastRead = lastReadMap[convId]
+        if (!lastRead) {
+          // Never read — count all messages not from me
+          const { count } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('conversation_id', convId)
+            .neq('sender_id', userId)
+          return [convId, count || 0]
+        }
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversation_id', convId)
+          .gt('created_at', lastRead)
+          .neq('sender_id', userId)
+        return [convId, count || 0]
+      })
+    )
+    const unreadMap = Object.fromEntries(unreadCounts)
+
+    const conversations = convIds
+      .map(convId => {
+        const other = membersRes.data?.find(m => m.conversation_id === convId)
+        return {
+          id: convId,
+          user: other?.users,
+          lastMessage: lastMsgMap[convId],
+          lastReadAt: lastReadMap[convId],
+          unread: unreadMap[convId] || 0,
+        }
+      })
+      .filter(c => c.user)
+      .sort((a, b) => {
+        const ta = a.lastMessage?.created_at || ''
+        const tb = b.lastMessage?.created_at || ''
+        return tb.localeCompare(ta)
+      })
 
     set({ conversations })
+  },
+
+  markAsRead: async (conversationId, userId) => {
+    const now = new Date().toISOString()
+    await supabase
+      .from('conversation_members')
+      .update({ last_read_at: now })
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+
+    set(state => ({
+      conversations: state.conversations.map(c =>
+        c.id === conversationId ? { ...c, unread: 0, lastReadAt: now } : c
+      )
+    }))
+  },
+
+  subscribeToConversations: (userId) => {
+    const channel = supabase
+      .channel(`user-convs:${userId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+      }, (payload) => {
+        const msg = payload.new
+        set(state => {
+          const convs = state.conversations
+          const idx = convs.findIndex(c => c.id === msg.conversation_id)
+          if (idx === -1) return state
+          const updated = convs.map(c => {
+            if (c.id !== msg.conversation_id) return c
+            const isActive = state.activeConversation?.id === c.id
+            return {
+              ...c,
+              lastMessage: msg,
+              unread: isActive || msg.sender_id === userId ? c.unread : c.unread + 1,
+            }
+          })
+          return {
+            conversations: updated.sort((a, b) => {
+              const ta = a.lastMessage?.created_at || ''
+              const tb = b.lastMessage?.created_at || ''
+              return tb.localeCompare(ta)
+            })
+          }
+        })
+      })
+      .subscribe()
+    return () => supabase.removeChannel(channel)
   },
 
   fetchMessages: async (conversationId) => {
@@ -63,7 +143,7 @@ export const useChatStore = create((set, get) => ({
       .select('*, users(display_name, username, avatar_url)')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true })
-      .limit(50)
+      .limit(100)
     set({ messages: data || [], loadingMessages: false })
   },
 
@@ -87,7 +167,6 @@ export const useChatStore = create((set, get) => ({
         table: 'messages',
         filter: `conversation_id=eq.${conversationId}`,
       }, async (payload) => {
-        // Buscar datos del sender
         const { data: msg } = await supabase
           .from('messages')
           .select('*, users(display_name, username, avatar_url)')
@@ -106,7 +185,6 @@ export const useChatStore = create((set, get) => ({
   },
 
   findOrCreateConversation: async (myId, otherUserId) => {
-    // Buscar conversación existente
     const { data: myConvs } = await supabase
       .from('conversation_members')
       .select('conversation_id')
@@ -123,7 +201,6 @@ export const useChatStore = create((set, get) => ({
       if (shared?.length) return shared[0].conversation_id
     }
 
-    // Crear nueva conversación
     const { data: conv } = await supabase
       .from('conversations')
       .insert({})
