@@ -3,6 +3,7 @@ import { supabase } from './lib/supabase'
 import { useAuthStore } from './store/authStore'
 import LoginPage from './pages/LoginPage'
 import ChatListPage from './pages/ChatListPage'
+import UpdateBanner from './components/UpdateBanner'
 
 export default function App() {
   const { user, loading, setUser, setLoading, fetchProfile } = useAuthStore()
@@ -30,5 +31,10 @@ export default function App() {
     )
   }
 
-  return user ? <ChatListPage /> : <LoginPage />
+  return (
+    <>
+      <UpdateBanner />
+      {user ? <ChatListPage /> : <LoginPage />}
+    </>
+  )
 }
