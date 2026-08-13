@@ -7,8 +7,46 @@ export const useChatStore = create((set, get) => ({
   activeConversation: null,
   messages: [],
   loadingMessages: false,
+  topics: [],
+  activeTopicId: null,
 
-  setActiveConversation: (conv) => set({ activeConversation: conv, messages: [] }),
+  setActiveConversation: (conv) => set({ activeConversation: conv, messages: [], topics: [], activeTopicId: null }),
+  setActiveTopic: (topicId) => set({ activeTopicId: topicId }),
+
+  fetchTopics: async (conversationId) => {
+    const { data } = await supabase
+      .from('topics')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('position', { ascending: true })
+    set({ topics: data || [] })
+  },
+
+  createTopic: async (conversationId, name, emoji = '💬', topicType = 'chat') => {
+    const { topics } = get()
+    const position = topics.length
+    const { data } = await supabase
+      .from('topics')
+      .insert({ conversation_id: conversationId, name, emoji, topic_type: topicType, position })
+      .select()
+      .single()
+    if (data) set(state => ({ topics: [...state.topics, data] }))
+    return data
+  },
+
+  fetchMessages: async (conversationId, topicId = null) => {
+    set({ loadingMessages: true })
+    let q = supabase
+      .from('messages')
+      .select('*, sender:users!messages_sender_id_fkey(id, display_name, username, avatar_url)')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true })
+      .limit(100)
+    if (topicId) q = q.eq('topic_id', topicId)
+    else q = q.is('topic_id', null)
+    const { data } = await q
+    set({ messages: data || [], loadingMessages: false })
+  },
 
   fetchConversations: async (userId) => {
     const { data: memberships } = await supabase
@@ -149,20 +187,11 @@ export const useChatStore = create((set, get) => ({
     return () => supabase.removeChannel(channel)
   },
 
-  fetchMessages: async (conversationId) => {
-    set({ loadingMessages: true })
-    const { data } = await supabase
-      .from('messages')
-      .select('*, sender:users!messages_sender_id_fkey(id, display_name, username, avatar_url)')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
-      .limit(100)
-    set({ messages: data || [], loadingMessages: false })
-  },
 
-  sendMessage: async (conversationId, senderId, content, type = 'text', maxViews = null) => {
+  sendMessage: async (conversationId, senderId, content, type = 'text', maxViews = null, topicId = null) => {
     const row = { conversation_id: conversationId, sender_id: senderId, content, type }
     if (maxViews) row.max_views = maxViews
+    if (topicId) row.topic_id = topicId
     const { data, error } = await supabase
       .from('messages')
       .insert(row)
