@@ -157,6 +157,37 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
 
+      {/* Gamer Stats */}
+      {!forceSetup && (
+        <div style={{
+          padding: '16px 20px', background: C.panel2,
+          borderBottom: `1px solid ${C.border}`,
+        }}>
+          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+            Estadísticas
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {[
+              { icon: '🏆', label: 'Torneos',     value: profile?.stats_tournaments || 0 },
+              { icon: '🥇', label: 'Campeonatos', value: profile?.stats_wins || 0 },
+              { icon: '⚔️', label: 'Partidos',    value: profile?.stats_matches || 0 },
+              { icon: '✅', label: 'Victorias',   value: profile?.stats_victories || 0 },
+              { icon: '⚽', label: 'Goles',       value: profile?.stats_goals || 0 },
+              { icon: '📊', label: 'Ranking',     value: profile?.stats_ranking ? `#${profile.stats_ranking}` : '--' },
+            ].map(s => (
+              <div key={s.label} style={{
+                background: C.panel, borderRadius: 12, padding: '10px 8px',
+                border: `1px solid ${C.border}`, textAlign: 'center',
+              }}>
+                <div style={{ fontSize: 20, marginBottom: 2 }}>{s.icon}</div>
+                <div style={{ color: C.text, fontWeight: 800, fontSize: 16 }}>{s.value}</div>
+                <div style={{ color: C.textDim, fontSize: 10, marginTop: 1 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Form */}
       <form onSubmit={handleSave} style={{
         display: 'flex', flexDirection: 'column', gap: 0,
