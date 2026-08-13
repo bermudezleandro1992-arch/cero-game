@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 // Registers the current user as "online" and updates last_seen_at periodically
@@ -17,7 +17,6 @@ export function usePresence(userId) {
     updateSeen()
     const interval = setInterval(updateSeen, 30000)
 
-    // Presence channel so others can see us online in real-time
     channelRef.current = supabase.channel('global-presence', { config: { presence: { key: userId } } })
     channelRef.current.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
@@ -34,4 +33,33 @@ export function usePresence(userId) {
       if (channelRef.current) supabase.removeChannel(channelRef.current)
     }
   }, [userId])
+}
+
+// Returns a Set of user IDs currently online (via Supabase Presence)
+export function useOnlineUsers() {
+  const [onlineIds, setOnlineIds] = useState(new Set())
+  const chRef = useRef(null)
+
+  useEffect(() => {
+    chRef.current = supabase.channel('global-presence')
+
+    const sync = () => {
+      const state = chRef.current.presenceState()
+      const ids = new Set()
+      Object.values(state).forEach(presences =>
+        presences.forEach(p => { if (p.user_id) ids.add(p.user_id) })
+      )
+      setOnlineIds(ids)
+    }
+
+    chRef.current
+      .on('presence', { event: 'sync' }, sync)
+      .on('presence', { event: 'join' }, sync)
+      .on('presence', { event: 'leave' }, sync)
+      .subscribe()
+
+    return () => { supabase.removeChannel(chRef.current) }
+  }, [])
+
+  return onlineIds
 }

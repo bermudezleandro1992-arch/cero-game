@@ -4,6 +4,7 @@ import { useChatStore } from '../store/chatStore'
 import { supabase } from '../lib/supabase'
 import NewGroupPage from './NewGroupPage'
 import { StoriesBar, useStoryUserIds } from './StoriesPage'
+import { useOnlineUsers } from '../hooks/usePresence'
 import { C } from '../App'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -77,8 +78,9 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
   useEffect(() => { setFilter(initialFilter || 'todos') }, [initialFilter])
   const [showFab, setShowFab] = useState(false)
-  const [loadingConvs, setLoadingConvs] = useState(true)
+  const [loadingConvs, setLoadingConvs] = useState(conversations.length === 0)
   const storyUserIds = useStoryUserIds()
+  const onlineUsers = useOnlineUsers()
 
   useEffect(() => {
     if (!profile?.id) return
@@ -310,18 +312,30 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
             >
               {/* Avatar with story ring */}
               <div style={{ position: 'relative', flexShrink: 0 }}>
-                {!isGroup && storyUserIds.has(conv.user?.id) ? (
-                  <div style={{
-                    width: 54, height: 54, borderRadius: '50%',
-                    background: `conic-gradient(${C.green}, #00cc66, ${C.green})`,
-                    padding: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', border: `2px solid ${C.bg}` }}>
-                      <Avatar name={name} size={46} color={color} url={conv.user?.avatar_url} />
-                    </div>
-                  </div>
-                ) : (
-                  <Avatar name={name} size={50} color={color} url={!isGroup ? conv.user?.avatar_url : null} />
+                {isGroup
+                  ? <GroupAvatar members={conv.members || []} size={50} isCommunity={isCommunity} />
+                  : storyUserIds.has(conv.user?.id)
+                    ? (
+                      <div style={{
+                        width: 54, height: 54, borderRadius: '50%',
+                        background: `conic-gradient(${C.green}, #00cc66, ${C.green})`,
+                        padding: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', border: `2px solid ${C.bg}` }}>
+                          <Avatar name={name} size={46} color={color} url={conv.user?.avatar_url} />
+                        </div>
+                      </div>
+                    )
+                    : <Avatar name={name} size={50} color={color} url={conv.user?.avatar_url} />
+                }
+                {/* Online dot — only for direct chats */}
+                {!isGroup && onlineUsers.has(conv.user?.id) && (
+                  <span style={{
+                    position: 'absolute', bottom: 1, right: 1,
+                    width: 11, height: 11, borderRadius: '50%',
+                    background: C.green, border: `2px solid ${C.bg}`,
+                    boxShadow: `0 0 6px ${C.green}99`,
+                  }} />
                 )}
                 {conv.unread > 0 && (
                   <span style={{
