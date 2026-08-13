@@ -3,6 +3,20 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { C } from '../App'
 
+// Track whether stories table exists — avoid repeated 400s if it doesn't
+let storiesTableExists = null // null = unknown, true/false after first check
+
+async function fetchStoriesIfAvailable(query) {
+  if (storiesTableExists === false) return { data: null, error: null }
+  const result = await query
+  if (result.error?.code === '42P01' || result.error?.message?.includes('does not exist') || (result.error && !result.data)) {
+    storiesTableExists = false
+    return { data: null, error: null }
+  }
+  storiesTableExists = true
+  return result
+}
+
 // ── Global story groups context (for avatar rings in chat list) ────────────────
 export const StoryCtx = createContext({ usersWithStories: new Set() })
 
@@ -242,15 +256,15 @@ export function StoriesBar() {
   }, [profile?.id])
 
   async function loadStories() {
-    const { data, error } = await supabase
-      .from('stories')
-      .select('*, user:users!stories_user_id_fkey(id, display_name, username, avatar_url)')
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
+    const { data } = await fetchStoriesIfAvailable(
+      supabase.from('stories')
+        .select('*, user:users!stories_user_id_fkey(id, display_name, username, avatar_url)')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+    )
 
     setLoading(false)
-    // Table may not exist yet — silently skip
-    if (error || !data) return
+    if (!data) return
 
     const map = {}
     data.forEach(s => {
@@ -395,12 +409,11 @@ export function useStoryUserIds() {
   const [ids, setIds] = useState(new Set())
   useEffect(() => {
     if (!profile?.id) return
-    supabase.from('stories')
-      .select('user_id')
-      .gt('expires_at', new Date().toISOString())
-      .then(({ data, error }) => {
-        if (!error && data) setIds(new Set(data.map(s => s.user_id)))
-      })
+    fetchStoriesIfAvailable(
+      supabase.from('stories').select('user_id').gt('expires_at', new Date().toISOString())
+    ).then(({ data }) => {
+      if (data) setIds(new Set(data.map(s => s.user_id)))
+    })
   }, [profile?.id])
   return ids
 }
