@@ -125,7 +125,8 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
   useEffect(() => { setFilter(initialFilter || 'todos') }, [initialFilter])
   const [showFab, setShowFab] = useState(false)
-  const [loadingConvs, setLoadingConvs] = useState(true)
+  // If conversations already in store, don't flash skeleton on tab switch
+  const [loadingConvs, setLoadingConvs] = useState(conversations.length === 0)
   const storyUserIds = useStoryUserIds()
 
   useEffect(() => {
@@ -264,7 +265,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
       <StoriesBar />
 
       {/* ── LIST ── */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowAnchor: 'none' }}>
 
         {/* Skeleton loading */}
         {loadingConvs && !search && (
