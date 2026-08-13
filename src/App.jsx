@@ -269,9 +269,11 @@ export default function App() {
           .slfa-left, .slfa-right {
             position: relative !important;
             transform: none !important;
+            top: auto !important; left: auto !important;
+            right: auto !important; bottom: auto !important;
           }
-          .slfa-left  { width: 320px; flex-shrink: 0; border-right: 1px solid ${C.border}; }
-          .slfa-right { flex: 1; min-width: 0; }
+          .slfa-left  { width: 320px !important; flex-shrink: 0; border-right: 1px solid ${C.border}; }
+          .slfa-right { flex: 1 !important; min-width: 0; }
         }
 
         /* Scrollbar */
