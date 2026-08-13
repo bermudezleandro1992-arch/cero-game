@@ -163,7 +163,9 @@ export default function CallPage({
   const sessionCh = useRef(null)
   const timerRef = useRef(null)
   const connectTimeoutRef = useRef(null)
+  const ringTimeoutRef = useRef(null)   // auto-hangup after 90s if not answered
   const silentCtxRef = useRef(null)   // kept alive while muted; closing it kills the silent track
+  const connectedRef = useRef(false)  // track whether call was ever connected (for missed call message)
   const localVid = useRef(null)
   const remoteVid = useRef(null)
   const remoteAudio = useRef(null)
@@ -200,13 +202,19 @@ export default function CallPage({
       .on('broadcast', { event: 'call-reject' }, () => hangup(false))
       .subscribe()
 
-    if (!isIncoming) { startOutgoing(); outgoingRing.start() }
-    else { ringtone.start(); vibrate([0, 400, 200, 400, 200, 400]) }
+    if (!isIncoming) {
+      startOutgoing(); outgoingRing.start()
+      // Auto-hangup after 90s if receiver never answers
+      ringTimeoutRef.current = setTimeout(() => {
+        if (!connectedRef.current) hangup(true)
+      }, 90000)
+    } else { ringtone.start(); vibrate([0, 400, 200, 400, 200, 400]) }
 
     return () => {
       ringtone.stop(); outgoingRing.stop()
       clearInterval(timerRef.current)
       clearTimeout(connectTimeoutRef.current)
+      clearTimeout(ringTimeoutRef.current)
       if (sessionCh.current) supabase.removeChannel(sessionCh.current)
     }
   }, [])
@@ -281,6 +289,8 @@ export default function CallPage({
   }
 
   function goActive() {
+    connectedRef.current = true
+    clearTimeout(ringTimeoutRef.current)
     outgoingRing.stop()
     setPhase('active')
     sounds.callConnect()
@@ -300,9 +310,20 @@ export default function CallPage({
     ringtone.stop(); outgoingRing.stop()
     clearInterval(timerRef.current)
     clearTimeout(connectTimeoutRef.current)
+    clearTimeout(ringTimeoutRef.current)
     silentCtxRef.current?.close(); silentCtxRef.current = null
     sounds.callEnd()
     if (sendSignal) sessionCh.current?.send({ type: 'broadcast', event: 'call-end', payload: {} })
+    // If caller hangs up and the call was never answered → insert missed call message
+    if (!isIncoming && !connectedRef.current && conversationId && myUserId) {
+      const icon = callType === 'video' ? '📹' : '📞'
+      supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: myUserId,
+        type: 'system',
+        content: `${icon} Llamada perdida`,
+      }).then(() => {})
+    }
     localStream.current?.getTracks().forEach(t => t.stop())
     pc.current?.close()
     setPhase('ended')

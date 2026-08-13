@@ -11,7 +11,7 @@ function avatarColor(id) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
-export default function NewGroupPage({ onBack, onCreated }) {
+export default function NewGroupPage({ onBack, onCreated, initialType }) {
   const { profile } = useAuthStore()
   const { createGroup } = useChatStore()
   const [step, setStep] = useState(1)
@@ -19,7 +19,7 @@ export default function NewGroupPage({ onBack, onCreated }) {
   const [searchResults, setSearchResults] = useState([])
   const [selected, setSelected] = useState([])
   const [groupName, setGroupName] = useState('')
-  const [groupType, setGroupType] = useState('group') // 'group' | 'community'
+  const [groupType, setGroupType] = useState(initialType || 'group') // 'group' | 'community'
   const [description, setDescription] = useState('')
   const [creating, setCreating] = useState(false)
   const [searching, setSearching] = useState(false)
