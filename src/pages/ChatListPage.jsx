@@ -4,6 +4,7 @@ import { useChatStore } from '../store/chatStore'
 import { supabase } from '../lib/supabase'
 import NewGroupPage from './NewGroupPage'
 import { StoriesBar, useStoryUserIds } from './StoriesPage'
+import { useOnlineUsers } from '../hooks/usePresence'
 import { C } from '../App'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -128,6 +129,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   // If conversations already in store, don't flash skeleton on tab switch
   const [loadingConvs, setLoadingConvs] = useState(conversations.length === 0)
   const storyUserIds = useStoryUserIds()
+  const onlineUsers = useOnlineUsers()
 
   useEffect(() => {
     if (!profile?.id) return
@@ -381,6 +383,15 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
                     )
                     : <Avatar name={name} size={50} color={color} url={conv.user?.avatar_url} />
                 }
+                {/* Online dot — only for direct chats */}
+                {!isGroup && onlineUsers.has(conv.user?.id) && (
+                  <span style={{
+                    position: 'absolute', bottom: 1, right: 1,
+                    width: 11, height: 11, borderRadius: '50%',
+                    background: C.green, border: `2px solid ${C.bg}`,
+                    boxShadow: `0 0 6px ${C.green}99`,
+                  }} />
+                )}
                 {conv.unread > 0 && (
                   <span style={{
                     position: 'absolute', top: -3, right: -4,
