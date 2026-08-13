@@ -256,20 +256,29 @@ export function StoriesBar() {
   }, [profile?.id])
 
   async function loadStories() {
-    const { data } = await fetchStoriesIfAvailable(
+    // Fetch stories without FK join (user_id → auth.users, not public.users)
+    const { data: stories } = await fetchStoriesIfAvailable(
       supabase.from('stories')
-        .select('*, user:users!stories_user_id_fkey(id, display_name, username, avatar_url)')
+        .select('*')
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
     )
 
     setLoading(false)
-    if (!data) return
+    if (!stories?.length) return
+
+    // Fetch user profiles for all story authors
+    const userIds = [...new Set(stories.map(s => s.user_id))]
+    const { data: users } = await supabase.from('users')
+      .select('id, display_name, username, avatar_url')
+      .in('id', userIds)
+    const userMap = Object.fromEntries((users || []).map(u => [u.id, u]))
 
     const map = {}
-    data.forEach(s => {
-      if (!map[s.user_id]) map[s.user_id] = { user: s.user, stories: [] }
-      map[s.user_id].stories.push(s)
+    stories.forEach(s => {
+      const user = userMap[s.user_id] || { id: s.user_id, display_name: 'Usuario' }
+      if (!map[s.user_id]) map[s.user_id] = { user, stories: [] }
+      map[s.user_id].stories.push({ ...s, user })
     })
 
     const groups = Object.values(map)
