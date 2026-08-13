@@ -264,9 +264,32 @@ export const useChatStore = create((set, get) => ({
       })
       .subscribe()
 
+    // Realtime reactions
+    const reactChannel = supabase
+      .channel(`reactions:${conversationId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'message_reactions',
+      }, async (payload) => {
+        const msgId = payload.new?.message_id || payload.old?.message_id
+        if (!msgId) return
+        const { data: reactions } = await supabase
+          .from('message_reactions')
+          .select('emoji, user_id')
+          .eq('message_id', msgId)
+        set(state => ({
+          messages: state.messages.map(m =>
+            m.id === msgId ? { ...m, reactions: reactions || [] } : m
+          )
+        }))
+      })
+      .subscribe()
+
     return () => {
       supabase.removeChannel(channel)
       supabase.removeChannel(evtChannel)
+      supabase.removeChannel(reactChannel)
     }
   },
 
