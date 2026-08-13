@@ -41,6 +41,54 @@ function Avatar({ name, size = 48, color, url }) {
     )
 }
 
+// ── Group Avatar — mosaic of up to 4 member faces ─────────────────────────────
+function GroupAvatar({ members = [], size = 50, isCommunity = false }) {
+  const shown = members.slice(0, 4)
+  const bg = isCommunity
+    ? 'linear-gradient(135deg,#7c3aed,#4f46e5)'
+    : 'linear-gradient(135deg,#0B7A2A,#065f21)'
+
+  if (shown.length < 2) {
+    // Single face or no members — show icon
+    return (
+      <div style={{
+        width: size, height: size, borderRadius: '50%', flexShrink: 0,
+        background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size * 0.4, border: `1.5px solid ${C.border}`,
+      }}>
+        {isCommunity ? '🌐' : '👥'}
+      </div>
+    )
+  }
+
+  const half = size / 2
+  const cellSize = half - 1
+
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      overflow: 'hidden', background: C.panel2, flexDirection: 'row',
+      display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1,
+      border: `1.5px solid ${C.border}`,
+    }}>
+      {shown.map((m, i) => {
+        const n = m.display_name || m.username || '?'
+        const col = avatarColor(m.id)
+        return m.avatar_url
+          ? <img key={i} src={m.avatar_url} alt={n} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : (
+            <div key={i} style={{
+              background: col, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: cellSize * 0.38, fontWeight: 700, color: '#fff',
+            }}>
+              {n.slice(0, 1).toUpperCase()}
+            </div>
+          )
+      })}
+    </div>
+  )
+}
+
 // ── Skeleton row ──────────────────────────────────────────────────────────────
 function SkeletonRow() {
   return (
@@ -280,18 +328,24 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
         )}
 
         {/* Conversations */}
-        {!search && filtered.map((conv, idx) => {
-          const isGroup      = conv.isGroup
-          const isCommunity  = conv.isCommunity
-          const name         = isGroup ? conv.name : conv.user?.display_name
-          const color        = isCommunity ? '#7c3aed' : isGroup ? C.greenDk : avatarColor(conv.user?.id)
-          const lastMsg   = conv.lastMessage
-          const isMine    = lastMsg?.sender_id === profile?.id
-          const isActive  = activeConversation?.id === conv.id
-          const preview   = lastMsg?.type === 'image' ? '📷 Imagen'
+        {!search && filtered.map((conv) => {
+          const isGroup     = conv.isGroup
+          const isCommunity = conv.isCommunity
+          const name        = isGroup ? conv.name : conv.user?.display_name
+          const color       = isCommunity ? '#7c3aed' : isGroup ? C.greenDk : avatarColor(conv.user?.id)
+          const lastMsg     = conv.lastMessage
+          const isMine      = lastMsg?.sender_id === profile?.id
+          const isActive    = activeConversation?.id === conv.id
+          const preview     = lastMsg?.type === 'image' ? '📷 Imagen'
             : lastMsg?.type === 'audio' ? '🎤 Audio'
             : lastMsg?.content?.startsWith('[↩ ') ? '↩ ' + (lastMsg.content.split('\n')[1] || lastMsg.content)
             : lastMsg?.content || ''
+          // For groups: find sender name from members list
+          const senderMember = isGroup && !isMine && lastMsg
+            ? conv.members?.find(m => m.id === lastMsg.sender_id)
+            : null
+          const senderName = senderMember?.display_name || senderMember?.username || null
+          const memberCount = conv.members?.length || 0
 
           return (
             <button key={conv.id} onClick={() => setActiveConversation(conv)}
@@ -304,26 +358,28 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
                 borderBottom: `1px solid ${C.border}22`,
                 cursor: 'pointer', textAlign: 'left',
                 transition: 'background .15s',
-                animation: `msgIn .2s ease-out ${idx * 0.03}s both`,
               }}
               onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = C.panel }}
               onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none' }}
             >
-              {/* Avatar with story ring */}
+              {/* Avatar */}
               <div style={{ position: 'relative', flexShrink: 0 }}>
-                {!isGroup && storyUserIds.has(conv.user?.id) ? (
-                  <div style={{
-                    width: 54, height: 54, borderRadius: '50%',
-                    background: `conic-gradient(${C.green}, #00cc66, ${C.green})`,
-                    padding: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', border: `2px solid ${C.bg}` }}>
-                      <Avatar name={name} size={46} color={color} url={conv.user?.avatar_url} />
-                    </div>
-                  </div>
-                ) : (
-                  <Avatar name={name} size={50} color={color} url={!isGroup ? conv.user?.avatar_url : null} />
-                )}
+                {isGroup
+                  ? <GroupAvatar members={conv.members || []} size={50} isCommunity={isCommunity} />
+                  : storyUserIds.has(conv.user?.id)
+                    ? (
+                      <div style={{
+                        width: 54, height: 54, borderRadius: '50%',
+                        background: `conic-gradient(${C.green}, #00cc66, ${C.green})`,
+                        padding: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', border: `2px solid ${C.bg}` }}>
+                          <Avatar name={name} size={46} color={color} url={conv.user?.avatar_url} />
+                        </div>
+                      </div>
+                    )
+                    : <Avatar name={name} size={50} color={color} url={conv.user?.avatar_url} />
+                }
                 {conv.unread > 0 && (
                   <span style={{
                     position: 'absolute', top: -3, right: -4,
@@ -338,8 +394,8 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
               {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
                     <p style={{
                       margin: 0, color: conv.unread > 0 ? C.text : C.text2,
                       fontWeight: conv.unread > 0 ? 700 : 600, fontSize: 14,
@@ -349,9 +405,15 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
                       <span style={{
                         fontSize: 9, fontWeight: 700, color: '#a78bfa', flexShrink: 0,
                         background: '#7c3aed22', border: '1px solid #7c3aed44',
-                        borderRadius: 4, padding: '1px 5px', letterSpacing: '0.5px',
-                        textTransform: 'uppercase',
+                        borderRadius: 4, padding: '1px 5px', letterSpacing: '0.5px', textTransform: 'uppercase',
                       }}>Comunidad</span>
+                    )}
+                    {isGroup && !isCommunity && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, color: C.green, flexShrink: 0,
+                        background: `${C.green}15`, border: `1px solid ${C.green}30`,
+                        borderRadius: 4, padding: '1px 5px', letterSpacing: '0.5px', textTransform: 'uppercase',
+                      }}>Grupo</span>
                     )}
                   </div>
                   {lastMsg && (
@@ -362,18 +424,31 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
                     }}>{formatTime(lastMsg.created_at)}</span>
                   )}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {isMine && lastMsg && <Ticks read={!!lastMsg.read_at} />}
-                  <p style={{
-                    margin: 0, fontSize: 12,
-                    color: conv.unread > 0 ? C.text2 : C.textDim,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
-                    fontWeight: conv.unread > 0 ? 500 : 400,
-                  }}>
-                    {isMine && <span style={{ color: C.textDim }}>Vos: </span>}
-                    {preview || 'Conversación iniciada'}
+                {/* Member count for groups */}
+                {isGroup && !lastMsg && (
+                  <p style={{ margin: 0, fontSize: 11, color: C.textDim }}>
+                    {memberCount} miembro{memberCount !== 1 ? 's' : ''}
                   </p>
-                </div>
+                )}
+                {lastMsg && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {isMine && <Ticks read={!!lastMsg.read_at} />}
+                    <p style={{
+                      margin: 0, fontSize: 12,
+                      color: conv.unread > 0 ? C.text2 : C.textDim,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                      fontWeight: conv.unread > 0 ? 500 : 400,
+                    }}>
+                      {isMine
+                        ? <span style={{ color: C.textDim }}>Vos: </span>
+                        : senderName
+                          ? <span style={{ color: C.text2, fontWeight: 600 }}>{senderName.split(' ')[0]}: </span>
+                          : null
+                      }
+                      {preview || 'Conversación iniciada'}
+                    </p>
+                  </div>
+                )}
               </div>
             </button>
           )

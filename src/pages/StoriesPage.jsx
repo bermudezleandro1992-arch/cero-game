@@ -242,14 +242,15 @@ export function StoriesBar() {
   }, [profile?.id])
 
   async function loadStories() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('stories')
       .select('*, user:users!stories_user_id_fkey(id, display_name, username, avatar_url)')
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
 
     setLoading(false)
-    if (!data) return
+    // Table may not exist yet — silently skip
+    if (error || !data) return
 
     const map = {}
     data.forEach(s => {
@@ -397,8 +398,8 @@ export function useStoryUserIds() {
     supabase.from('stories')
       .select('user_id')
       .gt('expires_at', new Date().toISOString())
-      .then(({ data }) => {
-        setIds(new Set((data || []).map(s => s.user_id)))
+      .then(({ data, error }) => {
+        if (!error && data) setIds(new Set(data.map(s => s.user_id)))
       })
   }, [profile?.id])
   return ids

@@ -245,19 +245,20 @@ export default function App() {
         /* Mobile: full-screen sliding panels */
         .slfa-side-nav { display: none; }
         .slfa-left, .slfa-right {
-          position: absolute; inset: 0;
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
           transition: transform .28s cubic-bezier(.4,0,.2,1);
           overflow: hidden;
           background: ${C.bg};
           display: flex;
           flex-direction: column;
         }
-        .slfa-left               { transform: translateX(0); }
+        .slfa-left               { transform: translateX(0); z-index: 1; }
         .slfa-left--hidden       { transform: translateX(-100%); }
-        .slfa-right              { transform: translateX(100%); }
+        .slfa-right              { transform: translateX(100%); z-index: 2; }
         .slfa-right--visible     { transform: translateX(0); }
 
-        /* Desktop ≥768px: sidebar layout */
+        /* Desktop ≥ 768px: sidebar layout */
         @media (min-width: 768px) {
           .slfa-bottom-nav { display: none !important; }
           .slfa-side-nav {
@@ -269,8 +270,8 @@ export default function App() {
             position: relative !important;
             transform: none !important;
           }
-          .slfa-left  { width: 300px; flex-shrink: 0; border-right: 1px solid ${C.border}; }
-          .slfa-right { flex: 1; }
+          .slfa-left  { width: 320px; flex-shrink: 0; border-right: 1px solid ${C.border}; }
+          .slfa-right { flex: 1; min-width: 0; }
         }
 
         /* Scrollbar */
@@ -278,18 +279,22 @@ export default function App() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 4px; }
 
-        /* Message entrance animation */
-        @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        /* Animations */
+        @keyframes msgIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
         .msg-in { animation: msgIn .18s ease-out both; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         /* Skeleton pulse */
         @keyframes skelPulse { 0%,100%{opacity:.4} 50%{opacity:.9} }
         .skeleton { animation: skelPulse 1.4s ease-in-out infinite; background: ${C.panel2}; border-radius: 8px; }
 
-        /* Green glow on focus */
+        /* Focus ring */
         input:focus, textarea:focus { outline: none; border-color: ${C.green} !important; box-shadow: 0 0 0 2px ${C.green}22 !important; }
 
+        /* Base resets */
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        img { max-width: 100%; }
+        button { touch-action: manipulation; }
       `}</style>
     </div>
   )
