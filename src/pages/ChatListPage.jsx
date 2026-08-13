@@ -88,8 +88,9 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   useEffect(() => {
     if (!showFab) return
     const h = () => setShowFab(false)
-    document.addEventListener('click', h, { capture: true, once: true })
-    return () => document.removeEventListener('click', h, { capture: true })
+    // Use setTimeout so FAB item onClick fires before the close handler
+    const t = setTimeout(() => document.addEventListener('click', h, { once: true }), 0)
+    return () => { clearTimeout(t); document.removeEventListener('click', h) }
   }, [showFab])
 
   async function searchUsers(q) {
