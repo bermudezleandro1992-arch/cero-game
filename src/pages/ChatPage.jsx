@@ -296,7 +296,7 @@ const REACTION_EMOJIS = ['👍','❤️','😂','🔥','⚽','🏆','😮','👏
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatPage({ onBack }) {
   const { profile } = useAuthStore()
-  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage } = useChatStore()
+  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage, topics, activeTopicId, fetchTopics, createTopic, setActiveTopic } = useChatStore()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -355,6 +355,10 @@ export default function ChatPage({ onBack }) {
   const [editText, setEditText] = useState('')
   const [forwardMsg, setForwardMsg] = useState(null) // message to forward
   const [viewOncePending, setViewOncePending] = useState(null) // { file, type } waiting for view count pick
+  const [showTopicsPanel, setShowTopicsPanel] = useState(false)
+  const [showNewTopic, setShowNewTopic] = useState(false)
+  const [newTopicName, setNewTopicName] = useState('')
+  const [newTopicEmoji, setNewTopicEmoji] = useState('💬')
   const [recording, setRecording] = useState(false) // 'hold' | 'locked' | false
   const [recDuration, setRecDuration] = useState(0)
   const [recCancelling, setRecCancelling] = useState(false)
@@ -407,14 +411,15 @@ export default function ChatPage({ onBack }) {
 
   useEffect(() => {
     if (!activeConversation?.id) return
-    fetchMessages(activeConversation.id).then(() => {
+    fetchMessages(activeConversation.id, activeTopicId).then(() => {
       const ids = messages.map(m => m.id)
       if (ids.length) fetchReactions(ids)
     })
     const unsub = subscribeToMessages(activeConversation.id)
     markAsRead(activeConversation.id, profile.id)
+    if (activeConversation.isGroup) fetchTopics(activeConversation.id)
     return unsub
-  }, [activeConversation?.id])
+  }, [activeConversation?.id, activeTopicId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -444,7 +449,7 @@ export default function ChatPage({ onBack }) {
       : text.trim()
     setReplyTo(null); setText('')
     try {
-      await sendMessage(activeConversation.id, profile.id, content, 'text')
+      await sendMessage(activeConversation.id, profile.id, content, 'text', null, activeTopicId)
       sounds.msgSent()
     } catch (err) { alert(`Error: ${err.message}`); setText(content) }
     setSending(false)
@@ -937,6 +942,14 @@ export default function ChatPage({ onBack }) {
               </HdrBtn>
             </div>
           )}
+          {/* Topics button — only for groups */}
+          {isGroup && (
+            <HdrBtn title="Canales" onClick={() => setShowTopicsPanel(v => !v)}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={showTopicsPanel ? C.green : C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </HdrBtn>
+          )}
           {/* Background picker button */}
           <HdrBtn title="Fondo de chat" onClick={() => setShowBgPicker(v => !v)}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={showBgPicker ? C.green : C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -949,6 +962,103 @@ export default function ChatPage({ onBack }) {
         {pinnedText && !pinnedDismissed && (
           <PinnedBanner text={pinnedText} onDismiss={() => setPinnedDismissed(true)} />
         )}
+
+        {/* ── TOPICS PANEL ── */}
+        {isGroup && showTopicsPanel && (
+          <div style={{
+            background: C.panel, borderBottom: `1px solid ${C.border}`,
+            padding: '8px 12px 10px', flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ color: C.text2, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Canales</span>
+              <button onClick={() => setShowNewTopic(v => !v)} style={{
+                background: showNewTopic ? `${C.green}22` : 'none', border: `1px solid ${showNewTopic ? C.green : C.border}`,
+                borderRadius: 8, color: showNewTopic ? C.green : C.text2, fontSize: 11, padding: '3px 8px',
+                cursor: 'pointer', fontWeight: 600,
+              }}>+ Nuevo</button>
+            </div>
+
+            {/* New topic form */}
+            {showNewTopic && (
+              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                <input
+                  value={newTopicEmoji}
+                  onChange={e => setNewTopicEmoji(e.target.value)}
+                  placeholder="💬"
+                  style={{
+                    width: 36, background: C.panel2, border: `1px solid ${C.border}`,
+                    borderRadius: 8, color: C.text, fontSize: 16, padding: '6px', textAlign: 'center', outline: 'none',
+                  }}
+                />
+                <input
+                  value={newTopicName}
+                  onChange={e => setNewTopicName(e.target.value)}
+                  placeholder="Nombre del canal..."
+                  onKeyDown={async e => {
+                    if (e.key === 'Enter' && newTopicName.trim()) {
+                      await createTopic(activeConversation.id, newTopicName.trim(), newTopicEmoji || '💬')
+                      setNewTopicName(''); setNewTopicEmoji('💬'); setShowNewTopic(false)
+                    }
+                  }}
+                  style={{
+                    flex: 1, background: C.panel2, border: `1px solid ${C.border}`,
+                    borderRadius: 8, color: C.text, fontSize: 13, padding: '6px 10px', outline: 'none',
+                  }}
+                />
+                <button onClick={async () => {
+                  if (!newTopicName.trim()) return
+                  await createTopic(activeConversation.id, newTopicName.trim(), newTopicEmoji || '💬')
+                  setNewTopicName(''); setNewTopicEmoji('💬'); setShowNewTopic(false)
+                }} style={{
+                  background: C.green, border: 'none', borderRadius: 8,
+                  color: C.bg, fontWeight: 700, fontSize: 12, padding: '6px 12px', cursor: 'pointer',
+                }}>OK</button>
+              </div>
+            )}
+
+            {/* Topic list */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => { setActiveTopic(null) }}
+                style={{
+                  background: activeTopicId === null ? `${C.green}22` : C.panel2,
+                  border: `1px solid ${activeTopicId === null ? C.green : C.border}`,
+                  borderRadius: 20, color: activeTopicId === null ? C.green : C.text2,
+                  fontSize: 12, padding: '4px 12px', cursor: 'pointer', fontWeight: 600,
+                  transition: 'all .15s',
+                }}
+              >💬 General</button>
+              {topics.map(t => (
+                <button key={t.id}
+                  onClick={() => setActiveTopic(t.id)}
+                  style={{
+                    background: activeTopicId === t.id ? `${C.green}22` : C.panel2,
+                    border: `1px solid ${activeTopicId === t.id ? C.green : C.border}`,
+                    borderRadius: 20, color: activeTopicId === t.id ? C.green : C.text2,
+                    fontSize: 12, padding: '4px 12px', cursor: 'pointer', fontWeight: 600,
+                    transition: 'all .15s',
+                  }}
+                >{t.emoji} {t.name}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Active topic indicator */}
+        {isGroup && activeTopicId && (() => {
+          const t = topics.find(x => x.id === activeTopicId)
+          return t ? (
+            <div style={{
+              background: `${C.green}10`, borderBottom: `1px solid ${C.green}33`,
+              padding: '4px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>{t.emoji} {t.name}</span>
+              <button onClick={() => setActiveTopic(null)} style={{
+                background: 'none', border: 'none', color: C.textDim, fontSize: 11, cursor: 'pointer', marginLeft: 'auto',
+              }}>✕ Volver a General</button>
+            </div>
+          ) : null
+        })()}
 
         {/* ── MESSAGES ── */}
         <div style={{
