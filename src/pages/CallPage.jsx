@@ -163,6 +163,7 @@ export default function CallPage({
   const sessionCh = useRef(null)
   const timerRef = useRef(null)
   const connectTimeoutRef = useRef(null)
+  const silentCtxRef = useRef(null)   // kept alive while muted; closing it kills the silent track
   const localVid = useRef(null)
   const remoteVid = useRef(null)
   const remoteAudio = useRef(null)
@@ -298,6 +299,8 @@ export default function CallPage({
     vibrate([0, 80])
     ringtone.stop(); outgoingRing.stop()
     clearInterval(timerRef.current)
+    clearTimeout(connectTimeoutRef.current)
+    silentCtxRef.current?.close(); silentCtxRef.current = null
     sounds.callEnd()
     if (sendSignal) sessionCh.current?.send({ type: 'broadcast', event: 'call-end', payload: {} })
     localStream.current?.getTracks().forEach(t => t.stop())
@@ -306,13 +309,36 @@ export default function CallPage({
     setTimeout(onEnd, 900)
   }
 
-  function toggleMute() { vibrate(25); const t = localStream.current?.getAudioTracks()[0]; if (t) { t.enabled = !t.enabled; setMuted(m => !m) } }
+  async function toggleMute() {
+    vibrate(25)
+    const newMuted = !muted
+    setMuted(newMuted)
+    const track = localStream.current?.getAudioTracks()[0]
+    if (track) track.enabled = !newMuted
+    const sender = pc.current?.getSenders().find(s => s.track?.kind === 'audio')
+    if (sender && track) {
+      try {
+        if (newMuted) {
+          silentCtxRef.current?.close()
+          silentCtxRef.current = new AudioContext()
+          const dst = silentCtxRef.current.createMediaStreamDestination()
+          await sender.replaceTrack(dst.stream.getAudioTracks()[0])
+        } else {
+          await sender.replaceTrack(track)
+          silentCtxRef.current?.close(); silentCtxRef.current = null
+        }
+      } catch (_) { /* replaceTrack unsupported — track.enabled fallback already applied */ }
+    }
+  }
   function toggleCam() { vibrate(25); const t = localStream.current?.getVideoTracks()[0]; if (t) { t.enabled = !t.enabled; setCamOff(c => !c) } }
   function toggleSpeaker() {
     vibrate(25)
     const next = !speaker; setSpeaker(next)
-    if (remoteAudio.current && typeof remoteAudio.current.setSinkId === 'function')
-      remoteAudio.current.setSinkId(next ? 'default' : '').catch(() => {})
+    if (remoteAudio.current) {
+      if (typeof remoteAudio.current.setSinkId === 'function')
+        remoteAudio.current.setSinkId(next ? 'default' : '').catch(() => {})
+      remoteAudio.current.volume = next ? 1.0 : 0.3
+    }
   }
 
   // Swipe-down-to-minimize
@@ -337,7 +363,7 @@ export default function CallPage({
     return (
       <>
         {/* Audio always mounted so ontrack can fire */}
-        <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
+        <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} onError={() => {}} />
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
           background: 'rgba(0,0,0,0.55)',

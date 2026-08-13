@@ -1,4 +1,4 @@
-const VERSION = '1.1.0'
+const VERSION = '1.2.0'
 const CACHE = `mimensajero-${VERSION}`
 const SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon.svg']
 
@@ -30,7 +30,8 @@ self.addEventListener('fetch', e => {
     e.respondWith(
       caches.match(e.request).then(cached => {
         const net = fetch(e.request).then(res => {
-          caches.open(CACHE).then(c => c.put(e.request, res.clone()))
+          const clone = res.clone()  // clone eagerly before any async gap
+          caches.open(CACHE).then(c => c.put(e.request, clone))
           return res
         })
         return cached || net
