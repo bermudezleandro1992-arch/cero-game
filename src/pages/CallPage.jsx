@@ -160,11 +160,12 @@ export default function CallPage({
 
   const pc = useRef(null)
   const localStream = useRef(null)
-  const remoteStream = useRef(null)   // persists stream even before video element mounts
   const sessionCh = useRef(null)
   const timerRef = useRef(null)
   const connectTimeoutRef = useRef(null)
-  const iceDisconnectTimer = useRef(null) // timer for reconnection grace period
+  const ringTimeoutRef = useRef(null)   // auto-hangup after 90s if not answered
+  const silentCtxRef = useRef(null)   // kept alive while muted; closing it kills the silent track
+  const connectedRef = useRef(false)  // track whether call was ever connected (for missed call message)
   const localVid = useRef(null)
   const remoteVid = useRef(null)
   const remoteAudio = useRef(null)
@@ -201,14 +202,19 @@ export default function CallPage({
       .on('broadcast', { event: 'call-reject' }, () => hangup(false))
       .subscribe()
 
-    if (!isIncoming) { startOutgoing(); outgoingRing.start() }
-    else { ringtone.start(); vibrate([0, 400, 200, 400, 200, 400]) }
+    if (!isIncoming) {
+      startOutgoing(); outgoingRing.start()
+      // Auto-hangup after 90s if receiver never answers
+      ringTimeoutRef.current = setTimeout(() => {
+        if (!connectedRef.current) hangup(true)
+      }, 90000)
+    } else { ringtone.start(); vibrate([0, 400, 200, 400, 200, 400]) }
 
     return () => {
       ringtone.stop(); outgoingRing.stop()
       clearInterval(timerRef.current)
       clearTimeout(connectTimeoutRef.current)
-      clearTimeout(iceDisconnectTimer.current)
+      clearTimeout(ringTimeoutRef.current)
       if (sessionCh.current) supabase.removeChannel(sessionCh.current)
     }
   }, [])
@@ -220,58 +226,33 @@ export default function CallPage({
         : { audio: true }
     )
     localStream.current = stream
-    if (localVid.current) { localVid.current.srcObject = stream; localVid.current.muted = true; localVid.current.play().catch(() => {}) }
+    if (localVid.current) { localVid.current.srcObject = stream; localVid.current.muted = true }
     return stream
-  }
-
-  function applyRemoteStream(s) {
-    remoteStream.current = s
-    if (remoteAudio.current) { remoteAudio.current.srcObject = s; remoteAudio.current.play().catch(() => {}) }
-    if (remoteVid.current)   { remoteVid.current.srcObject   = s; remoteVid.current.play().catch(() => {}) }
   }
 
   function makePc(stream) {
     const conn = new RTCPeerConnection(ICE_SERVERS)
     stream.getTracks().forEach(t => conn.addTrack(t, stream))
-
-    conn.ontrack = e => { applyRemoteStream(e.streams[0]) }
-
+    conn.ontrack = e => {
+      const s = e.streams[0]
+      if (remoteAudio.current) { remoteAudio.current.srcObject = s; remoteAudio.current.play().catch(() => {}) }
+      if (remoteVid.current) { remoteVid.current.srcObject = s; remoteVid.current.play().catch(() => {}) }
+    }
     conn.onicecandidate = e => {
       if (e.candidate) sessionCh.current?.send({ type: 'broadcast', event: 'call-ice', payload: { candidate: e.candidate, from: myUserId } })
     }
-
     conn.onconnectionstatechange = () => {
-      const state = conn.connectionState
-      if (state === 'connected') {
+      if (conn.connectionState === 'connected') {
         clearTimeout(connectTimeoutRef.current)
-        clearTimeout(iceDisconnectTimer.current)
         goActive()
       }
-      if (state === 'failed') { hangup(true) }
-      // 'disconnected' is transient on mobile — give 15s grace period before giving up
-      if (state === 'disconnected') {
-        iceDisconnectTimer.current = setTimeout(() => {
-          if (pc.current?.connectionState !== 'connected') hangup(true)
-        }, 15000)
-      }
+      if (conn.connectionState === 'failed') hangup(true)
+      // 'disconnected' is transient on mobile — don't hang up immediately
     }
-
-    conn.oniceconnectionstatechange = () => {
-      // Extra fallback: if ICE itself permanently fails
-      if (conn.iceConnectionState === 'failed') {
-        // Try ICE restart first
-        try { conn.restartIce?.() } catch {}
-        clearTimeout(iceDisconnectTimer.current)
-        iceDisconnectTimer.current = setTimeout(() => {
-          if (pc.current?.iceConnectionState !== 'connected') hangup(true)
-        }, 12000)
-      }
-    }
-
-    // 75 second timeout if ICE never connects at all
+    // 60 second timeout if ICE never connects
     connectTimeoutRef.current = setTimeout(() => {
       if (pc.current && pc.current.connectionState !== 'connected') hangup(true)
-    }, 75000)
+    }, 60000)
     pc.current = conn
     return conn
   }
@@ -308,6 +289,8 @@ export default function CallPage({
   }
 
   function goActive() {
+    connectedRef.current = true
+    clearTimeout(ringTimeoutRef.current)
     outgoingRing.stop()
     setPhase('active')
     sounds.callConnect()
@@ -327,9 +310,20 @@ export default function CallPage({
     ringtone.stop(); outgoingRing.stop()
     clearInterval(timerRef.current)
     clearTimeout(connectTimeoutRef.current)
-    clearTimeout(iceDisconnectTimer.current)
+    clearTimeout(ringTimeoutRef.current)
+    silentCtxRef.current?.close(); silentCtxRef.current = null
     sounds.callEnd()
     if (sendSignal) sessionCh.current?.send({ type: 'broadcast', event: 'call-end', payload: {} })
+    // If caller hangs up and the call was never answered → insert missed call message
+    if (!isIncoming && !connectedRef.current && conversationId && myUserId) {
+      const icon = callType === 'video' ? '📹' : '📞'
+      supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: myUserId,
+        type: 'system',
+        content: `${icon} Llamada perdida`,
+      }).then(() => {})
+    }
     localStream.current?.getTracks().forEach(t => t.stop())
     pc.current?.close()
     setPhase('ended')
@@ -340,45 +334,31 @@ export default function CallPage({
     vibrate(25)
     const newMuted = !muted
     setMuted(newMuted)
-    // Disable the local track (works on most browsers)
     const track = localStream.current?.getAudioTracks()[0]
     if (track) track.enabled = !newMuted
-    // Also replace the sender track for maximum iOS/Android compat
     const sender = pc.current?.getSenders().find(s => s.track?.kind === 'audio')
     if (sender && track) {
       try {
         if (newMuted) {
-          // Create a silent track and send that instead
-          const ctx = new AudioContext()
-          const dst = ctx.createMediaStreamDestination()
-          const silent = dst.stream.getAudioTracks()[0]
-          await sender.replaceTrack(silent)
-          ctx.close()
+          silentCtxRef.current?.close()
+          silentCtxRef.current = new AudioContext()
+          const dst = silentCtxRef.current.createMediaStreamDestination()
+          await sender.replaceTrack(dst.stream.getAudioTracks()[0])
         } else {
           await sender.replaceTrack(track)
+          silentCtxRef.current?.close(); silentCtxRef.current = null
         }
-      } catch (_) {
-        // replaceTrack not supported — track.enabled fallback is already set above
-      }
+      } catch (_) { /* replaceTrack unsupported — track.enabled fallback already applied */ }
     }
   }
-
-  function toggleCam() {
-    vibrate(25)
-    const t = localStream.current?.getVideoTracks()[0]
-    if (t) { t.enabled = !t.enabled; setCamOff(c => !c) }
-  }
-
+  function toggleCam() { vibrate(25); const t = localStream.current?.getVideoTracks()[0]; if (t) { t.enabled = !t.enabled; setCamOff(c => !c) } }
   function toggleSpeaker() {
     vibrate(25)
     const next = !speaker; setSpeaker(next)
-    // setSinkId has poor mobile support; fall back to volume control
     if (remoteAudio.current) {
-      if (typeof remoteAudio.current.setSinkId === 'function') {
+      if (typeof remoteAudio.current.setSinkId === 'function')
         remoteAudio.current.setSinkId(next ? 'default' : '').catch(() => {})
-      }
-      // Volume: speaker mode = 1.0, earpiece simulation = 0.4
-      remoteAudio.current.volume = next ? 1.0 : 0.4
+      remoteAudio.current.volume = next ? 1.0 : 0.3
     }
   }
 
@@ -404,7 +384,7 @@ export default function CallPage({
     return (
       <>
         {/* Audio always mounted so ontrack can fire */}
-        <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
+        <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} onError={() => {}} />
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
           background: 'rgba(0,0,0,0.55)',
@@ -579,13 +559,10 @@ export default function CallPage({
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)' }} />
         </div>
 
-        {/* Remote video (video calls) — always mounted so ontrack stream applies immediately */}
-        {isVideo && (
-          <video ref={el => {
-            remoteVid.current = el
-            if (el && remoteStream.current) { el.srcObject = remoteStream.current; el.play().catch(() => {}) }
-          }} autoPlay playsInline
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1, display: phase === 'active' ? 'block' : 'none' }} />
+        {/* Remote video (video calls) */}
+        {isVideo && phase === 'active' && (
+          <video ref={remoteVid} autoPlay playsInline
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }} />
         )}
 
         {/* Local PiP (video) */}
@@ -596,10 +573,7 @@ export default function CallPage({
             boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
             border: '2px solid rgba(255,255,255,0.18)',
           }}>
-            <video ref={el => {
-              localVid.current = el
-              if (el && localStream.current) { el.srcObject = localStream.current; el.play().catch(() => {}) }
-            }} autoPlay playsInline muted
+            <video ref={localVid} autoPlay playsInline muted
               style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
           </div>
         )}
@@ -698,9 +672,8 @@ export default function CallPage({
                     ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                     : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                   }
-                  label={muted ? 'Mic silenciado' : 'Micrófono'}
-                  state={muted ? 'danger' : 'on'}
-                  accent={accent}
+                  label={muted ? 'Mic apagado' : 'Micrófono'}
+                  state={muted ? 'danger' : 'off'}
                   onClick={toggleMute}
                 />
                 <RoundBtn

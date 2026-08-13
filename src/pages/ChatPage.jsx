@@ -23,7 +23,7 @@ const EMOJI_CATS = [
 // flat default for backwards compat
 const EMOJIS = EMOJI_CATS[1].emojis.slice(0, 31)
 
-const TENOR_KEY = import.meta.env.VITE_TENOR_KEY || 'AIzaSyAyimkuYQYF_FXVALexPZZy1C22sW6gAyA'
+const TENOR_KEY_V2 = import.meta.env.VITE_TENOR_KEY || ''
 
 const STICKER_PACKS = [
   { id: 'fiestas',   label: '🎉', title: 'Fiestas',    stickers: ['🎉','🎊','🥳','🏆','🔥','💯','⭐','✨','🎯','🌟','🥂','🍾','👑','🎈','🎁','🎀','🏅','💎','🎆','🎇'] },
@@ -145,42 +145,47 @@ function AudioPlayer({ src, isMine }) {
   const bars = [0.3,0.6,0.9,0.5,1,0.7,0.4,0.8,0.6,1,0.5,0.7,0.9,0.4,0.6,0.8,0.5,1,0.3,0.7,0.9,0.5,0.6,0.4,0.8,1,0.6,0.4,0.7,0.5]
 
   useEffect(() => {
-    const a = new Audio(src)
+    if (!src) return
+    const a = new Audio()
+    a.crossOrigin = 'anonymous'
+    a.preload = 'metadata'
     audioRef.current = a
-    const fixDuration = () => {
-      if (isFinite(a.duration)) { setDuration(a.duration); return }
-      // WebM from MediaRecorder has Infinity duration — seek to end to force calculation
-      a.currentTime = 1e9
-    }
-    a.onloadedmetadata = fixDuration
-    a.ontimeupdate = () => {
-      // After seeking to end, browser updates duration; reset to 0
-      if (!isFinite(a.duration) && a.currentTime > 0) return
-      if (isFinite(a.duration) && a.currentTime >= a.duration - 0.1 && a.duration > 0 && !playing) {
-        // we were seeking to fix duration — reset
-        setDuration(a.duration)
-        a.currentTime = 0
-        return
+    let durationFixed = false
+
+    a.onloadedmetadata = () => {
+      if (isFinite(a.duration) && a.duration > 0) {
+        durationFixed = true; setDuration(a.duration)
+      } else {
+        a.currentTime = 1e9  // WebM Infinity fix: seek to end to force duration calc
       }
-      setCurrent(a.currentTime)
-      setProgress(a.duration && isFinite(a.duration) ? (a.currentTime / a.duration) * 100 : 0)
+    }
+    a.onseeked = () => {
+      if (!durationFixed && isFinite(a.duration) && a.duration > 0) {
+        durationFixed = true; setDuration(a.duration); a.currentTime = 0
+      }
     }
     a.ondurationchange = () => {
-      if (isFinite(a.duration) && a.duration > 0) {
-        setDuration(a.duration)
-        // if we were seeking to force duration, reset position
+      if (!durationFixed && isFinite(a.duration) && a.duration > 0) {
+        durationFixed = true; setDuration(a.duration)
         if (a.currentTime > 1000) a.currentTime = 0
       }
     }
+    a.ontimeupdate = () => {
+      if (!durationFixed) return
+      setCurrent(a.currentTime)
+      setProgress(a.duration > 0 ? (a.currentTime / a.duration) * 100 : 0)
+    }
     a.onended = () => { setPlaying(false); setProgress(0); setCurrent(0); a.currentTime = 0 }
-    return () => { a.pause(); audioRef.current = null }
+    a.onerror = () => {}
+    a.src = src
+    return () => { a.pause(); a.src = ''; audioRef.current = null }
   }, [src])
 
   function toggle() {
     const a = audioRef.current
     if (!a) return
     if (playing) { a.pause(); setPlaying(false) }
-    else { a.play(); setPlaying(true) }
+    else { a.play().then(() => setPlaying(true)).catch(() => setPlaying(false)) }
   }
 
   function seek(e) {
@@ -384,14 +389,20 @@ export default function ChatPage({ onBack }) {
     prevMsgCount.current = messages.length
   }, [messages])
 
-  // Presence broadcast
+  // Presence broadcast — keep ref so typing reuses same subscribed channel
+  const presenceChRef = useRef(null)
   useEffect(() => {
     if (!activeConversation?.id || !profile?.id || isGroup) return
     const ch = supabase.channel(`contact-conv:${activeConversation.id}:${profile.id}`)
     const ping = () => ch.send({ type: 'broadcast', event: 'chat-presence', payload: { user_id: profile.id } })
-    ch.subscribe(() => ping())
+    ch.subscribe(() => { presenceChRef.current = ch; ping() })
     const t = setInterval(ping, 20000)
-    return () => { ch.send({ type: 'broadcast', event: 'chat-leave', payload: {} }); clearInterval(t); supabase.removeChannel(ch) }
+    return () => {
+      presenceChRef.current = null
+      ch.send({ type: 'broadcast', event: 'chat-leave', payload: {} })
+      clearInterval(t)
+      supabase.removeChannel(ch)
+    }
   }, [activeConversation?.id, profile?.id])
 
   useEffect(() => {
@@ -413,8 +424,7 @@ export default function ChatPage({ onBack }) {
   const typingTimer = useRef(null)
   function handleTyping() {
     if (!activeConversation?.id || !profile?.id) return
-    supabase.channel(`contact-conv:${activeConversation.id}:${profile.id}`)
-      .send({ type: 'broadcast', event: 'typing', payload: { user_id: profile.id } })
+    presenceChRef.current?.send({ type: 'broadcast', event: 'typing', payload: { user_id: profile.id } })
     clearTimeout(typingTimer.current)
   }
 
@@ -474,12 +484,29 @@ export default function ChatPage({ onBack }) {
   async function fetchGifs(q) {
     setGifsLoading(true)
     try {
-      const ep = q
-        ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&key=${TENOR_KEY}&limit=24&media_filter=gif`
-        : `https://tenor.googleapis.com/v2/featured?key=${TENOR_KEY}&limit=24&media_filter=gif`
+      let ep, isV2 = !!TENOR_KEY_V2
+      if (isV2) {
+        ep = q
+          ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&key=${TENOR_KEY_V2}&limit=24&media_filter=gif`
+          : `https://tenor.googleapis.com/v2/featured?key=${TENOR_KEY_V2}&limit=24&media_filter=gif`
+      } else {
+        ep = q
+          ? `https://api.tenor.com/v1/search?q=${encodeURIComponent(q)}&key=LIVDSRZULELA&limit=24&media_filter=minimal`
+          : `https://api.tenor.com/v1/trending?key=LIVDSRZULELA&limit=24&media_filter=minimal`
+      }
       const r = await fetch(ep)
       const d = await r.json()
-      setGifs(d.results || [])
+      if (isV2) {
+        setGifs(d.results || [])
+      } else {
+        setGifs((d.results || []).map(g => ({
+          id: g.id, title: g.title || '',
+          media_formats: {
+            gif: { url: g.media?.[0]?.gif?.url || '' },
+            tinygif: { url: g.media?.[0]?.tinygif?.url || '' },
+          },
+        })))
+      }
     } catch { setGifs([]) }
     setGifsLoading(false)
   }
@@ -566,10 +593,12 @@ export default function ChatPage({ onBack }) {
     try { navigator.vibrate?.(30) } catch (_) {}
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg', 'audio/mp4']
         .find(t => MediaRecorder.isTypeSupported(t)) || ''
-      const recOpts = { audioBitsPerSecond: 128000 }
+      const recOpts = {}
       if (mimeType) recOpts.mimeType = mimeType
+      // audioBitsPerSecond only for WebM/Ogg — iOS Safari mp4 ignores it and can corrupt audio
+      if (mimeType.includes('webm') || mimeType.includes('ogg')) recOpts.audioBitsPerSecond = 128000
       const recorder = new MediaRecorder(stream, recOpts)
       recChunks.current = []
       recorder.ondataavailable = ev => { if (ev.data.size > 0) recChunks.current.push(ev.data) }
@@ -589,7 +618,7 @@ export default function ChatPage({ onBack }) {
         } catch (err) { alert(`Error al enviar audio: ${err.message}`) }
         setUploadingImage(false)
       }
-      recorder.start(250)
+      recorder.start()  // no timeslice — iOS delivers all data on stop()
       recorderRef.current = recorder
       setRecording(true); setRecLocked(false); setRecCancelling(false); setRecDuration(0)
       let s = 0
@@ -1561,7 +1590,7 @@ export default function ChatPage({ onBack }) {
               )}
             </div>
 
-            {/* Send / media / mic */}
+            {/* Send / mic */}
             {text.trim() ? (
               <button type="submit" disabled={sending} style={{
                 width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
@@ -1578,16 +1607,6 @@ export default function ChatPage({ onBack }) {
               </button>
             ) : (
               <div style={{ display: 'flex', gap: 6 }}>
-                <button type="button" onClick={() => { setShowAttachMenu(v => !v); setShowEmoji(false) }} disabled={uploadingImage} style={{
-                  width: 40, height: 40, borderRadius: '50%',
-                  background: showAttachMenu ? `${C.green}22` : C.panel2,
-                  border: `1px solid ${showAttachMenu ? C.green : C.border}`,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  opacity: uploadingImage ? 0.5 : 1, fontSize: 20, color: showAttachMenu ? C.green : C.textDim, fontWeight: 300,
-                  transition: 'all .15s',
-                }}>
-                  {uploadingImage ? <span style={{ color: C.textDim, fontSize: 11 }}>...</span> : '+'}
-                </button>
                 {/* Mic button — hold to record */}
                 <div style={{ position: 'relative', flexShrink: 0 }}>
                   {/* Slide-to-cancel / lock hints (shown while holding) */}
@@ -1630,6 +1649,7 @@ export default function ChatPage({ onBack }) {
                     onTouchStart={startRecording}
                     onTouchMove={onRecordingMove}
                     onTouchEnd={onRecordingEnd}
+                    onTouchCancel={cancelRecording}
                     style={{
                       width: 42, height: 42, borderRadius: '50%',
                       background: recording ? (recCancelling ? C.red : `${C.green}dd`) : C.green,
