@@ -1590,7 +1590,7 @@ export default function ChatPage({ onBack }) {
               )}
             </div>
 
-            {/* Send / media / mic */}
+            {/* Send / mic */}
             {text.trim() ? (
               <button type="submit" disabled={sending} style={{
                 width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
@@ -1607,16 +1607,6 @@ export default function ChatPage({ onBack }) {
               </button>
             ) : (
               <div style={{ display: 'flex', gap: 6 }}>
-                <button type="button" onClick={() => { setShowAttachMenu(v => !v); setShowEmoji(false) }} disabled={uploadingImage} style={{
-                  width: 40, height: 40, borderRadius: '50%',
-                  background: showAttachMenu ? `${C.green}22` : C.panel2,
-                  border: `1px solid ${showAttachMenu ? C.green : C.border}`,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  opacity: uploadingImage ? 0.5 : 1, fontSize: 20, color: showAttachMenu ? C.green : C.textDim, fontWeight: 300,
-                  transition: 'all .15s',
-                }}>
-                  {uploadingImage ? <span style={{ color: C.textDim, fontSize: 11 }}>...</span> : '+'}
-                </button>
                 {/* Mic button — hold to record */}
                 <div style={{ position: 'relative', flexShrink: 0 }}>
                   {/* Slide-to-cancel / lock hints (shown while holding) */}

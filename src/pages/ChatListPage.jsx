@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { supabase } from '../lib/supabase'
 import NewGroupPage from './NewGroupPage'
-import { StoriesBar } from './StoriesPage'
+import { StoriesBar, useStoryUserIds } from './StoriesPage'
 import { C } from '../App'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -72,11 +72,13 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [showNewGroup, setShowNewGroup] = useState(false)
+  const [newGroupType, setNewGroupType] = useState('group')
   const [filter, setFilter] = useState(initialFilter || 'todos')
 
   useEffect(() => { setFilter(initialFilter || 'todos') }, [initialFilter])
   const [showFab, setShowFab] = useState(false)
   const [loadingConvs, setLoadingConvs] = useState(true)
+  const storyUserIds = useStoryUserIds()
 
   useEffect(() => {
     if (!profile?.id) return
@@ -115,7 +117,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
     fetchConversations(profile.id)
   }
 
-  if (showNewGroup) return <NewGroupPage onBack={() => setShowNewGroup(false)} onCreated={handleGroupCreated} />
+  if (showNewGroup) return <NewGroupPage initialType={newGroupType} onBack={() => setShowNewGroup(false)} onCreated={handleGroupCreated} />
 
   const filtered = search ? [] : conversations.filter(c => {
     if (filter === 'directos') return !c.isGroup
@@ -306,9 +308,21 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
               onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = C.panel }}
               onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none' }}
             >
-              {/* Avatar with online dot */}
+              {/* Avatar with story ring */}
               <div style={{ position: 'relative', flexShrink: 0 }}>
-                <Avatar name={name} size={50} color={color} url={!isGroup ? conv.user?.avatar_url : null} />
+                {!isGroup && storyUserIds.has(conv.user?.id) ? (
+                  <div style={{
+                    width: 54, height: 54, borderRadius: '50%',
+                    background: `conic-gradient(${C.green}, #00cc66, ${C.green})`,
+                    padding: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', border: `2px solid ${C.bg}` }}>
+                      <Avatar name={name} size={46} color={color} url={conv.user?.avatar_url} />
+                    </div>
+                  </div>
+                ) : (
+                  <Avatar name={name} size={50} color={color} url={!isGroup ? conv.user?.avatar_url : null} />
+                )}
                 {conv.unread > 0 && (
                   <span style={{
                     position: 'absolute', top: -3, right: -4,
@@ -369,7 +383,8 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
       <div style={{ position: 'absolute', bottom: 20, right: 16, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, zIndex: 30 }}>
         {showFab && (
           <>
-            <FabItem label="Nuevo grupo" icon="👥" onClick={() => { setShowFab(false); setShowNewGroup(true) }} />
+            <FabItem label="Nueva comunidad" icon="🌐" onClick={() => { setShowFab(false); setNewGroupType('community'); setShowNewGroup(true) }} />
+            <FabItem label="Nuevo grupo" icon="👥" onClick={() => { setShowFab(false); setNewGroupType('group'); setShowNewGroup(true) }} />
             <FabItem label="Nuevo chat" icon="💬" onClick={() => { setShowFab(false); document.querySelector('input[placeholder*="Buscar"]')?.focus() }} />
           </>
         )}
