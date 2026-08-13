@@ -296,7 +296,7 @@ const REACTION_EMOJIS = ['👍','❤️','😂','🔥','⚽','🏆','😮','👏
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatPage({ onBack }) {
   const { profile } = useAuthStore()
-  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage } = useChatStore()
+  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage, topics, activeTopicId, fetchTopics, createTopic, setActiveTopic } = useChatStore()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -355,6 +355,12 @@ export default function ChatPage({ onBack }) {
   const [editText, setEditText] = useState('')
   const [forwardMsg, setForwardMsg] = useState(null) // message to forward
   const [viewOncePending, setViewOncePending] = useState(null) // { file, type } waiting for view count pick
+  const [showTopicsPanel, setShowTopicsPanel] = useState(false)
+  const [showNewTopic, setShowNewTopic] = useState(false)
+  const [newTopicName, setNewTopicName] = useState('')
+  const [newTopicEmoji, setNewTopicEmoji] = useState('💬')
+  const [mentionQuery, setMentionQuery] = useState(null) // string after @, or null
+  const [mentionIndex, setMentionIndex] = useState(0)
   const [recording, setRecording] = useState(false) // 'hold' | 'locked' | false
   const [recDuration, setRecDuration] = useState(0)
   const [recCancelling, setRecCancelling] = useState(false)
@@ -407,14 +413,15 @@ export default function ChatPage({ onBack }) {
 
   useEffect(() => {
     if (!activeConversation?.id) return
-    fetchMessages(activeConversation.id).then(() => {
+    fetchMessages(activeConversation.id, activeTopicId).then(() => {
       const ids = messages.map(m => m.id)
       if (ids.length) fetchReactions(ids)
     })
     const unsub = subscribeToMessages(activeConversation.id)
     markAsRead(activeConversation.id, profile.id)
+    if (activeConversation.isGroup) fetchTopics(activeConversation.id)
     return unsub
-  }, [activeConversation?.id])
+  }, [activeConversation?.id, activeTopicId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -426,6 +433,36 @@ export default function ChatPage({ onBack }) {
     if (!activeConversation?.id || !profile?.id) return
     presenceChRef.current?.send({ type: 'broadcast', event: 'typing', payload: { user_id: profile.id } })
     clearTimeout(typingTimer.current)
+  }
+
+  // Members list for mention autocomplete
+  const allMembers = [
+    ...(activeConversation?.members || []),
+    otherUser,
+    profile,
+  ].filter(Boolean).filter((m, i, arr) => arr.findIndex(x => x?.id === m?.id) === i)
+
+  const mentionMatches = mentionQuery !== null
+    ? allMembers.filter(m => m?.display_name?.toLowerCase().includes(mentionQuery.toLowerCase()) || m?.username?.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 6)
+    : []
+
+  function handleTextChange(val) {
+    setText(val)
+    // Detect @mention
+    const match = val.match(/@([\w ]*)$/)
+    if (match) {
+      setMentionQuery(match[1])
+      setMentionIndex(0)
+    } else {
+      setMentionQuery(null)
+    }
+  }
+
+  function insertMention(member) {
+    const replaced = text.replace(/@([\w ]*)$/, `@${member.display_name} `)
+    setText(replaced)
+    setMentionQuery(null)
+    inputRef.current?.focus()
   }
 
   function insertEmoji(em) {
@@ -444,7 +481,7 @@ export default function ChatPage({ onBack }) {
       : text.trim()
     setReplyTo(null); setText('')
     try {
-      await sendMessage(activeConversation.id, profile.id, content, 'text')
+      await sendMessage(activeConversation.id, profile.id, content, 'text', null, activeTopicId)
       sounds.msgSent()
     } catch (err) { alert(`Error: ${err.message}`); setText(content) }
     setSending(false)
@@ -675,6 +712,10 @@ export default function ChatPage({ onBack }) {
 
   // Pinned message (first pinned message in conversation metadata)
   const pinnedText = activeConversation?.pinned_message || null
+
+  // Active topic metadata
+  const activeTopic = activeTopicId ? topics.find(t => t.id === activeTopicId) : null
+  const isAnnouncementTopic = activeTopic?.topic_type === 'announcements'
 
   if (showGroupInfo && isGroup) return (
     <GroupInfoPage
@@ -937,6 +978,14 @@ export default function ChatPage({ onBack }) {
               </HdrBtn>
             </div>
           )}
+          {/* Topics button — only for groups */}
+          {isGroup && (
+            <HdrBtn title="Canales" onClick={() => setShowTopicsPanel(v => !v)}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={showTopicsPanel ? C.green : C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </HdrBtn>
+          )}
           {/* Background picker button */}
           <HdrBtn title="Fondo de chat" onClick={() => setShowBgPicker(v => !v)}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={showBgPicker ? C.green : C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -950,8 +999,166 @@ export default function ChatPage({ onBack }) {
           <PinnedBanner text={pinnedText} onDismiss={() => setPinnedDismissed(true)} />
         )}
 
-        {/* ── MESSAGES ── */}
-        <div style={{
+        {/* ── TOPICS PANEL ── */}
+        {isGroup && showTopicsPanel && (
+          <div style={{
+            background: C.panel, borderBottom: `1px solid ${C.border}`,
+            padding: '8px 12px 10px', flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ color: C.text2, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Canales</span>
+              <button onClick={() => setShowNewTopic(v => !v)} style={{
+                background: showNewTopic ? `${C.green}22` : 'none', border: `1px solid ${showNewTopic ? C.green : C.border}`,
+                borderRadius: 8, color: showNewTopic ? C.green : C.text2, fontSize: 11, padding: '3px 8px',
+                cursor: 'pointer', fontWeight: 600,
+              }}>+ Nuevo</button>
+            </div>
+
+            {/* New topic form */}
+            {showNewTopic && (
+              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                <input
+                  value={newTopicEmoji}
+                  onChange={e => setNewTopicEmoji(e.target.value)}
+                  placeholder="💬"
+                  style={{
+                    width: 36, background: C.panel2, border: `1px solid ${C.border}`,
+                    borderRadius: 8, color: C.text, fontSize: 16, padding: '6px', textAlign: 'center', outline: 'none',
+                  }}
+                />
+                <input
+                  value={newTopicName}
+                  onChange={e => setNewTopicName(e.target.value)}
+                  placeholder="Nombre del canal..."
+                  onKeyDown={async e => {
+                    if (e.key === 'Enter' && newTopicName.trim()) {
+                      await createTopic(activeConversation.id, newTopicName.trim(), newTopicEmoji || '💬')
+                      setNewTopicName(''); setNewTopicEmoji('💬'); setShowNewTopic(false)
+                    }
+                  }}
+                  style={{
+                    flex: 1, background: C.panel2, border: `1px solid ${C.border}`,
+                    borderRadius: 8, color: C.text, fontSize: 13, padding: '6px 10px', outline: 'none',
+                  }}
+                />
+                <button onClick={async () => {
+                  if (!newTopicName.trim()) return
+                  await createTopic(activeConversation.id, newTopicName.trim(), newTopicEmoji || '💬')
+                  setNewTopicName(''); setNewTopicEmoji('💬'); setShowNewTopic(false)
+                }} style={{
+                  background: C.green, border: 'none', borderRadius: 8,
+                  color: C.bg, fontWeight: 700, fontSize: 12, padding: '6px 12px', cursor: 'pointer',
+                }}>OK</button>
+              </div>
+            )}
+
+            {/* Topic list */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => { setActiveTopic(null) }}
+                style={{
+                  background: activeTopicId === null ? `${C.green}22` : C.panel2,
+                  border: `1px solid ${activeTopicId === null ? C.green : C.border}`,
+                  borderRadius: 20, color: activeTopicId === null ? C.green : C.text2,
+                  fontSize: 12, padding: '4px 12px', cursor: 'pointer', fontWeight: 600,
+                  transition: 'all .15s',
+                }}
+              >💬 General</button>
+              {topics.map(t => (
+                <button key={t.id}
+                  onClick={() => setActiveTopic(t.id)}
+                  style={{
+                    background: activeTopicId === t.id ? `${C.green}22` : C.panel2,
+                    border: `1px solid ${activeTopicId === t.id ? C.green : C.border}`,
+                    borderRadius: 20, color: activeTopicId === t.id ? C.green : C.text2,
+                    fontSize: 12, padding: '4px 12px', cursor: 'pointer', fontWeight: 600,
+                    transition: 'all .15s',
+                  }}
+                >{t.emoji} {t.name}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Active topic indicator */}
+        {isGroup && activeTopicId && (() => {
+          const t = topics.find(x => x.id === activeTopicId)
+          return t ? (
+            <div style={{
+              background: `${C.green}10`, borderBottom: `1px solid ${C.green}33`,
+              padding: '4px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>{t.emoji} {t.name}</span>
+              <button onClick={() => setActiveTopic(null)} style={{
+                background: 'none', border: 'none', color: C.textDim, fontSize: 11, cursor: 'pointer', marginLeft: 'auto',
+              }}>✕ Volver a General</button>
+            </div>
+          ) : null
+        })()}
+
+        {/* ── ANNOUNCEMENTS FEED (topic_type = announcements) ── */}
+        {isAnnouncementTopic && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {loadingMessages && <MsgSkeleton />}
+            {!loadingMessages && messages.filter(m => !m.is_deleted).map(msg => {
+              const senderInfo = msg.sender || memberMap[msg.sender_id]
+              const senderName = senderInfo?.display_name || 'Admin'
+              const reactions = msg.reactions || []
+              const ANNOUNCE_REACTS = ['👍','🔥','⚽','❤️']
+              const grouped = reactions.reduce((acc, r) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc }, {})
+              const myReacts = new Set(reactions.filter(r => r.user_id === profile?.id).map(r => r.emoji))
+              return (
+                <div key={msg.id} style={{
+                  background: C.panel, borderRadius: 16, overflow: 'hidden',
+                  border: `1px solid ${C.border}`,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                }}>
+                  {/* Author bar */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px 8px' }}>
+                    <Avatar name={senderName} size={34} color={C.green} url={senderInfo?.avatar_url} />
+                    <div>
+                      <div style={{ color: C.green, fontWeight: 700, fontSize: 13 }}>{senderName}</div>
+                      <div style={{ color: C.textDim, fontSize: 11 }}>{formatTime(msg.created_at)}</div>
+                    </div>
+                    {msg.pinned && <span style={{ marginLeft: 'auto', fontSize: 11, color: C.yellow }}>📌 Fijado</span>}
+                  </div>
+                  {/* Content */}
+                  <div style={{ padding: '0 14px 12px', color: C.text, fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                    {msg.type === 'image'
+                      ? <img src={msg.content} alt="" style={{ width: '100%', borderRadius: 10, display: 'block' }} />
+                      : msg.content}
+                  </div>
+                  {/* Reactions bar */}
+                  <div style={{
+                    borderTop: `1px solid ${C.border}`, padding: '8px 14px',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    {ANNOUNCE_REACTS.map(em => {
+                      const count = grouped[em] || 0
+                      const mine = myReacts.has(em)
+                      return (
+                        <button key={em} onClick={() => reactToMessage(msg.id, profile.id, em)} style={{
+                          background: mine ? `${C.green}22` : C.panel2,
+                          border: `1px solid ${mine ? C.green : C.border}`,
+                          borderRadius: 20, padding: '4px 10px', cursor: 'pointer',
+                          fontSize: 14, display: 'flex', alignItems: 'center', gap: 4,
+                          color: mine ? C.green : C.text2, fontWeight: mine ? 700 : 400,
+                          transition: 'all .15s',
+                        }}>
+                          {em}{count > 0 && <span style={{ fontSize: 11 }}>{count}</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+            <div ref={bottomRef} />
+          </div>
+        )}
+
+        {/* ── MESSAGES (normal chat) ── */}
+        {!isAnnouncementTopic && <div style={{
           flex: 1, overflowY: 'auto', padding: '10px 12px',
           display: 'flex', flexDirection: 'column',
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%231C292F' fill-opacity='0.15' fill-rule='evenodd'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E")`,
@@ -1220,7 +1427,7 @@ export default function ChatPage({ onBack }) {
             </div>
           )}
           <div ref={bottomRef} />
-        </div>
+        </div>}
 
         {/* ── REPLY BAR ── */}
         {replyTo && (
@@ -1535,8 +1742,20 @@ export default function ChatPage({ onBack }) {
           @keyframes recSlideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
         `}</style>
 
+        {/* Announcements: only admins post, others see read-only bar */}
+        {isAnnouncementTopic && (
+          <div style={{
+            padding: '10px 16px', background: C.panel, borderTop: `1px solid ${C.border}`,
+            display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+            paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
+          }}>
+            <span style={{ fontSize: 18 }}>📢</span>
+            <span style={{ color: C.textDim, fontSize: 13 }}>Solo los administradores pueden publicar avisos</span>
+          </div>
+        )}
+
         {/* ── INPUT BAR ── */}
-        {!recLocked && (
+        {!isAnnouncementTopic && !recLocked && (
           <form onSubmit={handleSend} style={{
             display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 12px 10px',
             background: C.panel, borderTop: `1px solid ${C.border}`, flexShrink: 0,
@@ -1580,13 +1799,46 @@ export default function ChatPage({ onBack }) {
                   </div>
                 </div>
               ) : (
-                <input
-                  ref={inputRef} type="text" placeholder="Escribe un mensaje..." value={text}
-                  onChange={e => { setText(e.target.value); handleTyping() }}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSend(e) }}
-                  style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 14, padding: '9px 0' }}
-                  autoFocus
-                />
+                <div style={{ flex: 1, position: 'relative' }}>
+                  {/* Mention dropdown */}
+                  {mentionQuery !== null && mentionMatches.length > 0 && (
+                    <div style={{
+                      position: 'absolute', bottom: '100%', left: 0, right: 0,
+                      background: C.panel, border: `1px solid ${C.border}`,
+                      borderRadius: 12, overflow: 'hidden', zIndex: 50,
+                      boxShadow: '0 -8px 24px rgba(0,0,0,0.5)',
+                      marginBottom: 4,
+                    }}>
+                      {mentionMatches.map((m, i) => (
+                        <button key={m.id} onMouseDown={e => { e.preventDefault(); insertMention(m) }} style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '8px 12px', background: i === mentionIndex ? `${C.green}18` : 'none',
+                          border: 'none', cursor: 'pointer', textAlign: 'left',
+                        }}>
+                          <Avatar name={m.display_name} size={28} color={senderColor(m.id)} url={m.avatar_url} />
+                          <div>
+                            <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>{m.display_name}</div>
+                            <div style={{ color: C.textDim, fontSize: 11 }}>@{m.username}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <input
+                    ref={inputRef} type="text" placeholder="Escribe un mensaje..." value={text}
+                    onChange={e => { handleTextChange(e.target.value); handleTyping() }}
+                    onKeyDown={e => {
+                      if (mentionQuery !== null && mentionMatches.length > 0) {
+                        if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(i => Math.min(i + 1, mentionMatches.length - 1)) }
+                        if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(i => Math.max(i - 1, 0)) }
+                        if (e.key === 'Enter') { e.preventDefault(); insertMention(mentionMatches[mentionIndex]); return }
+                        if (e.key === 'Escape') { setMentionQuery(null) }
+                      } else if (e.key === 'Enter' && !e.shiftKey) { handleSend(e) }
+                    }}
+                    style={{ width: '100%', background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 14, padding: '9px 0' }}
+                    autoFocus
+                  />
+                </div>
               )}
             </div>
 
@@ -1867,7 +2119,21 @@ function MsgBody({ msg, isMine, otherLastRead }) {
       )
     } catch { return <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}{time}</span> }
   }
-  return <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}{time}</span>
+  // Highlight @mentions
+  const content = msg.content || ''
+  if (content.includes('@')) {
+    const parts = content.split(/(@\w[\w ]*)/g)
+    return (
+      <span style={{ whiteSpace: 'pre-wrap' }}>
+        {parts.map((p, i) => p.startsWith('@')
+          ? <span key={i} style={{ color: C.green, fontWeight: 700 }}>{p}</span>
+          : p
+        )}
+        {time}
+      </span>
+    )
+  }
+  return <span style={{ whiteSpace: 'pre-wrap' }}>{content}{time}</span>
 }
 
 function HdrBtn({ children, onClick, title }) {

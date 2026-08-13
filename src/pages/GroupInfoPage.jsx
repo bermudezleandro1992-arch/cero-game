@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from '../lib/supabase'
 import { C } from '../App'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
@@ -32,12 +33,40 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [showPinInput, setShowPinInput] = useState(false)
   const [pinText, setPinText] = useState(conversation?.pinned_message || '')
   const [savingPin, setSavingPin] = useState(false)
+  const [memberMenu, setMemberMenu] = useState(null) // member id
+  const [roles, setRoles] = useState({}) // userId -> role
+  const [mutedUntil, setMutedUntil] = useState({}) // userId -> date
+
+  const isAdmin = conversation?.created_by === profile?.id || roles[profile?.id] === 'admin'
 
   const members = conversation?.members || []
   const allMembers = [
     { id: profile?.id, display_name: profile?.display_name, username: profile?.username, isMe: true },
     ...members.filter(m => m?.id !== profile?.id).map(m => ({ ...m, isMe: false })),
   ]
+
+  async function kickMember(memberId) {
+    if (!confirm('¿Expulsar a este usuario del grupo?')) return
+    await supabase.from('conversation_members')
+      .delete()
+      .eq('conversation_id', conversation.id)
+      .eq('user_id', memberId)
+    setMemberMenu(null)
+  }
+
+  async function setRole(memberId, role) {
+    await supabase.from('group_roles')
+      .upsert({ conversation_id: conversation.id, user_id: memberId, role }, { onConflict: 'conversation_id,user_id' })
+    setRoles(prev => ({ ...prev, [memberId]: role }))
+    setMemberMenu(null)
+  }
+
+  function silenceMember(memberId) {
+    const until = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
+    setMutedUntil(prev => ({ ...prev, [memberId]: until }))
+    setMemberMenu(null)
+    alert('Usuario silenciado por 24 horas.')
+  }
 
   async function handleLeave() {
     if (!confirm('¿Salir del grupo?')) return
@@ -155,26 +184,83 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
         <p style={{ margin: '0 16px 8px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
           {allMembers.length} participantes
         </p>
-        {allMembers.map(m => (
-          <div key={m.id} style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            padding: '10px 16px', borderBottom: `1px solid ${C.border}11`,
-          }}>
-            <Avatar name={m.display_name} size={44} color={avatarColor(m.id)} url={m.avatar_url} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: m.isMe ? C.green : C.text }}>
-                {m.display_name} {m.isMe && <span style={{ fontSize: 11, color: C.textDim, fontWeight: 400 }}>(Vos)</span>}
-              </p>
-              {m.username && (
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>@{m.username}</p>
+        {allMembers.map(m => {
+          const mRole = roles[m.id]
+          const isMuted = mutedUntil[m.id] && new Date(mutedUntil[m.id]) > new Date()
+          return (
+            <div key={m.id} style={{ position: 'relative' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '10px 16px', borderBottom: `1px solid ${C.border}11`,
+              }}>
+                <Avatar name={m.display_name} size={44} color={avatarColor(m.id)} url={m.avatar_url} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: m.isMe ? C.green : C.text }}>
+                      {m.display_name} {m.isMe && <span style={{ fontSize: 11, color: C.textDim, fontWeight: 400 }}>(Vos)</span>}
+                    </p>
+                    {mRole === 'admin' && <span style={{ fontSize: 9, fontWeight: 700, color: C.green, background: `${C.green}18`, border: `1px solid ${C.green}33`, borderRadius: 6, padding: '1px 5px' }}>ADMIN</span>}
+                    {mRole === 'moderator' && <span style={{ fontSize: 9, fontWeight: 700, color: C.yellow, background: `${C.yellow}18`, border: `1px solid ${C.yellow}33`, borderRadius: 6, padding: '1px 5px' }}>MOD</span>}
+                    {isMuted && <span style={{ fontSize: 9, fontWeight: 700, color: C.textDim, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '1px 5px' }}>🔇</span>}
+                  </div>
+                  {m.username && (
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>@{m.username}</p>
+                  )}
+                </div>
+                {isAdmin && !m.isMe && (
+                  <button onClick={() => setMemberMenu(memberMenu === m.id ? null : m.id)} style={{
+                    background: 'none', border: 'none', cursor: 'pointer', color: C.textDim,
+                    padding: 6, borderRadius: 8, display: 'flex',
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                  </button>
+                )}
+              </div>
+              {/* Moderation menu */}
+              {memberMenu === m.id && (
+                <div onClick={() => setMemberMenu(null)} style={{
+                  position: 'absolute', right: 12, top: '100%', zIndex: 50,
+                  background: C.panel, border: `1px solid ${C.border}`,
+                  borderRadius: 12, padding: '6px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                  minWidth: 180, display: 'flex', flexDirection: 'column', gap: 2,
+                }}>
+                  {mRole !== 'admin' && (
+                    <ModeBtn label="⭐ Hacer Admin" onClick={() => setRole(m.id, 'admin')} />
+                  )}
+                  {mRole !== 'moderator' && (
+                    <ModeBtn label="🛡️ Hacer Moderador" onClick={() => setRole(m.id, 'moderator')} />
+                  )}
+                  {mRole && (
+                    <ModeBtn label="👤 Quitar rol" onClick={() => setRole(m.id, 'member')} />
+                  )}
+                  <ModeBtn label={isMuted ? '🔊 Quitar silencio' : '🔇 Silenciar 24h'} onClick={() => {
+                    if (isMuted) setMutedUntil(prev => { const n = {...prev}; delete n[m.id]; return n })
+                    else silenceMember(m.id)
+                    setMemberMenu(null)
+                  }} />
+                  <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
+                  <ModeBtn label="🚫 Expulsar" danger onClick={() => kickMember(m.id)} />
+                </div>
               )}
             </div>
-          </div>
-        ))}
+          )
+        })}
+      </div>
+
+      {/* Report group */}
+      <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
+        <button onClick={() => alert('Reporte enviado. Gracias.')} style={{
+          width: '100%', padding: '10px', borderRadius: 10,
+          background: 'none', border: `1px solid ${C.border}`,
+          color: C.textDim, fontSize: 13, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          🚩 Reportar grupo
+        </button>
       </div>
 
       {/* Leave group */}
-      <div style={{ padding: '16px', marginTop: 8, borderTop: `1px solid ${C.border}` }}>
+      <div style={{ padding: '16px', borderTop: `1px solid ${C.border}` }}>
         <button onClick={handleLeave} disabled={leavingGroup} style={{
           width: '100%', padding: '12px', borderRadius: 10,
           background: `${C.red}15`, border: `1px solid ${C.red}33`,
@@ -188,5 +274,19 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
         </button>
       </div>
     </div>
+  )
+}
+
+function ModeBtn({ label, onClick, danger }) {
+  return (
+    <button onClick={onClick} style={{
+      width: '100%', textAlign: 'left', padding: '9px 12px',
+      background: 'none', border: 'none', borderRadius: 8,
+      color: danger ? C.red : C.text, fontSize: 13, cursor: 'pointer',
+      transition: 'background .1s',
+    }}
+      onMouseEnter={e => e.currentTarget.style.background = danger ? `${C.red}18` : C.panel2}
+      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+    >{label}</button>
   )
 }
