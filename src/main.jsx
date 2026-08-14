@@ -1,5 +1,22 @@
 import { initAppWindow } from './lib/appStartup'
 initAppWindow()
+
+// Catch crashes before React mounts (module errors, etc.)
+window.addEventListener('error', (e) => {
+  const div = document.getElementById('pre-react-error')
+  if (div) {
+    div.style.display = 'block'
+    div.querySelector('pre').textContent = `${e.message}\n${e.filename}:${e.lineno}`
+  }
+})
+window.addEventListener('unhandledrejection', (e) => {
+  const div = document.getElementById('pre-react-error')
+  if (div) {
+    div.style.display = 'block'
+    div.querySelector('pre').textContent = String(e.reason)
+  }
+})
+
 import { StrictMode, Component } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
@@ -12,8 +29,8 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.error) {
       return (
-        <div style={{ background: '#05080A', color: '#fff', padding: 32, fontFamily: 'monospace', minHeight: '100vh' }}>
-          <h2 style={{ color: '#FF3B30' }}>Error de aplicación</h2>
+        <div style={{ background: '#b91c1c', color: '#fff', padding: 32, fontFamily: 'monospace', minHeight: '100vh' }}>
+          <h2 style={{ color: '#fff', margin: '0 0 12px' }}>⚠️ Error de aplicación</h2>
           <pre style={{ color: '#FFD600', whiteSpace: 'pre-wrap', fontSize: 13 }}>{this.state.error?.message}</pre>
           <pre style={{ color: '#667078', whiteSpace: 'pre-wrap', fontSize: 11 }}>{this.state.error?.stack}</pre>
           <button onClick={() => window.location.reload()} style={{ marginTop: 16, padding: '10px 20px', background: '#39FF14', color: '#000', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
