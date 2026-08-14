@@ -193,7 +193,7 @@ async function sendFCM(fcmToken: string, title: string, body: string, data: Reco
     const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: { token: fcmToken, notification: { title, body }, data, android: { priority: 'high', notification: { channel_id: type === 'call' ? 'calls' : 'messages', sound: type === 'call' ? 'ringtone' : 'default' } } } })
+      body: JSON.stringify({ message: { token: fcmToken, notification: { title, body }, data, android: { priority: 'high', notification: { channel_id: type === 'call' ? 'calls' : 'messages', sound: type === 'call' ? 'ringtone' : 'default', notification_priority: 'PRIORITY_HIGH', visibility: 'VISIBILITY_PUBLIC' } } } })
     })
     if (!res.ok) {
       const err = await res.text()
