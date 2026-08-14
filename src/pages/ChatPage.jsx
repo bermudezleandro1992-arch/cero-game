@@ -425,6 +425,15 @@ export default function ChatPage({ onBack }) {
   // Presence broadcast — keep ref so typing reuses same subscribed channel
   const presenceChRef = useRef(null)
   useEffect(() => {
+    if (!activeConversation?.id || isGroup) return
+    const ch = supabase.channel(`nudge:${activeConversation.id}`)
+    ch.on('broadcast', { event: 'nudge' }, ({ payload }) => {
+      if (payload?.from !== profile?.id) sounds.nudge()
+    }).subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [activeConversation?.id, isGroup])
+
+  useEffect(() => {
     if (!activeConversation?.id || !profile?.id || isGroup) return
     const ch = supabase.channel(`contact-conv:${activeConversation.id}:${profile.id}`)
     const ping = () => ch.send({ type: 'broadcast', event: 'chat-presence', payload: { user_id: profile.id } })
@@ -440,6 +449,7 @@ export default function ChatPage({ onBack }) {
 
   useEffect(() => {
     if (!activeConversation?.id) return
+    sounds.chatOpen()
     fetchMessages(activeConversation.id, activeTopicId).then(() => {
       const ids = messages.map(m => m.id)
       if (ids.length) fetchReactions(ids)
@@ -573,6 +583,14 @@ export default function ChatPage({ onBack }) {
       }
     } catch { setGifs([]) }
     setGifsLoading(false)
+  }
+
+  function sendNudge() {
+    if (!activeConversation?.id || !otherUser?.id) return
+    sounds.nudge()
+    supabase.channel(`nudge:${activeConversation.id}`).send({
+      type: 'broadcast', event: 'nudge', payload: { from: profile.id },
+    })
   }
 
   async function sendGif(url) {
@@ -1600,6 +1618,7 @@ export default function ChatPage({ onBack }) {
                 { icon: '📅', label: 'Evento',     action: () => { setShowEventModal(true); setShowAttachMenu(false) } },
                 { icon: '📞', label: 'Llamada gr.', action: () => { alert('Próximamente: llamadas grupales'); setShowAttachMenu(false) } },
                 { icon: '🎵', label: 'Audio',      action: () => { setShowAttachMenu(false) } },
+                ...(!isGroup ? [{ icon: '📳', label: 'Zumbido', action: () => { sendNudge(); setShowAttachMenu(false) } }] : []),
               ].map(item => (
                 <button key={item.label} onClick={item.action} style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
