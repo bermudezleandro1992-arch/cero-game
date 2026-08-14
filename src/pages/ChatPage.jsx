@@ -393,15 +393,13 @@ export default function ChatPage({ onBack }) {
   const [newTopicEmoji, setNewTopicEmoji] = useState('💬')
   const [mentionQuery, setMentionQuery] = useState(null) // string after @, or null
   const [mentionIndex, setMentionIndex] = useState(0)
-  const [recording, setRecording] = useState(false) // 'hold' | 'locked' | false
+  const [recording, setRecording] = useState(false)
   const [recDuration, setRecDuration] = useState(0)
   const [recCancelling, setRecCancelling] = useState(false)
   const [recLocked, setRecLocked] = useState(false)
   const recorderRef = useRef(null)
   const recChunks = useRef([])
   const recTimer = useRef(null)
-  const recStartY = useRef(0)
-  const recStartX = useRef(0)
   const recCancelledRef = useRef(false)
   const micBtnRef = useRef(null)
 
@@ -682,14 +680,12 @@ export default function ChatPage({ onBack }) {
 
   async function startRecording(e) {
     e?.preventDefault()
-    if (recording) return
+    if (recorderRef.current || recording) return
     recCancelledRef.current = false
-    const touch = e?.touches?.[0]
-    recStartX.current = touch?.clientX ?? e?.clientX ?? 0
-    recStartY.current = touch?.clientY ?? e?.clientY ?? 0
     try { navigator.vibrate?.(30) } catch (_) {}
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (recCancelledRef.current) { stream.getTracks().forEach(t => t.stop()); return }
       const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg', 'audio/mp4']
         .find(t => MediaRecorder.isTypeSupported(t)) || ''
       const recOpts = {}
@@ -717,46 +713,26 @@ export default function ChatPage({ onBack }) {
       }
       recorder.start()  // no timeslice — iOS delivers all data on stop()
       recorderRef.current = recorder
-      setRecording(true); setRecLocked(false); setRecCancelling(false); setRecDuration(0)
+      setRecording(true); setRecLocked(true); setRecCancelling(false); setRecDuration(0)
       let s = 0
       recTimer.current = setInterval(() => setRecDuration(++s), 1000)
     } catch (_) { alert('No se pudo acceder al micrófono.') }
-  }
-
-  function onRecordingMove(e) {
-    if (!recording || recLocked) return
-    const touch = e?.touches?.[0]
-    const cx = touch?.clientX ?? e?.clientX ?? 0
-    const cy = touch?.clientY ?? e?.clientY ?? 0
-    const dx = recStartX.current - cx  // swipe left → cancel
-    const dy = recStartY.current - cy  // swipe up → lock
-    if (dy > 60) { lockRecording(); return }
-    setRecCancelling(dx > 40)
-  }
-
-  function lockRecording() {
-    try { navigator.vibrate?.(40) } catch (_) {}
-    setRecLocked(true); setRecCancelling(false)
   }
 
   function cancelRecording() {
     try { navigator.vibrate?.(60) } catch (_) {}
     recCancelledRef.current = true
     recorderRef.current?.stop()
+    recorderRef.current = null
     clearInterval(recTimer.current)
     setRecording(false); setRecLocked(false); setRecCancelling(false); setRecDuration(0)
   }
 
   function stopRecording() {
     recorderRef.current?.stop()
+    recorderRef.current = null
     clearInterval(recTimer.current)
     setRecording(false); setRecLocked(false); setRecCancelling(false); setRecDuration(0)
-  }
-
-  function onRecordingEnd() {
-    // released finger without locking
-    if (recLocked) return
-    if (recCancelling) { cancelRecording() } else { stopRecording() }
   }
 
   const grouped = groupByDate(messages.filter(m => !deletedForMe.has(m.id)))
@@ -1936,64 +1912,25 @@ export default function ChatPage({ onBack }) {
               </button>
             ) : (
               <div style={{ display: 'flex', gap: 6 }}>
-                {/* Mic button — hold to record */}
+                {/* Mic button — tap to record */}
                 <div style={{ position: 'relative', flexShrink: 0 }}>
-                  {/* Slide-to-cancel / lock hints (shown while holding) */}
-                  {recording && !recLocked && (
-                    <div style={{
-                      position: 'absolute', right: 52, top: '50%', transform: 'translateY(-50%)',
-                      display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
-                      background: C.panel, border: `1px solid ${C.border}`,
-                      borderRadius: 20, padding: '5px 12px',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-                      animation: 'recHintIn .2s ease',
-                      pointerEvents: 'none',
-                    }}>
-                      <span style={{ fontSize: 12, color: recCancelling ? C.red : C.textDim }}>
-                        {recCancelling ? '🗑 Soltá para cancelar' : '← Deslizá para cancelar'}
-                      </span>
-                    </div>
-                  )}
-                  {recording && !recLocked && (
-                    <div style={{
-                      position: 'absolute', bottom: 52, right: 0,
-                      background: C.panel, border: `1px solid ${C.border}`,
-                      borderRadius: 20, padding: '6px 10px',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-                      pointerEvents: 'none',
-                      animation: 'recHintIn .2s ease',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                    }}>
-                      <span style={{ fontSize: 14 }}>🔒</span>
-                      <span style={{ fontSize: 10, color: C.textDim }}>↑ Fijar</span>
-                    </div>
-                  )}
                   <button
                     ref={micBtnRef}
                     type="button"
-                    onMouseDown={startRecording}
-                    onMouseUp={onRecordingEnd}
-                    onMouseLeave={e => { if (recording && !recLocked) onRecordingEnd() }}
-                    onMouseMove={onRecordingMove}
-                    onTouchStart={startRecording}
-                    onTouchMove={onRecordingMove}
-                    onTouchEnd={onRecordingEnd}
-                    onTouchCancel={cancelRecording}
+                    onClick={startRecording}
                     style={{
                       width: 42, height: 42, borderRadius: '50%',
-                      background: recording ? (recCancelling ? C.red : `${C.green}dd`) : C.green,
+                      background: C.green,
                       border: 'none', cursor: 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      boxShadow: recording ? `0 0 0 8px ${recCancelling ? C.red : C.green}22, 0 4px 16px ${C.green}55` : `0 4px 16px ${C.green}55`,
-                      transform: recording ? 'scale(1.12)' : 'scale(1)',
+                      boxShadow: `0 4px 16px ${C.green}55`,
+                      transform: 'scale(1)',
                       transition: 'background .15s, box-shadow .15s, transform .15s',
                       userSelect: 'none', WebkitUserSelect: 'none',
                     }}>
-                    {recording
-                      ? <div style={{ width: 8, height: 8, borderRadius: 2, background: '#fff', animation: 'recPulse .8s ease infinite' }} />
-                      : <svg width="15" height="15" viewBox="0 0 24 24" fill={C.bg}>
-                          <path d="M12 1c-1.66 0-3 1.34-3 3v8c0 1.66 1.34 3 3 3s3-1.34 3-3V4c0-1.66-1.34-3-3-3zm5.3 9c0 3-2.54 5.1-5.3 5.1S6.7 13 6.7 10H5c0 3.41 2.72 6.23 6 6.72V20h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
-                        </svg>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill={C.bg}>
+                        <path d="M12 1c-1.66 0-3 1.34-3 3v8c0 1.66 1.34 3 3 3s3-1.34 3-3V4c0-1.66-1.34-3-3-3zm5.3 9c0 3-2.54 5.1-5.3 5.1S6.7 13 6.7 10H5c0 3.41 2.72 6.23 6 6.72V20h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                      </svg>
                     }
                   </button>
                 </div>
