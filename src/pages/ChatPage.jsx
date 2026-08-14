@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import ContactPage from './ContactPage'
 import CallPage from './CallPage'
+import GroupCallPage from './GroupCallPage'
 import GroupInfoPage from './GroupInfoPage'
 import { useContactStatus, formatLastSeen } from '../hooks/useContactStatus'
 import { supabase } from '../lib/supabase'
@@ -357,6 +358,7 @@ export default function ChatPage({ onBack }) {
   const [showContact, setShowContact] = useState(false)
   const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [call, setCall] = useState(null)
+  const [groupCall, setGroupCall] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [showGifPicker, setShowGifPicker] = useState(false)
   const [showStickerPicker, setShowStickerPicker] = useState(false)
@@ -763,6 +765,15 @@ export default function ChatPage({ onBack }) {
           onEnd={() => setCall(null)}
         />
       )}
+      {groupCall && (
+        <GroupCallPage
+          conversationId={activeConversation?.id}
+          myUserId={profile?.id}
+          myName={profile?.display_name || 'Yo'}
+          members={activeConversation?.members}
+          onEnd={() => setGroupCall(false)}
+        />
+      )}
 
       {showContact && !isGroup && (
         <ContactPage user={otherUser} onBack={() => setShowContact(false)} onChat={() => setShowContact(false)} />
@@ -1002,6 +1013,14 @@ export default function ChatPage({ onBack }) {
                 </svg>
               </HdrBtn>
             </div>
+          )}
+          {/* Group call button */}
+          {isGroup && (
+            <HdrBtn title="Llamada grupal" onClick={() => setGroupCall(true)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={C.text2}>
+                <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+              </svg>
+            </HdrBtn>
           )}
           {/* Topics button — only for groups */}
           {isGroup && (
