@@ -24,6 +24,11 @@
   </style>
   <body>
     <div id="root"></div>
+    <div id="pre-react-error" style="display:none;position:fixed;inset:0;background:#b91c1c;color:#fff;padding:24px;font-family:monospace;z-index:9999;overflow:auto">
+      <h2 style="margin:0 0 12px;font-size:18px">⚠️ Error al iniciar</h2>
+      <pre style="font-size:12px;white-space:pre-wrap;margin:0"></pre>
+      <button onclick="location.reload()" style="margin-top:16px;padding:10px 20px;background:#fff;color:#b91c1c;border:none;border-radius:8px;font-weight:700;cursor:pointer">Recargar</button>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
