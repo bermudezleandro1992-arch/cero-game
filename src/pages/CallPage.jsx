@@ -267,6 +267,14 @@ export default function CallPage({
       await new Promise(r => ch.subscribe(s => s === 'SUBSCRIBED' && r()))
       await ch.send({ type: 'broadcast', event: 'call-offer', payload: { from: myUserId, fromName: contact?.display_name || '', convId: conversationId, callType, offer } })
       supabase.removeChannel(ch)
+      // Also send FCM push notification so receiver gets it even when app is closed
+      supabase.functions.invoke('send-fcm-notification', {
+        body: {
+          targetUserId: contact.id,
+          type: 'call',
+          payload: { from: myUserId, fromName: contact?.display_name || '', convId: conversationId, callType, offer: JSON.stringify(offer) },
+        }
+      }).catch(() => {}) // non-blocking, Supabase broadcast is the primary signal
     } catch (e) { alert(`Error: ${e.message}`); onEnd() }
   }
 

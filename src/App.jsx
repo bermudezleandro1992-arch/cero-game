@@ -14,6 +14,7 @@ import TournamentsPage from './pages/TournamentsPage'
 import ProfileSheet from './components/ProfileSheet'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
+import { initPushNotifications } from './lib/pushNotifications'
 export { C } from './theme'
 import { C } from './theme'
 
@@ -113,6 +114,12 @@ export default function App() {
       .on('broadcast', { event: 'call-offer' }, ({ payload }) => setIncomingCall(payload))
       .subscribe()
     return () => supabase.removeChannel(ch)
+  }, [profile?.id])
+
+  // Init native push notifications (Capacitor APK only)
+  useEffect(() => {
+    if (!profile?.id) return
+    initPushNotifications(profile.id, (callPayload) => setIncomingCall(callPayload))
   }, [profile?.id])
 
   useEffect(() => {
