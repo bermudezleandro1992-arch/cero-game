@@ -250,17 +250,16 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
         {!search && (
           <div style={{
             display: 'flex', gap: 6, padding: '10px 14px 8px',
-            borderTop: `1px solid ${C.border}`, overflowX: 'auto',
-            scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+            borderTop: `1px solid ${C.border}`, flexWrap: 'wrap',
           }}>
             {[['todos','Todos','💬'],['directos','Directos','👤'],['grupos','Grupos','👥'],['comunidades','Comunidades','🌐']].map(([id, label, icon]) => (
               <button key={id} onClick={() => setFilter(id)} style={{
-                flexShrink: 0, background: filter === id ? `${C.green}18` : C.panel2,
+                background: filter === id ? `${C.green}18` : C.panel2,
                 border: `1px solid ${filter === id ? C.green + '55' : C.border}`,
                 borderRadius: 20, cursor: 'pointer',
-                padding: '5px 10px',
+                padding: '5px 12px',
                 color: filter === id ? C.green : C.textDim,
-                fontSize: 11.5, fontWeight: filter === id ? 700 : 500,
+                fontSize: 12, fontWeight: filter === id ? 700 : 500,
                 transition: 'all .15s',
                 display: 'flex', alignItems: 'center', gap: 5,
                 whiteSpace: 'nowrap',

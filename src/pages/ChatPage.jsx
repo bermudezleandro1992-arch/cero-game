@@ -2183,7 +2183,7 @@ function MsgBody({ msg, isMine, otherLastRead }) {
 
 function HdrBtn({ children, onClick, title }) {
   return (
-    <button onClick={onClick} title={title} style={{
+    <button onClick={e => { e.stopPropagation(); onClick?.(e) }} title={title} style={{
       width: 38, height: 38, borderRadius: '50%', background: 'none',
       border: 'none', cursor: 'pointer', color: C.text2,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
