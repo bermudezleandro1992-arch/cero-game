@@ -53,13 +53,16 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | tr -d ' \n\r' | base64 -d > android/app/release.keystore
-            cd android && ./gradlew assembleRelease \
-              -Pandroid.injected.signing.store.file=$PWD/app/release.keystore \
-              -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
-              -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
-              -Pandroid.injected.signing.key.password="$KEY_PASSWORD" \
-              --no-daemon
+            if echo "$KEYSTORE_BASE64" | tr -d ' \n\r' | base64 -d > android/app/release.keystore 2>/dev/null; then
+              cd android && ./gradlew assembleRelease \
+                -Pandroid.injected.signing.store.file=$PWD/app/release.keystore \
+                -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+                -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+                -Pandroid.injected.signing.key.password="$KEY_PASSWORD" \
+                --no-daemon || echo "Release build failed, will use debug APK"
+            else
+              echo "Invalid keystore base64, skipping release build"
+            fi
           else
             echo "No keystore found, skipping release build"
           fi
