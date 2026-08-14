@@ -143,6 +143,21 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Handle Android hardware back button — must be before any conditional returns
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    const listener = CapApp.addListener('backButton', () => {
+      if (activeConversation) {
+        setActiveConversation(null)
+      } else if (showProfile) {
+        setShowProfile(false)
+      } else if (tab !== 'chats') {
+        setTab('chats')
+      }
+    })
+    return () => { listener.then(h => h.remove()) }
+  }, [activeConversation, showProfile, tab])
+
   if (loading) return <Splash />
   if (!user) return <LoginPage />
   if (!profile) return <Splash />
@@ -155,22 +170,6 @@ export default function App() {
     setActiveConversation(null)
     fetchConversations(profile.id)
   }
-
-  // Handle Android hardware back button
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return
-    const listener = CapApp.addListener('backButton', ({ canGoBack }) => {
-      if (activeConversation) {
-        goBack()
-      } else if (showProfile) {
-        setShowProfile(false)
-      } else if (tab !== 'chats') {
-        setTab('chats')
-      }
-      // If already on main screen, do nothing (don't exit app)
-    })
-    return () => { listener.then(h => h.remove()) }
-  }, [activeConversation, showProfile, tab])
 
   const showChat = !!activeConversation
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0)
