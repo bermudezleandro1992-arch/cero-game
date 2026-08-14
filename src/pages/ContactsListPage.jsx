@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
+import ContactPage from './ContactPage'
 
 const AVATAR_COLORS = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100','#c62828']
 function avatarColor(id) {
@@ -35,6 +36,7 @@ export default function ContactsListPage() {
   const [addingId, setAddingId] = useState(null)
   const [removingId, setRemovingId] = useState(null)
   const [contactIds, setContactIds] = useState(new Set())
+  const [selectedUser, setSelectedUser] = useState(null)
 
   useEffect(() => {
     if (!profile?.id) return
@@ -101,6 +103,16 @@ export default function ContactsListPage() {
     if (!grouped[letter]) grouped[letter] = []
     grouped[letter].push(c)
   })
+
+  if (selectedUser) {
+    return (
+      <ContactPage
+        user={selectedUser}
+        onBack={() => setSelectedUser(null)}
+        onChat={() => { setSelectedUser(null) }}
+      />
+    )
+  }
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
@@ -196,7 +208,7 @@ export default function ContactsListPage() {
                   return (
                     <button
                       key={c.id}
-                      onClick={() => openChat(u.id, u)}
+                      onClick={() => setSelectedUser(u)}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                         padding: '10px 16px', background: 'none', border: 'none',
