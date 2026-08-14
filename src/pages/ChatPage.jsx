@@ -62,9 +62,14 @@ function groupByDate(messages) {
   return groups
 }
 
+function normalizeTs(ts) {
+  if (!ts) return ts
+  if (!/Z|[+-]\d{2}:?\d{2}$/.test(ts)) return ts.replace(' ', 'T') + 'Z'
+  return ts
+}
 function formatTime(ts) {
   if (!ts) return ''
-  return new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+  return new Date(normalizeTs(ts)).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
 }
 function fmtDuration(s) {
   if (!isFinite(s) || isNaN(s) || s < 0) return '--:--'
