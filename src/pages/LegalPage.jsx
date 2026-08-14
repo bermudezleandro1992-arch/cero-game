@@ -1,4 +1,4 @@
-import { C } from '../App'
+import { C } from '../theme'
 
 const SECTIONS = [
   {

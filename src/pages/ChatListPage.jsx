@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import NewGroupPage from './NewGroupPage'
 import { StoriesBar, useStoryUserIds } from './StoriesPage'
 import { useOnlineUsers } from '../hooks/usePresence'
-import { C } from '../App'
+import { C } from '../theme'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const AVATAR_COLORS = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100','#c62828']

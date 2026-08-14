@@ -14,23 +14,8 @@ import TournamentsPage from './pages/TournamentsPage'
 import ProfileSheet from './components/ProfileSheet'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
-
-// ── Design tokens ─────────────────────────────────────────────────────────────
-export const C = {
-  bg:       '#05080A',
-  bg2:      '#0A1014',
-  panel:    '#0D151A',
-  panel2:   '#111B21',
-  border:   '#1C292F',
-  green:    '#39FF14',
-  green2:   '#19D84A',
-  greenDk:  '#0B7A2A',
-  text:     '#FFFFFF',
-  text2:    '#A7B0B5',
-  textDim:  '#667078',
-  red:      '#FF3B30',
-  yellow:   '#FFD600',
-}
+export { C } from './theme'
+import { C } from './theme'
 
 // ── Nav icons ─────────────────────────────────────────────────────────────────
 const NAV = [
