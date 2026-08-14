@@ -3,21 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { C } from '../theme'
 
-// Track whether stories table exists — avoid repeated 400s if it doesn't
-let storiesTableExists = null // null = unknown, true/false after first check
-
-async function fetchStoriesIfAvailable(query) {
-  if (storiesTableExists === false) return { data: null, error: null }
-  const result = await query
-  if (result.error?.code === '42P01' || result.error?.message?.includes('does not exist') || (result.error && !result.data)) {
-    storiesTableExists = false
-    return { data: null, error: null }
-  }
-  storiesTableExists = true
-  return result
-}
-
-// ── Global story groups context (for avatar rings in chat list) ────────────────
+// ── Global story groups context ────────────────────────────────────────────────
 export const StoryCtx = createContext({ usersWithStories: new Set() })
 
 // ── Story viewer ───────────────────────────────────────────────────────────────
@@ -59,7 +45,7 @@ function StoryViewer({ groups, startGroup, startIdx, onClose, myUserId, onPin })
 
   if (!story) return null
 
-  const btnStyle = {
+  const navBtn = {
     position: 'absolute', top: '50%', transform: 'translateY(-50%)',
     zIndex: 12, background: 'rgba(0,0,0,0.45)', border: 'none',
     borderRadius: '50%', width: 44, height: 44, cursor: 'pointer',
@@ -67,9 +53,18 @@ function StoryViewer({ groups, startGroup, startIdx, onClose, myUserId, onPin })
     backdropFilter: 'blur(4px)',
   }
 
+  const timeLeft = story.expires_at
+    ? (() => {
+        const ms = new Date(story.expires_at) - Date.now()
+        if (ms <= 0) return 'Expirada'
+        const h = Math.floor(ms / 3600000)
+        const d = Math.floor(h / 24)
+        return d > 0 ? `${d}d restantes` : `${h}h restantes`
+      })()
+    : null
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {/* Story card — max 480px wide on desktop, full screen on mobile */}
       <div style={{ position: 'relative', width: '100%', maxWidth: 480, height: '100%', maxHeight: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* Progress bars */}
@@ -80,7 +75,6 @@ function StoryViewer({ groups, startGroup, startIdx, onClose, myUserId, onPin })
                 height: '100%', borderRadius: 2,
                 background: i < idx ? '#fff' : i === idx ? `rgba(255,255,255,${0.4 + 0.6 * progress / 100})` : 'transparent',
                 width: i < idx ? '100%' : i === idx ? `${progress}%` : '0%',
-                transition: i === idx ? 'none' : 'none',
               }} />
             </div>
           ))}
@@ -97,10 +91,13 @@ function StoryViewer({ groups, startGroup, startIdx, onClose, myUserId, onPin })
             }
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>{group.user?.display_name || group.user?.username}</div>
-            <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>
-              {new Date(story.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-              {story.is_highlighted && <span style={{ marginLeft: 6, color: '#facc15' }}>★</span>}
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+              {group.user?.display_name || group.user?.username}
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span>{new Date(story.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</span>
+              {timeLeft && <span>· {timeLeft}</span>}
+              {story.is_highlighted && <span style={{ color: '#facc15' }}>★ Destacada</span>}
             </div>
           </div>
           {paused && <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: 600 }}>⏸ PAUSADO</span>}
@@ -115,14 +112,12 @@ function StoryViewer({ groups, startGroup, startIdx, onClose, myUserId, onPin })
           </button>
         </div>
 
-        {/* Media — fills full card */}
+        {/* Media */}
         <div style={{ flex: 1, position: 'relative', background: '#000' }}>
           {story.media_type === 'video'
             ? <video src={story.media_url} autoPlay loop playsInline style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
             : <img src={story.media_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
           }
-
-          {/* Caption overlay */}
           {story.caption && (
             <div style={{
               position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -130,8 +125,7 @@ function StoryViewer({ groups, startGroup, startIdx, onClose, myUserId, onPin })
               padding: '48px 20px 28px', color: '#fff', fontSize: 15, textAlign: 'center', zIndex: 2,
             }}>{story.caption}</div>
           )}
-
-          {/* Hold-to-pause zone (center, doesn't block nav buttons) */}
+          {/* Hold-to-pause */}
           <div style={{ position: 'absolute', inset: 0, zIndex: 3 }}
             onPointerDown={() => setPaused(true)}
             onPointerUp={() => setPaused(false)}
@@ -140,18 +134,15 @@ function StoryViewer({ groups, startGroup, startIdx, onClose, myUserId, onPin })
         </div>
       </div>
 
-      {/* ← Prev button */}
       {hasPrev && (
-        <button onClick={prev} style={{ ...btnStyle, left: 'max(12px, calc(50% - 264px))' }}>
+        <button onClick={prev} style={{ ...navBtn, left: 'max(12px, calc(50% - 264px))' }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
         </button>
       )}
-
-      {/* → Next button */}
       {hasNext && (
-        <button onClick={next} style={{ ...btnStyle, right: 'max(12px, calc(50% - 264px))' }}>
+        <button onClick={next} style={{ ...navBtn, right: 'max(12px, calc(50% - 264px))' }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
@@ -171,7 +162,7 @@ function StoryBubble({ group, profile, onClick, size = 56 }) {
     >
       <div style={{
         width: size, height: size, borderRadius: '50%',
-        background: `conic-gradient(${ringColor} 0%, ${ringColor}aa 60%, ${ringColor} 100%)`,
+        background: `conic-gradient(${ringColor} 0%, ${ringColor}88 50%, ${ringColor} 100%)`,
         padding: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', border: `2px solid ${C.bg}`, background: C.panel2 }}>
@@ -190,32 +181,63 @@ function StoryBubble({ group, profile, onClick, size = 56 }) {
   )
 }
 
-// ── Caption input modal ────────────────────────────────────────────────────────
+// ── Duration selector + caption modal ─────────────────────────────────────────
+const DURATIONS = [
+  { label: '6h',   hours: 6 },
+  { label: '12h',  hours: 12 },
+  { label: '24h',  hours: 24 },
+  { label: '3 días', hours: 72 },
+  { label: '7 días', hours: 168 },
+]
+
 function CaptionModal({ file, onConfirm, onCancel }) {
   const [caption, setCaption] = useState('')
+  const [durIdx, setDurIdx] = useState(2) // default 24h
   const preview = file ? URL.createObjectURL(file) : null
   const isVideo = file?.type.startsWith('video/')
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 }}>
       {isVideo
-        ? <video src={preview} autoPlay loop muted playsInline style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 16, objectFit: 'contain' }} />
-        : <img src={preview} alt="" style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 16, objectFit: 'contain' }} />
+        ? <video src={preview} autoPlay loop muted playsInline style={{ maxWidth: '100%', maxHeight: 280, borderRadius: 16, objectFit: 'contain' }} />
+        : <img src={preview} alt="" style={{ maxWidth: '100%', maxHeight: 280, borderRadius: 16, objectFit: 'contain' }} />
       }
+
       <input
         value={caption} onChange={e => setCaption(e.target.value)}
         placeholder="Agregar un texto... (opcional)"
         autoFocus
         style={{ width: '100%', maxWidth: 400, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 12, padding: '10px 14px', color: '#fff', fontSize: 14, outline: 'none' }}
       />
-      <div style={{ display: 'flex', gap: 12 }}>
-        <button onClick={onCancel} style={{ padding: '10px 24px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.2)', background: 'none', color: '#fff', cursor: 'pointer', fontSize: 14 }}>Cancelar</button>
-        <button onClick={() => onConfirm(caption)} style={{ padding: '10px 24px', borderRadius: 12, border: 'none', background: C.green, color: C.bg, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>Publicar</button>
+
+      {/* Duration picker */}
+      <div style={{ width: '100%', maxWidth: 400 }}>
+        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', marginBottom: 8 }}>
+          ⏱ Duración del estado
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {DURATIONS.map((d, i) => (
+            <button key={d.label} onClick={() => setDurIdx(i)} style={{
+              flex: 1, padding: '8px 4px', borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+              background: durIdx === i ? C.green : 'rgba(255,255,255,0.1)',
+              color: durIdx === i ? '#000' : '#fff',
+              border: `1px solid ${durIdx === i ? C.green : 'rgba(255,255,255,0.15)'}`,
+              transition: 'all .15s',
+            }}>{d.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, width: '100%', maxWidth: 400 }}>
+        <button onClick={onCancel} style={{ flex: 1, padding: '11px 0', borderRadius: 12, border: '1px solid rgba(255,255,255,0.2)', background: 'none', color: '#fff', cursor: 'pointer', fontSize: 14 }}>Cancelar</button>
+        <button onClick={() => onConfirm(caption, DURATIONS[durIdx].hours)} style={{ flex: 2, padding: '11px 0', borderRadius: 12, border: 'none', background: C.green, color: '#000', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
+          Publicar ({DURATIONS[durIdx].label})
+        </button>
       </div>
     </div>
   )
 }
 
-// ── Featured Stories section (Historias Destacadas) ───────────────────────────
+// ── Featured Stories section ───────────────────────────────────────────────────
 export function FeaturedStories({ userId, onView }) {
   const [featured, setFeatured] = useState([])
 
@@ -225,6 +247,7 @@ export function FeaturedStories({ userId, onView }) {
       .select('*, user:users!stories_user_id_fkey(id, display_name, username, avatar_url)')
       .eq('user_id', userId)
       .eq('is_highlighted', true)
+      .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
       .then(({ data }) => setFeatured(data || []))
   }, [userId])
@@ -238,11 +261,7 @@ export function FeaturedStories({ userId, onView }) {
         {featured.map(s => (
           <div key={s.id} style={{ flexShrink: 0, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}
             onClick={() => onView?.([{ user: s.user, stories: [s] }], 0, 0)}>
-            <div style={{
-              width: 64, height: 64, borderRadius: 12,
-              overflow: 'hidden', border: `2px solid #facc15`,
-              background: C.panel2,
-            }}>
+            <div style={{ width: 64, height: 64, borderRadius: 12, overflow: 'hidden', border: `2px solid #facc15`, background: C.panel2 }}>
               {s.media_type === 'video'
                 ? <video src={s.media_url} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : <img src={s.media_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -258,15 +277,16 @@ export function FeaturedStories({ userId, onView }) {
   )
 }
 
-// ── Stories Bar (shown at top of chat list) ───────────────────────────────────
+// ── Stories Bar ────────────────────────────────────────────────────────────────
 export function StoriesBar() {
   const { profile } = useAuthStore()
   const [storyGroups, setStoryGroups] = useState([])
-  const [viewing, setViewing] = useState(null) // { groups, gIdx, idx }
+  const [viewing, setViewing] = useState(null)
   const [loading, setLoading] = useState(true)
   const [pendingFile, setPendingFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef()
+  const allGroupsRef = useRef([])
 
   useEffect(() => {
     if (!profile?.id) return
@@ -274,46 +294,46 @@ export function StoriesBar() {
   }, [profile?.id])
 
   async function loadStories() {
-    // Fetch stories without FK join (user_id → auth.users, not public.users)
-    const { data: stories } = await fetchStoriesIfAvailable(
-      supabase.from('stories')
-        .select('*')
+    try {
+      const { data: stories, error } = await supabase.from('stories')
+        .select('id, user_id, media_url, media_type, caption, created_at, expires_at, is_highlighted')
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
-    )
 
-    setLoading(false)
-    if (!stories?.length) return
+      setLoading(false)
+      if (error || !stories?.length) return
 
-    // Fetch user profiles for all story authors
-    const userIds = [...new Set(stories.map(s => s.user_id))]
-    const { data: users } = await supabase.from('users')
-      .select('id, display_name, username, avatar_url')
-      .in('id', userIds)
-    const userMap = Object.fromEntries((users || []).map(u => [u.id, u]))
+      const userIds = [...new Set(stories.map(s => s.user_id))]
+      const { data: users } = await supabase.from('users')
+        .select('id, display_name, username, avatar_url')
+        .in('id', userIds)
+      const userMap = Object.fromEntries((users || []).map(u => [u.id, u]))
 
-    const map = {}
-    stories.forEach(s => {
-      const user = userMap[s.user_id] || { id: s.user_id, display_name: 'Usuario' }
-      if (!map[s.user_id]) map[s.user_id] = { user, stories: [] }
-      map[s.user_id].stories.push({ ...s, user })
-    })
+      const map = {}
+      stories.forEach(s => {
+        const user = userMap[s.user_id] || { id: s.user_id, display_name: 'Usuario' }
+        if (!map[s.user_id]) map[s.user_id] = { user, stories: [] }
+        map[s.user_id].stories.push({ ...s, user })
+      })
 
-    const groups = Object.values(map)
-    const myIdx = groups.findIndex(g => g.user?.id === profile.id)
-    if (myIdx > 0) { const [mine] = groups.splice(myIdx, 1); groups.unshift(mine) }
+      const groups = Object.values(map)
+      const myIdx = groups.findIndex(g => g.user?.id === profile.id)
+      if (myIdx > 0) { const [mine] = groups.splice(myIdx, 1); groups.unshift(mine) }
 
-    setStoryGroups(groups)
+      setStoryGroups(groups)
+    } catch {
+      setLoading(false)
+    }
   }
 
   async function handleFilePick(e) {
     const file = e.target.files?.[0]; if (!file) return
     fileRef.current.value = ''
-    if (file.size > 30 * 1024 * 1024) { alert('Máximo 30MB'); return }
+    if (file.size > 50 * 1024 * 1024) { alert('Máximo 50MB'); return }
     setPendingFile(file)
   }
 
-  async function publishStory(caption) {
+  async function publishStory(caption, durationHours) {
     const file = pendingFile
     setPendingFile(null)
     setUploading(true)
@@ -323,7 +343,7 @@ export function StoriesBar() {
     if (error) { alert('Error al subir: ' + error.message); setUploading(false); return }
     const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(path)
     const type = file.type.startsWith('video/') ? 'video' : 'image'
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    const expiresAt = new Date(Date.now() + (durationHours || 24) * 3600 * 1000).toISOString()
     const { error: insertErr } = await supabase.from('stories').insert({
       user_id: profile.id,
       media_url: urlData.publicUrl,
@@ -338,12 +358,24 @@ export function StoriesBar() {
 
   async function toggleHighlight(story) {
     await supabase.from('stories').update({ is_highlighted: !story.is_highlighted }).eq('id', story.id)
-    loadStories()
     setViewing(null)
+    loadStories()
   }
 
   const myGroup = storyGroups.find(g => g.user?.id === profile.id)
   const others = storyGroups.filter(g => g.user?.id !== profile.id)
+  const allGroups = [myGroup, ...others].filter(Boolean)
+  allGroupsRef.current = allGroups
+
+  // Register the global opener so ChatListPage avatars can trigger viewing
+  useEffect(() => {
+    registerStoryOpener((userId) => {
+      const groups = allGroupsRef.current
+      const gIdx = groups.findIndex(g => g.user?.id === userId)
+      if (gIdx >= 0) setViewing({ groups, gIdx, idx: 0 })
+    })
+    return () => registerStoryOpener(null)
+  }, [])
 
   if (loading) return null
 
@@ -373,9 +405,19 @@ export function StoriesBar() {
         borderBottom: `1px solid ${C.border}`,
         scrollbarWidth: 'none',
       }}>
-        {/* Add my story */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: uploading ? 'wait' : 'pointer', flexShrink: 0 }}
-          onClick={() => !uploading && fileRef.current?.click()}
+
+        {/* Add / my story button */}
+        <div
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: uploading ? 'wait' : 'pointer', flexShrink: 0 }}
+          onClick={() => {
+            if (uploading) return
+            if (myGroup) {
+              // Tap = view my story
+              setViewing({ groups: allGroups, gIdx: 0, idx: 0 })
+            } else {
+              fileRef.current?.click()
+            }
+          }}
         >
           <div style={{ position: 'relative' }}>
             <div style={{
@@ -393,15 +435,20 @@ export function StoriesBar() {
                 }
               </div>
             </div>
-            <div style={{
-              position: 'absolute', bottom: 0, right: 0,
-              width: 20, height: 20, borderRadius: '50%',
-              background: uploading ? C.textDim : C.green, border: `2px solid ${C.bg}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
+            {/* + button (always shown to add new story) */}
+            <div
+              onClick={e => { e.stopPropagation(); fileRef.current?.click() }}
+              style={{
+                position: 'absolute', bottom: 0, right: 0,
+                width: 20, height: 20, borderRadius: '50%',
+                background: uploading ? C.textDim : C.green, border: `2px solid ${C.bg}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
               {uploading
                 ? <div style={{ width: 8, height: 8, border: `2px solid ${C.bg}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
-                : <svg width="10" height="10" viewBox="0 0 24 24" fill="#000"><path d="M12 5v14M5 12h14" strokeWidth="3" stroke="#000" strokeLinecap="round"/></svg>
+                : <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" strokeWidth="3" stroke={C.bg} strokeLinecap="round"/></svg>
               }
             </div>
           </div>
@@ -410,37 +457,38 @@ export function StoriesBar() {
           </span>
         </div>
 
-        {/* My story (tap to view) — shown after add button if I have stories */}
-        {myGroup && (
-          <StoryBubble group={myGroup} profile={profile}
-            onClick={() => setViewing({ groups: [myGroup, ...others], gIdx: 0, idx: 0 })}
-          />
-        )}
-
-        {/* Others */}
+        {/* Other users' stories */}
         {others.map((group, gi) => (
           <StoryBubble key={group.user?.id} group={group} profile={profile}
-            onClick={() => setViewing({ groups: [myGroup, ...others].filter(Boolean), gIdx: myGroup ? gi + 1 : gi, idx: 0 })}
+            onClick={() => setViewing({ groups: allGroups, gIdx: myGroup ? gi + 1 : gi, idx: 0 })}
           />
         ))}
 
         <input type="file" accept="image/*,video/*" ref={fileRef} onChange={handleFilePick} style={{ display: 'none' }} />
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </>
   )
 }
 
-// Export story user IDs so chat list can show rings on contact avatars
+// ── Hook: get user IDs that have active stories (for avatar rings) ─────────────
 export function useStoryUserIds() {
   const { profile } = useAuthStore()
   const [ids, setIds] = useState(new Set())
   useEffect(() => {
     if (!profile?.id) return
-    fetchStoriesIfAvailable(
-      supabase.from('stories').select('user_id').gt('expires_at', new Date().toISOString())
-    ).then(({ data }) => {
-      if (data) setIds(new Set(data.map(s => s.user_id)))
-    })
+    supabase.from('stories')
+      .select('user_id')
+      .gt('expires_at', new Date().toISOString())
+      .then(({ data }) => {
+        if (data) setIds(new Set(data.map(s => s.user_id)))
+      })
   }, [profile?.id])
   return ids
 }
+
+// ── Hook + helper: open a specific user's stories from outside StoriesBar ──────
+// Used by ChatListPage to open stories when tapping a ringed avatar
+let _openStoryForUser = null
+export function registerStoryOpener(fn) { _openStoryForUser = fn }
+export function openStoryForUser(userId) { _openStoryForUser?.(userId) }
