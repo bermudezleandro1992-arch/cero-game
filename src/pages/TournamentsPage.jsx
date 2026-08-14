@@ -6,10 +6,10 @@ import { C } from '../theme'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const STATUS_CFG = {
-  inscripcion: { label: 'Inscripción', color: C.green,     bg: `${C.green}18`  },
-  en_curso:    { label: 'En Curso',    color: '#fb8c00',   bg: '#fb8c0018'     },
-  finalizado:  { label: 'Finalizado',  color: C.textDim,   bg: C.panel2        },
-  cancelado:   { label: 'Cancelado',   color: C.red,       bg: `${C.red}18`    },
+  inscripcion: { label: 'Inscripción', color: '#22c55e', bg: '#22c55e18' },
+  en_curso:    { label: 'En Curso',    color: '#fb8c00', bg: '#fb8c0018' },
+  finalizado:  { label: 'Finalizado',  color: '#64748b', bg: '#64748b18' },
+  cancelado:   { label: 'Cancelado',   color: '#ef4444', bg: '#ef444418' },
 }
 
 const GAMES  = ['FC 26', 'FC 25', 'eFootball', 'FIFA', 'Warzone', 'Otro']
