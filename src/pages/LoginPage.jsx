@@ -1,8 +1,14 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
+import { useAppVersion } from '../hooks/useAppVersion'
+import { Capacitor } from '@capacitor/core'
+
+const APK_URL = 'https://github.com/bermudezleandro1992-arch/cero-game/releases/latest/download/mimensajero.apk'
 
 export default function LoginPage() {
+  const { updateAvailable, newVersion, apkUrl } = useAppVersion()
+  const isNative = Capacitor.isNativePlatform()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -52,10 +58,27 @@ export default function LoginPage() {
     }}>
       <div style={{ width: '100%', maxWidth: 380 }}>
 
-        {/* APK Download Banner — hidden inside native app */}
-        {!window.Capacitor && (
-          <a href="https://github.com/bermudezleandro1992-arch/cero-game/releases/latest/download/app-debug.apk" style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+        {/* Update banner — inside native app when update available */}
+        {isNative && updateAvailable && (
+          <a href={apkUrl || APK_URL} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: `${C.green}20`, border: `1.5px solid ${C.green}66`,
+            borderRadius: 14, padding: '12px 16px', marginBottom: 20,
+            textDecoration: 'none', animation: 'pulse 2s ease-in-out infinite',
+          }}>
+            <span style={{ fontSize: 22 }}>🆕</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, color: C.green, fontWeight: 800, fontSize: 13 }}>¡Nueva versión disponible! {newVersion}</p>
+              <p style={{ margin: 0, color: C.textDim, fontSize: 11, marginTop: 2 }}>Tocá para actualizar la app</p>
+            </div>
+            <span style={{ color: C.green, fontSize: 18 }}>⬇️</span>
+          </a>
+        )}
+
+        {/* APK Download Banner — only on web (not inside native app) */}
+        {!isNative && (
+          <a href={APK_URL} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
             background: `${C.green}15`, border: `1px solid ${C.green}44`,
             borderRadius: 14, padding: '12px 16px', marginBottom: 20,
             textDecoration: 'none', transition: 'background .15s',
@@ -64,11 +87,11 @@ export default function LoginPage() {
             onMouseLeave={e => e.currentTarget.style.background = `${C.green}15`}
           >
             <span style={{ fontSize: 22 }}>📱</span>
-            <div style={{ textAlign: 'left' }}>
+            <div style={{ flex: 1 }}>
               <p style={{ margin: 0, color: C.green, fontWeight: 700, fontSize: 13 }}>Descargar APK Android</p>
-              <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>Instalá la app nativa · última versión</p>
+              <p style={{ margin: 0, color: C.textDim, fontSize: 11, marginTop: 2 }}>Instalá la app nativa · última versión</p>
             </div>
-            <span style={{ marginLeft: 'auto', color: C.green, fontSize: 18 }}>⬇️</span>
+            <span style={{ color: C.green, fontSize: 18 }}>⬇️</span>
           </a>
         )}
 
