@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-const CURRENT_VERSION = '1.0.0'
+const CURRENT_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2026.01.01'
 const GITHUB_REPO = 'bermudezleandro1992-arch/cero-game'
 
 export function useAppVersion() {
@@ -19,7 +19,7 @@ export function useAppVersion() {
       if (!res.ok) return
       const data = await res.json()
       const latest = data.tag_name?.replace(/^v/, '')
-      if (!latest || latest === CURRENT_VERSION) return
+      if (!latest || latest <= CURRENT_VERSION) return
       const apk = data.assets?.find(a => a.name.endsWith('.apk'))
       setUpdateAvailable(true)
       setNewVersion(latest)
