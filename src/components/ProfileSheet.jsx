@@ -5,6 +5,8 @@ import { C } from '../theme'
 import { soundSettings, SOUND_PACKS } from '../lib/sounds'
 import LegalPage from '../pages/LegalPage'
 import BotApiPage from '../pages/BotApiPage'
+import VipPage from '../pages/VipPage'
+import DonationsPage from '../pages/DonationsPage'
 import { useTheme } from '../lib/ThemeContext'
 
 export default function ProfileSheet({ onClose, forceSetup = false }) {
@@ -12,6 +14,8 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const { themeId, setTheme, themes } = useTheme()
   const [showLegal, setShowLegal] = useState(false)
   const [showBotApi, setShowBotApi] = useState(false)
+  const [showVip, setShowVip] = useState(false)
+  const [showDonations, setShowDonations] = useState(false)
   const defaultName = (!profile?.display_name || profile.display_name === 'Usuario' || profile.display_name.startsWith('user_')) ? '' : profile.display_name
   const defaultUser = (!profile?.username || profile.username.startsWith('user_')) ? '' : profile.username
   const [name, setName] = useState(defaultName)
@@ -76,6 +80,8 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
 
   if (showLegal) return <LegalPage onBack={() => setShowLegal(false)} />
   if (showBotApi) return <BotApiPage onBack={() => setShowBotApi(false)} />
+  if (showVip) return <VipPage onBack={() => setShowVip(false)} />
+  if (showDonations) return <DonationsPage onBack={() => setShowDonations(false)} />
 
   return (
     <div style={{
@@ -364,6 +370,47 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* VIP membership */}
+        {!forceSetup && (
+          <div style={{ padding: '0 24px 4px' }}>
+            <button type="button" onClick={() => setShowVip(true)} style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+              background: `linear-gradient(135deg, #f59e0b12, #f59e0b06)`,
+              border: `1px solid #f59e0b44`, borderRadius: 12,
+              padding: '12px 16px', cursor: 'pointer',
+            }}>
+              <span style={{ fontSize: 18 }}>⭐</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ color: '#f59e0b', fontSize: 14, fontWeight: 700 }}>Plan VIP</div>
+                <div style={{ fontSize: 11, color: C.textDim }}>Comunidades ilimitadas, bots, estadísticas y más</div>
+              </div>
+              <svg style={{ marginLeft: 'auto' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Donations */}
+        {!forceSetup && (
+          <div style={{ padding: '0 24px 4px' }}>
+            <button type="button" onClick={() => setShowDonations(true)} style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+              background: 'none', border: `1px solid ${C.border}`, borderRadius: 12,
+              padding: '12px 16px', cursor: 'pointer', color: C.textDim,
+            }}>
+              <span style={{ fontSize: 18 }}>💚</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ color: C.text2, fontSize: 14, fontWeight: 600 }}>Apoyá el proyecto</div>
+                <div style={{ fontSize: 11, color: C.textDim }}>Donaciones para mantener todo gratis</div>
+              </div>
+              <svg style={{ marginLeft: 'auto' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </button>
           </div>
         )}
 
