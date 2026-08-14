@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
-import { C } from '../App'
+import { C } from '../theme'
 
 // Simple crypto token generator using Web Crypto API
 async function generateToken() {

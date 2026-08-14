@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { C } from '../App'
+import { C } from '../theme'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 

@@ -7,7 +7,7 @@ import GroupInfoPage from './GroupInfoPage'
 import { useContactStatus, formatLastSeen } from '../hooks/useContactStatus'
 import { supabase } from '../lib/supabase'
 import { sounds } from '../lib/sounds'
-import { C } from '../App'
+import { C } from '../theme'
 
 const EMOJI_CATS = [
   { id: 'recientes', label: '🕐', title: 'Recientes', emojis: [] },

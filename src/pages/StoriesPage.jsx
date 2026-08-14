@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, createContext, useContext } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
-import { C } from '../App'
+import { C } from '../theme'
 
 // Track whether stories table exists — avoid repeated 400s if it doesn't
 let storiesTableExists = null // null = unknown, true/false after first check

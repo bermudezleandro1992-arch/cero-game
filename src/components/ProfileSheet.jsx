@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
-import { C } from '../App'
+import { C } from '../theme'
 import { soundSettings } from '../lib/sounds'
 import LegalPage from '../pages/LegalPage'
 import BotApiPage from '../pages/BotApiPage'
