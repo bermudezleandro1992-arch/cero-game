@@ -36,6 +36,10 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [memberMenu, setMemberMenu] = useState(null) // member id
   const [roles, setRoles] = useState({}) // userId -> role
   const [mutedUntil, setMutedUntil] = useState({}) // userId -> date
+  const [isPublic, setIsPublic] = useState(conversation?.is_public || false)
+  const [description, setDescription] = useState(conversation?.description || '')
+  const [editingDesc, setEditingDesc] = useState(false)
+  const [savingPublic, setSavingPublic] = useState(false)
 
   const isAdmin = conversation?.created_by === profile?.id || roles[profile?.id] === 'admin'
 
@@ -81,6 +85,23 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
     await pinMessage(conversation.id, pinText.trim())
     setSavingPin(false)
     setShowPinInput(false)
+  }
+
+  async function togglePublic() {
+    setSavingPublic(true)
+    const next = !isPublic
+    await supabase.from('conversations')
+      .update({ is_public: next })
+      .eq('id', conversation.id)
+    setIsPublic(next)
+    setSavingPublic(false)
+  }
+
+  async function saveDescription() {
+    await supabase.from('conversations')
+      .update({ description: description.trim() })
+      .eq('id', conversation.id)
+    setEditingDesc(false)
   }
 
   return (
@@ -178,6 +199,78 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
           </div>
         )}
       </div>
+
+      {/* Public settings — admin only */}
+      {isAdmin && (
+        <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
+          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+            Visibilidad
+          </p>
+
+          {/* Toggle público */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.text }}>
+                {isPublic ? '🌐 Público' : '🔒 Privado'}
+              </p>
+              <p style={{ margin: '3px 0 0', fontSize: 12, color: C.textDim }}>
+                {isPublic
+                  ? 'Aparece en Explorar. Cualquiera puede unirse.'
+                  : 'Solo accesible por invitación directa.'}
+              </p>
+            </div>
+            <button
+              onClick={togglePublic}
+              disabled={savingPublic}
+              style={{
+                width: 46, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
+                background: isPublic ? C.green : C.panel2,
+                position: 'relative', transition: 'background .2s', flexShrink: 0,
+                outline: `1px solid ${isPublic ? C.green : C.border}`,
+              }}
+            >
+              <div style={{
+                position: 'absolute', top: 3, left: isPublic ? 23 : 3,
+                width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.25)', transition: 'left .2s',
+              }} />
+            </button>
+          </div>
+
+          {/* Description */}
+          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 600, color: C.textDim }}>Descripción</p>
+          {editingDesc ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Describí de qué trata este grupo..."
+                autoFocus rows={3}
+                style={{
+                  width: '100%', background: C.panel2, border: `1px solid ${C.green}`,
+                  borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 13,
+                  resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setEditingDesc(false)} style={{ flex: 1, padding: '9px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.panel2, color: C.textDim, cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+                <button onClick={saveDescription} style={{ flex: 1, padding: '9px', borderRadius: 8, border: 'none', background: C.green, color: C.bg, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Guardar</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ flex: 1, padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.green}` }}>
+                <p style={{ margin: 0, fontSize: 13, color: description ? C.text2 : C.textDim, lineHeight: 1.4 }}>
+                  {description || 'Sin descripción'}
+                </p>
+              </div>
+              <button onClick={() => setEditingDesc(true)} style={{ background: `${C.green}15`, border: `1px solid ${C.green}33`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: C.green, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                ✏️ Editar
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Members list */}
       <div style={{ padding: '12px 0' }}>

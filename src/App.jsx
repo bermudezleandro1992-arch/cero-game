@@ -13,6 +13,7 @@ import LlamadasPage from './pages/LlamadasPage'
 import ContactsListPage from './pages/ContactsListPage'
 import NotificationsPage from './pages/NotificationsPage'
 import TournamentsPage from './pages/TournamentsPage'
+import DiscoverPage from './pages/DiscoverPage'
 import ProfileSheet from './components/ProfileSheet'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
@@ -37,6 +38,15 @@ const NAV = [
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
         <circle cx="12" cy="7" r="4"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'explorar', label: 'Explorar',
+    icon: (a) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
       </svg>
     ),
   },
@@ -230,6 +240,8 @@ export default function App() {
             ? <ContactsListPage />
             : tab === 'grupos'
             ? <ChatListPage onProfileClick={() => setShowProfile(true)} initialFilter="grupos" />
+            : tab === 'explorar'
+            ? <DiscoverPage />
             : tab === 'torneos'
             ? <TournamentsPage />
             : tab === 'notifs'
