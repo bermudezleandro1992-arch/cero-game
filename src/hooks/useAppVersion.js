@@ -1,33 +1,32 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
 
 const CURRENT_VERSION = '1.0.0'
+const GITHUB_REPO = 'bermudezleandro1992-arch/cero-game'
 
 export function useAppVersion() {
   const [updateAvailable, setUpdateAvailable] = useState(false)
-  const [forceUpdate, setForceUpdate] = useState(false)
   const [newVersion, setNewVersion] = useState(null)
   const [changelog, setChangelog] = useState('')
+  const [apkUrl, setApkUrl] = useState('')
 
   useEffect(() => {
     checkVersion()
   }, [])
 
   async function checkVersion() {
-    const { data } = await supabase
-      .from('app_versions')
-      .select('version, force_update, changelog')
-      .eq('is_current', true)
-      .single()
-
-    if (!data) return
-    if (data.version !== CURRENT_VERSION) {
+    try {
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
+      if (!res.ok) return
+      const data = await res.json()
+      const latest = data.tag_name?.replace(/^v/, '')
+      if (!latest || latest === CURRENT_VERSION) return
+      const apk = data.assets?.find(a => a.name.endsWith('.apk'))
       setUpdateAvailable(true)
-      setForceUpdate(data.force_update)
-      setNewVersion(data.version)
-      setChangelog(data.changelog)
-    }
+      setNewVersion(latest)
+      setChangelog(data.body?.split('\n')[0] || '')
+      setApkUrl(apk?.browser_download_url || '')
+    } catch {}
   }
 
-  return { updateAvailable, forceUpdate, newVersion, changelog }
+  return { updateAvailable, forceUpdate: false, newVersion, changelog, apkUrl }
 }
