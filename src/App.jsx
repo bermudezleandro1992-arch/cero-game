@@ -3,6 +3,8 @@ import { supabase } from './lib/supabase'
 import { useAuthStore } from './store/authStore'
 import { useCallStore } from './store/callStore'
 import { useChatStore } from './store/chatStore'
+import { App as CapApp } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
 import LoginPage from './pages/LoginPage'
 import ChatListPage from './pages/ChatListPage'
 import ChatPage from './pages/ChatPage'
@@ -153,6 +155,22 @@ export default function App() {
     setActiveConversation(null)
     fetchConversations(profile.id)
   }
+
+  // Handle Android hardware back button
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    const listener = CapApp.addListener('backButton', ({ canGoBack }) => {
+      if (activeConversation) {
+        goBack()
+      } else if (showProfile) {
+        setShowProfile(false)
+      } else if (tab !== 'chats') {
+        setTab('chats')
+      }
+      // If already on main screen, do nothing (don't exit app)
+    })
+    return () => { listener.then(h => h.remove()) }
+  }, [activeConversation, showProfile, tab])
 
   const showChat = !!activeConversation
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0)
