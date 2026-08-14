@@ -290,7 +290,7 @@ export default function App() {
             top: auto !important; left: auto !important;
             right: auto !important; bottom: auto !important;
           }
-          .slfa-left  { width: 380px !important; flex-shrink: 0; border-right: 1px solid ${C.border}; }
+          .slfa-left  { width: 400px !important; flex-shrink: 0; border-right: 1px solid ${C.border}; }
           .slfa-right { flex: 1 !important; min-width: 0; }
         }
 
