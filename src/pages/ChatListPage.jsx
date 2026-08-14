@@ -15,9 +15,15 @@ function avatarColor(id) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
+function normalizeTs(ts) {
+  if (!ts) return ts
+  // Supabase realtime sends timestamps without timezone — treat as UTC
+  if (!/Z|[+-]\d{2}:?\d{2}$/.test(ts)) return ts.replace(' ', 'T') + 'Z'
+  return ts
+}
 function formatTime(ts) {
   if (!ts) return ''
-  const d = new Date(ts), now = new Date()
+  const d = new Date(normalizeTs(ts)), now = new Date()
   if (d.toDateString() === now.toDateString())
     return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
   const y = new Date(now); y.setDate(y.getDate() - 1)
