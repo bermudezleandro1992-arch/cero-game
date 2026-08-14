@@ -4,10 +4,6 @@ const config: CapacitorConfig = {
   appId: 'app.mimensajero.app',
   appName: 'Mi Mensajero',
   webDir: 'dist',
-  server: {
-    url: 'https://mimensajero.vercel.app',
-    cleartext: false,
-  },
   plugins: {
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],

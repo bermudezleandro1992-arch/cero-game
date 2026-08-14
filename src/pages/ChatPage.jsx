@@ -406,6 +406,7 @@ export default function ChatPage({ onBack }) {
   const micBtnRef = useRef(null)
 
   const bottomRef = useRef(null)
+  const initialScrollDone = useRef(false)
   const inputRef = useRef(null)
   const fileRef = useRef(null)
   const longPressTimer = useRef(null)
@@ -456,7 +457,8 @@ export default function ChatPage({ onBack }) {
     if (!activeConversation?.id) return
     sounds.chatOpen()
     fetchMessages(activeConversation.id, activeTopicId).then(() => {
-      const ids = messages.map(m => m.id)
+      const { messages: msgs } = useChatStore.getState()
+      const ids = msgs.map(m => m.id)
       if (ids.length) fetchReactions(ids)
     })
     const unsub = subscribeToMessages(activeConversation.id)
@@ -466,8 +468,11 @@ export default function ChatPage({ onBack }) {
   }, [activeConversation?.id, activeTopicId])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-    if (messages.length > 0) markAsRead(activeConversation?.id, profile?.id)
+    if (!messages.length) return
+    const behavior = initialScrollDone.current ? 'smooth' : 'instant'
+    initialScrollDone.current = true
+    bottomRef.current?.scrollIntoView({ behavior })
+    markAsRead(activeConversation?.id, profile?.id)
   }, [messages])
 
   const typingTimer = useRef(null)
