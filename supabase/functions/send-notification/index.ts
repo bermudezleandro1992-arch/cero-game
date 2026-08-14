@@ -195,8 +195,15 @@ async function sendFCM(fcmToken: string, title: string, body: string, data: Reco
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: { token: fcmToken, notification: { title, body }, data, android: { priority: 'high', notification: { channel_id: type === 'call' ? 'calls' : 'messages', sound: type === 'call' ? 'ringtone' : 'default' } } } })
     })
+    if (!res.ok) {
+      const err = await res.text()
+      console.error('FCM error:', res.status, err)
+    }
     return res.ok
-  } catch { return false }
+  } catch (e) {
+    console.error('FCM exception:', e)
+    return false
+  }
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
