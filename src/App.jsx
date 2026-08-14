@@ -267,7 +267,7 @@ export default function App() {
           top: 0; left: 0; right: 0; bottom: 0;
           transition: transform .28s cubic-bezier(.4,0,.2,1);
           overflow: hidden;
-          background: ${C.bg};
+          background: var(--c-bg);
           display: flex;
           flex-direction: column;
         }
@@ -282,7 +282,7 @@ export default function App() {
           .slfa-side-nav {
             display: flex; flex-direction: column;
             width: 68px; flex-shrink: 0;
-            background: ${C.panel}; border-right: 1px solid ${C.border};
+            background: var(--c-panel); border-right: 1px solid var(--c-border);
           }
           .slfa-left, .slfa-right {
             position: relative !important;
@@ -290,7 +290,7 @@ export default function App() {
             top: auto !important; left: auto !important;
             right: auto !important; bottom: auto !important;
           }
-          .slfa-left  { width: 320px !important; flex-shrink: 0; border-right: 1px solid ${C.border}; }
+          .slfa-left  { width: 380px !important; flex-shrink: 0; border-right: 1px solid ${C.border}; }
           .slfa-right { flex: 1 !important; min-width: 0; }
         }
 

@@ -1,15 +1,6 @@
-export const C = {
-  bg:       '#05080A',
-  bg2:      '#0A1014',
-  panel:    '#0D151A',
-  panel2:   '#111B21',
-  border:   '#1C292F',
-  green:    '#39FF14',
-  green2:   '#19D84A',
-  greenDk:  '#0B7A2A',
-  text:     '#FFFFFF',
-  text2:    '#A7B0B5',
-  textDim:  '#667078',
-  red:      '#FF3B30',
-  yellow:   '#FFD600',
-}
+// C reads from CSS variables set by applyTheme() — no component needs to change
+const getCSSVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(`--c-${name}`).trim()
+
+export const C = new Proxy({}, {
+  get(_, key) { return getCSSVar(key) }
+})
