@@ -52,23 +52,25 @@ export default function LoginPage() {
     }}>
       <div style={{ width: '100%', maxWidth: 380 }}>
 
-        {/* APK Download Banner */}
-        <a href="/mimensajero.apk" download style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          background: `${C.green}15`, border: `1px solid ${C.green}44`,
-          borderRadius: 14, padding: '12px 16px', marginBottom: 20,
-          textDecoration: 'none', transition: 'background .15s',
-        }}
-          onMouseEnter={e => e.currentTarget.style.background = `${C.green}25`}
-          onMouseLeave={e => e.currentTarget.style.background = `${C.green}15`}
-        >
-          <span style={{ fontSize: 22 }}>📱</span>
-          <div style={{ textAlign: 'left' }}>
-            <p style={{ margin: 0, color: C.green, fontWeight: 700, fontSize: 13 }}>Descargar APK Android</p>
-            <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>Instalá la app nativa · v1.0</p>
-          </div>
-          <span style={{ marginLeft: 'auto', color: C.green, fontSize: 18 }}>⬇️</span>
-        </a>
+        {/* APK Download Banner — hidden inside native app */}
+        {!window.Capacitor && (
+          <a href="https://github.com/bermudezleandro1992-arch/cero-game/releases/latest/download/app-debug.apk" style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            background: `${C.green}15`, border: `1px solid ${C.green}44`,
+            borderRadius: 14, padding: '12px 16px', marginBottom: 20,
+            textDecoration: 'none', transition: 'background .15s',
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = `${C.green}25`}
+            onMouseLeave={e => e.currentTarget.style.background = `${C.green}15`}
+          >
+            <span style={{ fontSize: 22 }}>📱</span>
+            <div style={{ textAlign: 'left' }}>
+              <p style={{ margin: 0, color: C.green, fontWeight: 700, fontSize: 13 }}>Descargar APK Android</p>
+              <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>Instalá la app nativa · última versión</p>
+            </div>
+            <span style={{ marginLeft: 'auto', color: C.green, fontSize: 18 }}>⬇️</span>
+          </a>
+        )}
 
         {/* Logo / Hero */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
