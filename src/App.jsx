@@ -41,7 +41,7 @@ const NAV = [
     ),
   },
   {
-    id: 'torneos', label: 'Torneos',
+    id: 'torneos', label: 'Comunidad',
     icon: (a) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
