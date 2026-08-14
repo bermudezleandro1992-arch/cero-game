@@ -80,6 +80,25 @@ jobs:
             echo "Using debug APK"
           fi
 
+      - name: Create GitHub Release with APK
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="v$(date +%Y.%m.%d)"
+          APK_PATH=""
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
+          else
+            APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          fi
+          # Delete existing release with same tag if exists
+          gh release delete "$VERSION" --yes 2>/dev/null || true
+          git push origin --delete "refs/tags/$VERSION" 2>/dev/null || true
+          gh release create "$VERSION" "$APK_PATH#mimensajero.apk" \
+            --title "Mi Mensajero $VERSION" \
+            --notes "Build automático $(date +%Y-%m-%d)" \
+            --latest
+
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
