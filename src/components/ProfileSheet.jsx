@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
-import { soundSettings } from '../lib/sounds'
+import { soundSettings, SOUND_PACKS } from '../lib/sounds'
 import LegalPage from '../pages/LegalPage'
 import BotApiPage from '../pages/BotApiPage'
 import { useTheme } from '../lib/ThemeContext'
@@ -18,6 +18,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const [username, setUsername] = useState(defaultUser)
   const [bio, setBio] = useState(profile?.bio || '')
   const [soundOn, setSoundOn] = useState(soundSettings.isEnabled())
+  const [soundPack, setSoundPack] = useState(soundSettings.getPack())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
@@ -313,6 +314,35 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
                   transition: 'left .2s',
                 }} />
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Sound pack picker */}
+        {!forceSetup && soundOn && (
+          <div style={{ padding: '0 24px 16px', borderBottom: `1px solid ${C.border}` }}>
+            <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Pack de sonidos</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {Object.values(SOUND_PACKS).map(p => (
+                <button key={p.id} type="button" onClick={() => { soundSettings.setPack(p.id); setSoundPack(p.id) }} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                  background: soundPack === p.id ? `${C.green}18` : C.panel2,
+                  border: `1.5px solid ${soundPack === p.id ? C.green : C.border}`,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 20, flexShrink: 0 }}>{p.emoji}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: soundPack === p.id ? C.green : C.text, fontWeight: 600, fontSize: 13 }}>{p.label}</div>
+                    <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{p.desc}</div>
+                  </div>
+                  {soundPack === p.id && (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         )}
