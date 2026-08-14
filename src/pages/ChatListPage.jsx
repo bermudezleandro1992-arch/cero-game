@@ -172,8 +172,9 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   if (showNewGroup) return <NewGroupPage initialType={newGroupType} onBack={() => setShowNewGroup(false)} onCreated={handleGroupCreated} />
 
   const filtered = search ? [] : conversations.filter(c => {
-    if (filter === 'directos') return !c.isGroup
-    if (filter === 'grupos')   return c.isGroup
+    if (filter === 'directos')    return !c.isGroup && !c.isCommunity
+    if (filter === 'grupos')      return c.isGroup && !c.isCommunity
+    if (filter === 'comunidades') return c.isCommunity
     return true
   })
 
@@ -247,17 +248,23 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
         {/* Filter tabs */}
         {!search && (
-          <div style={{ display: 'flex', borderTop: `1px solid ${C.border}` }}>
-            {[['todos','Todos'],['directos','Directos'],['grupos','Grupos']].map(([id, label]) => (
+          <div style={{
+            display: 'flex', gap: 6, padding: '10px 14px 8px',
+            borderTop: `1px solid ${C.border}`, overflowX: 'auto',
+            scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+          }}>
+            {[['todos','Todos','💬'],['directos','Directos','👤'],['grupos','Grupos','👥'],['comunidades','Comunidades','🌐']].map(([id, label, icon]) => (
               <button key={id} onClick={() => setFilter(id)} style={{
-                flex: 1, background: 'none', border: 'none', cursor: 'pointer',
-                padding: '9px 8px 10px',
+                flexShrink: 0, background: filter === id ? `${C.green}18` : C.panel2,
+                border: `1px solid ${filter === id ? C.green + '55' : C.border}`,
+                borderRadius: 20, cursor: 'pointer',
+                padding: '6px 14px',
                 color: filter === id ? C.green : C.textDim,
-                fontSize: 12, fontWeight: filter === id ? 700 : 400,
-                borderBottom: filter === id ? `2px solid ${C.green}` : '2px solid transparent',
-                marginBottom: -1, transition: 'color .15s',
-                letterSpacing: '.3px',
-              }}>{label}</button>
+                fontSize: 12, fontWeight: filter === id ? 700 : 500,
+                transition: 'all .15s',
+                display: 'flex', alignItems: 'center', gap: 5,
+                whiteSpace: 'nowrap',
+              }}><span>{icon}</span>{label}</button>
             ))}
           </div>
         )}
