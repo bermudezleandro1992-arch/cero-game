@@ -532,7 +532,12 @@ export default function ChatPage({ onBack }) {
       sounds.msgSent()
     } catch (err) { alert(`Error: ${err.message}`); setText(content) }
     setSending(false)
-    inputRef.current?.focus()
+    // On mobile: blur to dismiss keyboard after send; on desktop: keep focus
+    if (window.innerWidth < 768) {
+      inputRef.current?.blur()
+    } else {
+      inputRef.current?.focus()
+    }
   }
 
   async function handleEditSave() {
