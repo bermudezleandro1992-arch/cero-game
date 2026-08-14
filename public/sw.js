@@ -1,4 +1,4 @@
-const VERSION = '1.7.0'
+const VERSION = '1.8.0'
 const CACHE = `mimensajero-${VERSION}`
 const SHELL = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon.svg']
 
@@ -21,13 +21,11 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return
   const url = new URL(e.request.url)
 
-  // Network-first for API/supabase calls — no cache fallback
   if (url.hostname.includes('supabase') || url.pathname.startsWith('/api')) {
     e.respondWith(fetch(e.request).catch(() => new Response('', { status: 503 })))
     return
   }
 
-  // Always network-first for JS and CSS bundles (Vite content-hashes handle versioning)
   if (url.pathname.match(/\.(js|css)$/)) {
     e.respondWith(
       fetch(e.request)
@@ -41,7 +39,6 @@ self.addEventListener('fetch', e => {
     return
   }
 
-  // Cache-first for static assets (images, fonts, icons)
   if (url.pathname.match(/\.(png|svg|woff2?|ico|webp|jpg|jpeg|apk)$/)) {
     e.respondWith(
       caches.match(e.request).then(cached => {
@@ -56,7 +53,6 @@ self.addEventListener('fetch', e => {
     return
   }
 
-  // Navigation: network-first, fallback to cached index.html (SPA shell)
   e.respondWith(
     fetch(e.request)
       .then(res => {
@@ -67,5 +63,50 @@ self.addEventListener('fetch', e => {
         return res
       })
       .catch(() => caches.match('/index.html').then(r => r || caches.match('/')))
+  )
+})
+
+// ── Web Push notifications ─────────────────────────────────────────────────────
+self.addEventListener('push', e => {
+  if (!e.data) return
+  let data = {}
+  try { data = e.data.json() } catch { data = { title: 'Mi Mensajero', body: e.data.text() } }
+
+  const title = data.title || 'Mi Mensajero'
+  const options = {
+    body: data.body || '',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: data.tag || 'mm-notification',
+    data: data,
+    vibrate: data.type === 'call' ? [200, 100, 200, 100, 200] : [150, 50, 150],
+    requireInteraction: data.type === 'call',
+    actions: data.type === 'call'
+      ? [
+          { action: 'accept', title: '✅ Aceptar' },
+          { action: 'decline', title: '❌ Rechazar' },
+        ]
+      : [{ action: 'open', title: 'Ver mensaje' }],
+  }
+
+  e.waitUntil(self.registration.showNotification(title, options))
+})
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close()
+  const data = e.notification.data || {}
+
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      // Focus existing window if open
+      for (const client of list) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.postMessage({ type: 'NOTIFICATION_CLICK', action: e.action, data })
+          return client.focus()
+        }
+      }
+      // Open new window
+      return clients.openWindow('/?from=notification')
+    })
   )
 })
