@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "635590033952",
+    "project_id": "mimensajer0",
+    "storage_bucket": "mimensajer0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:635590033952:android:d2da05deb58d8689773245",
+        "android_client_info": {
+          "package_name": "app.mimensajero.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAAb55e-sn3cqgOGKYfO3QEWo3Su4Afxfg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
