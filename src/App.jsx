@@ -15,6 +15,7 @@ import ProfileSheet from './components/ProfileSheet'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
 import { initPushNotifications, initWebPush, listenNotificationClicks } from './lib/pushNotifications'
+import { acquireWakeLock, releaseWakeLock } from './lib/appStartup'
 export { C } from './theme'
 import { C } from './theme'
 
@@ -168,7 +169,8 @@ export default function App() {
           callType={incomingCall.callType}
           isIncoming={true}
           incomingOffer={incomingCall.offer}
-          onEnd={clearCall}
+          onEnd={() => { clearCall(); releaseWakeLock() }}
+          onAccept={() => acquireWakeLock()}
         />
       )}
 
