@@ -29,8 +29,10 @@ function StoryViewer({ groups, startGroup, startIdx, onClose, myUserId, onPin })
   const timerRef = useRef(null)
   const group = groups[gIdx]
   const story = group?.stories[idx]
-  const DURATION = story?.media_type === 'video' ? 15000 : 5000
+  const DURATION = story?.media_type === 'video' ? 15000 : 8000
   const isOwn = story?.user_id === myUserId
+  const hasPrev = idx > 0 || gIdx > 0
+  const hasNext = idx < (group?.stories.length || 1) - 1 || gIdx < groups.length - 1
 
   useEffect(() => {
     setProgress(0)
@@ -39,105 +41,121 @@ function StoryViewer({ groups, startGroup, startIdx, onClose, myUserId, onPin })
     timerRef.current = setInterval(() => {
       const p = Math.min(100, ((Date.now() - start) / DURATION) * 100)
       setProgress(p)
-      if (p >= 100) {
-        clearInterval(timerRef.current)
-        next()
-      }
+      if (p >= 100) { clearInterval(timerRef.current); next() }
     }, 50)
     return () => clearInterval(timerRef.current)
   }, [idx, gIdx, paused])
 
   function next() {
-    if (idx < (group?.stories.length || 1) - 1) { setIdx(i => i + 1) }
+    if (idx < (group?.stories.length || 1) - 1) setIdx(i => i + 1)
     else if (gIdx < groups.length - 1) { setGIdx(g => g + 1); setIdx(0) }
     else onClose()
   }
   function prev() {
-    if (idx > 0) { setIdx(i => i - 1) }
+    if (idx > 0) setIdx(i => i - 1)
     else if (gIdx > 0) { setGIdx(g => g - 1); setIdx(0) }
     else onClose()
   }
 
   if (!story) return null
 
+  const btnStyle = {
+    position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+    zIndex: 12, background: 'rgba(0,0,0,0.45)', border: 'none',
+    borderRadius: '50%', width: 44, height: 44, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    backdropFilter: 'blur(4px)',
+  }
+
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: '#000', display: 'flex', flexDirection: 'column' }}>
-      {/* Progress bars */}
-      <div style={{ display: 'flex', gap: 3, padding: '12px 12px 8px', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
-        {group.stories.map((_, i) => (
-          <div key={i} style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.35)', borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', borderRadius: 2, background: '#fff',
-              width: i < idx ? '100%' : i === idx ? `${progress}%` : '0%',
-            }} />
+    <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Story card — max 480px wide on desktop, full screen on mobile */}
+      <div style={{ position: 'relative', width: '100%', maxWidth: 480, height: '100%', maxHeight: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* Progress bars */}
+        <div style={{ display: 'flex', gap: 3, padding: '14px 14px 8px', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
+          {group.stories.map((_, i) => (
+            <div key={i} style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.3)', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 2,
+                background: i < idx ? '#fff' : i === idx ? `rgba(255,255,255,${0.4 + 0.6 * progress / 100})` : 'transparent',
+                width: i < idx ? '100%' : i === idx ? `${progress}%` : '0%',
+                transition: i === idx ? 'none' : 'none',
+              }} />
+            </div>
+          ))}
+        </div>
+
+        {/* Header */}
+        <div style={{ position: 'absolute', top: 28, left: 0, right: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px' }}>
+          <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(255,255,255,0.8)', flexShrink: 0 }}>
+            {group.user?.avatar_url
+              ? <img src={group.user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <div style={{ width: '100%', height: '100%', background: C.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#000', fontSize: 14 }}>
+                  {group.user?.display_name?.slice(0, 2).toUpperCase()}
+                </div>
+            }
           </div>
-        ))}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>{group.user?.display_name || group.user?.username}</div>
+            <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>
+              {new Date(story.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+              {story.is_highlighted && <span style={{ marginLeft: 6, color: '#facc15' }}>★</span>}
+            </div>
+          </div>
+          {paused && <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: 600 }}>⏸ PAUSADO</span>}
+          {isOwn && (
+            <button onClick={() => onPin?.(story)} title={story.is_highlighted ? 'Quitar destacada' : 'Destacar'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: story.is_highlighted ? '#facc15' : 'rgba(255,255,255,0.6)', fontSize: 20 }}>★</button>
+          )}
+          <button onClick={onClose} style={{ background: 'rgba(0,0,0,0.3)', border: 'none', cursor: 'pointer', padding: 8, borderRadius: '50%', display: 'flex' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Media — fills full card */}
+        <div style={{ flex: 1, position: 'relative', background: '#000' }}>
+          {story.media_type === 'video'
+            ? <video src={story.media_url} autoPlay loop playsInline style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+            : <img src={story.media_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+          }
+
+          {/* Caption overlay */}
+          {story.caption && (
+            <div style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              background: 'linear-gradient(transparent, rgba(0,0,0,0.8))',
+              padding: '48px 20px 28px', color: '#fff', fontSize: 15, textAlign: 'center', zIndex: 2,
+            }}>{story.caption}</div>
+          )}
+
+          {/* Hold-to-pause zone (center, doesn't block nav buttons) */}
+          <div style={{ position: 'absolute', inset: 0, zIndex: 3 }}
+            onPointerDown={() => setPaused(true)}
+            onPointerUp={() => setPaused(false)}
+            onPointerLeave={() => setPaused(false)}
+          />
+        </div>
       </div>
 
-      {/* Header */}
-      <div style={{ position: 'absolute', top: 32, left: 0, right: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px' }}>
-        <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', border: '2px solid #fff', flexShrink: 0 }}>
-          {group.user?.avatar_url
-            ? <img src={group.user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <div style={{ width: '100%', height: '100%', background: C.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#000', fontSize: 14 }}>
-                {group.user?.display_name?.slice(0, 2).toUpperCase()}
-              </div>
-          }
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{group.user?.display_name || group.user?.username}</div>
-          <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 11 }}>
-            {new Date(story.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-            {story.is_highlighted && <span style={{ marginLeft: 6, color: '#facc15', fontWeight: 700 }}>★ Destacada</span>}
-          </div>
-        </div>
-        {/* Own story options */}
-        {isOwn && (
-          <button
-            onClick={() => onPin?.(story)}
-            title={story.is_highlighted ? 'Quitar de destacadas' : 'Agregar a destacadas'}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: story.is_highlighted ? '#facc15' : 'rgba(255,255,255,0.6)', fontSize: 20 }}>
-            ★
-          </button>
-        )}
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round">
-            <path d="M18 6L6 18M6 6l12 12"/>
+      {/* ← Prev button */}
+      {hasPrev && (
+        <button onClick={prev} style={{ ...btnStyle, left: 'max(12px, calc(50% - 264px))' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
           </svg>
         </button>
-      </div>
+      )}
 
-      {/* Tap zones */}
-      <div style={{ position: 'absolute', inset: 0, zIndex: 5, display: 'flex' }}>
-        <div style={{ flex: 1 }} onPointerDown={prev} />
-        <div style={{ flex: 1 }} onPointerDown={next} />
-      </div>
-
-      {/* Hold to pause */}
-      <div style={{ position: 'absolute', inset: 0, zIndex: 6 }}
-        onPointerDown={() => setPaused(true)}
-        onPointerUp={() => setPaused(false)}
-        onPointerLeave={() => setPaused(false)}
-      />
-
-      {/* Media */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {story.media_type === 'video'
-          ? <video src={story.media_url} autoPlay loop playsInline style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-          : <img src={story.media_url} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-        }
-      </div>
-
-      {/* Caption */}
-      {story.caption && (
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
-          background: 'linear-gradient(transparent, rgba(0,0,0,0.85))',
-          padding: '40px 20px 32px', color: '#fff', fontSize: 15, textAlign: 'center',
-          zIndex: 7,
-        }}>
-          {story.caption}
-        </div>
+      {/* → Next button */}
+      {hasNext && (
+        <button onClick={next} style={{ ...btnStyle, right: 'max(12px, calc(50% - 264px))' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
       )}
     </div>
   )
