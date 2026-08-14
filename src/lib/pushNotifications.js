@@ -19,10 +19,13 @@ export async function initPushNotifications(userId, onCallReceived) {
   const perm = await PushNotifications.requestPermissions()
   if (perm.receive !== 'granted') return null
 
+  // Always re-register on app start to get fresh/current token
   await PushNotifications.register()
 
   PushNotifications.addListener('registration', async (token) => {
-    await supabase.from('users').update({ fcm_token: token.value }).eq('id', userId)
+    if (token?.value) {
+      await supabase.from('users').update({ fcm_token: token.value }).eq('id', userId)
+    }
   })
 
   PushNotifications.addListener('registrationError', (err) => {
