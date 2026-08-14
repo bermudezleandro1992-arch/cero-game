@@ -5,7 +5,8 @@ const config: CapacitorConfig = {
   appName: 'Mi Mensajero',
   webDir: 'dist',
   server: {
-    androidScheme: 'https',
+    url: 'https://mimensajero.vercel.app',
+    cleartext: false,
   },
   plugins: {
     PushNotifications: {
