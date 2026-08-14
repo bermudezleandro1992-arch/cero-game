@@ -228,7 +228,7 @@ function AudioPlayer({ src, isMine }) {
     if (audioRef.current) audioRef.current.playbackRate = next
   }
 
-  const accent = isMine ? C.green : '#60a5fa'
+  const accent = isMine ? C.green : C.text2
   const playedBars = Math.floor((progress / 100) * bars.length)
 
   return (
@@ -1247,11 +1247,11 @@ export default function ChatPage({ onBack }) {
                   ? (isFirst && isLast ? '14px 4px 14px 14px' : isFirst ? '14px 4px 4px 14px' : isLast ? '14px 14px 4px 14px' : '14px 4px 4px 14px')
                   : (isFirst && isLast ? '4px 14px 14px 14px' : isFirst ? '4px 14px 14px 4px' : isLast ? '4px 14px 14px 4px' : '4px 14px 14px 4px')
 
-                // Sent: dark green gradient. Received: panel2
+                // Sent: green-tinted. Received: panel2
                 const bubbleBg = isMine
-                  ? `linear-gradient(135deg, #0D2918 0%, #12351F 100%)`
+                  ? `linear-gradient(135deg, ${C.green}1a 0%, ${C.green}26 100%)`
                   : C.panel2
-                const bubbleBorder = isMine ? `1px solid #1a4a2a` : `1px solid ${C.border}`
+                const bubbleBorder = isMine ? `1px solid ${C.green}33` : `1px solid ${C.border}`
 
                 return (
                   <div
@@ -1976,7 +1976,7 @@ export default function ChatPage({ onBack }) {
 
 // ── Poll bubble ───────────────────────────────────────────────────────────────
 function PollBubble({ data, msgId, isMine }) {
-  const accent = isMine ? C.green : '#60a5fa'
+  const accent = isMine ? C.green : C.text2
   const { profile } = useAuthStore()
   const userId = profile?.id
 
@@ -2034,7 +2034,7 @@ function PollBubble({ data, msgId, isMine }) {
 
 // ── Event bubble ──────────────────────────────────────────────────────────────
 function EventBubble({ data, isMine }) {
-  const accent = isMine ? C.green : '#60a5fa'
+  const accent = isMine ? C.green : C.text2
   const dateStr = data.date ? new Date(data.date + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }) : ''
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 200 }}>
@@ -2063,7 +2063,7 @@ function EventBubble({ data, isMine }) {
 
 // ── File bubble ────────────────────────────────────────────────────────────────
 function FileBubble({ data, isMine }) {
-  const accent = isMine ? C.green : '#60a5fa'
+  const accent = isMine ? C.green : C.text2
   const ext = data.name?.split('.').pop()?.toUpperCase() || 'FILE'
   const size = data.size ? (data.size > 1024 * 1024 ? `${(data.size / 1024 / 1024).toFixed(1)} MB` : `${Math.round(data.size / 1024)} KB`) : ''
   return (
