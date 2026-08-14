@@ -4,7 +4,7 @@ import { C } from '../theme'
 import { useAppVersion } from '../hooks/useAppVersion'
 import { Capacitor } from '@capacitor/core'
 
-const APK_URL = '/descargar'
+const APK_URL = '/mimensajero.apk'
 
 export default function LoginPage() {
   const { updateAvailable, newVersion, apkUrl } = useAppVersion()
