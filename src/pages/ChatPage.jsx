@@ -1899,7 +1899,6 @@ export default function ChatPage({ onBack }) {
                       } else if (e.key === 'Enter' && !e.shiftKey) { handleSend(e) }
                     }}
                     style={{ width: '100%', background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 14, padding: '9px 0' }}
-                    autoFocus
                   />
                 </div>
               )}
