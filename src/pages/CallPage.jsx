@@ -360,13 +360,27 @@ export default function CallPage({
     }
   }
   function toggleCam() { vibrate(25); const t = localStream.current?.getVideoTracks()[0]; if (t) { t.enabled = !t.enabled; setCamOff(c => !c) } }
-  function toggleSpeaker() {
+  async function toggleSpeaker() {
     vibrate(25)
     const next = !speaker; setSpeaker(next)
+    // Native Android: use Capacitor bridge to switch earpiece/speaker
+    if (window.Capacitor?.isNativePlatform?.()) {
+      try {
+        await window.Capacitor.Plugins.CapacitorSpeaker?.toggleAudioRoute?.({ speaker: next })
+      } catch (_) {}
+      // Fallback: AudioSession via eval (works on some Capacitor versions)
+      try {
+        if (next) {
+          await window.Capacitor.Plugins.App?.requestAudioFocus?.()
+        }
+      } catch (_) {}
+    }
+    // Web fallback: setSinkId
     if (remoteAudio.current) {
-      if (typeof remoteAudio.current.setSinkId === 'function')
+      if (typeof remoteAudio.current.setSinkId === 'function') {
         remoteAudio.current.setSinkId(next ? 'default' : '').catch(() => {})
-      remoteAudio.current.volume = next ? 1.0 : 0.3
+      }
+      remoteAudio.current.volume = 1.0
     }
   }
 
@@ -381,6 +395,8 @@ export default function CallPage({
   if (minimized && phase === 'active') {
     return (
       <>
+        {/* Audio must stay mounted to keep sound when minimized */}
+        <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
         <MiniPill name={name} elapsed={elapsed} avatar_url={avatar_url} colors={colors} isVideo={isVideo} onExpand={() => setMinimized(false)} onHangup={() => hangup(true)} />
         <CallStyles />
       </>
@@ -526,6 +542,7 @@ export default function CallPage({
 
   return (
     <>
+      <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
       <div style={{
         position: 'fixed', inset: 0, zIndex: 200,
         fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
@@ -734,7 +751,6 @@ export default function CallPage({
         </div>
       </div>
 
-      <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
       <CallStyles />
     </>
   )
