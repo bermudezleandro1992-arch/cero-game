@@ -9,6 +9,46 @@ import VipPage from '../pages/VipPage'
 import DonationsPage from '../pages/DonationsPage'
 import { useTheme } from '../lib/ThemeContext'
 
+// ── Role config ───────────────────────────────────────────────────────────────
+const ROLES = {
+  ceo:          { label: 'CEO',              color: '#a855f7', bg: '#a855f718', icon: '👑' },
+  organizador:  { label: 'Organizador',      color: '#f59e0b', bg: '#f59e0b18', icon: '🎖️' },
+  comunidad:    { label: 'Comunidad',        color: '#3b82f6', bg: '#3b82f618', icon: '🌐' },
+  vip:          { label: 'Miembro VIP',      color: '#f59e0b', bg: '#f59e0b18', icon: '⭐' },
+  member:       { label: 'Miembro',          color: C.textDim, bg: C.panel2,    icon: '👤' },
+}
+
+const PLANS = {
+  community: { label: 'Plan Comunidad',  color: '#3b82f6', bg: '#3b82f614', icon: '🌐' },
+  vip:       { label: 'Plan VIP',        color: '#f59e0b', bg: '#f59e0b14', icon: '⭐' },
+  free:      { label: 'Plan Gratuito',   color: C.textDim,  bg: C.panel2,    icon: '🆓' },
+}
+
+function RoleBadge({ role }) {
+  const cfg = ROLES[role] || ROLES.member
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: 11, fontWeight: 700,
+      color: cfg.color, background: cfg.bg,
+      border: `1px solid ${cfg.color}44`,
+      borderRadius: 20, padding: '2px 8px',
+    }}>
+      {cfg.icon} {cfg.label}
+    </span>
+  )
+}
+
+function VerifiedBadge() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="#3b82f6" style={{ flexShrink: 0 }}>
+      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      <circle cx="12" cy="12" r="11" fill="#3b82f6"/>
+      <polyline points="8 12 11 15 16 9" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+    </svg>
+  )
+}
+
 export default function ProfileSheet({ onClose, forceSetup = false }) {
   const { profile, updateProfile } = useAuthStore()
   const { themeId, setTheme, themes } = useTheme()
@@ -16,6 +56,8 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const [showBotApi, setShowBotApi] = useState(false)
   const [showVip, setShowVip] = useState(false)
   const [showDonations, setShowDonations] = useState(false)
+  const [section, setSection] = useState('perfil') // 'perfil' | 'cuenta' | 'preferencias'
+
   const defaultName = (!profile?.display_name || profile.display_name === 'Usuario' || profile.display_name.startsWith('user_')) ? '' : profile.display_name
   const defaultUser = (!profile?.username || profile.username.startsWith('user_')) ? '' : profile.username
   const [name, setName] = useState(defaultName)
@@ -30,15 +72,19 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const avatarInputRef = useRef(null)
 
+  // Plan & role (community plan free for everyone during beta)
+  const userRole = profile?.role || 'member'
+  const userPlan = profile?.plan || 'community' // free community plan for all
+  const isVerified = profile?.is_verified || false
+  const planCfg = PLANS[userPlan] || PLANS.free
+
   async function handleAvatarChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 5 * 1024 * 1024) { setError('La imagen debe pesar menos de 5 MB'); return }
-    setUploadingAvatar(true)
-    setError('')
+    setUploadingAvatar(true); setError('')
     try {
       const ext = file.name.split('.').pop().toLowerCase()
-      // Unique path per upload avoids upsert permission issues
       const path = `${profile.id}/avatar-${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
       if (upErr) throw upErr
@@ -49,18 +95,15 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
       setAvatarUrl(url)
     } catch (err) {
       setError(`No se pudo subir la foto: ${err.message || 'Intentá de nuevo.'}`)
-      console.error(err)
     } finally {
-      setUploadingAvatar(false)
-      e.target.value = ''
+      setUploadingAvatar(false); e.target.value = ''
     }
   }
 
   async function handleSave(e) {
     e.preventDefault()
     if (!name.trim()) return
-    setSaving(true)
-    setError('')
+    setSaving(true); setError('')
     const cleanUser = username.trim().replace(/^@/, '').toLowerCase().replace(/[^a-z0-9_]/g, '')
     const err = await updateProfile(profile.id, {
       display_name: name.trim(),
@@ -68,10 +111,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
       bio: bio.trim(),
     })
     if (err) setError(err)
-    else {
-      setSuccess(true)
-      setTimeout(onClose, 800)
-    }
+    else { setSuccess(true); setTimeout(onClose, 800) }
     setSaving(false)
   }
 
@@ -83,13 +123,35 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   if (showVip) return <VipPage onBack={() => setShowVip(false)} />
   if (showDonations) return <DonationsPage onBack={() => setShowDonations(false)} />
 
+  const inp = {
+    width: '100%', background: C.panel2,
+    border: `1px solid ${C.border}`, borderRadius: 10,
+    color: C.text, fontSize: 15, padding: '11px 14px',
+    outline: 'none', boxSizing: 'border-box',
+    transition: 'border-color .15s',
+  }
+
+  const SECTIONS = [
+    { id: 'perfil', label: 'Perfil' },
+    { id: 'cuenta', label: 'Cuenta' },
+    { id: 'preferencias', label: 'Preferencias' },
+  ]
+
   return (
     <div style={{
-      flex: 1, minHeight: 0,
-      display: 'flex', flexDirection: 'column',
+      flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
       background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
       overflowY: 'auto',
     }}>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .settings-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        @media (min-width: 600px) { .settings-grid { grid-template-columns: 1fr 1fr; } }
+        @media (min-width: 900px) { .settings-grid { grid-template-columns: 1fr 1fr 1fr; } }
+        .stat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+        @media (min-width: 600px) { .stat-grid { grid-template-columns: repeat(6,1fr); } }
+      `}</style>
+
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
@@ -97,85 +159,101 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
         borderBottom: `1px solid ${C.border}`, flexShrink: 0,
       }}>
         {!forceSetup && (
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: C.text2, padding: 4, display: 'flex',
-          }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: 4, display: 'flex' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
         )}
-        <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>
-          {forceSetup ? '¡Bienvenido! Completá tu perfil' : 'Editar perfil'}
+        <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16, flex: 1 }}>
+          {forceSetup ? '¡Bienvenido! Completá tu perfil' : 'Ajustes'}
         </h2>
+        {!forceSetup && userPlan !== 'free' && (
+          <span style={{
+            fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20,
+            background: planCfg.bg, color: planCfg.color,
+            border: `1px solid ${planCfg.color}44`,
+          }}>
+            {planCfg.icon} {planCfg.label}
+          </span>
+        )}
       </div>
 
-      {/* Avatar hero */}
+      {/* Hero — avatar + info + badges */}
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        padding: '40px 20px 32px',
-        background: `radial-gradient(ellipse at 50% 0%, ${C.greenDk}22 0%, transparent 60%)`,
+        padding: '32px 20px 24px',
+        background: `radial-gradient(ellipse at 50% 0%, ${C.greenDk}22 0%, transparent 65%)`,
         borderBottom: `1px solid ${C.border}`, flexShrink: 0,
       }}>
         <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
-        <button
-          type="button"
-          onClick={() => avatarInputRef.current?.click()}
-          disabled={uploadingAvatar}
-          style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-        >
+        <button type="button" onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}
+          style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
           {avatarUrl
-            ? <img src={avatarUrl} alt="avatar" style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${C.green}44`, boxShadow: `0 0 32px ${C.green}22` }} />
+            ? <img src={avatarUrl} alt="avatar" style={{ width: 88, height: 88, borderRadius: '50%', objectFit: 'cover', border: `2.5px solid ${C.green}55`, boxShadow: `0 0 32px ${C.green}22` }} />
             : (
               <div style={{
-                width: 96, height: 96, borderRadius: '50%',
+                width: 88, height: 88, borderRadius: '50%',
                 background: `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})`,
-                border: `2px solid ${C.green}44`,
+                border: `2.5px solid ${C.green}55`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 34, fontWeight: 800, color: C.text,
+                fontSize: 32, fontWeight: 800, color: C.text,
                 boxShadow: `0 0 32px ${C.green}22`,
-                letterSpacing: '-1px',
-              }}>
-                {initials}
-              </div>
+              }}>{initials}</div>
             )
           }
-          {/* Camera overlay */}
           <div style={{
             position: 'absolute', bottom: 2, right: 2,
-            width: 28, height: 28, borderRadius: '50%',
+            width: 26, height: 26, borderRadius: '50%',
             background: uploadingAvatar ? C.panel2 : C.green,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: `2px solid ${C.bg}`,
           }}>
             {uploadingAvatar
-              ? <div style={{ width: 12, height: 12, border: `2px solid ${C.bg}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
-              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              ? <div style={{ width: 11, height: 11, border: `2px solid ${C.bg}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+              : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
             }
           </div>
         </button>
+
+        {/* Name + verified */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12 }}>
+          <span style={{ color: C.text, fontWeight: 800, fontSize: 18 }}>{name || profile?.display_name || 'Usuario'}</span>
+          {isVerified && <VerifiedBadge />}
+        </div>
         {profile?.username && (
-          <p style={{ margin: '10px 0 0', color: C.green, fontSize: 13, fontWeight: 600 }}>
-            @{profile.username}
-          </p>
+          <span style={{ color: C.green, fontSize: 13, fontWeight: 600, marginTop: 2 }}>@{profile.username}</span>
         )}
-        <p style={{ margin: '4px 0 0', color: C.textDim, fontSize: 12 }}>
-          {uploadingAvatar ? 'Subiendo foto...' : 'Tocá para cambiar la foto'}
+
+        {/* Badges row */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, justifyContent: 'center' }}>
+          <RoleBadge role={userRole} />
+          {userPlan !== 'free' && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 11, fontWeight: 700,
+              color: planCfg.color, background: planCfg.bg,
+              border: `1px solid ${planCfg.color}44`,
+              borderRadius: 20, padding: '2px 8px',
+            }}>
+              {planCfg.icon} {planCfg.label}
+            </span>
+          )}
+        </div>
+
+        {!forceSetup && profile?.bio && (
+          <p style={{ color: C.textDim, fontSize: 13, margin: '10px 0 0', textAlign: 'center', maxWidth: 280, lineHeight: 1.4 }}>{profile.bio}</p>
+        )}
+        <p style={{ margin: '6px 0 0', color: C.textDim, fontSize: 11 }}>
+          {uploadingAvatar ? 'Subiendo foto...' : 'Tocá la foto para cambiarla'}
         </p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
 
-      {/* Gamer Stats */}
+      {/* Stats */}
       {!forceSetup && (
-        <div style={{
-          padding: '16px 20px', background: C.panel2,
-          borderBottom: `1px solid ${C.border}`,
-        }}>
-          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
-            Estadísticas
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <div style={{ padding: '16px 20px', background: C.panel2, borderBottom: `1px solid ${C.border}` }}>
+          <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Estadísticas</p>
+          <div className="stat-grid">
             {[
               { icon: '🏆', label: 'Torneos',     value: profile?.stats_tournaments || 0 },
               { icon: '🥇', label: 'Campeonatos', value: profile?.stats_wins || 0 },
@@ -185,11 +263,11 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
               { icon: '📊', label: 'Ranking',     value: profile?.stats_ranking ? `#${profile.stats_ranking}` : '--' },
             ].map(s => (
               <div key={s.label} style={{
-                background: C.panel, borderRadius: 12, padding: '10px 8px',
+                background: C.panel, borderRadius: 12, padding: '10px 6px',
                 border: `1px solid ${C.border}`, textAlign: 'center',
               }}>
-                <div style={{ fontSize: 20, marginBottom: 2 }}>{s.icon}</div>
-                <div style={{ color: C.text, fontWeight: 800, fontSize: 16 }}>{s.value}</div>
+                <div style={{ fontSize: 18, marginBottom: 2 }}>{s.icon}</div>
+                <div style={{ color: C.text, fontWeight: 800, fontSize: 15 }}>{s.value}</div>
                 <div style={{ color: C.textDim, fontSize: 10, marginTop: 1 }}>{s.label}</div>
               </div>
             ))}
@@ -197,282 +275,245 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
         </div>
       )}
 
-      {/* Form */}
-      <form onSubmit={handleSave} style={{
-        display: 'flex', flexDirection: 'column', gap: 0,
-        padding: '8px 0', overflowY: 'auto', flex: 1,
-      }}>
-        {/* Name field */}
-        <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${C.border}` }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 12 }}>
-            Tu nombre
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            maxLength={50}
-            autoFocus
-            placeholder="Cómo querés que te vean"
-            style={{
-              width: '100%', background: 'transparent',
-              border: 'none', borderBottom: `1.5px solid ${C.green}`,
-              color: C.text, fontSize: 16, padding: '4px 0 8px',
-              outline: 'none', boxSizing: 'border-box',
-            }}
-          />
-          <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '6px 0 0' }}>
-            {name.length}/50
-          </p>
+      {/* Section tabs */}
+      {!forceSetup && (
+        <div style={{
+          display: 'flex', gap: 0, background: C.panel,
+          borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+        }}>
+          {SECTIONS.map(s => (
+            <button key={s.id} onClick={() => setSection(s.id)} style={{
+              flex: 1, padding: '12px 4px', background: 'none',
+              border: 'none', borderBottom: `2px solid ${section === s.id ? C.green : 'transparent'}`,
+              color: section === s.id ? C.green : C.textDim,
+              fontSize: 13, fontWeight: section === s.id ? 700 : 500,
+              cursor: 'pointer', transition: 'all .15s',
+            }}>{s.label}</button>
+          ))}
         </div>
+      )}
 
-        {/* Username field */}
-        <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${C.border}` }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 12 }}>
-            Nombre de usuario
-          </label>
-          <div style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
-            <span style={{ color: C.textDim, fontSize: 16, marginRight: 2 }}>@</span>
-            <input
-              type="text"
-              value={username}
-              onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-              maxLength={30}
-              placeholder="tu_usuario"
-              style={{
-                flex: 1, background: 'transparent', border: 'none',
-                color: C.text, fontSize: 16, padding: '4px 0',
-                outline: 'none',
-              }}
-            />
-          </div>
-          <p style={{ fontSize: 12, color: C.textDim, margin: '8px 0 0' }}>
-            Solo letras minúsculas, números y guión bajo
-          </p>
-        </div>
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 40px' }}>
 
-        {/* Bio */}
-        <div style={{ padding: '0 24px 20px' }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 12 }}>
-            Bio
-          </label>
-          <textarea
-            value={bio}
-            onChange={e => setBio(e.target.value)}
-            maxLength={160}
-            placeholder="Algo sobre vos..."
-            rows={3}
-            style={{
-              width: '100%', background: 'transparent', border: 'none',
-              borderBottom: `1px solid ${C.border}`, color: C.text,
-              fontSize: 15, padding: '4px 0 8px', outline: 'none',
-              resize: 'none', lineHeight: 1.5, boxSizing: 'border-box',
-            }}
-          />
-          <p style={{ fontSize: 12, color: C.textDim, margin: '4px 0 0', textAlign: 'right' }}>{bio.length}/160</p>
-        </div>
-
-        {/* Status messages */}
-        {error && (
-          <div style={{ margin: '0 24px', padding: '10px 14px', background: `${C.red}18`, border: `1px solid ${C.red}44`, borderRadius: 10, color: C.red, fontSize: 13 }}>
-            {error}
-          </div>
-        )}
-        {success && (
-          <div style={{ margin: '0 24px', padding: '10px 14px', background: `${C.green}18`, border: `1px solid ${C.green}44`, borderRadius: 10, color: C.green, fontSize: 13, textAlign: 'center', fontWeight: 600 }}>
-            ¡Perfil actualizado!
-          </div>
-        )}
-
-        {/* Sound settings */}
-        {!forceSetup && (
-          <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${C.border}` }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', margin: '0 0 16px' }}>
-              Configuración
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 20 }}>{soundOn ? '🔔' : '🔕'}</span>
+        {/* ── PERFIL ── */}
+        {(section === 'perfil' || forceSetup) && (
+          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            <div style={{ padding: '20px 20px 0' }}>
+              <p style={{ margin: '0 0 16px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Información personal</p>
+              <div className="settings-grid">
                 <div>
-                  <p style={{ margin: 0, fontSize: 14, color: C.text, fontWeight: 600 }}>Sonidos</p>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>
-                    {soundOn ? 'Activados' : 'Silenciados'}
-                  </p>
+                  <label style={{ fontSize: 11, color: C.green, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre</label>
+                  <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={50}
+                    autoFocus={forceSetup} placeholder="Tu nombre" style={inp} />
+                  <p style={{ textAlign: 'right', fontSize: 10, color: C.textDim, margin: '4px 0 0' }}>{name.length}/50</p>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.textDim, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Usuario</label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: C.textDim, fontSize: 15 }}>@</span>
+                    <input type="text" value={username}
+                      onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      maxLength={30} placeholder="tu_usuario"
+                      style={{ ...inp, paddingLeft: 28 }} />
+                  </div>
+                </div>
+                <div style={{ gridColumn: 'span 1' }}>
+                  <label style={{ fontSize: 11, color: C.textDim, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Bio</label>
+                  <textarea value={bio} onChange={e => setBio(e.target.value)} maxLength={160}
+                    placeholder="Algo sobre vos..." rows={3}
+                    style={{ ...inp, resize: 'none', lineHeight: 1.5 }} />
+                  <p style={{ fontSize: 10, color: C.textDim, margin: '4px 0 0', textAlign: 'right' }}>{bio.length}/160</p>
                 </div>
               </div>
-              {/* Toggle switch */}
-              <button
-                type="button"
-                onClick={() => { const next = soundSettings.toggle(); setSoundOn(next) }}
-                style={{
-                  width: 48, height: 26, borderRadius: 13, border: 'none',
-                  background: soundOn ? C.green : C.border,
-                  cursor: 'pointer', position: 'relative',
-                  transition: 'background .2s',
-                  flexShrink: 0,
-                }}
-              >
-                <div style={{
-                  position: 'absolute', top: 3,
-                  left: soundOn ? 25 : 3,
-                  width: 20, height: 20, borderRadius: '50%',
-                  background: soundOn ? C.bg : C.text2,
-                  transition: 'left .2s',
-                }} />
+            </div>
+
+            {error && (
+              <div style={{ margin: '12px 20px 0', padding: '10px 14px', background: `${C.red}18`, border: `1px solid ${C.red}44`, borderRadius: 10, color: C.red, fontSize: 13 }}>
+                {error}
+              </div>
+            )}
+            {success && (
+              <div style={{ margin: '12px 20px 0', padding: '10px 14px', background: `${C.green}18`, border: `1px solid ${C.green}44`, borderRadius: 10, color: C.green, fontSize: 13, textAlign: 'center', fontWeight: 600 }}>
+                ¡Perfil actualizado!
+              </div>
+            )}
+
+            <div style={{ padding: '20px 20px 0' }}>
+              <button type="submit" disabled={disabled} style={{
+                padding: '13px 28px', borderRadius: 12, border: 'none', width: '100%',
+                background: disabled ? C.panel2 : C.green,
+                color: disabled ? C.textDim : C.bg,
+                fontSize: 15, fontWeight: 800,
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                boxShadow: disabled ? 'none' : `0 4px 20px ${C.green}44`,
+                transition: 'all .2s',
+              }}>
+                {saving ? 'Guardando...' : forceSetup ? 'Entrar al chat' : 'Guardar cambios'}
               </button>
             </div>
-          </div>
+          </form>
         )}
 
-        {/* Sound pack picker */}
-        {!forceSetup && soundOn && (
-          <div style={{ padding: '0 24px 16px', borderBottom: `1px solid ${C.border}` }}>
-            <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Pack de sonidos</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {Object.values(SOUND_PACKS).map(p => (
-                <button key={p.id} type="button" onClick={() => { soundSettings.setPack(p.id); setSoundPack(p.id) }} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
-                  background: soundPack === p.id ? `${C.green}18` : C.panel2,
-                  border: `1.5px solid ${soundPack === p.id ? C.green : C.border}`,
-                  transition: 'all .15s',
-                }}>
-                  <span style={{ fontSize: 20, flexShrink: 0 }}>{p.emoji}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: soundPack === p.id ? C.green : C.text, fontWeight: 600, fontSize: 13 }}>{p.label}</div>
-                    <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{p.desc}</div>
+        {/* ── CUENTA ── */}
+        {section === 'cuenta' && !forceSetup && (
+          <div style={{ padding: '20px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* Plan actual */}
+            <div style={{
+              background: planCfg.bg, border: `1.5px solid ${planCfg.color}55`,
+              borderRadius: 16, padding: '16px 18px',
+              display: 'flex', alignItems: 'center', gap: 14,
+            }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: 14, flexShrink: 0,
+                background: `${planCfg.color}22`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
+              }}>{planCfg.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: planCfg.color, fontWeight: 800, fontSize: 15 }}>{planCfg.label}</div>
+                <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>
+                  {userPlan === 'community' ? 'Acceso completo a Comunidad — gratis durante beta' : 'Acceso completo a todas las funciones'}
+                </div>
+              </div>
+              {isVerified && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                  <VerifiedBadge />
+                  <span style={{ fontSize: 9, color: '#3b82f6', fontWeight: 700 }}>VERIFICADO</span>
+                </div>
+              )}
+            </div>
+
+            {/* Rol */}
+            <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, padding: '16px 18px' }}>
+              <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Tu rango</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {Object.entries(ROLES).map(([key, cfg]) => (
+                  <div key={key} style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '8px 14px', borderRadius: 12,
+                    background: userRole === key ? cfg.bg : C.panel2,
+                    border: `1.5px solid ${userRole === key ? cfg.color : C.border}`,
+                    opacity: userRole === key ? 1 : 0.5,
+                  }}>
+                    <span style={{ fontSize: 16 }}>{cfg.icon}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: userRole === key ? cfg.color : C.textDim }}>{cfg.label}</span>
+                    {userRole === key && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
                   </div>
-                  {soundPack === p.id && (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                  )}
-                </button>
-              ))}
+                ))}
+              </div>
             </div>
+
+            {/* Acciones */}
+            {[
+              { icon: '⭐', label: 'Plan VIP', desc: 'Comunidades ilimitadas, bots y más', color: '#f59e0b', action: () => setShowVip(true) },
+              { icon: '💚', label: 'Apoyá el proyecto', desc: 'Donaciones para mantener todo gratis', color: C.green, action: () => setShowDonations(true) },
+              { icon: '🤖', label: 'API de Bots', desc: 'Conectá plataformas externas y bots', color: C.textDim, action: () => setShowBotApi(true) },
+              { icon: '⚖️', label: 'Legal y Privacidad', desc: 'Términos, privacidad y reglamento', color: C.textDim, action: () => setShowLegal(true) },
+            ].map(item => (
+              <button key={item.label} type="button" onClick={item.action} style={{
+                display: 'flex', alignItems: 'center', gap: 14, width: '100%',
+                background: C.panel, border: `1px solid ${C.border}`,
+                borderRadius: 14, padding: '14px 16px', cursor: 'pointer', textAlign: 'left',
+                transition: 'border-color .15s',
+              }}>
+                <span style={{ fontSize: 20, flexShrink: 0 }}>{item.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: item.color !== C.textDim ? item.color : C.text, fontSize: 14, fontWeight: 700 }}>{item.label}</div>
+                  <div style={{ color: C.textDim, fontSize: 11, marginTop: 2 }}>{item.desc}</div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
+              </button>
+            ))}
           </div>
         )}
 
-        {/* Theme picker */}
-        {!forceSetup && (
-          <div style={{ padding: '0 24px 4px' }}>
-            <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: C.textDim, letterSpacing: '.5px', textTransform: 'uppercase' }}>Tema</p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {Object.values(themes).map(t => (
-                <button key={t.id} type="button" onClick={() => setTheme(t.id)} style={{
-                  flex: 1, padding: '10px 4px', borderRadius: 14, cursor: 'pointer',
-                  background: t.bg, border: `2px solid ${themeId === t.id ? t.green : t.border}`,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  transition: 'border .15s',
+        {/* ── PREFERENCIAS ── */}
+        {section === 'preferencias' && !forceSetup && (
+          <div style={{ padding: '20px 20px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Sonidos */}
+            <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}` }}>
+                <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Sonidos</p>
+              </div>
+              <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 20 }}>{soundOn ? '🔔' : '🔕'}</span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 14, color: C.text, fontWeight: 600 }}>Sonidos de notificación</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>{soundOn ? 'Activados' : 'Silenciados'}</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => { const next = soundSettings.toggle(); setSoundOn(next) }} style={{
+                  width: 48, height: 26, borderRadius: 13, border: 'none',
+                  background: soundOn ? C.green : C.border,
+                  cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0,
                 }}>
-                  <span style={{ fontSize: 18 }}>{t.emoji}</span>
-                  <span style={{ fontSize: 10, color: t.text2, fontWeight: 600 }}>{t.label}</span>
+                  <div style={{
+                    position: 'absolute', top: 3, left: soundOn ? 25 : 3,
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: soundOn ? C.bg : C.text2, transition: 'left .2s',
+                  }} />
                 </button>
-              ))}
+              </div>
+              {soundOn && (
+                <div style={{ padding: '0 18px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Pack de sonidos</p>
+                  {Object.values(SOUND_PACKS).map(p => (
+                    <button key={p.id} type="button" onClick={() => { soundSettings.setPack(p.id); setSoundPack(p.id) }} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                      background: soundPack === p.id ? `${C.green}18` : C.panel2,
+                      border: `1.5px solid ${soundPack === p.id ? C.green : C.border}`,
+                      transition: 'all .15s',
+                    }}>
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>{p.emoji}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: soundPack === p.id ? C.green : C.text, fontWeight: 600, fontSize: 13 }}>{p.label}</div>
+                        <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{p.desc}</div>
+                      </div>
+                      {soundPack === p.id && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Tema */}
+            <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}` }}>
+                <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Apariencia</p>
+              </div>
+              <div style={{ padding: '14px 18px' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {Object.values(themes).map(t => (
+                    <button key={t.id} type="button" onClick={() => setTheme(t.id)} style={{
+                      flex: 1, padding: '12px 4px', borderRadius: 14, cursor: 'pointer',
+                      background: t.bg, border: `2.5px solid ${themeId === t.id ? t.green : t.border}`,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                      transition: 'border .15s',
+                    }}>
+                      <span style={{ fontSize: 20 }}>{t.emoji}</span>
+                      <span style={{ fontSize: 10, color: t.text2, fontWeight: 600 }}>{t.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
-
-        {/* VIP membership */}
-        {!forceSetup && (
-          <div style={{ padding: '0 24px 4px' }}>
-            <button type="button" onClick={() => setShowVip(true)} style={{
-              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-              background: `linear-gradient(135deg, #f59e0b12, #f59e0b06)`,
-              border: `1px solid #f59e0b44`, borderRadius: 12,
-              padding: '12px 16px', cursor: 'pointer',
-            }}>
-              <span style={{ fontSize: 18 }}>⭐</span>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ color: '#f59e0b', fontSize: 14, fontWeight: 700 }}>Plan VIP</div>
-                <div style={{ fontSize: 11, color: C.textDim }}>Comunidades ilimitadas, bots, estadísticas y más</div>
-              </div>
-              <svg style={{ marginLeft: 'auto' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18l6-6-6-6"/>
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Donations */}
-        {!forceSetup && (
-          <div style={{ padding: '0 24px 4px' }}>
-            <button type="button" onClick={() => setShowDonations(true)} style={{
-              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-              background: 'none', border: `1px solid ${C.border}`, borderRadius: 12,
-              padding: '12px 16px', cursor: 'pointer', color: C.textDim,
-            }}>
-              <span style={{ fontSize: 18 }}>💚</span>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ color: C.text2, fontSize: 14, fontWeight: 600 }}>Apoyá el proyecto</div>
-                <div style={{ fontSize: 11, color: C.textDim }}>Donaciones para mantener todo gratis</div>
-              </div>
-              <svg style={{ marginLeft: 'auto' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18l6-6-6-6"/>
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Bot API link */}
-        {!forceSetup && (
-          <div style={{ padding: '0 24px 4px' }}>
-            <button type="button" onClick={() => setShowBotApi(true)} style={{
-              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-              background: 'none', border: `1px solid ${C.border}`, borderRadius: 12,
-              padding: '12px 16px', cursor: 'pointer', color: C.textDim,
-            }}>
-              <span style={{ fontSize: 18 }}>🤖</span>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ color: C.text2, fontSize: 14, fontWeight: 600 }}>API de Bots</div>
-                <div style={{ fontSize: 11, color: C.textDim }}>Conectá plataformas externas y bots</div>
-              </div>
-              <svg style={{ marginLeft: 'auto' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18l6-6-6-6"/>
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Legal link */}
-        {!forceSetup && (
-          <div style={{ padding: '0 24px 4px' }}>
-            <button type="button" onClick={() => setShowLegal(true)} style={{
-              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-              background: 'none', border: `1px solid ${C.border}`, borderRadius: 12,
-              padding: '12px 16px', cursor: 'pointer', color: C.textDim,
-            }}>
-              <span style={{ fontSize: 18 }}>⚖️</span>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ color: C.text2, fontSize: 14, fontWeight: 600 }}>Legal y Privacidad</div>
-                <div style={{ fontSize: 11, color: C.textDim }}>Términos, privacidad y reglamento</div>
-              </div>
-              <svg style={{ marginLeft: 'auto' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18l6-6-6-6"/>
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Save button */}
-        <div style={{ padding: '20px 24px' }}>
-          <button
-            type="submit"
-            disabled={disabled}
-            style={{
-              padding: '11px 28px',
-              borderRadius: 10, border: 'none',
-              background: disabled ? C.panel2 : C.green,
-              color: disabled ? C.textDim : C.bg,
-              fontSize: 14, fontWeight: 700,
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              boxShadow: disabled ? 'none' : `0 2px 16px ${C.green}33`,
-              transition: 'all .2s',
-            }}>
-            {saving ? 'Guardando...' : forceSetup ? 'Entrar al chat' : 'Guardar cambios'}
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   )
 }
