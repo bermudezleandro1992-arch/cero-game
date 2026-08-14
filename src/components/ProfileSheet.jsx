@@ -5,9 +5,11 @@ import { C } from '../theme'
 import { soundSettings } from '../lib/sounds'
 import LegalPage from '../pages/LegalPage'
 import BotApiPage from '../pages/BotApiPage'
+import { useTheme } from '../lib/ThemeContext'
 
 export default function ProfileSheet({ onClose, forceSetup = false }) {
   const { profile, updateProfile } = useAuthStore()
+  const { themeId, setTheme, themes } = useTheme()
   const [showLegal, setShowLegal] = useState(false)
   const [showBotApi, setShowBotApi] = useState(false)
   const defaultName = (!profile?.display_name || profile.display_name === 'Usuario' || profile.display_name.startsWith('user_')) ? '' : profile.display_name
@@ -311,6 +313,26 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
                   transition: 'left .2s',
                 }} />
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Theme picker */}
+        {!forceSetup && (
+          <div style={{ padding: '0 24px 4px' }}>
+            <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: C.textDim, letterSpacing: '.5px', textTransform: 'uppercase' }}>Tema</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {Object.values(themes).map(t => (
+                <button key={t.id} type="button" onClick={() => setTheme(t.id)} style={{
+                  flex: 1, padding: '10px 4px', borderRadius: 14, cursor: 'pointer',
+                  background: t.bg, border: `2px solid ${themeId === t.id ? t.green : t.border}`,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'border .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>{t.emoji}</span>
+                  <span style={{ fontSize: 10, color: t.text2, fontWeight: 600 }}>{t.label}</span>
+                </button>
+              ))}
             </div>
           </div>
         )}

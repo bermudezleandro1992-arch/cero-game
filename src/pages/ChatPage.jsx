@@ -1977,22 +1977,23 @@ export default function ChatPage({ onBack }) {
 // ── Poll bubble ───────────────────────────────────────────────────────────────
 function PollBubble({ data, msgId, isMine }) {
   const accent = isMine ? C.green : '#60a5fa'
-  const voteKey = `poll_vote:${msgId}`
-  const [voted, setVoted] = useState(() => {
-    try { return localStorage.getItem(voteKey) } catch { return null }
-  })
-  const [votes, setVotes] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(`poll_votes:${msgId}`) || 'null') || {} } catch { return {} }
-  })
+  const { profile } = useAuthStore()
+  const userId = profile?.id
+
+  // votes / voters live in message content (synced via Supabase realtime)
+  const votes = data.votes || {}
+  const voterOptions = data.voterOptions || {}
+  const voted = voterOptions[userId] || null
+
   const total = Object.values(votes).reduce((s, v) => s + v, 0)
-  function vote(opt) {
-    if (voted) return
-    const next = { ...votes, [opt]: (votes[opt] || 0) + 1 }
-    setVotes(next)
-    setVoted(opt)
+
+  async function vote(opt) {
+    if (voted || !userId) return
+    const nextVotes = { ...votes, [opt]: (votes[opt] || 0) + 1 }
+    const nextVoterOptions = { ...voterOptions, [userId]: opt }
+    const nextData = { ...data, votes: nextVotes, voterOptions: nextVoterOptions }
     try {
-      localStorage.setItem(voteKey, opt)
-      localStorage.setItem(`poll_votes:${msgId}`, JSON.stringify(next))
+      await supabase.from('messages').update({ content: JSON.stringify(nextData) }).eq('id', msgId)
     } catch {}
     try { navigator.vibrate?.(20) } catch {}
   }
