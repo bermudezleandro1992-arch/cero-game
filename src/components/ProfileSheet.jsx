@@ -15,13 +15,13 @@ const ROLES = {
   organizador:  { label: 'Organizador',      color: '#f59e0b', bg: '#f59e0b18', icon: '🎖️' },
   comunidad:    { label: 'Comunidad',        color: '#3b82f6', bg: '#3b82f618', icon: '🌐' },
   vip:          { label: 'Miembro VIP',      color: '#f59e0b', bg: '#f59e0b18', icon: '⭐' },
-  member:       { label: 'Miembro',          color: C.textDim, bg: C.panel2,    icon: '👤' },
+  member:       { label: 'Miembro',          color: '#64748b', bg: '#64748b18', icon: '👤' },
 }
 
 const PLANS = {
   community: { label: 'Plan Comunidad',  color: '#3b82f6', bg: '#3b82f614', icon: '🌐' },
   vip:       { label: 'Plan VIP',        color: '#f59e0b', bg: '#f59e0b14', icon: '⭐' },
-  free:      { label: 'Plan Gratuito',   color: C.textDim,  bg: C.panel2,    icon: '🆓' },
+  free:      { label: 'Plan Gratuito',   color: '#64748b', bg: '#64748b14', icon: '🆓' },
 }
 
 function RoleBadge({ role }) {
