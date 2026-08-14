@@ -141,6 +141,7 @@ function AudioPlayer({ src, isMine }) {
   const [duration, setDuration] = useState(0)
   const [speed, setSpeed] = useState(1)
   const audioRef = useRef(null)
+  const audioCtxRef = useRef(null)
   // Static waveform bars (decorative — real waveform requires Web Audio decoding)
   const bars = [0.3,0.6,0.9,0.5,1,0.7,0.4,0.8,0.6,1,0.5,0.7,0.9,0.4,0.6,0.8,0.5,1,0.3,0.7,0.9,0.5,0.6,0.4,0.8,1,0.6,0.4,0.7,0.5]
 
@@ -151,6 +152,24 @@ function AudioPlayer({ src, isMine }) {
     a.preload = 'metadata'
     audioRef.current = a
     let durationFixed = false
+
+    // Web Audio normalization: compressor + gain to keep consistent volume
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      const source = ctx.createMediaElementSource(a)
+      const compressor = ctx.createDynamicsCompressor()
+      compressor.threshold.value = -24
+      compressor.knee.value = 10
+      compressor.ratio.value = 8
+      compressor.attack.value = 0.003
+      compressor.release.value = 0.15
+      const gain = ctx.createGain()
+      gain.gain.value = 1.4
+      source.connect(compressor)
+      compressor.connect(gain)
+      gain.connect(ctx.destination)
+      audioCtxRef.current = ctx
+    } catch (_) {}
 
     a.onloadedmetadata = () => {
       if (isFinite(a.duration) && a.duration > 0) {
@@ -178,14 +197,20 @@ function AudioPlayer({ src, isMine }) {
     a.onended = () => { setPlaying(false); setProgress(0); setCurrent(0); a.currentTime = 0 }
     a.onerror = () => {}
     a.src = src
-    return () => { a.pause(); a.src = ''; audioRef.current = null }
+    return () => {
+      a.pause(); a.src = ''; audioRef.current = null
+      audioCtxRef.current?.close(); audioCtxRef.current = null
+    }
   }, [src])
 
   function toggle() {
     const a = audioRef.current
     if (!a) return
     if (playing) { a.pause(); setPlaying(false) }
-    else { a.play().then(() => setPlaying(true)).catch(() => setPlaying(false)) }
+    else {
+      audioCtxRef.current?.resume()
+      a.play().then(() => setPlaying(true)).catch(() => setPlaying(false))
+    }
   }
 
   function seek(e) {
