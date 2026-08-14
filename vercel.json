@@ -1,0 +1,14 @@
+{
+  "redirects": [
+    {
+      "source": "/descargar",
+      "destination": "https://github.com/bermudezleandro1992-arch/cero-game/releases/latest/download/mimensajero.apk",
+      "permanent": false
+    },
+    {
+      "source": "/apk",
+      "destination": "https://github.com/bermudezleandro1992-arch/cero-game/releases/latest/download/mimensajero.apk",
+      "permanent": false
+    }
+  ]
+}
