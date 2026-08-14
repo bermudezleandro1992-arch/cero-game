@@ -5,8 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Mi Mensajero',
   webDir: 'dist',
   server: {
-    // For production: remove this and use bundled dist
-    // androidScheme: 'https',
+    androidScheme: 'https',
   },
   plugins: {
     PushNotifications: {
