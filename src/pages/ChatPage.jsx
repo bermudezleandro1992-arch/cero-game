@@ -362,6 +362,35 @@ export default function ChatPage({ onBack }) {
     deleteMessage(msgId, activeConversation.id)
     setDeleteMenuMsg(null); setLongPressMsg(null)
   }
+  async function handleClearHistory() {
+    setShowChatMenu(false)
+    if (!window.confirm('¿Limpiar historial? Se borrará solo para vos.')) return
+    await supabase.from('conversation_members')
+      .update({ cleared_at: new Date().toISOString() })
+      .eq('conversation_id', activeConversation.id)
+      .eq('user_id', profile.id)
+    fetchMessages(activeConversation.id)
+  }
+
+  async function handleDeleteChat() {
+    setShowChatMenu(false)
+    if (!window.confirm('¿Borrar este chat de tu lista?')) return
+    await supabase.from('conversation_members')
+      .delete()
+      .eq('conversation_id', activeConversation.id)
+      .eq('user_id', profile.id)
+    onBack?.()
+  }
+
+  async function handleSetAutoDelete(hours) {
+    setShowAutoDeletePicker(false)
+    setShowChatMenu(false)
+    setAutoDeleteHours(hours)
+    await supabase.from('conversations')
+      .update({ auto_delete_hours: hours })
+      .eq('id', activeConversation.id)
+  }
+
   const [showContact, setShowContact] = useState(false)
   const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [call, setCall] = useState(null)
@@ -393,6 +422,9 @@ export default function ChatPage({ onBack }) {
   const [showNewTopic, setShowNewTopic] = useState(false)
   const [newTopicName, setNewTopicName] = useState('')
   const [newTopicEmoji, setNewTopicEmoji] = useState('💬')
+  const [showChatMenu, setShowChatMenu] = useState(false)
+  const [autoDeleteHours, setAutoDeleteHours] = useState(null)
+  const [showAutoDeletePicker, setShowAutoDeletePicker] = useState(false)
   const [mentionQuery, setMentionQuery] = useState(null) // string after @, or null
   const [mentionIndex, setMentionIndex] = useState(0)
   const [recording, setRecording] = useState(false)
@@ -410,6 +442,13 @@ export default function ChatPage({ onBack }) {
   const inputRef = useRef(null)
   const fileRef = useRef(null)
   const longPressTimer = useRef(null)
+
+  useEffect(() => {
+    if (!showChatMenu) return
+    const h = () => setShowChatMenu(false)
+    const t = setTimeout(() => document.addEventListener('click', h, { once: true }), 0)
+    return () => { clearTimeout(t); document.removeEventListener('click', h) }
+  }, [showChatMenu])
 
   const isGroup = activeConversation?.isGroup
   const otherUser = activeConversation?.user
@@ -1085,6 +1124,79 @@ export default function ChatPage({ onBack }) {
               <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
             </svg>
           </HdrBtn>
+
+          {/* ⋯ more menu */}
+          <div style={{ position: 'relative' }}>
+            <HdrBtn title="Más opciones" onClick={() => { setShowChatMenu(v => !v); setShowAutoDeletePicker(false) }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill={C.text2}>
+                <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+              </svg>
+            </HdrBtn>
+            {showChatMenu && (
+              <div
+                onClick={e => e.stopPropagation()}
+                style={{
+                  position: 'absolute', top: 38, right: 0, zIndex: 200,
+                  background: C.panel, border: `1px solid ${C.border}`,
+                  borderRadius: 12, overflow: 'hidden',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                  minWidth: 210,
+                }}
+              >
+                {/* Auto-delete / mensajes temporales */}
+                <div
+                  onClick={() => setShowAutoDeletePicker(v => !v)}
+                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${C.border}22`, background: showAutoDeletePicker ? C.panel2 : 'transparent' }}
+                  onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                  onMouseLeave={e => e.currentTarget.style.background = showAutoDeletePicker ? C.panel2 : 'transparent'}
+                >
+                  <span>⏱️</span>
+                  <span style={{ flex: 1 }}>Mensajes temporales</span>
+                  {autoDeleteHours ? <span style={{ fontSize: 10, color: C.green, fontWeight: 700 }}>ON</span> : <span style={{ fontSize: 10, color: C.textDim }}>▼</span>}
+                </div>
+                {showAutoDeletePicker && (
+                  <div style={{ background: C.panel2, borderBottom: `1px solid ${C.border}22` }}>
+                    {[
+                      [null,'Desactivado'],
+                      [0.083,'5 minutos'],
+                      [1,'1 hora'],
+                      [12,'12 horas'],
+                      [24,'24 horas'],
+                      [168,'7 días'],
+                    ].map(([h, label]) => (
+                      <div
+                        key={label}
+                        onClick={() => handleSetAutoDelete(h)}
+                        style={{
+                          padding: '8px 28px', cursor: 'pointer', fontSize: 12,
+                          color: autoDeleteHours === h ? C.green : C.text,
+                          fontWeight: autoDeleteHours === h ? 700 : 400,
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = C.panel}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >{label} {autoDeleteHours === h ? '✓' : ''}</div>
+                    ))}
+                  </div>
+                )}
+                <div
+                  onClick={handleClearHistory}
+                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', gap: 8, alignItems: 'center' }}
+                  onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span>🧹</span> Limpiar historial
+                </div>
+                <div
+                  onClick={handleDeleteChat}
+                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: '#ef4444', display: 'flex', gap: 8, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#ef444418'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span>🗑️</span> Borrar chat
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Pinned message */}
