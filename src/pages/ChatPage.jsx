@@ -8,6 +8,7 @@ import GroupInfoPage from './GroupInfoPage'
 import { useContactStatus, formatLastSeen } from '../hooks/useContactStatus'
 import { supabase } from '../lib/supabase'
 import { sounds } from '../lib/sounds'
+import { acquireWakeLock } from '../lib/appStartup'
 import { C } from '../theme'
 
 const EMOJI_CATS = [
@@ -768,10 +769,12 @@ export default function ChatPage({ onBack }) {
         <CallPage
           conversationId={activeConversation?.id}
           myUserId={profile?.id}
+          myUserName={profile?.display_name || ''}
           contact={otherUser}
           callType={call.type}
           isIncoming={false}
           onEnd={() => setCall(null)}
+          onAccept={acquireWakeLock}
         />
       )}
       {groupCall && (

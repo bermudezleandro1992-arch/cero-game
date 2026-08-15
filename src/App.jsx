@@ -192,12 +192,13 @@ export default function App() {
         <CallPage
           conversationId={incomingCall.convId}
           myUserId={profile.id}
+          myUserName={profile.display_name || ''}
           contact={{ id: incomingCall.from, display_name: incomingCall.fromName || 'Usuario' }}
           callType={incomingCall.callType}
           isIncoming={true}
           incomingOffer={incomingCall.offer}
           onEnd={() => { clearCall(); releaseWakeLock() }}
-          onAccept={() => acquireWakeLock()}
+          onAccept={acquireWakeLock}
         />
       )}
 
