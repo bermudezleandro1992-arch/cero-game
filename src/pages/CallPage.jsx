@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-import { sounds, ringtone, outgoingRing } from '../lib/sounds'
+import { sounds, ringtone, outgoingRing, busyTone } from '../lib/sounds'
 
 const TURN_USER = import.meta.env.VITE_TURN_USERNAME || 'openrelayproject'
 const TURN_CRED = import.meta.env.VITE_TURN_CREDENTIAL || 'openrelayproject'
@@ -200,7 +200,7 @@ export default function CallPage({
         } else { pendingIce.current.push(payload.candidate) }
       })
       .on('broadcast', { event: 'call-end' }, () => hangup(false))
-      .on('broadcast', { event: 'call-reject' }, () => hangup(false))
+      .on('broadcast', { event: 'call-reject' }, () => { busyTone.start(); setTimeout(() => busyTone.stop(), 3000); hangup(false) })
       .subscribe()
 
     if (!isIncoming) {
@@ -212,7 +212,7 @@ export default function CallPage({
     } else { ringtone.start(); vibrate([0, 400, 200, 400, 200, 400]) }
 
     return () => {
-      ringtone.stop(); outgoingRing.stop()
+      ringtone.stop(); outgoingRing.stop(); busyTone.stop()
       clearInterval(timerRef.current)
       clearTimeout(connectTimeoutRef.current)
       clearTimeout(ringTimeoutRef.current)
@@ -341,7 +341,7 @@ export default function CallPage({
 
   function hangup(sendSignal = true) {
     vibrate([0, 80])
-    ringtone.stop(); outgoingRing.stop()
+    ringtone.stop(); outgoingRing.stop(); busyTone.stop()
     clearInterval(timerRef.current)
     clearTimeout(connectTimeoutRef.current)
     clearTimeout(ringTimeoutRef.current)
