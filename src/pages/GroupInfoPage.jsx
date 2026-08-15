@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import { useAuthStore } from '../store/authStore'
@@ -11,12 +11,12 @@ function avatarColor(id) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
-function Avatar({ name, size = 46, color, url }) {
-  return url
-    ? <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+function Avatar({ name, size = 46, color, url, onClick }) {
+  const inner = url
+    ? <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />
     : (
       <div style={{
-        width: size, height: size, borderRadius: '50%', flexShrink: 0,
+        width: size, height: size, borderRadius: '50%',
         background: color || C.panel2,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: size * 0.34, fontWeight: 700, color: '#fff',
@@ -24,95 +24,336 @@ function Avatar({ name, size = 46, color, url }) {
         {name?.slice(0, 2).toUpperCase() || '?'}
       </div>
     )
+  if (!onClick) return inner
+  return <button onClick={onClick} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex' }}>{inner}</button>
 }
+
+function Toggle({ value, onChange, disabled }) {
+  return (
+    <button
+      onClick={() => !disabled && onChange(!value)}
+      disabled={disabled}
+      style={{
+        width: 46, height: 26, borderRadius: 13, border: 'none', cursor: disabled ? 'default' : 'pointer',
+        background: value ? C.green : C.panel2,
+        position: 'relative', transition: 'background .2s', flexShrink: 0,
+        outline: `1px solid ${value ? C.green : C.border}`,
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <div style={{
+        position: 'absolute', top: 3, left: value ? 23 : 3,
+        width: 20, height: 20, borderRadius: '50%', background: '#fff',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.25)', transition: 'left .2s',
+      }} />
+    </button>
+  )
+}
+
+function SectionLabel({ label }) {
+  return (
+    <p style={{ margin: '0 16px 8px', fontSize: 10, fontWeight: 800, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+      {label}
+    </p>
+  )
+}
+
+function Row({ icon, label, value, onClick, danger, right }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 16px', cursor: onClick ? 'pointer' : 'default',
+        borderBottom: `1px solid ${C.border}11`,
+        transition: 'background .12s',
+      }}
+      onMouseEnter={e => { if (onClick) e.currentTarget.style.background = C.panel }}
+      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+    >
+      {icon && <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{icon}</span>}
+      <span style={{ flex: 1, fontSize: 14, color: danger ? '#ef4444' : C.text }}>{label}</span>
+      {value && <span style={{ fontSize: 12, color: C.textDim }}>{value}</span>}
+      {right}
+      {onClick && !right && (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2">
+          <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      )}
+    </div>
+  )
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+const TABS = [
+  { id: 'info',    label: '📋 Info' },
+  { id: 'members', label: '👥 Miembros' },
+  { id: 'perms',  label: '🔐 Permisos' },
+  { id: 'media',  label: '🖼 Medios' },
+]
 
 export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const { profile } = useAuthStore()
-  const { leaveGroup, pinMessage } = useChatStore()
+  const { leaveGroup, pinMessage, fetchConversations } = useChatStore()
+  const fileRef = useRef(null)
+
+  // ── State ──
+  const [tab, setTab] = useState('info')
+  const [memberMenu, setMemberMenu] = useState(null)
+  const [memberSearch, setMemberSearch] = useState('')
+  const [inviteSearch, setInviteSearch] = useState('')
+  const [inviteResults, setInviteResults] = useState([])
+  const [inviting, setInviting] = useState(null)
+  const [roles, setRoles] = useState({})        // userId -> role string
   const [leavingGroup, setLeavingGroup] = useState(false)
-  const [showPinInput, setShowPinInput] = useState(false)
-  const [pinText, setPinText] = useState(conversation?.pinned_message || '')
-  const [savingPin, setSavingPin] = useState(false)
-  const [memberMenu, setMemberMenu] = useState(null) // member id
-  const [roles, setRoles] = useState({}) // userId -> role
-  const [mutedUntil, setMutedUntil] = useState({}) // userId -> date
-  const [isPublic, setIsPublic] = useState(conversation?.is_public || false)
+
+  // Info editable
+  const [name, setName] = useState(conversation?.name || '')
+  const [editingName, setEditingName] = useState(false)
   const [description, setDescription] = useState(conversation?.description || '')
   const [editingDesc, setEditingDesc] = useState(false)
-  const [savingPublic, setSavingPublic] = useState(false)
+  const [isPublic, setIsPublic] = useState(conversation?.is_public || false)
+  const [isLocked, setIsLocked] = useState(conversation?.is_locked || false)
+  const [savingInfo, setSavingInfo] = useState(false)
 
-  const isAdmin = conversation?.created_by === profile?.id || roles[profile?.id] === 'admin'
+  // Pinned
+  const [pinText, setPinText] = useState(conversation?.pinned_message || '')
+  const [editingPin, setEditingPin] = useState(false)
+  const [savingPin, setSavingPin] = useState(false)
+
+  // Permisos
+  const [whoCanSend, setWhoCanSend] = useState(conversation?.who_can_send || 'everyone')
+  const [whoCanAdd,  setWhoCanAdd]  = useState(conversation?.who_can_add  || 'everyone')
+  const [whoCanEdit, setWhoCanEdit] = useState(conversation?.who_can_edit_info || 'everyone')
+  const [slowMode,   setSlowMode]   = useState(conversation?.slow_mode_seconds || null)
+  const [savingPerms, setSavingPerms] = useState(false)
+
+  // Invite link
+  const [inviteLink, setInviteLink] = useState(conversation?.invite_link || '')
+  const [generatingLink, setGeneratingLink] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
+
+  // Auto-delete
+  const [autoDelete, setAutoDelete] = useState(conversation?.auto_delete_hours || null)
+
+  // Media (messages with images)
+  const [media, setMedia] = useState([])
+  const [mediaLoading, setMediaLoading] = useState(false)
 
   const members = conversation?.members || []
   const allMembers = [
-    { id: profile?.id, display_name: profile?.display_name, username: profile?.username, isMe: true },
+    { id: profile?.id, display_name: profile?.display_name, username: profile?.username, avatar_url: profile?.avatar_url, isMe: true },
     ...members.filter(m => m?.id !== profile?.id).map(m => ({ ...m, isMe: false })),
   ]
 
-  async function kickMember(memberId) {
-    if (!confirm('¿Expulsar a este usuario del grupo?')) return
+  const myRole = roles[profile?.id]
+  const isOwner = conversation?.created_by === profile?.id
+  const isAdmin = isOwner || myRole === 'owner' || myRole === 'admin'
+  const isMod   = isAdmin || myRole === 'moderator'
+
+  // ── Load roles ──
+  useEffect(() => {
+    if (!conversation?.id) return
+    supabase.from('group_roles')
+      .select('user_id, role')
+      .eq('conversation_id', conversation.id)
+      .then(({ data }) => {
+        if (data) {
+          const map = {}
+          data.forEach(r => { map[r.user_id] = r.role })
+          setRoles(map)
+        }
+      })
+  }, [conversation?.id])
+
+  // ── Load media ──
+  useEffect(() => {
+    if (tab !== 'media' || !conversation?.id) return
+    setMediaLoading(true)
+    supabase.from('messages')
+      .select('id, content, created_at, sender_id')
+      .eq('conversation_id', conversation.id)
+      .eq('type', 'image')
+      .order('created_at', { ascending: false })
+      .limit(60)
+      .then(({ data }) => { setMedia(data || []); setMediaLoading(false) })
+  }, [tab, conversation?.id])
+
+  // ── Invite search ──
+  useEffect(() => {
+    if (!inviteSearch.trim()) { setInviteResults([]); return }
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('users')
+        .select('id, display_name, username, avatar_url')
+        .or(`username.ilike.%${inviteSearch.replace('@','')}%,display_name.ilike.%${inviteSearch}%`)
+        .neq('id', profile.id)
+        .limit(8)
+      const memberIds = new Set(allMembers.map(m => m.id))
+      setInviteResults((data || []).filter(u => !memberIds.has(u.id)))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [inviteSearch])
+
+  // ── Handlers ──
+  async function saveName() {
+    if (!name.trim()) return
+    setSavingInfo(true)
+    await supabase.from('conversations').update({ name: name.trim() }).eq('id', conversation.id)
+    setSavingInfo(false); setEditingName(false)
+  }
+
+  async function saveDesc() {
+    setSavingInfo(true)
+    await supabase.from('conversations').update({ description: description.trim() }).eq('id', conversation.id)
+    setSavingInfo(false); setEditingDesc(false)
+  }
+
+  async function savePin() {
+    if (!pinText.trim()) return
+    setSavingPin(true)
+    await pinMessage(conversation.id, pinText.trim())
+    setSavingPin(false); setEditingPin(false)
+  }
+
+  async function togglePublic() {
+    const next = !isPublic
+    setIsPublic(next)
+    await supabase.from('conversations').update({ is_public: next }).eq('id', conversation.id)
+  }
+
+  async function toggleLocked() {
+    const next = !isLocked
+    setIsLocked(next)
+    await supabase.from('conversations').update({ is_locked: next }).eq('id', conversation.id)
+  }
+
+  async function savePerms() {
+    setSavingPerms(true)
+    await supabase.from('conversations').update({
+      who_can_send: whoCanSend,
+      who_can_add: whoCanAdd,
+      who_can_edit_info: whoCanEdit,
+      slow_mode_seconds: slowMode,
+      auto_delete_hours: autoDelete,
+    }).eq('id', conversation.id)
+    setSavingPerms(false)
+  }
+
+  async function generateInviteLink() {
+    setGeneratingLink(true)
+    const token = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10)
+    const link = `${window.location.origin}/join/${token}`
+    await supabase.from('conversations').update({ invite_link: token }).eq('id', conversation.id)
+    setInviteLink(link)
+    setGeneratingLink(false)
+  }
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(inviteLink)
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 2000)
+  }
+
+  async function revokeLink() {
+    if (!window.confirm('¿Revocar el enlace actual? El anterior dejará de funcionar.')) return
+    await supabase.from('conversations').update({ invite_link: null }).eq('id', conversation.id)
+    setInviteLink('')
+  }
+
+  async function inviteMember(user) {
+    setInviting(user.id)
+    await supabase.from('conversation_members').upsert(
+      { conversation_id: conversation.id, user_id: user.id },
+      { onConflict: 'conversation_id,user_id' }
+    )
+    setInviting(null); setInviteSearch(''); setInviteResults([])
+    fetchConversations(profile.id)
+  }
+
+  async function setRole(memberId, role) {
+    await supabase.from('group_roles').upsert(
+      { conversation_id: conversation.id, user_id: memberId, role, granted_by: profile.id },
+      { onConflict: 'conversation_id,user_id' }
+    )
+    setRoles(prev => ({ ...prev, [memberId]: role }))
+    setMemberMenu(null)
+  }
+
+  async function silenceMember(memberId, hours) {
+    const until = new Date(Date.now() + hours * 3600 * 1000).toISOString()
     await supabase.from('conversation_members')
-      .delete()
+      .update({ muted_until: until })
       .eq('conversation_id', conversation.id)
       .eq('user_id', memberId)
     setMemberMenu(null)
   }
 
-  async function setRole(memberId, role) {
-    await supabase.from('group_roles')
-      .upsert({ conversation_id: conversation.id, user_id: memberId, role }, { onConflict: 'conversation_id,user_id' })
-    setRoles(prev => ({ ...prev, [memberId]: role }))
+  async function unsilenceMember(memberId) {
+    await supabase.from('conversation_members')
+      .update({ muted_until: null })
+      .eq('conversation_id', conversation.id)
+      .eq('user_id', memberId)
     setMemberMenu(null)
   }
 
-  function silenceMember(memberId) {
-    const until = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
-    setMutedUntil(prev => ({ ...prev, [memberId]: until }))
+  async function kickMember(memberId) {
+    if (!window.confirm('¿Expulsar a este miembro?')) return
+    await supabase.from('conversation_members')
+      .delete()
+      .eq('conversation_id', conversation.id)
+      .eq('user_id', memberId)
+    await supabase.from('group_roles')
+      .delete()
+      .eq('conversation_id', conversation.id)
+      .eq('user_id', memberId)
     setMemberMenu(null)
-    alert('Usuario silenciado por 24 horas.')
+    fetchConversations(profile.id)
   }
 
   async function handleLeave() {
-    if (!confirm('¿Salir del grupo?')) return
+    if (!window.confirm('¿Salir del grupo?')) return
     setLeavingGroup(true)
     await leaveGroup(conversation.id, profile.id)
     onLeft?.()
   }
 
-  async function handleSavePin() {
-    if (!pinText.trim()) return
-    setSavingPin(true)
-    await pinMessage(conversation.id, pinText.trim())
-    setSavingPin(false)
-    setShowPinInput(false)
+  async function handleDeleteGroup() {
+    if (!window.confirm('⚠️ ¿Eliminar el grupo permanentemente? Esto borrará todos los mensajes y no se puede deshacer.')) return
+    await supabase.from('conversations').delete().eq('id', conversation.id)
+    onLeft?.()
   }
 
-  async function togglePublic() {
-    setSavingPublic(true)
-    const next = !isPublic
-    await supabase.from('conversations')
-      .update({ is_public: next })
-      .eq('id', conversation.id)
-    setIsPublic(next)
-    setSavingPublic(false)
+  async function uploadAvatar(file) {
+    if (!file) return
+    const ext = file.name.split('.').pop()
+    const path = `group-avatars/${conversation.id}.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (error) return
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+    await supabase.from('conversations').update({ avatar_url: publicUrl }).eq('id', conversation.id)
   }
 
-  async function saveDescription() {
-    await supabase.from('conversations')
-      .update({ description: description.trim() })
-      .eq('id', conversation.id)
-    setEditingDesc(false)
-  }
+  const filteredMembers = memberSearch
+    ? allMembers.filter(m =>
+        (m.display_name || '').toLowerCase().includes(memberSearch.toLowerCase()) ||
+        (m.username || '').toLowerCase().includes(memberSearch.toLowerCase())
+      )
+    : allMembers
 
+  const roleColor = { owner: '#f59e0b', admin: C.green, moderator: '#8b5cf6', member: C.textDim }
+  const roleLabel = { owner: 'Dueño', admin: 'Admin', moderator: 'Mod', member: '' }
+
+  // ── RENDER ────────────────────────────────────────────────────────────────────
   return (
     <div style={{
       height: '100%', display: 'flex', flexDirection: 'column',
-      background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif', overflowY: 'auto',
+      background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
     }}>
-      {/* Header */}
+
+      {/* ── HEADER ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '14px 16px', background: C.panel,
+        padding: '12px 16px', background: C.panel,
         borderBottom: `1px solid ${C.border}`, flexShrink: 0,
       }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: 4, display: 'flex' }}>
@@ -120,252 +361,512 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
             <path d="M19 12H5M12 5l-7 7 7 7"/>
           </svg>
         </button>
-        <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>Info del grupo</h2>
+        <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16, flex: 1 }}>Info del grupo</h2>
       </div>
 
-      {/* Group hero */}
-      <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        padding: '32px 20px 24px',
-        background: `radial-gradient(ellipse at 50% 0%, ${C.greenDk}22 0%, transparent 65%)`,
-        borderBottom: `1px solid ${C.border}`,
-      }}>
-        <div style={{
-          width: 88, height: 88, borderRadius: '50%',
-          background: `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})`,
-          border: `2px solid ${C.green}44`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 32, fontWeight: 800, color: C.text,
-          boxShadow: `0 0 32px ${C.green}22`,
-          marginBottom: 14,
-        }}>
-          {conversation?.name?.slice(0, 2).toUpperCase() || '👥'}
-        </div>
-        <p style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 800, color: C.text }}>{conversation?.name}</p>
-        <p style={{ margin: 0, fontSize: 13, color: C.textDim }}>Grupo · {allMembers.length} participantes</p>
+      {/* ── TABS ── */}
+      <div style={{ display: 'flex', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: 'auto' }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            flex: 1, padding: '10px 6px', background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 12, fontWeight: 600,
+            color: tab === t.id ? C.green : C.textDim,
+            borderBottom: `2px solid ${tab === t.id ? C.green : 'transparent'}`,
+            transition: 'color .15s', whiteSpace: 'nowrap', minWidth: 70,
+          }}>{t.label}</button>
+        ))}
       </div>
 
-      {/* Pinned message section */}
-      <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
-        <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
-          Mensaje fijado
-        </p>
-        {!showPinInput ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      {/* ── CONTENT ── */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+
+        {/* ════ TAB: INFO ════ */}
+        {tab === 'info' && (
+          <>
+            {/* Hero: avatar + name */}
             <div style={{
-              flex: 1, padding: '10px 12px', background: C.panel2,
-              borderRadius: 10, border: `1px solid ${C.border}`,
-              borderLeft: `3px solid ${C.green}`,
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              padding: '28px 20px 20px',
+              background: `radial-gradient(ellipse at 50% 0%, ${C.greenDk}22 0%, transparent 65%)`,
+              borderBottom: `1px solid ${C.border}`,
             }}>
-              <p style={{ margin: 0, fontSize: 13, color: conversation?.pinned_message ? C.text2 : C.textDim, lineHeight: 1.4 }}>
-                {conversation?.pinned_message || 'Sin mensaje fijado'}
-              </p>
-            </div>
-            <button onClick={() => setShowPinInput(true)} style={{
-              background: `${C.green}15`, border: `1px solid ${C.green}33`,
-              borderRadius: 8, padding: '8px 12px', cursor: 'pointer',
-              color: C.green, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
-            }}>
-              📌 Editar
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <textarea
-              value={pinText}
-              onChange={e => setPinText(e.target.value)}
-              placeholder="Mensaje fijado para el grupo..."
-              autoFocus
-              rows={3}
-              style={{
-                width: '100%', background: C.panel2, border: `1px solid ${C.green}`,
-                borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 13,
-                resize: 'none', outline: 'none', boxSizing: 'border-box',
-                fontFamily: 'inherit',
-              }}
-            />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setShowPinInput(false)} style={{
-                flex: 1, padding: '9px', borderRadius: 8, border: `1px solid ${C.border}`,
-                background: C.panel2, color: C.textDim, cursor: 'pointer', fontSize: 13,
-              }}>Cancelar</button>
-              <button onClick={handleSavePin} disabled={savingPin || !pinText.trim()} style={{
-                flex: 1, padding: '9px', borderRadius: 8, border: 'none',
-                background: savingPin || !pinText.trim() ? C.panel2 : C.green,
-                color: savingPin || !pinText.trim() ? C.textDim : C.bg,
-                cursor: 'pointer', fontSize: 13, fontWeight: 700,
-              }}>{savingPin ? '...' : 'Guardar'}</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Public settings — admin only */}
-      {isAdmin && (
-        <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
-          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
-            Visibilidad
-          </p>
-
-          {/* Toggle público */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.text }}>
-                {isPublic ? '🌐 Público' : '🔒 Privado'}
-              </p>
-              <p style={{ margin: '3px 0 0', fontSize: 12, color: C.textDim }}>
-                {isPublic
-                  ? 'Aparece en Explorar. Cualquiera puede unirse.'
-                  : 'Solo accesible por invitación directa.'}
-              </p>
-            </div>
-            <button
-              onClick={togglePublic}
-              disabled={savingPublic}
-              style={{
-                width: 46, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
-                background: isPublic ? C.green : C.panel2,
-                position: 'relative', transition: 'background .2s', flexShrink: 0,
-                outline: `1px solid ${isPublic ? C.green : C.border}`,
-              }}
-            >
-              <div style={{
-                position: 'absolute', top: 3, left: isPublic ? 23 : 3,
-                width: 20, height: 20, borderRadius: '50%', background: '#fff',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.25)', transition: 'left .2s',
-              }} />
-            </button>
-          </div>
-
-          {/* Description */}
-          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 600, color: C.textDim }}>Descripción</p>
-          {editingDesc ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Describí de qué trata este grupo..."
-                autoFocus rows={3}
-                style={{
-                  width: '100%', background: C.panel2, border: `1px solid ${C.green}`,
-                  borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 13,
-                  resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
-                }}
-              />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setEditingDesc(false)} style={{ flex: 1, padding: '9px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.panel2, color: C.textDim, cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
-                <button onClick={saveDescription} style={{ flex: 1, padding: '9px', borderRadius: 8, border: 'none', background: C.green, color: C.bg, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Guardar</button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-              <div style={{ flex: 1, padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.green}` }}>
-                <p style={{ margin: 0, fontSize: 13, color: description ? C.text2 : C.textDim, lineHeight: 1.4 }}>
-                  {description || 'Sin descripción'}
-                </p>
-              </div>
-              <button onClick={() => setEditingDesc(true)} style={{ background: `${C.green}15`, border: `1px solid ${C.green}33`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: C.green, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                ✏️ Editar
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Members list */}
-      <div style={{ padding: '12px 0' }}>
-        <p style={{ margin: '0 16px 8px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
-          {allMembers.length} participantes
-        </p>
-        {allMembers.map(m => {
-          const mRole = roles[m.id]
-          const isMuted = mutedUntil[m.id] && new Date(mutedUntil[m.id]) > new Date()
-          return (
-            <div key={m.id} style={{ position: 'relative' }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '10px 16px', borderBottom: `1px solid ${C.border}11`,
-              }}>
-                <Avatar name={m.display_name} size={44} color={avatarColor(m.id)} url={m.avatar_url} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: m.isMe ? C.green : C.text }}>
-                      {m.display_name} {m.isMe && <span style={{ fontSize: 11, color: C.textDim, fontWeight: 400 }}>(Vos)</span>}
-                    </p>
-                    {mRole === 'admin' && <span style={{ fontSize: 9, fontWeight: 700, color: C.green, background: `${C.green}18`, border: `1px solid ${C.green}33`, borderRadius: 6, padding: '1px 5px' }}>ADMIN</span>}
-                    {mRole === 'moderator' && <span style={{ fontSize: 9, fontWeight: 700, color: C.yellow, background: `${C.yellow}18`, border: `1px solid ${C.yellow}33`, borderRadius: 6, padding: '1px 5px' }}>MOD</span>}
-                    {isMuted && <span style={{ fontSize: 9, fontWeight: 700, color: C.textDim, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '1px 5px' }}>🔇</span>}
-                  </div>
-                  {m.username && (
-                    <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>@{m.username}</p>
-                  )}
+              <div style={{ position: 'relative', marginBottom: 14 }}>
+                <div style={{
+                  width: 90, height: 90, borderRadius: '50%',
+                  background: `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})`,
+                  border: `2px solid ${C.green}44`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 34, fontWeight: 800, color: C.text,
+                  boxShadow: `0 0 32px ${C.green}22`, overflow: 'hidden',
+                }}>
+                  {conversation?.avatar_url
+                    ? <img src={conversation.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : conversation?.name?.slice(0, 2).toUpperCase() || '👥'
+                  }
                 </div>
-                {isAdmin && !m.isMe && (
-                  <button onClick={() => setMemberMenu(memberMenu === m.id ? null : m.id)} style={{
-                    background: 'none', border: 'none', cursor: 'pointer', color: C.textDim,
-                    padding: 6, borderRadius: 8, display: 'flex',
-                  }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
-                  </button>
+                {isAdmin && (
+                  <>
+                    <button
+                      onClick={() => fileRef.current?.click()}
+                      style={{
+                        position: 'absolute', bottom: 0, right: 0,
+                        width: 28, height: 28, borderRadius: '50%',
+                        background: C.green, border: `2px solid ${C.bg}`,
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                      </svg>
+                    </button>
+                    <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
+                      onChange={e => uploadAvatar(e.target.files?.[0])} />
+                  </>
                 )}
               </div>
-              {/* Moderation menu */}
-              {memberMenu === m.id && (
-                <div onClick={() => setMemberMenu(null)} style={{
-                  position: 'absolute', right: 12, top: '100%', zIndex: 50,
-                  background: C.panel, border: `1px solid ${C.border}`,
-                  borderRadius: 12, padding: '6px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-                  minWidth: 180, display: 'flex', flexDirection: 'column', gap: 2,
-                }}>
-                  {mRole !== 'admin' && (
-                    <ModeBtn label="⭐ Hacer Admin" onClick={() => setRole(m.id, 'admin')} />
+
+              {/* Name editable */}
+              {editingName ? (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%', maxWidth: 280 }}>
+                  <input
+                    value={name} onChange={e => setName(e.target.value)}
+                    autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false) }}
+                    style={{
+                      flex: 1, background: C.panel2, border: `1px solid ${C.green}`,
+                      borderRadius: 10, padding: '8px 12px', color: C.text,
+                      fontSize: 16, fontWeight: 700, outline: 'none', textAlign: 'center',
+                    }}
+                  />
+                  <button onClick={saveName} disabled={savingInfo} style={{ background: C.green, border: 'none', borderRadius: 8, padding: '8px 12px', color: C.bg, fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+                    {savingInfo ? '...' : 'OK'}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: C.text }}>{name || conversation?.name}</p>
+                  {isAdmin && (
+                    <button onClick={() => setEditingName(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4 }}>✏️</button>
                   )}
-                  {mRole !== 'moderator' && (
-                    <ModeBtn label="🛡️ Hacer Moderador" onClick={() => setRole(m.id, 'moderator')} />
-                  )}
-                  {mRole && (
-                    <ModeBtn label="👤 Quitar rol" onClick={() => setRole(m.id, 'member')} />
-                  )}
-                  <ModeBtn label={isMuted ? '🔊 Quitar silencio' : '🔇 Silenciar 24h'} onClick={() => {
-                    if (isMuted) setMutedUntil(prev => { const n = {...prev}; delete n[m.id]; return n })
-                    else silenceMember(m.id)
-                    setMemberMenu(null)
-                  }} />
-                  <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
-                  <ModeBtn label="🚫 Expulsar" danger onClick={() => kickMember(m.id)} />
+                </div>
+              )}
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: C.textDim }}>
+                {conversation?.group_type === 'community' ? 'Comunidad' : 'Grupo'} · {allMembers.length} participantes
+              </p>
+              {isLocked && (
+                <span style={{ marginTop: 8, fontSize: 11, color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b33', borderRadius: 20, padding: '3px 10px', fontWeight: 700 }}>
+                  🔒 Grupo bloqueado
+                </span>
+              )}
+            </div>
+
+            {/* Description */}
+            <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
+              <SectionLabel label="Descripción" />
+              {editingDesc ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <textarea
+                    value={description} onChange={e => setDescription(e.target.value)}
+                    autoFocus rows={3}
+                    placeholder="Describí de qué trata este grupo..."
+                    style={{
+                      width: '100%', background: C.panel2, border: `1px solid ${C.green}`,
+                      borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 13,
+                      resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setEditingDesc(false)} style={{ flex: 1, padding: '9px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.panel2, color: C.textDim, cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+                    <button onClick={saveDesc} disabled={savingInfo} style={{ flex: 1, padding: '9px', borderRadius: 8, border: 'none', background: C.green, color: C.bg, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>{savingInfo ? '...' : 'Guardar'}</button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={isAdmin ? () => setEditingDesc(true) : undefined}
+                  style={{
+                    padding: '10px 12px', background: C.panel2, borderRadius: 10,
+                    border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.green}`,
+                    cursor: isAdmin ? 'pointer' : 'default',
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: 13, color: description ? C.text2 : C.textDim, lineHeight: 1.4 }}>
+                    {description || (isAdmin ? 'Tocá para agregar descripción...' : 'Sin descripción')}
+                  </p>
                 </div>
               )}
             </div>
-          )
-        })}
+
+            {/* Pinned message */}
+            <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
+              <SectionLabel label="Mensaje fijado" />
+              {editingPin ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <textarea
+                    value={pinText} onChange={e => setPinText(e.target.value)}
+                    autoFocus rows={3}
+                    placeholder="Mensaje visible para todos en el chat..."
+                    style={{
+                      width: '100%', background: C.panel2, border: `1px solid ${C.green}`,
+                      borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 13,
+                      resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setEditingPin(false)} style={{ flex: 1, padding: '9px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.panel2, color: C.textDim, cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+                    <button onClick={savePin} disabled={savingPin || !pinText.trim()} style={{ flex: 1, padding: '9px', borderRadius: 8, border: 'none', background: C.green, color: C.bg, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>{savingPin ? '...' : 'Fijar'}</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    flex: 1, padding: '10px 12px', background: C.panel2,
+                    borderRadius: 10, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.green}`,
+                  }}>
+                    <p style={{ margin: 0, fontSize: 13, color: conversation?.pinned_message ? C.text2 : C.textDim, lineHeight: 1.4 }}>
+                      {conversation?.pinned_message || 'Sin mensaje fijado'}
+                    </p>
+                  </div>
+                  {isMod && (
+                    <button onClick={() => setEditingPin(true)} style={{
+                      background: `${C.green}15`, border: `1px solid ${C.green}33`,
+                      borderRadius: 8, padding: '8px 12px', cursor: 'pointer',
+                      color: C.green, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+                    }}>📌 Editar</button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Invite link */}
+            {isAdmin && (
+              <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
+                <SectionLabel label="Enlace de invitación" />
+                {inviteLink ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px',
+                    }}>
+                      <p style={{ margin: 0, flex: 1, fontSize: 12, color: C.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inviteLink}</p>
+                      <button onClick={copyLink} style={{ background: linkCopied ? `${C.green}22` : `${C.green}15`, border: `1px solid ${C.green}33`, borderRadius: 6, padding: '5px 10px', cursor: 'pointer', color: C.green, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                        {linkCopied ? '✓ Copiado' : '📋 Copiar'}
+                      </button>
+                    </div>
+                    <button onClick={revokeLink} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px', cursor: 'pointer', color: '#ef4444', fontSize: 12 }}>
+                      🔄 Revocar enlace
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={generateInviteLink} disabled={generatingLink} style={{
+                    width: '100%', padding: '10px', borderRadius: 10,
+                    background: `${C.green}15`, border: `1px solid ${C.green}33`,
+                    color: C.green, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                    {generatingLink ? '...' : '🔗 Generar enlace de invitación'}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ padding: '12px 0', borderBottom: `1px solid ${C.border}` }}>
+              <Row icon="🚩" label="Reportar grupo" onClick={() => alert('Reporte enviado. Gracias.')} />
+              <Row icon="🚪" label="Salir del grupo" danger onClick={handleLeave} />
+              {isOwner && (
+                <Row icon="💣" label="Eliminar grupo" danger onClick={handleDeleteGroup} />
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ════ TAB: MIEMBROS ════ */}
+        {tab === 'members' && (
+          <>
+            {/* Search members */}
+            <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '0 12px' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" strokeLinecap="round"/></svg>
+                <input
+                  value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
+                  placeholder="Buscar en miembros..."
+                  style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 13, padding: '9px 0' }}
+                />
+              </div>
+            </div>
+
+            {/* Invite new member — admins */}
+            {(isAdmin || whoCanAdd === 'everyone') && (
+              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.panel2, border: `1px solid ${C.green}44`, borderRadius: 10, padding: '0 12px' }}>
+                  <span style={{ fontSize: 15 }}>➕</span>
+                  <input
+                    value={inviteSearch} onChange={e => setInviteSearch(e.target.value)}
+                    placeholder="Agregar miembro por nombre o @usuario..."
+                    style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 13, padding: '9px 0' }}
+                  />
+                </div>
+                {inviteResults.length > 0 && (
+                  <div style={{ marginTop: 6, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+                    {inviteResults.map(u => (
+                      <div key={u.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                        borderBottom: `1px solid ${C.border}11`,
+                      }}>
+                        <Avatar name={u.display_name} size={36} color={avatarColor(u.id)} url={u.avatar_url} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.text }}>{u.display_name}</p>
+                          <p style={{ margin: 0, fontSize: 11, color: C.textDim }}>@{u.username}</p>
+                        </div>
+                        <button
+                          onClick={() => inviteMember(u)}
+                          disabled={inviting === u.id}
+                          style={{ background: C.green, border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.bg, fontSize: 12, fontWeight: 700 }}
+                        >{inviting === u.id ? '...' : 'Agregar'}</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Members list */}
+            <p style={{ margin: '12px 16px 6px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+              {filteredMembers.length} {memberSearch ? 'resultados' : 'participantes'}
+            </p>
+            {filteredMembers.map(m => {
+              const mRole = roles[m.id] || (m.id === conversation?.created_by ? 'owner' : 'member')
+              return (
+                <div key={m.id} style={{ position: 'relative' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 16px', borderBottom: `1px solid ${C.border}11`,
+                  }}>
+                    <Avatar name={m.display_name} size={44} color={avatarColor(m.id)} url={m.avatar_url} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: m.isMe ? C.green : C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {m.display_name}
+                        </p>
+                        {m.isMe && <span style={{ fontSize: 10, color: C.textDim }}>(Vos)</span>}
+                        {mRole && mRole !== 'member' && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px',
+                            color: roleColor[mRole], background: `${roleColor[mRole]}18`, border: `1px solid ${roleColor[mRole]}33`,
+                            textTransform: 'uppercase', letterSpacing: '0.5px',
+                          }}>{roleLabel[mRole]}</span>
+                        )}
+                      </div>
+                      <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>@{m.username}</p>
+                    </div>
+                    {isMod && !m.isMe && (
+                      <button onClick={() => setMemberMenu(memberMenu === m.id ? null : m.id)} style={{
+                        background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 6, borderRadius: 8, display: 'flex',
+                      }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Member action menu */}
+                  {memberMenu === m.id && (
+                    <div
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        position: 'absolute', right: 12, top: '100%', zIndex: 50,
+                        background: C.panel, border: `1px solid ${C.border}`,
+                        borderRadius: 12, overflow: 'hidden',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)', minWidth: 200,
+                      }}
+                    >
+                      {isAdmin && mRole !== 'admin' && mRole !== 'owner' && (
+                        <ModeBtn label="⭐ Hacer Admin" onClick={() => setRole(m.id, 'admin')} />
+                      )}
+                      {isAdmin && mRole !== 'moderator' && mRole !== 'owner' && (
+                        <ModeBtn label="🛡️ Hacer Moderador" onClick={() => setRole(m.id, 'moderator')} />
+                      )}
+                      {isAdmin && mRole !== 'member' && mRole !== 'owner' && (
+                        <ModeBtn label="👤 Quitar rol" onClick={() => setRole(m.id, 'member')} />
+                      )}
+                      <div style={{ height: 1, background: C.border }} />
+                      <ModeBtn label="🔇 Silenciar 1h"   onClick={() => silenceMember(m.id, 1)} />
+                      <ModeBtn label="🔇 Silenciar 6h"   onClick={() => silenceMember(m.id, 6)} />
+                      <ModeBtn label="🔇 Silenciar 24h"  onClick={() => silenceMember(m.id, 24)} />
+                      <ModeBtn label="🔊 Quitar silencio" onClick={() => unsilenceMember(m.id)} />
+                      <div style={{ height: 1, background: C.border }} />
+                      <ModeBtn label="🚫 Expulsar" danger onClick={() => kickMember(m.id)} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </>
+        )}
+
+        {/* ════ TAB: PERMISOS ════ */}
+        {tab === 'perms' && (
+          <>
+            {!isAdmin && (
+              <div style={{ padding: '32px 20px', textAlign: 'center', color: C.textDim, fontSize: 13 }}>
+                🔐 Solo los admins pueden cambiar los permisos.
+              </div>
+            )}
+            {isAdmin && (
+              <>
+                <div style={{ padding: '16px 0 0' }}>
+                  <SectionLabel label="Visibilidad" />
+                  <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}11` }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.text }}>{isPublic ? '🌐 Público' : '🔒 Privado'}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 12, color: C.textDim }}>{isPublic ? 'Aparece en Explorar. Cualquiera puede unirse.' : 'Solo por invitación directa.'}</p>
+                    </div>
+                    <Toggle value={isPublic} onChange={togglePublic} />
+                  </div>
+                  <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}11` }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.text }}>🔒 Bloquear grupo</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 12, color: C.textDim }}>Nadie puede enviar mensajes, ni admins.</p>
+                    </div>
+                    <Toggle value={isLocked} onChange={toggleLocked} />
+                  </div>
+                </div>
+
+                <div style={{ padding: '16px 0 0', borderTop: `1px solid ${C.border}` }}>
+                  <SectionLabel label="¿Quién puede enviar mensajes?" />
+                  {[['everyone','Todos los miembros'],['admins','Solo Admins y Moderadores']].map(([v, label]) => (
+                    <div key={v} onClick={() => setWhoCanSend(v)} style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: 'pointer',
+                      borderBottom: `1px solid ${C.border}11`,
+                      background: whoCanSend === v ? `${C.green}08` : 'transparent',
+                    }}>
+                      <div style={{
+                        width: 18, height: 18, borderRadius: '50%',
+                        border: `2px solid ${whoCanSend === v ? C.green : C.border}`,
+                        background: whoCanSend === v ? C.green : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {whoCanSend === v && <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.bg }} />}
+                      </div>
+                      <span style={{ fontSize: 13, color: C.text }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ padding: '16px 0 0', borderTop: `1px solid ${C.border}` }}>
+                  <SectionLabel label="¿Quién puede agregar miembros?" />
+                  {[['everyone','Todos los miembros'],['admins','Solo Admins']].map(([v, label]) => (
+                    <div key={v} onClick={() => setWhoCanAdd(v)} style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: 'pointer',
+                      borderBottom: `1px solid ${C.border}11`,
+                      background: whoCanAdd === v ? `${C.green}08` : 'transparent',
+                    }}>
+                      <div style={{
+                        width: 18, height: 18, borderRadius: '50%',
+                        border: `2px solid ${whoCanAdd === v ? C.green : C.border}`,
+                        background: whoCanAdd === v ? C.green : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {whoCanAdd === v && <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.bg }} />}
+                      </div>
+                      <span style={{ fontSize: 13, color: C.text }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ padding: '16px 0 0', borderTop: `1px solid ${C.border}` }}>
+                  <SectionLabel label="¿Quién puede editar info del grupo?" />
+                  {[['everyone','Todos los miembros'],['admins','Solo Admins']].map(([v, label]) => (
+                    <div key={v} onClick={() => setWhoCanEdit(v)} style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: 'pointer',
+                      borderBottom: `1px solid ${C.border}11`,
+                      background: whoCanEdit === v ? `${C.green}08` : 'transparent',
+                    }}>
+                      <div style={{
+                        width: 18, height: 18, borderRadius: '50%',
+                        border: `2px solid ${whoCanEdit === v ? C.green : C.border}`,
+                        background: whoCanEdit === v ? C.green : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {whoCanEdit === v && <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.bg }} />}
+                      </div>
+                      <span style={{ fontSize: 13, color: C.text }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ padding: '16px 0 0', borderTop: `1px solid ${C.border}` }}>
+                  <SectionLabel label="Modo lento (entre mensajes)" />
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 16px' }}>
+                    {[[null,'Off'],[10,'10s'],[30,'30s'],[60,'1min'],[300,'5min'],[600,'10min']].map(([v, label]) => (
+                      <button key={label} onClick={() => setSlowMode(v)} style={{
+                        padding: '6px 14px', borderRadius: 20, border: `1px solid ${slowMode === v ? C.green : C.border}`,
+                        background: slowMode === v ? `${C.green}18` : C.panel2,
+                        color: slowMode === v ? C.green : C.textDim, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      }}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ padding: '16px 0 0', borderTop: `1px solid ${C.border}` }}>
+                  <SectionLabel label="Mensajes temporales (auto-borrado)" />
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 16px' }}>
+                    {[[null,'Off'],[0.083,'5min'],[1,'1h'],[12,'12h'],[24,'24h'],[168,'7d']].map(([v, label]) => (
+                      <button key={label} onClick={() => setAutoDelete(v)} style={{
+                        padding: '6px 14px', borderRadius: 20, border: `1px solid ${autoDelete === v ? C.green : C.border}`,
+                        background: autoDelete === v ? `${C.green}18` : C.panel2,
+                        color: autoDelete === v ? C.green : C.textDim, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      }}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ padding: '12px 16px 20px', borderTop: `1px solid ${C.border}` }}>
+                  <button onClick={savePerms} disabled={savingPerms} style={{
+                    width: '100%', padding: '12px', borderRadius: 12, border: 'none',
+                    background: C.green, color: C.bg, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                    opacity: savingPerms ? 0.6 : 1,
+                  }}>{savingPerms ? 'Guardando...' : '💾 Guardar configuración'}</button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ════ TAB: MEDIOS ════ */}
+        {tab === 'media' && (
+          <>
+            <p style={{ margin: '12px 16px 8px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+              Imágenes compartidas
+            </p>
+            {mediaLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                <div style={{ width: 24, height: 24, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+              </div>
+            ) : media.length === 0 ? (
+              <div style={{ padding: '60px 20px', textAlign: 'center', color: C.textDim }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>🖼</div>
+                <p style={{ margin: 0, fontSize: 14, color: C.text2 }}>Sin imágenes compartidas aún</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, padding: '0 0 16px' }}>
+                {media.map(msg => (
+                  <div key={msg.id} style={{ aspectRatio: '1', overflow: 'hidden', background: C.panel2 }}>
+                    <img src={msg.content} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      {/* Report group */}
-      <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
-        <button onClick={() => alert('Reporte enviado. Gracias.')} style={{
-          width: '100%', padding: '10px', borderRadius: 10,
-          background: 'none', border: `1px solid ${C.border}`,
-          color: C.textDim, fontSize: 13, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        }}>
-          🚩 Reportar grupo
-        </button>
-      </div>
-
-      {/* Leave group */}
-      <div style={{ padding: '16px', borderTop: `1px solid ${C.border}` }}>
-        <button onClick={handleLeave} disabled={leavingGroup} style={{
-          width: '100%', padding: '12px', borderRadius: 10,
-          background: `${C.red}15`, border: `1px solid ${C.red}33`,
-          color: C.red, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-          </svg>
-          {leavingGroup ? 'Saliendo...' : 'Salir del grupo'}
-        </button>
-      </div>
+      {/* Close member menu on outside click */}
+      {memberMenu && (
+        <div
+          onClick={() => setMemberMenu(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 49 }}
+        />
+      )}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
@@ -373,12 +874,12 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
 function ModeBtn({ label, onClick, danger }) {
   return (
     <button onClick={onClick} style={{
-      width: '100%', textAlign: 'left', padding: '9px 12px',
-      background: 'none', border: 'none', borderRadius: 8,
-      color: danger ? C.red : C.text, fontSize: 13, cursor: 'pointer',
-      transition: 'background .1s',
+      width: '100%', textAlign: 'left', padding: '10px 14px',
+      background: 'none', border: 'none',
+      color: danger ? '#ef4444' : C.text, fontSize: 13, cursor: 'pointer',
+      transition: 'background .1s', display: 'block',
     }}
-      onMouseEnter={e => e.currentTarget.style.background = danger ? `${C.red}18` : C.panel2}
+      onMouseEnter={e => e.currentTarget.style.background = danger ? '#ef444418' : C.panel2}
       onMouseLeave={e => e.currentTarget.style.background = 'none'}
     >{label}</button>
   )
