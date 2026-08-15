@@ -11,6 +11,7 @@ const TABS = [
 ]
 
 const ROLES = [
+  { id: 'ceo',       label: 'CEO',       color: '#f43f5e', bg: '#f43f5e20', emoji: '👑' },
   { id: 'vip',       label: 'VIP',       color: '#f59e0b', bg: '#f59e0b20', emoji: '⭐' },
   { id: 'community', label: 'Comunidad', color: '#8b5cf6', bg: '#8b5cf620', emoji: '🌐' },
   { id: 'moderator', label: 'Moderador', color: '#3b82f6', bg: '#3b82f620', emoji: '🛡️' },

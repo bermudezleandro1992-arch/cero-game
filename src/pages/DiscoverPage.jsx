@@ -71,7 +71,7 @@ export default function DiscoverPage() {
       supabase.from('admin_users').select('user_id').eq('user_id', profile.id).maybeSingle(),
     ]).then(([{ data: roles }, { data: adminRow }]) => {
       const isAdmin = !!adminRow
-      const ranked = (roles || []).some(r => ['vip', 'community', 'moderator'].includes(r.role))
+      const ranked = (roles || []).some(r => ['ceo', 'vip', 'community', 'moderator'].includes(r.role))
       setHasAccess(isAdmin || ranked)
     })
   }, [profile?.id])
