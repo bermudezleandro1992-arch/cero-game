@@ -84,13 +84,54 @@ function Row({ icon, label, value, onClick, danger, right }) {
   )
 }
 
-// ── TABS ──────────────────────────────────────────────────────────────────────
-const TABS = [
-  { id: 'info',    label: '📋 Info' },
-  { id: 'members', label: '👥 Miembros' },
-  { id: 'perms',  label: '🔐 Permisos' },
-  { id: 'media',  label: '🖼 Medios' },
-]
+function RadioGroup({ label, options, value, onChange }) {
+  return (
+    <div style={{ padding: '16px 0 0', borderTop: `1px solid ${C.border}` }}>
+      <SectionLabel label={label} />
+      {options.map(([v, lbl, desc]) => (
+        <div key={v} onClick={() => onChange(v)} style={{
+          display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', cursor: 'pointer',
+          borderBottom: `1px solid ${C.border}11`,
+          background: value === v ? `${C.green}08` : 'transparent',
+        }}>
+          <div style={{
+            width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+            border: `2px solid ${value === v ? C.green : C.border}`,
+            background: value === v ? C.green : 'transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {value === v && <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.bg }} />}
+          </div>
+          <div>
+            <span style={{ fontSize: 13, color: C.text }}>{lbl}</span>
+            {desc && <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>{desc}</p>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PrivacyRow({ icon, label, desc, value, onChange }) {
+  return (
+    <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}11` }}>
+      <div style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.text }}>{icon} {label}</p>
+        {desc && <p style={{ margin: '3px 0 0', fontSize: 11, color: C.textDim, lineHeight: 1.35 }}>{desc}</p>}
+      </div>
+      <Toggle value={value} onChange={onChange} />
+    </div>
+  )
+}
+
+// Role config within group/community
+const GROUP_ROLE_CFG = {
+  owner:       { label: 'Dueño',       color: '#f59e0b', icon: '👑' },
+  admin:       { label: 'Admin',       color: '#ef4444', icon: '🛡️' },
+  moderador:   { label: 'Moderador',   color: '#8b5cf6', icon: '🔰' },
+  organizador: { label: 'Organizador', color: '#10b981', icon: '🎖️' },
+  member:      { label: 'Miembro',     color: '#64748b', icon: '👤' },
+}
 
 export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const { profile } = useAuthStore()
@@ -104,8 +145,13 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [inviteSearch, setInviteSearch] = useState('')
   const [inviteResults, setInviteResults] = useState([])
   const [inviting, setInviting] = useState(null)
-  const [roles, setRoles] = useState({})        // userId -> role string
+  const [roles, setRoles] = useState({})
   const [leavingGroup, setLeavingGroup] = useState(false)
+
+  // Join requests
+  const [joinRequests, setJoinRequests] = useState([])
+  const [loadingRequests, setLoadingRequests] = useState(false)
+  const [processingReq, setProcessingReq] = useState(null)
 
   // Info editable
   const [name, setName] = useState(conversation?.name || '')
@@ -121,11 +167,18 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [editingPin, setEditingPin] = useState(false)
   const [savingPin, setSavingPin] = useState(false)
 
-  // Permisos
+  // Permisos básicos
   const [whoCanSend, setWhoCanSend] = useState(conversation?.who_can_send || 'everyone')
   const [whoCanAdd,  setWhoCanAdd]  = useState(conversation?.who_can_add  || 'everyone')
   const [whoCanEdit, setWhoCanEdit] = useState(conversation?.who_can_edit_info || 'everyone')
   const [slowMode,   setSlowMode]   = useState(conversation?.slow_mode_seconds || null)
+  const [autoDelete, setAutoDelete] = useState(conversation?.auto_delete_hours || null)
+
+  // Privacidad avanzada
+  const [allowExport,      setAllowExport]      = useState(conversation?.allow_export      !== false)
+  const [allowAutoSave,    setAllowAutoSave]    = useState(conversation?.allow_auto_save    !== false)
+  const [announcementOnly, setAnnouncementOnly] = useState(conversation?.announcement_only || false)
+  const [requireApproval,  setRequireApproval]  = useState(conversation?.require_approval  || false)
   const [savingPerms, setSavingPerms] = useState(false)
 
   // Invite link
@@ -133,10 +186,7 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [generatingLink, setGeneratingLink] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
-  // Auto-delete
-  const [autoDelete, setAutoDelete] = useState(conversation?.auto_delete_hours || null)
-
-  // Media (messages with images)
+  // Media
   const [media, setMedia] = useState([])
   const [mediaLoading, setMediaLoading] = useState(false)
 
@@ -149,7 +199,8 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const myRole = roles[profile?.id]
   const isOwner = conversation?.created_by === profile?.id
   const isAdmin = isOwner || myRole === 'owner' || myRole === 'admin'
-  const isMod   = isAdmin || myRole === 'moderator'
+  const isMod   = isAdmin || myRole === 'moderador'
+  const isOrganizador = isMod || myRole === 'organizador'
 
   // ── Load roles ──
   useEffect(() => {
@@ -178,6 +229,18 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
       .limit(60)
       .then(({ data }) => { setMedia(data || []); setMediaLoading(false) })
   }, [tab, conversation?.id])
+
+  // ── Load join requests ──
+  useEffect(() => {
+    if (tab !== 'requests' || !conversation?.id || !isAdmin) return
+    setLoadingRequests(true)
+    supabase.from('join_requests')
+      .select('id, user_id, status, requested_at, users:user_id(id, display_name, username, avatar_url)')
+      .eq('conversation_id', conversation.id)
+      .eq('status', 'pending')
+      .order('requested_at', { ascending: true })
+      .then(({ data }) => { setJoinRequests(data || []); setLoadingRequests(false) })
+  }, [tab, conversation?.id, isAdmin])
 
   // ── Invite search ──
   useEffect(() => {
@@ -216,25 +279,27 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   }
 
   async function togglePublic() {
-    const next = !isPublic
-    setIsPublic(next)
+    const next = !isPublic; setIsPublic(next)
     await supabase.from('conversations').update({ is_public: next }).eq('id', conversation.id)
   }
 
   async function toggleLocked() {
-    const next = !isLocked
-    setIsLocked(next)
+    const next = !isLocked; setIsLocked(next)
     await supabase.from('conversations').update({ is_locked: next }).eq('id', conversation.id)
   }
 
   async function savePerms() {
     setSavingPerms(true)
     await supabase.from('conversations').update({
-      who_can_send: whoCanSend,
-      who_can_add: whoCanAdd,
+      who_can_send:      whoCanSend,
+      who_can_add:       whoCanAdd,
       who_can_edit_info: whoCanEdit,
       slow_mode_seconds: slowMode,
       auto_delete_hours: autoDelete,
+      allow_export:      allowExport,
+      allow_auto_save:   allowAutoSave,
+      announcement_only: announcementOnly,
+      require_approval:  requireApproval,
     }).eq('id', conversation.id)
     setSavingPerms(false)
   }
@@ -299,13 +364,9 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   async function kickMember(memberId) {
     if (!window.confirm('¿Expulsar a este miembro?')) return
     await supabase.from('conversation_members')
-      .delete()
-      .eq('conversation_id', conversation.id)
-      .eq('user_id', memberId)
+      .delete().eq('conversation_id', conversation.id).eq('user_id', memberId)
     await supabase.from('group_roles')
-      .delete()
-      .eq('conversation_id', conversation.id)
-      .eq('user_id', memberId)
+      .delete().eq('conversation_id', conversation.id).eq('user_id', memberId)
     setMemberMenu(null)
     fetchConversations(profile.id)
   }
@@ -333,6 +394,23 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
     await supabase.from('conversations').update({ avatar_url: publicUrl }).eq('id', conversation.id)
   }
 
+  async function approveRequest(reqId) {
+    setProcessingReq(reqId)
+    await supabase.rpc('approve_join_request', { p_request_id: reqId })
+    setJoinRequests(prev => prev.filter(r => r.id !== reqId))
+    setProcessingReq(null)
+    fetchConversations(profile.id)
+  }
+
+  async function rejectRequest(reqId) {
+    setProcessingReq(reqId)
+    await supabase.from('join_requests')
+      .update({ status: 'rejected', reviewed_by: profile.id, reviewed_at: new Date().toISOString() })
+      .eq('id', reqId)
+    setJoinRequests(prev => prev.filter(r => r.id !== reqId))
+    setProcessingReq(null)
+  }
+
   const filteredMembers = memberSearch
     ? allMembers.filter(m =>
         (m.display_name || '').toLowerCase().includes(memberSearch.toLowerCase()) ||
@@ -340,8 +418,13 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
       )
     : allMembers
 
-  const roleColor = { owner: '#f59e0b', admin: C.green, moderator: '#8b5cf6', member: C.textDim }
-  const roleLabel = { owner: 'Dueño', admin: 'Admin', moderator: 'Mod', member: '' }
+  const TABS = [
+    { id: 'info',     label: '📋 Info' },
+    { id: 'members',  label: '👥 Miembros' },
+    { id: 'perms',    label: '🔐 Permisos' },
+    ...(isAdmin && requireApproval ? [{ id: 'requests', label: `📬 Solicitudes${joinRequests.length ? ` (${joinRequests.length})` : ''}` }] : []),
+    { id: 'media',    label: '🖼 Medios' },
+  ]
 
   // ── RENDER ────────────────────────────────────────────────────────────────────
   return (
@@ -361,7 +444,14 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
             <path d="M19 12H5M12 5l-7 7 7 7"/>
           </svg>
         </button>
-        <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16, flex: 1 }}>Info del grupo</h2>
+        <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16, flex: 1 }}>
+          Info del {conversation?.group_type === 'community' ? 'comunidad' : 'grupo'}
+        </h2>
+        {announcementOnly && (
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b33', borderRadius: 20, padding: '3px 8px' }}>
+            📢 Solo avisos
+          </span>
+        )}
       </div>
 
       {/* ── TABS ── */}
@@ -369,7 +459,7 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             flex: 1, padding: '10px 6px', background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 12, fontWeight: 600,
+            fontSize: 11, fontWeight: 600,
             color: tab === t.id ? C.green : C.textDim,
             borderBottom: `2px solid ${tab === t.id ? C.green : 'transparent'}`,
             transition: 'color .15s', whiteSpace: 'nowrap', minWidth: 70,
@@ -453,11 +543,23 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
               <p style={{ margin: '4px 0 0', fontSize: 12, color: C.textDim }}>
                 {conversation?.group_type === 'community' ? 'Comunidad' : 'Grupo'} · {allMembers.length} participantes
               </p>
-              {isLocked && (
-                <span style={{ marginTop: 8, fontSize: 11, color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b33', borderRadius: 20, padding: '3px 10px', fontWeight: 700 }}>
-                  🔒 Grupo bloqueado
-                </span>
-              )}
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {isLocked && (
+                  <span style={{ fontSize: 11, color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b33', borderRadius: 20, padding: '3px 10px', fontWeight: 700 }}>
+                    🔒 Bloqueado
+                  </span>
+                )}
+                {announcementOnly && (
+                  <span style={{ fontSize: 11, color: '#3b82f6', background: '#3b82f618', border: '1px solid #3b82f633', borderRadius: 20, padding: '3px 10px', fontWeight: 700 }}>
+                    📢 Solo avisos
+                  </span>
+                )}
+                {requireApproval && (
+                  <span style={{ fontSize: 11, color: '#10b981', background: '#10b98118', border: '1px solid #10b98133', borderRadius: 20, padding: '3px 10px', fontWeight: 700 }}>
+                    ✅ Aprobación requerida
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Description */}
@@ -594,7 +696,7 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
               </div>
             </div>
 
-            {/* Invite new member — admins */}
+            {/* Invite new member */}
             {(isAdmin || whoCanAdd === 'everyone') && (
               <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.panel2, border: `1px solid ${C.green}44`, borderRadius: 10, padding: '0 12px' }}>
@@ -635,6 +737,7 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
             </p>
             {filteredMembers.map(m => {
               const mRole = roles[m.id] || (m.id === conversation?.created_by ? 'owner' : 'member')
+              const rcfg = GROUP_ROLE_CFG[mRole] || GROUP_ROLE_CFG.member
               return (
                 <div key={m.id} style={{ position: 'relative' }}>
                   <div style={{
@@ -643,17 +746,17 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                   }}>
                     <Avatar name={m.display_name} size={44} color={avatarColor(m.id)} url={m.avatar_url} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: m.isMe ? C.green : C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {m.display_name}
                         </p>
                         {m.isMe && <span style={{ fontSize: 10, color: C.textDim }}>(Vos)</span>}
-                        {mRole && mRole !== 'member' && (
+                        {mRole !== 'member' && (
                           <span style={{
                             fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px',
-                            color: roleColor[mRole], background: `${roleColor[mRole]}18`, border: `1px solid ${roleColor[mRole]}33`,
-                            textTransform: 'uppercase', letterSpacing: '0.5px',
-                          }}>{roleLabel[mRole]}</span>
+                            color: rcfg.color, background: `${rcfg.color}18`, border: `1px solid ${rcfg.color}33`,
+                            textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap',
+                          }}>{rcfg.icon} {rcfg.label}</span>
                         )}
                       </div>
                       <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>@{m.username}</p>
@@ -675,19 +778,21 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                         position: 'absolute', right: 12, top: '100%', zIndex: 50,
                         background: C.panel, border: `1px solid ${C.border}`,
                         borderRadius: 12, overflow: 'hidden',
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)', minWidth: 200,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)', minWidth: 210,
                       }}
                     >
-                      {isAdmin && mRole !== 'admin' && mRole !== 'owner' && (
-                        <ModeBtn label="⭐ Hacer Admin" onClick={() => setRole(m.id, 'admin')} />
+                      {/* Role assignment — ordered by hierarchy */}
+                      {isAdmin && mRole !== 'owner' && (
+                        <>
+                          <div style={{ padding: '7px 14px 4px', fontSize: 10, color: C.textDim, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>Asignar rol</div>
+                          {mRole !== 'admin'       && <ModeBtn label="🛡️ Hacer Admin"       onClick={() => setRole(m.id, 'admin')} />}
+                          {mRole !== 'moderador'   && <ModeBtn label="🔰 Hacer Moderador"   onClick={() => setRole(m.id, 'moderador')} />}
+                          {mRole !== 'organizador' && <ModeBtn label="🎖️ Hacer Organizador" onClick={() => setRole(m.id, 'organizador')} />}
+                          {mRole !== 'member'      && <ModeBtn label="👤 Quitar rol"         onClick={() => setRole(m.id, 'member')} />}
+                          <div style={{ height: 1, background: C.border }} />
+                        </>
                       )}
-                      {isAdmin && mRole !== 'moderator' && mRole !== 'owner' && (
-                        <ModeBtn label="🛡️ Hacer Moderador" onClick={() => setRole(m.id, 'moderator')} />
-                      )}
-                      {isAdmin && mRole !== 'member' && mRole !== 'owner' && (
-                        <ModeBtn label="👤 Quitar rol" onClick={() => setRole(m.id, 'member')} />
-                      )}
-                      <div style={{ height: 1, background: C.border }} />
+                      <div style={{ padding: '7px 14px 4px', fontSize: 10, color: C.textDim, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>Silenciar</div>
                       <ModeBtn label="🔇 Silenciar 1h"   onClick={() => silenceMember(m.id, 1)} />
                       <ModeBtn label="🔇 Silenciar 6h"   onClick={() => silenceMember(m.id, 6)} />
                       <ModeBtn label="🔇 Silenciar 24h"  onClick={() => silenceMember(m.id, 24)} />
@@ -712,87 +817,94 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
             )}
             {isAdmin && (
               <>
+                {/* Visibilidad */}
                 <div style={{ padding: '16px 0 0' }}>
-                  <SectionLabel label="Visibilidad" />
-                  <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}11` }}>
-                    <div>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.text }}>{isPublic ? '🌐 Público' : '🔒 Privado'}</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 12, color: C.textDim }}>{isPublic ? 'Aparece en Explorar. Cualquiera puede unirse.' : 'Solo por invitación directa.'}</p>
-                    </div>
-                    <Toggle value={isPublic} onChange={togglePublic} />
-                  </div>
-                  <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}11` }}>
-                    <div>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.text }}>🔒 Bloquear grupo</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 12, color: C.textDim }}>Nadie puede enviar mensajes, ni admins.</p>
-                    </div>
-                    <Toggle value={isLocked} onChange={toggleLocked} />
-                  </div>
+                  <SectionLabel label="Visibilidad y acceso" />
+                  <PrivacyRow
+                    icon={isPublic ? '🌐' : '🔒'}
+                    label={isPublic ? 'Público' : 'Privado'}
+                    desc={isPublic ? 'Aparece en Explorar. Cualquiera puede unirse.' : 'Solo por invitación directa.'}
+                    value={isPublic}
+                    onChange={togglePublic}
+                  />
+                  <PrivacyRow
+                    icon="🔒"
+                    label="Bloquear grupo"
+                    desc="Nadie puede enviar mensajes, ni admins."
+                    value={isLocked}
+                    onChange={toggleLocked}
+                  />
+                  <PrivacyRow
+                    icon="✅"
+                    label="Aprobar nuevos miembros"
+                    desc="Los nuevos miembros deben ser aprobados por un admin antes de entrar."
+                    value={requireApproval}
+                    onChange={v => setRequireApproval(v)}
+                  />
                 </div>
 
+                {/* Privacidad avanzada */}
                 <div style={{ padding: '16px 0 0', borderTop: `1px solid ${C.border}` }}>
-                  <SectionLabel label="¿Quién puede enviar mensajes?" />
-                  {[['everyone','Todos los miembros'],['admins','Solo Admins y Moderadores']].map(([v, label]) => (
-                    <div key={v} onClick={() => setWhoCanSend(v)} style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: 'pointer',
-                      borderBottom: `1px solid ${C.border}11`,
-                      background: whoCanSend === v ? `${C.green}08` : 'transparent',
-                    }}>
-                      <div style={{
-                        width: 18, height: 18, borderRadius: '50%',
-                        border: `2px solid ${whoCanSend === v ? C.green : C.border}`,
-                        background: whoCanSend === v ? C.green : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                      }}>
-                        {whoCanSend === v && <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.bg }} />}
-                      </div>
-                      <span style={{ fontSize: 13, color: C.text }}>{label}</span>
-                    </div>
-                  ))}
+                  <SectionLabel label="Privacidad avanzada" />
+                  <PrivacyRow
+                    icon="📤"
+                    label="Permitir exportar chats"
+                    desc="Si está desactivado, los miembros no pueden exportar el historial de mensajes."
+                    value={allowExport}
+                    onChange={v => setAllowExport(v)}
+                  />
+                  <PrivacyRow
+                    icon="💾"
+                    label="Permitir guardar archivos"
+                    desc="Si está desactivado, los archivos no se guardan automáticamente en el dispositivo."
+                    value={allowAutoSave}
+                    onChange={v => setAllowAutoSave(v)}
+                  />
+                  <PrivacyRow
+                    icon="📢"
+                    label="Solo avisos (announcement only)"
+                    desc="Solo admins y moderadores pueden enviar mensajes. Ideal para canales de comunicación oficial."
+                    value={announcementOnly}
+                    onChange={v => setAnnouncementOnly(v)}
+                  />
                 </div>
 
-                <div style={{ padding: '16px 0 0', borderTop: `1px solid ${C.border}` }}>
-                  <SectionLabel label="¿Quién puede agregar miembros?" />
-                  {[['everyone','Todos los miembros'],['admins','Solo Admins']].map(([v, label]) => (
-                    <div key={v} onClick={() => setWhoCanAdd(v)} style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: 'pointer',
-                      borderBottom: `1px solid ${C.border}11`,
-                      background: whoCanAdd === v ? `${C.green}08` : 'transparent',
-                    }}>
-                      <div style={{
-                        width: 18, height: 18, borderRadius: '50%',
-                        border: `2px solid ${whoCanAdd === v ? C.green : C.border}`,
-                        background: whoCanAdd === v ? C.green : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                      }}>
-                        {whoCanAdd === v && <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.bg }} />}
-                      </div>
-                      <span style={{ fontSize: 13, color: C.text }}>{label}</span>
-                    </div>
-                  ))}
-                </div>
+                {/* ¿Quién puede... */}
+                <RadioGroup
+                  label="¿Quién puede enviar mensajes?"
+                  value={whoCanSend}
+                  onChange={setWhoCanSend}
+                  options={[
+                    ['everyone',   'Todos los miembros',               null],
+                    ['members',    'Miembros verificados',              'Excluye invitados recientes'],
+                    ['moderators', 'Moderadores y Admins',             null],
+                    ['admins',     'Solo Admins',                      null],
+                  ]}
+                />
 
-                <div style={{ padding: '16px 0 0', borderTop: `1px solid ${C.border}` }}>
-                  <SectionLabel label="¿Quién puede editar info del grupo?" />
-                  {[['everyone','Todos los miembros'],['admins','Solo Admins']].map(([v, label]) => (
-                    <div key={v} onClick={() => setWhoCanEdit(v)} style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: 'pointer',
-                      borderBottom: `1px solid ${C.border}11`,
-                      background: whoCanEdit === v ? `${C.green}08` : 'transparent',
-                    }}>
-                      <div style={{
-                        width: 18, height: 18, borderRadius: '50%',
-                        border: `2px solid ${whoCanEdit === v ? C.green : C.border}`,
-                        background: whoCanEdit === v ? C.green : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                      }}>
-                        {whoCanEdit === v && <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.bg }} />}
-                      </div>
-                      <span style={{ fontSize: 13, color: C.text }}>{label}</span>
-                    </div>
-                  ))}
-                </div>
+                <RadioGroup
+                  label="¿Quién puede agregar miembros?"
+                  value={whoCanAdd}
+                  onChange={setWhoCanAdd}
+                  options={[
+                    ['everyone', 'Todos los miembros', null],
+                    ['admins',   'Solo Admins',         null],
+                    ['owner',    'Solo el Dueño',       null],
+                  ]}
+                />
 
+                <RadioGroup
+                  label="¿Quién puede editar info del grupo?"
+                  value={whoCanEdit}
+                  onChange={setWhoCanEdit}
+                  options={[
+                    ['everyone', 'Todos los miembros',        null],
+                    ['admins',   'Admins y Moderadores',      null],
+                    ['owner',    'Solo el Dueño',             null],
+                  ]}
+                />
+
+                {/* Modo lento */}
                 <div style={{ padding: '16px 0 0', borderTop: `1px solid ${C.border}` }}>
                   <SectionLabel label="Modo lento (entre mensajes)" />
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 16px' }}>
@@ -806,6 +918,7 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                   </div>
                 </div>
 
+                {/* Auto-delete */}
                 <div style={{ padding: '16px 0 0', borderTop: `1px solid ${C.border}` }}>
                   <SectionLabel label="Mensajes temporales (auto-borrado)" />
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 16px' }}>
@@ -828,6 +941,55 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                 </div>
               </>
             )}
+          </>
+        )}
+
+        {/* ════ TAB: SOLICITUDES ════ */}
+        {tab === 'requests' && isAdmin && (
+          <>
+            <div style={{ padding: '16px 16px 8px' }}>
+              <SectionLabel label="Solicitudes pendientes de ingreso" />
+              {loadingRequests ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                  <div style={{ width: 24, height: 24, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+                </div>
+              ) : joinRequests.length === 0 ? (
+                <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
+                  <p style={{ margin: 0, fontSize: 14, color: C.text2 }}>No hay solicitudes pendientes</p>
+                  <p style={{ margin: '6px 0 0', fontSize: 12, color: C.textDim }}>Cuando alguien solicite unirse aparecerá aquí</p>
+                </div>
+              ) : joinRequests.map(req => {
+                const u = req.users || {}
+                const processing = processingReq === req.id
+                return (
+                  <div key={req.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 0', borderBottom: `1px solid ${C.border}11`,
+                  }}>
+                    <Avatar name={u.display_name} size={46} color={avatarColor(u.id)} url={u.avatar_url} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.text }}>{u.display_name || 'Usuario'}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>
+                        @{u.username} · {new Date(req.requested_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <button
+                        onClick={() => approveRequest(req.id)}
+                        disabled={processing}
+                        style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: C.green, color: C.bg, fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: processing ? 0.6 : 1 }}
+                      >{processing ? '...' : '✓ Aceptar'}</button>
+                      <button
+                        onClick={() => rejectRequest(req.id)}
+                        disabled={processing}
+                        style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.panel2, color: '#ef4444', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: processing ? 0.6 : 1 }}
+                      >{processing ? '...' : '✗ Rechazar'}</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </>
         )}
 
