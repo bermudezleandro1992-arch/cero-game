@@ -15,6 +15,7 @@ import NotificationsPage from './pages/NotificationsPage'
 import TournamentsPage from './pages/TournamentsPage'
 import DiscoverPage from './pages/DiscoverPage'
 import AnnouncementsPage from './pages/AnnouncementsPage'
+import AdminPage from './pages/AdminPage'
 import ProfileSheet from './components/ProfileSheet'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
@@ -78,6 +79,14 @@ const NAV = [
     icon: (a) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'admin', label: 'Admin',
+    icon: (a) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
       </svg>
     ),
   },
@@ -273,6 +282,8 @@ export default function App() {
             ? <TournamentsPage />
             : tab === 'anuncios'
             ? <AnnouncementsPage />
+            : tab === 'admin'
+            ? <AdminPage />
             : <ChatListPage onProfileClick={() => setShowProfile(true)} />
           }
         </div>
