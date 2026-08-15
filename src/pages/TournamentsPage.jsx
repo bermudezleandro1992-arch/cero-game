@@ -92,23 +92,60 @@ function FeatureCard({ icon, title, desc, color = C.green, onClick, comingSoon }
   )
 }
 
-// ── Rankings ──────────────────────────────────────────────────────────────────
+// ── Rankings (real-time from DB) ──────────────────────────────────────────────
 function RankingsSection() {
   const [rankType, setRankType] = useState('general')
+  const [players, setPlayers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const MEDAL_COLORS = ['#f59e0b', '#94a3b8', '#b45309']
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const { data } = await supabase
+        .from('users')
+        .select('id, display_name, username, avatar_url, stats_wins, stats_victories, stats_matches, stats_goals, stats_tournaments')
+        .order('stats_wins', { ascending: false })
+        .limit(50)
+      setPlayers(data || [])
+      setLoading(false)
+    }
+    load()
+
+    // Realtime subscription
+    const channel = supabase.channel('rankings-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => load())
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
+  const ranked = players.filter(p => (p.stats_wins || 0) > 0 || (p.stats_tournaments || 0) > 0)
+
   const TYPES = [
     { id: 'general', label: '🌍 General' },
-    { id: 'pais', label: '🇦🇷 País' },
-    { id: 'zona', label: '🗺️ Zona' },
-    { id: 'plataforma', label: '🎮 Plataforma' },
+    { id: 'victorias', label: '✅ Victorias' },
+    { id: 'torneos', label: '🏆 Torneos' },
+    { id: 'goles', label: '⚽ Goles' },
   ]
 
-  const mockRanking = [
-    { pos: 1, name: 'ElCrack99', pts: 2840, pais: '🇦🇷', plat: 'PS5', wins: 28, color: '#f59e0b' },
-    { pos: 2, name: 'Xavi_Pro',  pts: 2610, pais: '🇪🇸', plat: 'PC',  wins: 24, color: '#94a3b8' },
-    { pos: 3, name: 'Draka_FUT', pts: 2390, pais: '🇲🇽', plat: 'PS5', wins: 21, color: '#b45309' },
-    { pos: 4, name: 'Leo_Goal',  pts: 2100, pais: '🇦🇷', plat: 'PC',  wins: 19, color: C.textDim },
-    { pos: 5, name: 'TikiTaka',  pts: 1980, pais: '🇧🇷', plat: 'Xbox',wins: 17, color: C.textDim },
-  ]
+  const sorted = [...ranked].sort((a, b) => {
+    if (rankType === 'victorias') return (b.stats_victories || 0) - (a.stats_victories || 0)
+    if (rankType === 'torneos')   return (b.stats_tournaments || 0) - (a.stats_tournaments || 0)
+    if (rankType === 'goles')     return (b.stats_goals || 0) - (a.stats_goals || 0)
+    return (b.stats_wins || 0) - (a.stats_wins || 0)
+  })
+
+  function getScore(p) {
+    if (rankType === 'victorias') return p.stats_victories || 0
+    if (rankType === 'torneos')   return p.stats_tournaments || 0
+    if (rankType === 'goles')     return p.stats_goals || 0
+    return p.stats_wins || 0
+  }
+
+  function getSubline(p) {
+    return `🏆 ${p.stats_tournaments || 0} torneos · ✅ ${p.stats_victories || 0} victorias · ⚽ ${p.stats_goals || 0} goles`
+  }
 
   return (
     <div>
@@ -124,32 +161,59 @@ function RankingsSection() {
         ))}
       </div>
 
+      {loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[1,2,3].map(i => <div key={i} style={{ height: 62, background: C.panel, borderRadius: 12 }} />)}
+        </div>
+      )}
+
+      {!loading && sorted.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: C.textDim }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>📊</div>
+          <p style={{ margin: 0, fontSize: 14 }}>Aún no hay jugadores con estadísticas.</p>
+          <p style={{ margin: '4px 0 0', fontSize: 12 }}>Jugá torneos para aparecer en el ranking.</p>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {mockRanking.map(r => (
-          <div key={r.pos} style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            background: r.pos <= 3 ? `${r.color}10` : C.panel,
-            border: `1px solid ${r.pos <= 3 ? r.color + '33' : C.border}`,
-            borderRadius: 12, padding: '12px 14px',
-          }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-              background: r.pos <= 3 ? `${r.color}22` : C.panel2,
-              border: `1.5px solid ${r.pos <= 3 ? r.color : C.border}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 800, fontSize: 14, color: r.pos <= 3 ? r.color : C.textDim,
-            }}>{r.pos <= 3 ? ['🥇','🥈','🥉'][r.pos-1] : r.pos}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{r.name}</div>
-              <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{r.pais} · {r.plat} · {r.wins} victorias</div>
+        {sorted.map((p, i) => {
+          const pos = i + 1
+          const color = pos <= 3 ? MEDAL_COLORS[pos - 1] : C.textDim
+          const score = getScore(p)
+          return (
+            <div key={p.id} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              background: pos <= 3 ? `${color}10` : C.panel,
+              border: `1px solid ${pos <= 3 ? color + '33' : C.border}`,
+              borderRadius: 12, padding: '12px 14px',
+            }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                background: pos <= 3 ? `${color}22` : C.panel2,
+                border: `1.5px solid ${pos <= 3 ? color : C.border}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 800, fontSize: 14, color: pos <= 3 ? color : C.textDim,
+              }}>{pos <= 3 ? ['🥇','🥈','🥉'][pos-1] : pos}</div>
+              {p.avatar_url
+                ? <img src={p.avatar_url} alt={p.display_name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                : <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: C.text }}>{(p.display_name || '?').slice(0,2).toUpperCase()}</div>
+              }
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: C.text, fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.display_name || p.username}</div>
+                <div style={{ color: C.textDim, fontSize: 11, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getSubline(p)}</div>
+              </div>
+              <div style={{ color: pos <= 3 ? color : C.text, fontWeight: 800, fontSize: 15, flexShrink: 0 }}>{score.toLocaleString()}</div>
             </div>
-            <div style={{ color: r.pos <= 3 ? r.color : C.text, fontWeight: 800, fontSize: 15 }}>{r.pts.toLocaleString()}</div>
-          </div>
-        ))}
-        <p style={{ textAlign: 'center', color: C.textDim, fontSize: 11, margin: '4px 0 0' }}>
-          Rankings en tiempo real — próximamente conectados a torneos reales
-        </p>
+          )
+        })}
       </div>
+
+      {!loading && (
+        <p style={{ textAlign: 'center', color: C.textDim, fontSize: 11, margin: '12px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block', animation: 'pulse 2s infinite' }} />
+          Rankings en tiempo real · {sorted.length} jugadores
+        </p>
+      )}
     </div>
   )
 }
@@ -232,6 +296,12 @@ function TournamentsList({ profile }) {
       setTName(''); setTGame('FC 26'); setTFormat('1vs1'); setTMaxPl('16'); setTDeadline('')
     } catch (e) { alert(`Error al crear: ${e.message}`) }
     setCreating(false)
+  }
+
+  async function handleDeleteTournament(t) {
+    if (!window.confirm(`¿Eliminar "${t.name}"? Esta acción no se puede deshacer.`)) return
+    await supabase.from('conversations').delete().eq('id', t.id).eq('created_by', profile.id)
+    await loadTournaments()
   }
 
   async function joinTournament(id) {
@@ -354,6 +424,13 @@ function TournamentsList({ profile }) {
                     background: C.green, border: 'none',
                     color: C.bg, fontWeight: 700, fontSize: 13, cursor: 'pointer',
                   }}>⚔️ Inscribirse</button>
+                )}
+                {isCreator && (
+                  <button onClick={() => handleDeleteTournament(t)} title="Eliminar" style={{
+                    width: 38, padding: '9px', borderRadius: 10, flexShrink: 0,
+                    background: '#ef444418', border: '1px solid #ef444430',
+                    color: '#ef4444', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+                  }}>🗑️</button>
                 )}
               </div>
             </div>

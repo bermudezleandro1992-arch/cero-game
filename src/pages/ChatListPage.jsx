@@ -132,6 +132,8 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   const [contactCategories, setContactCategories] = useState({}) // contactId -> 'amigo'|'clan'|'conocido'
   const [contextMenu, setContextMenu] = useState(null)           // {conv, x, y}
   const [catSubMenu, setCatSubMenu] = useState(false)
+  const [sortOrder, setSortOrder] = useState('recientes')        // 'recientes' | 'no_leidos' | 'az'
+  const [showSortMenu, setShowSortMenu] = useState(false)
 
   useEffect(() => { setFilter(initialFilter || 'todos') }, [initialFilter])
   const [showFab, setShowFab] = useState(false)
@@ -171,6 +173,24 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
     const t = setTimeout(() => document.addEventListener('click', h, { once: true }), 0)
     return () => { clearTimeout(t); document.removeEventListener('click', h) }
   }, [contextMenu])
+
+  useEffect(() => {
+    if (!showSortMenu) return
+    const h = () => setShowSortMenu(false)
+    const t = setTimeout(() => document.addEventListener('click', h, { once: true }), 0)
+    return () => { clearTimeout(t); document.removeEventListener('click', h) }
+  }, [showSortMenu])
+
+  async function handleClearAll() {
+    if (!window.confirm('¿Limpiar el historial de todos los chats? Solo se borrará para vos.')) return
+    const ids = filtered.map(c => c.id)
+    if (!ids.length) return
+    await supabase.from('conversation_members')
+      .update({ cleared_at: new Date().toISOString() })
+      .in('conversation_id', ids)
+      .eq('user_id', profile.id)
+    fetchConversations(profile.id)
+  }
 
   async function searchUsers(q) {
     if (!q.trim()) { setSearchResults([]); return }
@@ -245,7 +265,8 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
   if (showNewGroup) return <NewGroupPage initialType={newGroupType} onBack={() => setShowNewGroup(false)} onCreated={handleGroupCreated} />
 
-  const filtered = search ? [] : conversations.filter(c => {
+  const filtered = (search ? [] : conversations.filter(c => {
+    if (filter === 'chats')       return !c.isGroup && !c.isCommunity
     if (filter === 'directos')    return !c.isGroup && !c.isCommunity
     if (filter === 'grupos')      return c.isGroup && !c.isCommunity
     if (filter === 'comunidades') return c.isCommunity
@@ -253,6 +274,11 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
     if (filter === 'clan')        return !c.isGroup && contactCategories[c.user?.id] === 'clan'
     if (filter === 'conocido')    return !c.isGroup && contactCategories[c.user?.id] === 'conocido'
     return true
+  })).sort((a, b) => {
+    if (sortOrder === 'no_leidos') return (b.unread || 0) - (a.unread || 0)
+    if (sortOrder === 'az') return (a.name || a.user?.display_name || '').localeCompare(b.name || b.user?.display_name || '')
+    // 'recientes' — default order from store (already sorted by last message)
+    return 0
   })
 
   return (
@@ -281,7 +307,50 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
             </span>
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button onClick={() => onProfileClick?.()} style={{
+            {/* Ordenar */}
+            <div style={{ position: 'relative' }}>
+              <button onClick={e => { e.stopPropagation(); setShowSortMenu(v => !v) }} title="Ordenar" style={{
+                width: 32, height: 32, borderRadius: '50%', background: showSortMenu ? `${C.green}22` : C.panel2,
+                border: `1px solid ${showSortMenu ? C.green + '55' : C.border}`, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={showSortMenu ? C.green : C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="7" y2="18"/>
+                </svg>
+              </button>
+              {showSortMenu && (
+                <div onClick={e => e.stopPropagation()} style={{
+                  position: 'absolute', right: 0, top: 38, zIndex: 100,
+                  background: C.panel, border: `1px solid ${C.border}`,
+                  borderRadius: 12, overflow: 'hidden', minWidth: 170,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                }}>
+                  {[['recientes','🕐 Más recientes'],['no_leidos','🔵 No leídos primero'],['az','🔤 A-Z']].map(([id, label]) => (
+                    <div key={id} onClick={() => { setSortOrder(id); setShowSortMenu(false) }} style={{
+                      padding: '10px 14px', cursor: 'pointer', fontSize: 13,
+                      color: sortOrder === id ? C.green : C.text,
+                      fontWeight: sortOrder === id ? 700 : 400,
+                      background: sortOrder === id ? `${C.green}10` : 'transparent',
+                      borderBottom: `1px solid ${C.border}22`,
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                      onMouseLeave={e => e.currentTarget.style.background = sortOrder === id ? `${C.green}10` : 'transparent'}
+                    >{label} {sortOrder === id ? '✓' : ''}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Limpiar todos */}
+            <button onClick={handleClearAll} title="Limpiar todos los chats" style={{
+              width: 32, height: 32, borderRadius: '50%', background: C.panel2,
+              border: `1px solid ${C.border}`, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+              </svg>
+            </button>
+            <button onClick={() => onProfileClick?.()} title="Perfil" style={{
               width: 32, height: 32, borderRadius: '50%', background: C.panel2,
               border: `1px solid ${C.border}`, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -331,7 +400,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
           }}>
             {[
               ['todos','Todos','💬'],
-              ['directos','Directos','👤'],
+              ['chats','Chats','👤'],
               ['grupos','Grupos','👥'],
               ['comunidades','Comunidades','🌐'],
               ['amigo','Amigos','🤝'],

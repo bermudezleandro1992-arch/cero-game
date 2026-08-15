@@ -141,15 +141,17 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
     <div style={{
       flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
       background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-      overflowY: 'auto',
+      overflow: 'hidden',
     }}>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         .settings-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
         @media (min-width: 600px) { .settings-grid { grid-template-columns: 1fr 1fr; } }
         @media (min-width: 900px) { .settings-grid { grid-template-columns: 1fr 1fr 1fr; } }
-        .stat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
-        @media (min-width: 600px) { .stat-grid { grid-template-columns: repeat(6,1fr); } }
+        .stat-grid { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+        .stat-grid::-webkit-scrollbar { display: none; }
+        .stat-item { flex: 0 0 calc(33.333% - 6px); min-width: 76px; }
+        @media (min-width: 600px) { .stat-item { flex: 1; min-width: 0; } }
       `}</style>
 
       {/* Header */}
@@ -182,7 +184,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
       {/* Hero — avatar + info + badges */}
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        padding: '32px 20px 24px',
+        padding: '20px 20px 16px',
         background: `radial-gradient(ellipse at 50% 0%, ${C.greenDk}22 0%, transparent 65%)`,
         borderBottom: `1px solid ${C.border}`, flexShrink: 0,
       }}>
@@ -251,7 +253,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
 
       {/* Stats */}
       {!forceSetup && (
-        <div style={{ padding: '16px 20px', background: C.panel2, borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ padding: '16px 20px', background: C.panel2, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
           <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Estadísticas</p>
           <div className="stat-grid">
             {[
@@ -262,7 +264,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
               { icon: '⚽', label: 'Goles',       value: profile?.stats_goals || 0 },
               { icon: '📊', label: 'Ranking',     value: profile?.stats_ranking ? `#${profile.stats_ranking}` : '--' },
             ].map(s => (
-              <div key={s.label} style={{
+              <div key={s.label} className="stat-item" style={{
                 background: C.panel, borderRadius: 12, padding: '10px 6px',
                 border: `1px solid ${C.border}`, textAlign: 'center',
               }}>
@@ -279,7 +281,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
       {!forceSetup && (
         <div style={{
           display: 'flex', gap: 0, background: C.panel,
-          borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+          borderBottom: `1px solid ${C.border}`, flexShrink: 0, zIndex: 1,
         }}>
           {SECTIONS.map(s => (
             <button key={s.id} onClick={() => setSection(s.id)} style={{
@@ -293,8 +295,8 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
         </div>
       )}
 
-      {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 40px' }}>
+      {/* Content — scrollable area */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 40px', minHeight: 0 }}>
 
         {/* ── PERFIL ── */}
         {(section === 'perfil' || forceSetup) && (
