@@ -36,6 +36,20 @@ export const useChatStore = create((set, get) => ({
 
   fetchMessages: async (conversationId, topicId = null) => {
     set({ loadingMessages: true })
+    const userId = (await supabase.auth.getUser()).data?.user?.id
+
+    // Get cleared_at for this user so we hide messages before the clear point
+    let clearedAt = null
+    if (userId) {
+      const { data: mem } = await supabase
+        .from('conversation_members')
+        .select('cleared_at')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', userId)
+        .single()
+      clearedAt = mem?.cleared_at || null
+    }
+
     let q = supabase
       .from('messages')
       .select('*, sender:users!messages_sender_id_fkey(id, display_name, username, avatar_url)')
@@ -44,6 +58,7 @@ export const useChatStore = create((set, get) => ({
       .limit(100)
     if (topicId) q = q.eq('topic_id', topicId)
     else q = q.is('topic_id', null)
+    if (clearedAt) q = q.gt('created_at', clearedAt)
     const { data } = await q
     set({ messages: (data || []).reverse(), loadingMessages: false })
   },
