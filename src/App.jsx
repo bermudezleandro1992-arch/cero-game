@@ -364,8 +364,14 @@ export default function App() {
             top: auto !important; left: auto !important;
             right: auto !important; bottom: auto !important;
           }
-          .slfa-left  { width: 400px !important; flex-shrink: 0; border-right: 1px solid ${C.border}; }
+          .slfa-left  { width: 420px !important; flex-shrink: 0; border-right: 1px solid ${C.border}; }
           .slfa-right { flex: 1 !important; min-width: 0; }
+        }
+        @media (min-width: 1200px) {
+          .slfa-left  { width: 520px !important; }
+        }
+        @media (min-width: 1600px) {
+          .slfa-left  { width: 600px !important; }
         }
 
         /* Scrollbar */
