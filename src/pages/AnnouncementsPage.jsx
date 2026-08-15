@@ -351,6 +351,7 @@ export default function AnnouncementsPage() {
   const [showForm, setShowForm] = useState(false)
   const [likedSet, setLikedSet] = useState(new Set())
   const [likeCounts, setLikeCounts] = useState({})
+  const [canPublish, setCanPublish] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -397,6 +398,19 @@ export default function AnnouncementsPage() {
   }, [category, profile?.id])
 
   useEffect(() => { load() }, [load])
+
+  // Check if user can publish: must be owner/admin of at least one group or community, or CEO/organizador
+  useEffect(() => {
+    if (!profile?.id) return
+    const role = profile?.role || 'member'
+    if (role === 'ceo' || role === 'organizador') { setCanPublish(true); return }
+    supabase
+      .from('group_roles')
+      .select('conversation_id', { count: 'exact', head: true })
+      .eq('user_id', profile.id)
+      .in('role', ['owner', 'admin'])
+      .then(({ count }) => setCanPublish((count || 0) > 0))
+  }, [profile?.id, profile?.role])
 
   // Realtime — new announcements
   useEffect(() => {
@@ -451,18 +465,24 @@ export default function AnnouncementsPage() {
             <span style={{ fontSize: 20 }}>📢</span>
             <span style={{ color: C.text, fontWeight: 800, fontSize: 17, letterSpacing: '-0.3px' }}>Anuncios</span>
           </div>
-          <button
-            onClick={() => setShowForm(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: C.green, border: 'none', borderRadius: 10,
-              padding: '7px 14px', cursor: 'pointer',
-              color: C.bg, fontSize: 13, fontWeight: 700,
-              boxShadow: `0 2px 10px ${C.green}44`,
-            }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Publicar
-          </button>
+          {canPublish ? (
+            <button
+              onClick={() => setShowForm(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: C.green, border: 'none', borderRadius: 10,
+                padding: '7px 14px', cursor: 'pointer',
+                color: C.bg, fontSize: 13, fontWeight: 700,
+                boxShadow: `0 2px 10px ${C.green}44`,
+              }}
+            >
+              <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Publicar
+            </button>
+          ) : (
+            <div style={{ fontSize: 11, color: C.textDim, padding: '6px 10px', borderRadius: 8, background: C.panel2, border: `1px solid ${C.border}` }}>
+              Solo organizadores
+            </div>
+          )}
         </div>
 
         {/* Category filter */}
@@ -503,9 +523,14 @@ export default function AnnouncementsPage() {
                 ? 'Sé el primero en publicar un torneo, liga o evento de la comunidad.'
                 : `No hay anuncios de tipo "${CATEGORIES.find(c => c.id === category)?.label}" todavía.`}
             </p>
-            <button onClick={() => setShowForm(true)} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: C.green, color: C.bg, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: `0 2px 12px ${C.green}33` }}>
-              + Publicar anuncio
-            </button>
+            {canPublish && (
+              <button onClick={() => setShowForm(true)} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: C.green, color: C.bg, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: `0 2px 12px ${C.green}33` }}>
+                + Publicar anuncio
+              </button>
+            )}
+            {!canPublish && (
+              <p style={{ color: C.textDim, fontSize: 12, margin: 0 }}>Solo organizadores con grupos o comunidades pueden publicar</p>
+            )}
           </div>
         )}
 
