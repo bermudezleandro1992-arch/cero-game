@@ -14,6 +14,7 @@ import ContactsListPage from './pages/ContactsListPage'
 import NotificationsPage from './pages/NotificationsPage'
 import TournamentsPage from './pages/TournamentsPage'
 import DiscoverPage from './pages/DiscoverPage'
+import AnnouncementsPage from './pages/AnnouncementsPage'
 import ProfileSheet from './components/ProfileSheet'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
@@ -73,11 +74,10 @@ const NAV = [
     ),
   },
   {
-    id: 'notifs', label: 'Avisos',
+    id: 'anuncios', label: 'Anuncios',
     icon: (a) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
       </svg>
     ),
   },
@@ -217,7 +217,7 @@ export default function App() {
                 borderLeft: `3px solid ${active ? C.green : 'transparent'}`,
                 transition: 'background .15s',
               }}>
-                {(id === 'chats' || id === 'notifs') && totalUnread > 0 && (
+                {id === 'chats' && totalUnread > 0 && (
                   <span style={{
                     position: 'absolute', top: 10, right: '12%',
                     minWidth: 16, height: 16, borderRadius: 8, padding: '0 4px',
@@ -244,8 +244,8 @@ export default function App() {
             ? <DiscoverPage />
             : tab === 'torneos'
             ? <TournamentsPage />
-            : tab === 'notifs'
-            ? <NotificationsPage onConvClick={() => setTab('chats')} />
+            : tab === 'anuncios'
+            ? <AnnouncementsPage />
             : <ChatListPage onProfileClick={() => setShowProfile(true)} />
           }
         </div>
@@ -273,7 +273,7 @@ export default function App() {
                 justifyContent: 'center', gap: 4, border: 'none', background: 'none',
                 cursor: 'pointer', position: 'relative', transition: 'opacity .15s',
               }}>
-                {(id === 'chats' || id === 'notifs') && totalUnread > 0 && (
+                {id === 'chats' && totalUnread > 0 && (
                   <span style={{
                     position: 'absolute', top: 8, right: '22%',
                     minWidth: 16, height: 16, borderRadius: 8, padding: '0 4px',
