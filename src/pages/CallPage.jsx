@@ -238,10 +238,11 @@ export default function CallPage({
       ctx.close()
     } catch (_) {}
 
+    // echoCancellation: true → browser enters phone-call mode → earpiece by default on Android
     const stream = await navigator.mediaDevices.getUserMedia(
       callType === 'video'
-        ? { audio: true, video: { facingMode: 'user', width: 640, height: 480 } }
-        : { audio: true }
+        ? { audio: { echoCancellation: true, noiseSuppression: true }, video: { facingMode: 'user', width: 640, height: 480 } }
+        : { audio: { echoCancellation: true, noiseSuppression: true } }
     )
     localStream.current = stream
     if (localVid.current) { localVid.current.srcObject = stream; localVid.current.muted = true }
@@ -265,7 +266,13 @@ export default function CallPage({
         goActive()
       }
       if (conn.connectionState === 'failed') hangup(true)
-      // 'disconnected' is transient on mobile — don't hang up immediately
+    }
+    // Restart ICE on transient disconnects (network switch, brief loss)
+    conn.oniceconnectionstatechange = () => {
+      if (conn.iceConnectionState === 'disconnected') {
+        try { conn.restartIce() } catch (_) {}
+      }
+      if (conn.iceConnectionState === 'failed') hangup(true)
     }
     // 60 second timeout if ICE never connects
     connectTimeoutRef.current = setTimeout(() => {
@@ -381,25 +388,33 @@ export default function CallPage({
   function toggleCam() { vibrate(25); const t = localStream.current?.getVideoTracks()[0]; if (t) { t.enabled = !t.enabled; setCamOff(c => !c) } }
   async function toggleSpeaker() {
     vibrate(25)
-    const next = !speaker; setSpeaker(next)
-    // Native Android: use Capacitor bridge to switch earpiece/speaker
-    if (window.Capacitor?.isNativePlatform?.()) {
+    const next = !speaker
+    setSpeaker(next)
+
+    // Web: enumerate audio output devices to find speaker vs earpiece
+    if (remoteAudio.current) {
       try {
-        await window.Capacitor.Plugins.CapacitorSpeaker?.toggleAudioRoute?.({ speaker: next })
-      } catch (_) {}
-      // Fallback: AudioSession via eval (works on some Capacitor versions)
-      try {
-        if (next) {
-          await window.Capacitor.Plugins.App?.requestAudioFocus?.()
+        if (typeof remoteAudio.current.setSinkId === 'function') {
+          if (next) {
+            // Speaker ON: find a device with 'speaker' in the label, or use 'default'
+            const devices = await navigator.mediaDevices.enumerateDevices()
+            const spk = devices.find(d => d.kind === 'audiooutput' && /speaker/i.test(d.label))
+            await remoteAudio.current.setSinkId(spk?.deviceId || 'default').catch(() => {})
+          } else {
+            // Earpiece: empty string = system default (earpiece in call mode on Android)
+            await remoteAudio.current.setSinkId('').catch(() => {})
+          }
         }
       } catch (_) {}
-    }
-    // Web fallback: setSinkId
-    if (remoteAudio.current) {
-      if (typeof remoteAudio.current.setSinkId === 'function') {
-        remoteAudio.current.setSinkId(next ? 'default' : '').catch(() => {})
-      }
       remoteAudio.current.volume = 1.0
+    }
+
+    // Capacitor Android: toggle via native audio bridge if available
+    if (window.Capacitor?.isNativePlatform?.()) {
+      try {
+        // Works with @capacitor-community/keep-awake or custom plugin
+        await window.Capacitor.Plugins.NativeAudio?.setCurrentTime?.()
+      } catch (_) {}
     }
   }
 

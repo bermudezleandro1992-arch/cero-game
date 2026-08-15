@@ -123,10 +123,36 @@ export default function App() {
 
   useEffect(() => {
     if (!profile?.id) return
-    const ch = supabase.channel(`user-calls:${profile.id}`)
-      .on('broadcast', { event: 'call-offer' }, ({ payload }) => setIncomingCall(payload))
-      .subscribe()
-    return () => supabase.removeChannel(ch)
+    let ch, retryTimer
+
+    function connectCallChannel() {
+      if (ch) supabase.removeChannel(ch)
+      ch = supabase.channel(`user-calls:${profile.id}`, {
+        config: { broadcast: { ack: false } },
+      })
+        .on('broadcast', { event: 'call-offer' }, ({ payload }) => setIncomingCall(payload))
+        .subscribe((status) => {
+          // Auto-reconnect if channel drops (mobile network switches, sleep, etc.)
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            clearTimeout(retryTimer)
+            retryTimer = setTimeout(connectCallChannel, 3000)
+          }
+        })
+    }
+
+    connectCallChannel()
+
+    // Also reconnect when tab becomes visible again (tab switch, screen wake)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') connectCallChannel()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      clearTimeout(retryTimer)
+      document.removeEventListener('visibilitychange', onVisible)
+      if (ch) supabase.removeChannel(ch)
+    }
   }, [profile?.id])
 
   // Init push notifications: native FCM (APK) + Web Push (PWA)
