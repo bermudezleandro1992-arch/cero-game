@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { C } from '../theme'
+import { canPublishAnnouncements } from '../lib/roles'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(ts) {
@@ -399,11 +400,12 @@ export default function AnnouncementsPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Check if user can publish: must be owner/admin of at least one group or community, or CEO/organizador
+  // Check if user can publish announcements
   useEffect(() => {
     if (!profile?.id) return
-    const role = profile?.role || 'member'
-    if (role === 'ceo' || role === 'organizador') { setCanPublish(true); return }
+    // Role-based check first (ceo, admin, organizador, vip, comunidad can publish)
+    if (canPublishAnnouncements(profile)) { setCanPublish(true); return }
+    // Fallback: also allow if user owns/admins at least one group or community
     supabase
       .from('group_roles')
       .select('conversation_id', { count: 'exact', head: true })

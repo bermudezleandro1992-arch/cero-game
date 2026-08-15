@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { C } from '../theme'
+import { getMaxParticipants, getRoleCfg } from '../lib/roles'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -317,6 +318,7 @@ function TournamentsList({ profile }) {
   }
 
   const filtered = filter === 'all' ? tournaments : tournaments.filter(t => t.status === filter)
+  const maxPlayers = getMaxParticipants(profile)
   const inp = { background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, padding: '10px 12px', outline: 'none', width: '100%', boxSizing: 'border-box' }
 
   return (
@@ -345,7 +347,14 @@ function TournamentsList({ profile }) {
       {/* Create form */}
       {showCreate && (
         <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16, marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <p style={{ margin: 0, color: C.green, fontWeight: 700, fontSize: 14 }}>🏆 Crear competencia</p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <p style={{ margin: 0, color: C.green, fontWeight: 700, fontSize: 14 }}>🏆 Crear competencia</p>
+            {(() => { const cfg = getRoleCfg(profile?.role || 'member'); return (
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}44` }}>
+                {cfg.icon} Máx. {maxPlayers} jugadores
+              </span>
+            )})()}
+          </div>
           {/* Type */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {Object.entries(TYPE_CFG).map(([key, cfg]) => (
@@ -463,9 +472,7 @@ export default function TournamentsPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg }}>
       <style>{`
-        .comm-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-        @media (min-width: 500px) { .comm-grid { grid-template-columns: 1fr 1fr; } }
-        @media (min-width: 800px) { .comm-grid { grid-template-columns: 1fr 1fr 1fr; } }
+        .comm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
       `}</style>
 
       {/* Header */}
@@ -558,9 +565,9 @@ export default function TournamentsPage() {
 
             <SectionHeader icon="🚀" title="Acceso rápido" desc="Tus herramientas de comunidad" />
             <div className="comm-grid" style={{ marginBottom: 20 }}>
-              <FeatureCard icon="🏆" title="Crear Torneo" desc="Organizá competencias por eliminación, grupos o liga" color={C.green} onClick={() => { requirePlan(() => setTab('torneos')) }} />
-              <FeatureCard icon="📋" title="Crear Liga" desc="Sistema de puntos con tabla de posiciones" color="#3b82f6" onClick={() => requirePlan(() => setTab('torneos'))} />
-              <FeatureCard icon="⚔️" title="Torneo de Clanes" desc="Enfrentá grupos de jugadores organizados en clanes" color="#a855f7" onClick={() => requirePlan(() => setTab('torneos'))} />
+              <FeatureCard icon="🏆" title="Crear Torneo" desc="Organizá competencias por eliminación, grupos o liga" color={C.green} onClick={() => setTab('torneos')} />
+              <FeatureCard icon="📋" title="Crear Liga" desc="Sistema de puntos con tabla de posiciones" color="#3b82f6" onClick={() => setTab('torneos')} />
+              <FeatureCard icon="⚔️" title="Torneo de Clanes" desc="Enfrentá grupos de jugadores organizados en clanes" color="#a855f7" onClick={() => setTab('torneos')} />
               <FeatureCard icon="🎲" title="Sorteo en Vivo" desc="Sorteá enfrentamientos y premios en tiempo real" color="#f59e0b" comingSoon />
               <FeatureCard icon="🔱" title="Brackets" desc="Cuadros de eliminación automáticos y visuales" color="#06b6d4" comingSoon />
               <FeatureCard icon="📊" title="Rankings" desc="Posiciones por zonas, países y plataformas" color={C.green} onClick={() => setTab('rankings')} />
