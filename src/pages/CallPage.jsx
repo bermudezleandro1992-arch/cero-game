@@ -144,14 +144,15 @@ function HangupIcon({ size = 22 }) {
 }
 
 export default function CallPage({
-  conversationId, myUserId, contact,
-  callType: initType, isIncoming, incomingOffer, onEnd,
+  conversationId, myUserId, myUserName,
+  contact, callType: initType, isIncoming, incomingOffer, onEnd, onAccept,
 }) {
   const [phase, setPhase] = useState(isIncoming ? 'incoming' : 'connecting')
   const [callType] = useState(initType || 'audio')
   const [muted, setMuted] = useState(false)
   const [camOff, setCamOff] = useState(false)
-  const [speaker, setSpeaker] = useState(true)
+  // On native (Capacitor) default to earpiece like a real phone call; on web default to speaker
+  const [speaker, setSpeaker] = useState(!window.Capacitor?.isNativePlatform?.())
   const [elapsed, setElapsed] = useState(0)
   const [minimized, setMinimized] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -220,6 +221,23 @@ export default function CallPage({
   }, [])
 
   async function getMedia() {
+    // On Capacitor Android, request mic permission before getUserMedia
+    if (window.Capacitor?.isNativePlatform?.()) {
+      try {
+        const { Permissions } = window.Capacitor.Plugins
+        if (Permissions?.requestPermissions) {
+          await Permissions.requestPermissions({ permissions: ['microphone'] })
+        }
+      } catch (_) {}
+    }
+
+    // Resume suspended AudioContext (happens when screen wakes from lock)
+    try {
+      const ctx = new AudioContext()
+      if (ctx.state === 'suspended') await ctx.resume()
+      ctx.close()
+    } catch (_) {}
+
     const stream = await navigator.mediaDevices.getUserMedia(
       callType === 'video'
         ? { audio: true, video: { facingMode: 'user', width: 640, height: 480 } }
@@ -265,14 +283,14 @@ export default function CallPage({
       await conn.setLocalDescription(offer)
       const ch = supabase.channel(`user-calls:${contact.id}`)
       await new Promise(r => ch.subscribe(s => s === 'SUBSCRIBED' && r()))
-      await ch.send({ type: 'broadcast', event: 'call-offer', payload: { from: myUserId, fromName: contact?.display_name || '', convId: conversationId, callType, offer } })
+      await ch.send({ type: 'broadcast', event: 'call-offer', payload: { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer } })
       supabase.removeChannel(ch)
       // Also send FCM push notification so receiver gets it even when app is closed
       supabase.functions.invoke('send-fcm-notification', {
         body: {
           targetUserId: contact.id,
           type: 'call',
-          payload: { from: myUserId, fromName: contact?.display_name || '', convId: conversationId, callType, offer: JSON.stringify(offer) },
+          payload: { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer: JSON.stringify(offer) },
         }
       }).catch(() => {}) // non-blocking, Supabase broadcast is the primary signal
     } catch (e) { alert(`Error: ${e.message}`); onEnd() }
@@ -304,6 +322,7 @@ export default function CallPage({
     sounds.callConnect()
     vibrate([0, 60])
     timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
+    onAccept?.()  // acquire WakeLock so screen stays on during call
   }
 
   function rejectCall() {
