@@ -9,6 +9,7 @@ import { useContactStatus, formatLastSeen } from '../hooks/useContactStatus'
 import { supabase } from '../lib/supabase'
 import { sounds } from '../lib/sounds'
 import { acquireWakeLock } from '../lib/appStartup'
+import { detectSpam, applyAutoSanction, checkSanction, reportMessage, sanctionMessage } from '../lib/antispam'
 import { C } from '../theme'
 
 const EMOJI_CATS = [
@@ -522,9 +523,45 @@ export default function ChatPage({ onBack }) {
     e?.preventDefault()
     if (!text.trim() || sending) return
     setSending(true)
+
+    // ── Anti-spam check ──────────────────────────────────────
+    const rawText = text.trim()
+
+    // 1. Verificar si el usuario ya está sancionado
+    const sanction = await checkSanction(profile.id)
+    if (sanction?.sanctioned) {
+      alert(sanctionMessage(sanction))
+      setSending(false)
+      return
+    }
+
+    // 2. Detectar spam en el contenido (solo en grupos)
+    if (activeConversation?.isGroup) {
+      const spam = detectSpam(rawText)
+      if (spam) {
+        // Reportar y aplicar sanción automática
+        const result = await applyAutoSanction(profile.id, spam.detail, {
+          message: rawText,
+          conversation_id: activeConversation.id,
+        })
+        await reportMessage({
+          reporterId:      profile.id,
+          reportedUserId:  profile.id,
+          conversationId:  activeConversation.id,
+          reason:          spam.type,
+          contentSnapshot: rawText,
+        })
+        const msg = sanctionMessage({ sanctioned: true, ...result })
+        alert(`⚠️ Mensaje bloqueado.\n\n${msg || 'Tu mensaje fue bloqueado por spam.'}`)
+        setSending(false)
+        return
+      }
+    }
+    // ── Fin anti-spam ────────────────────────────────────────
+
     const content = replyTo
-      ? `[↩ ${replyTo.sender?.display_name}: ${replyTo.content?.slice(0, 40)}${replyTo.content?.length > 40 ? '…' : ''}]\n${text.trim()}`
-      : text.trim()
+      ? `[↩ ${replyTo.sender?.display_name}: ${replyTo.content?.slice(0, 40)}${replyTo.content?.length > 40 ? '…' : ''}]\n${rawText}`
+      : rawText
     setReplyTo(null); setText('')
     try {
       await sendMessage(activeConversation.id, profile.id, content, 'text', null, activeTopicId)
