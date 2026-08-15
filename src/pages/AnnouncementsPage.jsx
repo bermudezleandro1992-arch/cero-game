@@ -87,9 +87,10 @@ function NewAnnouncementForm({ onClose, onCreate }) {
         game: game || null,
         category,
         link_url: linkUrl.trim() || null,
-        link_label: linkLabel.trim() || 'Ver más',
+        link_label: linkUrl.trim() ? (linkLabel.trim() || 'Ver más') : null,
       }).select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url)').single()
-      if (!error) onCreate(data)
+      if (error) throw new Error(error.message)
+      onCreate(data)
     } catch (err) {
       alert(`Error: ${err.message}`)
     }

@@ -203,25 +203,34 @@ function TournamentsList({ profile }) {
     try {
       const typeLabel = TYPE_CFG[tType]?.label || 'Torneo'
       const desc = `${typeLabel} · ${tGame} · ${tFormat} · Hasta ${tMaxPl} jugadores${tDeadline ? ` · Cierre: ${tDeadline}` : ''}`
-      const { data: conv } = await supabase.from('conversations')
-        .insert({ name: tName.trim(), is_group: true, group_type: 'tournament', description: desc, created_by: profile.id })
-        .select().single()
-      if (conv) {
-        await supabase.from('conversation_members').insert({ conversation_id: conv.id, user_id: profile.id })
-        await supabase.from('topics').insert([
-          { conversation_id: conv.id, name: 'Anuncios',   emoji: '📢', topic_type: 'announcements', position: 0 },
-          { conversation_id: conv.id, name: 'Chat',       emoji: '💬', topic_type: 'chat',          position: 1 },
-          { conversation_id: conv.id, name: 'Resultados', emoji: '📸', topic_type: 'chat',          position: 2 },
-        ])
-        await supabase.from('messages').insert({
-          conversation_id: conv.id, sender_id: profile.id, type: 'system',
-          content: `${TYPE_CFG[tType]?.icon || '🏆'} ${typeLabel} "${tName.trim()}" creado · ${tGame} ${tFormat}`,
-        })
-        await loadTournaments()
-        setShowCreate(false)
-        setTName(''); setTGame('FC 26'); setTFormat('1vs1'); setTMaxPl('16'); setTDeadline('')
-      }
-    } catch (e) { alert(`Error: ${e.message}`) }
+
+      // Usar RPC que crea conversación + miembro + rol owner atómicamente
+      const { data: convId, error: rpcErr } = await supabase.rpc('create_group_with_owner', {
+        p_name:        tName.trim(),
+        p_is_group:    true,
+        p_group_type:  'tournament',
+        p_description: desc,
+        p_created_by:  profile.id,
+      })
+      if (rpcErr) throw rpcErr
+
+      // Crear topics (canales del torneo)
+      await supabase.from('topics').insert([
+        { conversation_id: convId, name: 'Anuncios',   emoji: '📢', topic_type: 'announcements', position: 0 },
+        { conversation_id: convId, name: 'Chat',       emoji: '💬', topic_type: 'chat',          position: 1 },
+        { conversation_id: convId, name: 'Resultados', emoji: '📸', topic_type: 'chat',          position: 2 },
+      ])
+
+      // Mensaje de sistema
+      await supabase.from('messages').insert({
+        conversation_id: convId, sender_id: profile.id, type: 'system',
+        content: `${TYPE_CFG[tType]?.icon || '🏆'} ${typeLabel} "${tName.trim()}" creado · ${tGame} ${tFormat}`,
+      })
+
+      await loadTournaments()
+      setShowCreate(false)
+      setTName(''); setTGame('FC 26'); setTFormat('1vs1'); setTMaxPl('16'); setTDeadline('')
+    } catch (e) { alert(`Error al crear: ${e.message}`) }
     setCreating(false)
   }
 

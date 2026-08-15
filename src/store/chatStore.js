@@ -505,6 +505,12 @@ export const useChatStore = create((set, get) => ({
       }))
     )
 
+    // Asignar rol owner al creador
+    await supabase.from('group_roles').upsert(
+      { conversation_id: conv.id, user_id: createdBy, role: 'owner', granted_by: createdBy },
+      { onConflict: 'conversation_id,user_id' }
+    )
+
     await supabase.from('messages').insert({
       conversation_id: conv.id,
       sender_id: createdBy,
