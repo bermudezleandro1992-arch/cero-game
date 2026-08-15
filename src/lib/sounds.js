@@ -264,3 +264,16 @@ export const outgoingRing = {
   },
   stop() { if (outRingHandle) { clearInterval(outRingHandle); outRingHandle = null } },
 }
+
+// Tono de ocupado — beeps cortos dobles repetidos (como línea telefónica)
+let busyHandle = null
+export const busyTone = {
+  start() {
+    const b = () => {
+      tone(480, 0.5, 0.3)
+      tone(620, 0.5, 0.3)
+    }
+    b(); busyHandle = setInterval(b, 1100)
+  },
+  stop() { if (busyHandle) { clearInterval(busyHandle); busyHandle = null } },
+}
