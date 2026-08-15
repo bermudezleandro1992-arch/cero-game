@@ -39,6 +39,7 @@ export default function DiscoverPage() {
   const [joined, setJoined] = useState(new Set())
   const [joining, setJoining] = useState(null)
   const [myGroups, setMyGroups] = useState(new Set())
+  const [hasAccess, setHasAccess] = useState(null)  // null=checking, true/false
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -61,6 +62,19 @@ export default function DiscoverPage() {
     setItems(data || [])
     setLoading(false)
   }, [category, search])
+
+  // Verificar si el usuario tiene rango para ver comunidades (o es admin)
+  useEffect(() => {
+    if (!profile?.id) return
+    Promise.all([
+      supabase.from('user_roles').select('role').eq('user_id', profile.id),
+      supabase.from('admin_users').select('user_id').eq('user_id', profile.id).maybeSingle(),
+    ]).then(([{ data: roles }, { data: adminRow }]) => {
+      const isAdmin = !!adminRow
+      const ranked = (roles || []).some(r => ['vip', 'community', 'moderator'].includes(r.role))
+      setHasAccess(isAdmin || ranked)
+    })
+  }, [profile?.id])
 
   // Load my joined groups
   useEffect(() => {
@@ -106,6 +120,41 @@ export default function DiscoverPage() {
   }
 
   const isJoined = (id) => joined.has(id)
+
+  // Sin acceso — mostrar pantalla de espera de rango
+  if (hasAccess === false) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: C.bg, gap: 16, padding: 32, textAlign: 'center' }}>
+        <div style={{ fontSize: 56 }}>🔐</div>
+        <h2 style={{ margin: 0, color: C.text, fontSize: 20, fontWeight: 800 }}>Acceso con rango</h2>
+        <p style={{ margin: 0, color: C.textDim, fontSize: 14, lineHeight: 1.6, maxWidth: 280 }}>
+          Las comunidades son privadas. Para acceder necesitás que un administrador te asigne un rango.
+        </p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {[['⭐', 'VIP', '#f59e0b'], ['🌐', 'Comunidad', '#8b5cf6'], ['🛡️', 'Moderador', '#3b82f6']].map(([emoji, label, color]) => (
+            <span key={label} style={{
+              padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+              background: color + '20', color,
+            }}>
+              {emoji} {label}
+            </span>
+          ))}
+        </div>
+        <p style={{ margin: 0, color: C.textDim, fontSize: 12, maxWidth: 260 }}>
+          Contactá a un admin para que te habilite el acceso.
+        </p>
+      </div>
+    )
+  }
+
+  if (hasAccess === null) {
+    return (
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+        <div style={{ width: 24, height: 24, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    )
+  }
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>

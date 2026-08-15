@@ -6,7 +6,14 @@ import { C } from '../theme'
 const TABS = [
   { id: 'reports', label: '🚨 Reportes' },
   { id: 'sanctions', label: '⛔ Sanciones' },
+  { id: 'roles', label: '🏅 Rangos' },
   { id: 'manual', label: '🔨 Manual' },
+]
+
+const ROLES = [
+  { id: 'vip',       label: 'VIP',       color: '#f59e0b', bg: '#f59e0b20', emoji: '⭐' },
+  { id: 'community', label: 'Comunidad', color: '#8b5cf6', bg: '#8b5cf620', emoji: '🌐' },
+  { id: 'moderator', label: 'Moderador', color: '#3b82f6', bg: '#3b82f620', emoji: '🛡️' },
 ]
 
 function fmtDate(d) {
@@ -223,6 +230,182 @@ function SanctionsTab() {
   )
 }
 
+// ── Rangos ────────────────────────────────────────────────────
+function RolesTab() {
+  const { profile } = useAuthStore()
+  const [search, setSearch] = useState('')
+  const [users, setUsers] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [roleUsers, setRoleUsers] = useState([])  // usuarios con algún rango
+  const [loadingRoles, setLoadingRoles] = useState(true)
+
+  const loadRoleUsers = useCallback(async () => {
+    setLoadingRoles(true)
+    const { data } = await supabase
+      .from('user_roles')
+      .select(`
+        id, role, notes, created_at,
+        user:user_id(id, display_name, username, avatar_url),
+        granted_by_user:granted_by(display_name, username)
+      `)
+      .order('created_at', { ascending: false })
+    setRoleUsers(data || [])
+    setLoadingRoles(false)
+  }, [])
+
+  useEffect(() => { loadRoleUsers() }, [loadRoleUsers])
+
+  async function doSearch() {
+    if (!search.trim()) return
+    setSearching(true)
+    const { data } = await supabase
+      .from('users')
+      .select('id, display_name, username, avatar_url')
+      .or(`username.ilike.%${search.trim()}%,display_name.ilike.%${search.trim()}%`)
+      .limit(8)
+    setUsers(data || [])
+    setSearching(false)
+  }
+
+  async function grantRole(userId, role) {
+    await supabase.from('user_roles').upsert(
+      { user_id: userId, role, granted_by: profile.id },
+      { onConflict: 'user_id,role' }
+    )
+    loadRoleUsers()
+  }
+
+  async function revokeRole(roleId) {
+    await supabase.from('user_roles').delete().eq('id', roleId)
+    loadRoleUsers()
+  }
+
+  const userHasRole = (userId, role) => roleUsers.some(r => r.user?.id === userId && r.role === role)
+
+  return (
+    <div>
+      {/* Buscador */}
+      <div style={{ padding: 16, borderBottom: `1px solid ${C.border}` }}>
+        <p style={{ margin: '0 0 10px', color: C.textDim, fontSize: 13 }}>
+          Buscá un usuario para asignarle un rango
+        </p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && doSearch()}
+            placeholder="@username o nombre..."
+            style={{
+              flex: 1, background: C.panel2, border: `1px solid ${C.border}`,
+              borderRadius: 10, padding: '9px 14px', color: C.text, fontSize: 14, outline: 'none',
+            }}
+          />
+          <button onClick={doSearch} style={{
+            padding: '9px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: C.green, color: C.bg, fontSize: 13, fontWeight: 700,
+          }}>
+            Buscar
+          </button>
+        </div>
+
+        {/* Resultados de búsqueda */}
+        {searching && <div style={{ color: C.textDim, fontSize: 13, padding: '8px 0' }}>Buscando...</div>}
+        {users.map(u => (
+          <div key={u.id} style={{
+            marginTop: 10, padding: '10px 14px', background: C.panel2, borderRadius: 12,
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+              background: C.border, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 14, fontWeight: 700, color: C.text,
+            }}>
+              {u.avatar_url
+                ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (u.display_name || '?').slice(0, 2).toUpperCase()
+              }
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>{u.display_name}</div>
+              <div style={{ color: C.textDim, fontSize: 11 }}>@{u.username}</div>
+            </div>
+            {/* Botones de rangos */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {ROLES.map(r => {
+                const has = userHasRole(u.id, r.id)
+                const existing = roleUsers.find(x => x.user?.id === u.id && x.role === r.id)
+                return (
+                  <button key={r.id}
+                    onClick={() => has ? revokeRole(existing.id) : grantRole(u.id, r.id)}
+                    style={{
+                      padding: '5px 10px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                      fontSize: 11, fontWeight: 700,
+                      background: has ? r.bg : C.panel,
+                      color: has ? r.color : C.textDim,
+                      border: `1px solid ${has ? r.color + '40' : C.border}`,
+                    }}
+                  >
+                    {r.emoji} {r.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Lista de usuarios con rangos */}
+      <div style={{ padding: '10px 16px 4px', display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ color: C.textDim, fontSize: 13, fontWeight: 600 }}>Usuarios con rangos</span>
+        <span style={{ color: C.textDim, fontSize: 12 }}>{roleUsers.length} total</span>
+      </div>
+
+      {loadingRoles && <div style={{ padding: 24, textAlign: 'center', color: C.textDim }}>Cargando...</div>}
+
+      {!loadingRoles && roleUsers.length === 0 && (
+        <div style={{ padding: 32, textAlign: 'center', color: C.textDim, fontSize: 13 }}>
+          Sin usuarios con rango asignado aún
+        </div>
+      )}
+
+      {roleUsers.map(r => {
+        const role = ROLES.find(x => x.id === r.role) || { label: r.role, color: C.textDim, bg: C.panel2, emoji: '•' }
+        return (
+          <div key={r.id} style={{
+            padding: '10px 16px', borderBottom: `1px solid ${C.border}22`,
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>
+                  @{r.user?.username || r.user?.display_name || '?'}
+                </span>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                  background: role.bg, color: role.color,
+                }}>
+                  {role.emoji} {role.label}
+                </span>
+              </div>
+              {r.granted_by_user && (
+                <div style={{ color: C.textDim, fontSize: 11, marginTop: 2 }}>
+                  Asignado por @{r.granted_by_user.username || r.granted_by_user.display_name}
+                </div>
+              )}
+            </div>
+            <button onClick={() => revokeRole(r.id)} style={{
+              padding: '5px 10px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              background: '#ef444415', color: '#ef4444', fontSize: 11, fontWeight: 700,
+            }}>
+              Quitar
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Sanción manual ────────────────────────────────────────────
 function ManualTab() {
   const [username, setUsername] = useState('')
@@ -434,6 +617,7 @@ export default function AdminPage() {
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {tab === 'reports'   && <ReportsTab />}
         {tab === 'sanctions' && <SanctionsTab />}
+        {tab === 'roles'     && <RolesTab />}
         {tab === 'manual'    && <ManualTab />}
       </div>
     </div>
