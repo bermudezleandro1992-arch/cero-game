@@ -11,17 +11,27 @@ const ICE_SERVERS = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    // UDP — fastest path
     { urls: `turn:${TURN_HOST}:80`, username: TURN_USER, credential: TURN_CRED },
-    // TCP fallback — penetrates strict firewalls
     { urls: `turn:${TURN_HOST}:80?transport=tcp`, username: TURN_USER, credential: TURN_CRED },
-    // TLS — works on networks that block non-HTTPS
     { urls: `turns:${TURN_HOST}:443?transport=tcp`, username: TURN_USER, credential: TURN_CRED },
   ],
   iceCandidatePoolSize: 10,
-  iceTransportPolicy: 'all', // try P2P first, TURN as fallback
+  iceTransportPolicy: 'all',
   bundlePolicy: 'max-bundle',
 }
+
+// ── Backgrounds the user can pick ────────────────────────────────────────────
+const CALL_BACKGROUNDS = [
+  { id: 'default',  label: 'Auto',     bg: null },
+  { id: 'dark',     label: 'Dark',     bg: 'linear-gradient(160deg,#050c08,#0a0a0a)' },
+  { id: 'space',    label: 'Space',    bg: 'linear-gradient(160deg,#020010,#0d0030,#000820)' },
+  { id: 'ocean',    label: 'Ocean',    bg: 'linear-gradient(160deg,#001830,#003060,#001020)' },
+  { id: 'forest',   label: 'Forest',   bg: 'linear-gradient(160deg,#001a0a,#003318,#000d05)' },
+  { id: 'sunset',   label: 'Sunset',   bg: 'linear-gradient(160deg,#1a0010,#3d0030,#0d0020)' },
+  { id: 'gold',     label: 'Gold',     bg: 'linear-gradient(160deg,#1a1000,#3d2800,#0d0800)' },
+]
+
+const REACTIONS = ['❤️','😂','🔥','👍','😮','🥇','💪','🎮']
 
 function fmtTime(s) {
   const m = Math.floor(s / 60)
@@ -40,7 +50,46 @@ function nameToColor(name = '') {
 
 function vibrate(p) { try { navigator.vibrate?.(p) } catch (e) {} }
 
-// Animated waveform bars
+// ── Signal bars (connection quality) ─────────────────────────────────────────
+function SignalBars({ quality }) {
+  // quality: 'excellent' | 'good' | 'fair' | 'poor' | null
+  const colors = { excellent: '#22c55e', good: '#86efac', fair: '#f59e0b', poor: '#ef4444' }
+  const filled = { excellent: 4, good: 3, fair: 2, poor: 1 }
+  const n = filled[quality] ?? 0
+  const color = colors[quality] ?? 'rgba(255,255,255,0.2)'
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2 }}>
+      {[5, 9, 13, 17].map((h, i) => (
+        <div key={i} style={{
+          width: 3.5, height: h, borderRadius: 2,
+          background: i < n ? color : 'rgba(255,255,255,0.15)',
+          transition: 'background .4s',
+        }} />
+      ))}
+    </div>
+  )
+}
+
+// ── Floating reaction emoji ───────────────────────────────────────────────────
+function FloatingReaction({ emoji, id, onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 2800)
+    return () => clearTimeout(t)
+  }, [])
+  return (
+    <div key={id} style={{
+      position: 'absolute',
+      bottom: 140,
+      left: `${20 + Math.random() * 60}%`,
+      fontSize: 38,
+      pointerEvents: 'none',
+      zIndex: 50,
+      animation: 'floatUp 2.8s ease-out forwards',
+    }}>{emoji}</div>
+  )
+}
+
+// ── Waveform ─────────────────────────────────────────────────────────────────
 function Waveform({ active, color = '#39FF14', bars = 9, height = 40 }) {
   const hs = [0.4, 0.9, 0.6, 1.3, 0.5, 1.1, 0.4, 0.95, 0.65]
   return (
@@ -58,7 +107,7 @@ function Waveform({ active, color = '#39FF14', bars = 9, height = 40 }) {
   )
 }
 
-// Avatar circle
+// ── Avatar ────────────────────────────────────────────────────────────────────
 function Avatar({ name, avatar_url, size = 120, active, colors }) {
   const [bg, accent] = colors
   return (
@@ -89,8 +138,8 @@ function Avatar({ name, avatar_url, size = 120, active, colors }) {
   )
 }
 
-// Floating mini pill when minimized
-function MiniPill({ name, elapsed, avatar_url, colors, isVideo, onExpand, onHangup }) {
+// ── Mini pill when minimized ──────────────────────────────────────────────────
+function MiniPill({ name, elapsed, avatar_url, colors, isVideo, quality, onExpand, onHangup }) {
   const [, accent] = colors
   const [bg] = colors
   return (
@@ -112,6 +161,7 @@ function MiniPill({ name, elapsed, avatar_url, colors, isVideo, onExpand, onHang
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 13, fontWeight: 700, color: '#fff',
         animation: 'avPulse 2s ease-in-out infinite',
+        backgroundSize: 'cover',
       }}>
         {!avatar_url && (name || '?').slice(0, 2).toUpperCase()}
       </div>
@@ -119,6 +169,7 @@ function MiniPill({ name, elapsed, avatar_url, colors, isVideo, onExpand, onHang
         <div style={{ color: '#fff', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
         <div style={{ color: accent, fontSize: 11.5, fontWeight: 500, marginTop: 1 }}>{fmtTime(elapsed)} · {isVideo ? 'Video' : 'Audio'}</div>
       </div>
+      <SignalBars quality={quality} />
       <Waveform active bars={3} height={24} color={accent} />
       <button onClick={e => { e.stopPropagation(); vibrate(50); onHangup() }} style={{
         width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
@@ -143,6 +194,7 @@ function HangupIcon({ size = 22 }) {
   )
 }
 
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function CallPage({
   conversationId, myUserId, myUserName,
   contact, callType: initType, isIncoming, incomingOffer, onEnd, onAccept,
@@ -151,7 +203,6 @@ export default function CallPage({
   const [callType] = useState(initType || 'audio')
   const [muted, setMuted] = useState(false)
   const [camOff, setCamOff] = useState(false)
-  // On native (Capacitor) default to earpiece like a real phone call; on web default to speaker
   const [speaker, setSpeaker] = useState(!window.Capacitor?.isNativePlatform?.())
   const [elapsed, setElapsed] = useState(0)
   const [minimized, setMinimized] = useState(false)
@@ -159,14 +210,27 @@ export default function CallPage({
   const [dragY, setDragY] = useState(0)
   const [dragging, setDragging] = useState(false)
 
+  // ── New features state ──────────────────────────────────────────────────────
+  const [quality, setQuality] = useState(null)          // signal quality
+  const [latency, setLatency] = useState(null)          // ms
+  const [reactions, setReactions] = useState([])        // floating emojis
+  const [showReactions, setShowReactions] = useState(false)
+  const [showBgPicker, setShowBgPicker] = useState(false)
+  const [selectedBg, setSelectedBg] = useState('default')
+  const [screenSharing, setScreenSharing] = useState(false)
+  const [note, setNote] = useState('')
+  const [showNote, setShowNote] = useState(false)
+
   const pc = useRef(null)
   const localStream = useRef(null)
+  const screenStream = useRef(null)
   const sessionCh = useRef(null)
   const timerRef = useRef(null)
+  const qualityRef = useRef(null)
   const connectTimeoutRef = useRef(null)
-  const ringTimeoutRef = useRef(null)   // auto-hangup after 90s if not answered
-  const silentCtxRef = useRef(null)   // kept alive while muted; closing it kills the silent track
-  const connectedRef = useRef(false)  // track whether call was ever connected (for missed call message)
+  const ringTimeoutRef = useRef(null)
+  const silentCtxRef = useRef(null)
+  const connectedRef = useRef(false)
   const localVid = useRef(null)
   const remoteVid = useRef(null)
   const remoteAudio = useRef(null)
@@ -178,8 +242,8 @@ export default function CallPage({
   const colors = nameToColor(name)
   const [, accent] = colors
   const isVideo = callType === 'video'
+  const bgObj = CALL_BACKGROUNDS.find(b => b.id === selectedBg) || CALL_BACKGROUNDS[0]
 
-  // Entrance animation
   useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
 
   useEffect(() => {
@@ -201,11 +265,15 @@ export default function CallPage({
       })
       .on('broadcast', { event: 'call-end' }, () => hangup(false))
       .on('broadcast', { event: 'call-reject' }, () => { busyTone.start(); setTimeout(() => busyTone.stop(), 3000); hangup(false) })
+      // ── New events ──────────────────────────────────────────────────────────
+      .on('broadcast', { event: 'call-reaction' }, ({ payload }) => {
+        if (payload.from === myUserId) return
+        addReaction(payload.emoji)
+      })
       .subscribe()
 
     if (!isIncoming) {
       startOutgoing(); outgoingRing.start()
-      // Auto-hangup after 90s if receiver never answers
       ringTimeoutRef.current = setTimeout(() => {
         if (!connectedRef.current) hangup(true)
       }, 90000)
@@ -214,14 +282,53 @@ export default function CallPage({
     return () => {
       ringtone.stop(); outgoingRing.stop(); busyTone.stop()
       clearInterval(timerRef.current)
+      clearInterval(qualityRef.current)
       clearTimeout(connectTimeoutRef.current)
       clearTimeout(ringTimeoutRef.current)
       if (sessionCh.current) supabase.removeChannel(sessionCh.current)
     }
   }, [])
 
+  // ── RTCStats quality polling ──────────────────────────────────────────────
+  function startQualityPolling() {
+    qualityRef.current = setInterval(async () => {
+      if (!pc.current) return
+      try {
+        const stats = await pc.current.getStats()
+        let rtt = null
+        stats.forEach(s => {
+          if (s.type === 'candidate-pair' && s.state === 'succeeded' && s.currentRoundTripTime != null) {
+            rtt = s.currentRoundTripTime * 1000 // convert to ms
+          }
+        })
+        if (rtt !== null) {
+          setLatency(Math.round(rtt))
+          if (rtt < 80)        setQuality('excellent')
+          else if (rtt < 150)  setQuality('good')
+          else if (rtt < 300)  setQuality('fair')
+          else                  setQuality('poor')
+        }
+      } catch (_) {}
+    }, 3000)
+  }
+
+  // ── Reactions ─────────────────────────────────────────────────────────────
+  function addReaction(emoji) {
+    const id = Date.now() + Math.random()
+    setReactions(prev => [...prev, { emoji, id }])
+  }
+
+  function sendReaction(emoji) {
+    vibrate(30)
+    addReaction(emoji)
+    sessionCh.current?.send({
+      type: 'broadcast', event: 'call-reaction',
+      payload: { emoji, from: myUserId },
+    })
+    setShowReactions(false)
+  }
+
   async function getMedia() {
-    // On Capacitor Android, request mic permission before getUserMedia
     if (window.Capacitor?.isNativePlatform?.()) {
       try {
         const { Permissions } = window.Capacitor.Plugins
@@ -230,15 +337,12 @@ export default function CallPage({
         }
       } catch (_) {}
     }
-
-    // Resume suspended AudioContext (happens when screen wakes from lock)
     try {
       const ctx = new AudioContext()
       if (ctx.state === 'suspended') await ctx.resume()
       ctx.close()
     } catch (_) {}
 
-    // echoCancellation: true → browser enters phone-call mode → earpiece by default on Android
     const stream = await navigator.mediaDevices.getUserMedia(
       callType === 'video'
         ? { audio: { echoCancellation: true, noiseSuppression: true }, video: { facingMode: 'user', width: 640, height: 480 } }
@@ -267,14 +371,12 @@ export default function CallPage({
       }
       if (conn.connectionState === 'failed') hangup(true)
     }
-    // Restart ICE on transient disconnects (network switch, brief loss)
     conn.oniceconnectionstatechange = () => {
       if (conn.iceConnectionState === 'disconnected') {
         try { conn.restartIce() } catch (_) {}
       }
       if (conn.iceConnectionState === 'failed') hangup(true)
     }
-    // 60 second timeout if ICE never connects
     connectTimeoutRef.current = setTimeout(() => {
       if (pc.current && pc.current.connectionState !== 'connected') hangup(true)
     }, 60000)
@@ -292,14 +394,13 @@ export default function CallPage({
       await new Promise(r => ch.subscribe(s => s === 'SUBSCRIBED' && r()))
       await ch.send({ type: 'broadcast', event: 'call-offer', payload: { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer } })
       supabase.removeChannel(ch)
-      // Also send FCM push notification so receiver gets it even when app is closed
       supabase.functions.invoke('send-fcm-notification', {
         body: {
           targetUserId: contact.id,
           type: 'call',
           payload: { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer: JSON.stringify(offer) },
         }
-      }).catch(() => {}) // non-blocking, Supabase broadcast is the primary signal
+      }).catch(() => {})
     } catch (e) { alert(`Error: ${e.message}`); onEnd() }
   }
 
@@ -329,7 +430,8 @@ export default function CallPage({
     sounds.callConnect()
     vibrate([0, 60])
     timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
-    onAccept?.()  // acquire WakeLock so screen stays on during call
+    startQualityPolling()
+    onAccept?.()
   }
 
   function rejectCall() {
@@ -343,12 +445,13 @@ export default function CallPage({
     vibrate([0, 80])
     ringtone.stop(); outgoingRing.stop(); busyTone.stop()
     clearInterval(timerRef.current)
+    clearInterval(qualityRef.current)
     clearTimeout(connectTimeoutRef.current)
     clearTimeout(ringTimeoutRef.current)
     silentCtxRef.current?.close(); silentCtxRef.current = null
+    screenStream.current?.getTracks().forEach(t => t.stop())
     sounds.callEnd()
     if (sendSignal) sessionCh.current?.send({ type: 'broadcast', event: 'call-end', payload: {} })
-    // If caller hangs up and the call was never answered → insert missed call message
     if (!isIncoming && !connectedRef.current && conversationId && myUserId) {
       const icon = callType === 'video' ? '📹' : '📞'
       supabase.from('messages').insert({
@@ -382,43 +485,66 @@ export default function CallPage({
           await sender.replaceTrack(track)
           silentCtxRef.current?.close(); silentCtxRef.current = null
         }
-      } catch (_) { /* replaceTrack unsupported — track.enabled fallback already applied */ }
+      } catch (_) {}
     }
   }
-  function toggleCam() { vibrate(25); const t = localStream.current?.getVideoTracks()[0]; if (t) { t.enabled = !t.enabled; setCamOff(c => !c) } }
+
+  function toggleCam() {
+    vibrate(25)
+    const t = localStream.current?.getVideoTracks()[0]
+    if (t) { t.enabled = !t.enabled; setCamOff(c => !c) }
+  }
+
   async function toggleSpeaker() {
     vibrate(25)
     const next = !speaker
     setSpeaker(next)
-
-    // Web: enumerate audio output devices to find speaker vs earpiece
     if (remoteAudio.current) {
       try {
         if (typeof remoteAudio.current.setSinkId === 'function') {
           if (next) {
-            // Speaker ON: find a device with 'speaker' in the label, or use 'default'
             const devices = await navigator.mediaDevices.enumerateDevices()
             const spk = devices.find(d => d.kind === 'audiooutput' && /speaker/i.test(d.label))
             await remoteAudio.current.setSinkId(spk?.deviceId || 'default').catch(() => {})
           } else {
-            // Earpiece: empty string = system default (earpiece in call mode on Android)
             await remoteAudio.current.setSinkId('').catch(() => {})
           }
         }
       } catch (_) {}
       remoteAudio.current.volume = 1.0
     }
+  }
 
-    // Capacitor Android: toggle via native audio bridge if available
-    if (window.Capacitor?.isNativePlatform?.()) {
+  // ── Screen share ───────────────────────────────────────────────────────────
+  async function toggleScreenShare() {
+    vibrate(25)
+    if (screenSharing) {
+      // Restore camera
+      screenStream.current?.getTracks().forEach(t => t.stop())
+      screenStream.current = null
+      const camTrack = localStream.current?.getVideoTracks()[0]
+      if (camTrack) {
+        const sender = pc.current?.getSenders().find(s => s.track?.kind === 'video')
+        if (sender) await sender.replaceTrack(camTrack).catch(() => {})
+        if (localVid.current) { localVid.current.srcObject = localStream.current }
+      }
+      setScreenSharing(false)
+    } else {
       try {
-        // Works with @capacitor-community/keep-awake or custom plugin
-        await window.Capacitor.Plugins.NativeAudio?.setCurrentTime?.()
-      } catch (_) {}
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+        screenStream.current = stream
+        const screenTrack = stream.getVideoTracks()[0]
+        const sender = pc.current?.getSenders().find(s => s.track?.kind === 'video')
+        if (sender) await sender.replaceTrack(screenTrack).catch(() => {})
+        if (localVid.current) { localVid.current.srcObject = stream }
+        setScreenSharing(true)
+        // Auto-stop when user ends via browser UI
+        screenTrack.onended = () => toggleScreenShare()
+      } catch (_) { /* user cancelled or not supported */ }
     }
   }
 
-  // Swipe-down-to-minimize
+  // Swipe down to minimize
   const onTS = useCallback(e => { touchY0.current = e.touches[0].clientY; setDragging(true) }, [])
   const onTM = useCallback(e => { setDragY(Math.max(0, e.touches[0].clientY - touchY0.current)) }, [])
   const onTE = useCallback(() => {
@@ -426,22 +552,26 @@ export default function CallPage({
     if (dragY > 90) { setMinimized(true); setDragY(0) } else { setDragY(0) }
   }, [dragY])
 
+  // ── Minimized pill ─────────────────────────────────────────────────────────
   if (minimized && phase === 'active') {
     return (
       <>
-        {/* Audio must stay mounted to keep sound when minimized */}
         <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
-        <MiniPill name={name} elapsed={elapsed} avatar_url={avatar_url} colors={colors} isVideo={isVideo} onExpand={() => setMinimized(false)} onHangup={() => hangup(true)} />
+        <MiniPill
+          name={name} elapsed={elapsed} avatar_url={avatar_url}
+          colors={colors} isVideo={isVideo} quality={quality}
+          onExpand={() => setMinimized(false)}
+          onHangup={() => hangup(true)}
+        />
         <CallStyles />
       </>
     )
   }
 
-  // ─── Incoming call: WhatsApp-style panel from bottom ───
+  // ── Incoming call ──────────────────────────────────────────────────────────
   if (phase === 'incoming') {
     return (
       <>
-        {/* Audio always mounted so ontrack can fire */}
         <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} onError={() => {}} />
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
@@ -461,12 +591,10 @@ export default function CallPage({
             animation: 'slideUp .4s cubic-bezier(.34,1.3,.64,1)',
             overflow: 'hidden',
           }}>
-            {/* Pull handle */}
             <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 16 }}>
               <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.18)' }} />
             </div>
 
-            {/* Blurred background strip */}
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 220, overflow: 'hidden', zIndex: 0 }}>
               {avatar_url
                 ? <img src={avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(40px) brightness(0.15) saturate(2)', transform: 'scale(1.3)' }} />
@@ -474,9 +602,7 @@ export default function CallPage({
               }
             </div>
 
-            {/* Content */}
             <div style={{ position: 'relative', zIndex: 1, padding: '0 28px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-              {/* Label */}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 7,
                 background: `${accent}15`, border: `1px solid ${accent}30`,
@@ -488,7 +614,6 @@ export default function CallPage({
                 </span>
               </div>
 
-              {/* Avatar */}
               <div style={{ position: 'relative' }}>
                 {[0, 1, 2].map(i => (
                   <div key={i} style={{
@@ -501,7 +626,6 @@ export default function CallPage({
                 <Avatar name={name} avatar_url={avatar_url} size={110} colors={colors} />
               </div>
 
-              {/* Name + subtext */}
               <div style={{ textAlign: 'center' }}>
                 <h2 style={{ color: '#fff', fontSize: 26, fontWeight: 700, margin: '0 0 4px', letterSpacing: '-0.5px' }}>{name}</h2>
                 <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, margin: 0 }}>
@@ -509,18 +633,13 @@ export default function CallPage({
                 </p>
               </div>
 
-              {/* Buttons */}
               <div style={{ display: 'flex', justifyContent: 'center', gap: 52, paddingTop: 8 }}>
-                {/* Reject */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                   <button onClick={rejectCall} style={{
-                    width: 68, height: 68, borderRadius: '50%', border: 'none', cursor: 'pointer',
-                    background: 'rgba(239,68,68,0.15)',
-                    border: '1.5px solid rgba(239,68,68,0.35)',
-                    backdropFilter: 'blur(12px)',
+                    width: 68, height: 68, borderRadius: '50%', border: '1.5px solid rgba(239,68,68,0.35)', cursor: 'pointer',
+                    background: 'rgba(239,68,68,0.15)', backdropFilter: 'blur(12px)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: '0 4px 24px rgba(239,68,68,0.2)',
-                    transition: 'transform .15s',
+                    boxShadow: '0 4px 24px rgba(239,68,68,0.2)', transition: 'transform .15s',
                   }}
                     onTouchStart={e => e.currentTarget.style.transform = 'scale(0.92)'}
                     onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -532,7 +651,6 @@ export default function CallPage({
                   <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>Rechazar</span>
                 </div>
 
-                {/* Accept */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                   <button onClick={acceptCall} style={{
                     width: 68, height: 68, borderRadius: '50%', border: 'none', cursor: 'pointer',
@@ -553,7 +671,6 @@ export default function CallPage({
                 </div>
               </div>
 
-              {/* Safe area */}
               <div style={{ height: 'env(safe-area-inset-bottom, 16px)' }} />
             </div>
           </div>
@@ -563,7 +680,7 @@ export default function CallPage({
     )
   }
 
-  // ─── Outgoing / Active / Ended: full-screen overlay ───
+  // ── Full screen (outgoing / active / ended) ───────────────────────────────
   const slideBase = dragging ? {
     transform: `translateY(${dragY * 0.55}px)`,
     opacity: Math.max(0, 1 - dragY / 280),
@@ -571,12 +688,13 @@ export default function CallPage({
   } : {
     transform: visible ? 'translateY(0)' : 'translateY(100%)',
     opacity: visible ? 1 : 0,
-    transition: dragging ? 'none' : 'transform .45s cubic-bezier(.34,1.2,.64,1), opacity .35s ease',
+    transition: 'transform .45s cubic-bezier(.34,1.2,.64,1), opacity .35s ease',
   }
 
   return (
     <>
       <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
+
       <div style={{
         position: 'fixed', inset: 0, zIndex: 200,
         fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
@@ -589,53 +707,66 @@ export default function CallPage({
       >
         {/* ── BACKGROUND ── */}
         <div style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', inset: 0, background: '#050c08' }} />
-          {avatar_url ? (
-            <img src={avatar_url} alt="" style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'cover',
-              filter: 'blur(60px) brightness(0.2) saturate(1.8)',
-              transform: 'scale(1.3)',
-            }} />
+          {bgObj.bg ? (
+            <div style={{ position: 'absolute', inset: 0, background: bgObj.bg }} />
           ) : (
             <>
-              <div style={{
-                position: 'absolute', top: '-15%', left: '-15%', width: '75%', paddingBottom: '75%',
-                borderRadius: '50%',
-                background: `radial-gradient(circle, ${colors[0]}cc 0%, transparent 70%)`,
-                opacity: 0.6, animation: 'orbFloat 9s ease-in-out infinite',
-              }} />
-              <div style={{
-                position: 'absolute', bottom: '-25%', right: '-15%', width: '80%', paddingBottom: '80%',
-                borderRadius: '50%',
-                background: `radial-gradient(circle, ${accent}22 0%, transparent 70%)`,
-                opacity: 0.5, animation: 'orbFloat 11s ease-in-out 3s infinite reverse',
-              }} />
+              <div style={{ position: 'absolute', inset: 0, background: '#050c08' }} />
+              {avatar_url ? (
+                <img src={avatar_url} alt="" style={{
+                  position: 'absolute', inset: 0, width: '100%', height: '100%',
+                  objectFit: 'cover',
+                  filter: 'blur(60px) brightness(0.2) saturate(1.8)',
+                  transform: 'scale(1.3)',
+                }} />
+              ) : (
+                <>
+                  <div style={{
+                    position: 'absolute', top: '-15%', left: '-15%', width: '75%', paddingBottom: '75%',
+                    borderRadius: '50%',
+                    background: `radial-gradient(circle, ${colors[0]}cc 0%, transparent 70%)`,
+                    opacity: 0.6, animation: 'orbFloat 9s ease-in-out infinite',
+                  }} />
+                  <div style={{
+                    position: 'absolute', bottom: '-25%', right: '-15%', width: '80%', paddingBottom: '80%',
+                    borderRadius: '50%',
+                    background: `radial-gradient(circle, ${accent}22 0%, transparent 70%)`,
+                    opacity: 0.5, animation: 'orbFloat 11s ease-in-out 3s infinite reverse',
+                  }} />
+                </>
+              )}
             </>
           )}
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.52)' }} />
-          {/* Subtle vignette */}
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)' }} />
         </div>
 
-        {/* Remote video (video calls) */}
+        {/* Remote video */}
         {isVideo && phase === 'active' && (
           <video ref={remoteVid} autoPlay playsInline
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }} />
         )}
 
-        {/* Local PiP (video) */}
+        {/* Local PiP */}
         {isVideo && phase === 'active' && (
           <div style={{
             position: 'absolute', top: 60, right: 16, width: 88, height: 132,
             borderRadius: 20, overflow: 'hidden', zIndex: 20,
             boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
-            border: '2px solid rgba(255,255,255,0.18)',
+            border: `2px solid ${screenSharing ? accent : 'rgba(255,255,255,0.18)'}`,
           }}>
             <video ref={localVid} autoPlay playsInline muted
-              style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+              style={{ width: '100%', height: '100%', objectFit: 'cover', transform: screenSharing ? 'none' : 'scaleX(-1)' }} />
           </div>
         )}
+
+        {/* ── Floating reactions ── */}
+        {reactions.map(r => (
+          <FloatingReaction
+            key={r.id} emoji={r.emoji} id={r.id}
+            onDone={() => setReactions(prev => prev.filter(x => x.id !== r.id))}
+          />
+        ))}
 
         {/* ── MAIN CONTENT ── */}
         <div style={{
@@ -645,22 +776,37 @@ export default function CallPage({
 
           {/* Top bar */}
           <div style={{ width: '100%', padding: '54px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            {/* Drag handle */}
             {phase === 'active' && (
               <div style={{ position: 'absolute', top: 14, left: 0, right: 0, display: 'flex', justifyContent: 'center' }}>
                 <div style={{ width: 38, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.25)' }} />
               </div>
             )}
 
-            {/* HD badge */}
+            {/* Quality + HD badges */}
             {phase === 'active' && (
-              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 20, padding: '4px 10px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2 }}>
-                  {[4, 7, 10, 13].map((h, i) => (
-                    <div key={i} style={{ width: 3, height: h, borderRadius: 2, background: i < 3 ? accent : 'rgba(255,255,255,0.2)' }} />
-                  ))}
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Latency pill */}
+                {latency !== null && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255,255,255,0.12)', borderRadius: 20, padding: '4px 10px',
+                  }}>
+                    <SignalBars quality={quality} />
+                    <span style={{ color: quality === 'excellent' ? '#22c55e' : quality === 'poor' ? '#ef4444' : '#f59e0b', fontSize: 11, fontWeight: 600 }}>
+                      {latency}ms
+                    </span>
+                  </div>
+                )}
+                {/* HD */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 20, padding: '4px 10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2 }}>
+                    {[4, 7, 10, 13].map((h, i) => (
+                      <div key={i} style={{ width: 3, height: h, borderRadius: 2, background: i < 3 ? accent : 'rgba(255,255,255,0.2)' }} />
+                    ))}
+                  </div>
+                  <span style={{ color: accent, fontSize: 11, fontWeight: 600 }}>HD</span>
                 </div>
-                <span style={{ color: accent, fontSize: 11, fontWeight: 600 }}>HD</span>
               </div>
             )}
           </div>
@@ -676,7 +822,6 @@ export default function CallPage({
               letterSpacing: '-0.6px', textShadow: '0 2px 16px rgba(0,0,0,0.5)',
             }}>{name}</h2>
 
-            {/* Status */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 22 }}>
               {phase === 'active' && (
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: accent, boxShadow: `0 0 8px ${accent}`, animation: 'blink 2s ease-in-out infinite' }} />
@@ -686,10 +831,8 @@ export default function CallPage({
               </span>
             </div>
 
-            {/* Waveform when active */}
             {phase === 'active' && !isVideo && <Waveform active={!muted} color={accent} />}
 
-            {/* Connecting dots */}
             {phase === 'connecting' && (
               <div style={{ display: 'flex', gap: 8 }}>
                 {[0, 1, 2].map(i => (
@@ -698,7 +841,6 @@ export default function CallPage({
               </div>
             )}
 
-            {/* Encrypted badge */}
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               marginTop: 20, padding: '5px 14px',
@@ -721,48 +863,152 @@ export default function CallPage({
           {/* ── CONTROLS ── */}
           {phase !== 'ended' && (
             <div style={{ width: '100%', padding: '0 20px 44px' }}>
-              {/* Secondary buttons — only when call is active */}
+
+              {/* Secondary buttons */}
               {phase === 'active' && (
-              <div style={{
-                display: 'flex', justifyContent: 'center', gap: 18, marginBottom: 28,
-              }}>
-                <RoundBtn
-                  icon={muted
-                    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-                  }
-                  label={muted ? 'Mic apagado' : 'Micrófono'}
-                  state={muted ? 'danger' : 'off'}
-                  onClick={toggleMute}
-                />
-                <RoundBtn
-                  icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                    {speaker
-                      ? <><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></>
-                      : <line x1="23" y1="9" x2="17" y2="15"/>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 22, flexWrap: 'wrap' }}>
+                  {/* Mute */}
+                  <RoundBtn
+                    icon={muted
+                      ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                      : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                     }
-                  </svg>}
-                  label="Altavoz"
-                  state={speaker ? 'on' : 'off'}
-                  accent={accent}
-                  onClick={toggleSpeaker}
-                />
-                {isVideo && (
+                    label={muted ? 'Mic off' : 'Micrófono'}
+                    state={muted ? 'danger' : 'off'}
+                    onClick={toggleMute}
+                  />
+                  {/* Speaker */}
                   <RoundBtn
                     icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
-                      {camOff && <line x1="1" y1="1" x2="23" y2="23"/>}
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                      {speaker
+                        ? <><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></>
+                        : <line x1="23" y1="9" x2="17" y2="15"/>
+                      }
                     </svg>}
-                    label={camOff ? 'Cam apagada' : 'Cámara'}
-                    state={camOff ? 'danger' : 'off'}
-                    onClick={toggleCam}
+                    label="Altavoz"
+                    state={speaker ? 'on' : 'off'}
+                    accent={accent}
+                    onClick={toggleSpeaker}
                   />
-                )}
-              </div>
-              )} {/* end phase === active secondary controls */}
+                  {/* Camera (video only) */}
+                  {isVideo && (
+                    <RoundBtn
+                      icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+                        {camOff && <line x1="1" y1="1" x2="23" y2="23"/>}
+                      </svg>}
+                      label={camOff ? 'Cam off' : 'Cámara'}
+                      state={camOff ? 'danger' : 'off'}
+                      onClick={toggleCam}
+                    />
+                  )}
+                  {/* Screen share (video calls + desktop) */}
+                  {isVideo && (
+                    <RoundBtn
+                      icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                        {screenSharing && <line x1="2" y1="2" x2="22" y2="22"/>}
+                      </svg>}
+                      label={screenSharing ? 'Compartiendo' : 'Pantalla'}
+                      state={screenSharing ? 'on' : 'off'}
+                      accent={accent}
+                      onClick={toggleScreenShare}
+                    />
+                  )}
+                  {/* Reactions */}
+                  <RoundBtn
+                    icon={<span style={{ fontSize: 18, lineHeight: 1 }}>😊</span>}
+                    label="Reacción"
+                    state="off"
+                    onClick={() => { setShowReactions(v => !v); setShowBgPicker(false); setShowNote(false) }}
+                  />
+                  {/* Background picker */}
+                  <RoundBtn
+                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+                      <path d="M2 12h20"/>
+                    </svg>}
+                    label="Fondo"
+                    state={selectedBg !== 'default' ? 'on' : 'off'}
+                    accent={accent}
+                    onClick={() => { setShowBgPicker(v => !v); setShowReactions(false); setShowNote(false) }}
+                  />
+                  {/* Note */}
+                  <RoundBtn
+                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                    </svg>}
+                    label="Nota"
+                    state={showNote ? 'on' : 'off'}
+                    accent={accent}
+                    onClick={() => { setShowNote(v => !v); setShowReactions(false); setShowBgPicker(false) }}
+                  />
+                </div>
+              )}
 
-              {/* Row 2: hang up — always visible (connecting + active) */}
+              {/* ── Reaction picker ── */}
+              {showReactions && phase === 'active' && (
+                <div style={{
+                  display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 16,
+                  animation: 'slideUp .25s ease',
+                }}>
+                  {REACTIONS.map(emoji => (
+                    <button key={emoji} onClick={() => sendReaction(emoji)} style={{
+                      fontSize: 28, background: 'rgba(255,255,255,0.1)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: '50%', width: 48, height: 48,
+                      cursor: 'pointer', backdropFilter: 'blur(12px)',
+                      transition: 'transform .1s',
+                    }}
+                      onTouchStart={e => e.currentTarget.style.transform = 'scale(1.3)'}
+                      onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
+                    >{emoji}</button>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Background picker ── */}
+              {showBgPicker && phase === 'active' && (
+                <div style={{
+                  display: 'flex', gap: 10, marginBottom: 16, overflowX: 'auto', padding: '4px 0',
+                  animation: 'slideUp .25s ease',
+                }}>
+                  {CALL_BACKGROUNDS.map(bg => (
+                    <button key={bg.id} onClick={() => { setSelectedBg(bg.id); setShowBgPicker(false) }} style={{
+                      flexShrink: 0, width: 52, height: 52, borderRadius: 14, cursor: 'pointer',
+                      background: bg.bg || `linear-gradient(135deg, ${colors[0]}, #050c08)`,
+                      border: `2.5px solid ${selectedBg === bg.id ? accent : 'rgba(255,255,255,0.15)'}`,
+                      boxShadow: selectedBg === bg.id ? `0 0 14px ${accent}60` : 'none',
+                      transition: 'border .15s',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {selectedBg === bg.id && <span style={{ color: '#fff', fontSize: 16 }}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Note pad ── */}
+              {showNote && phase === 'active' && (
+                <div style={{ marginBottom: 16, animation: 'slideUp .25s ease' }}>
+                  <textarea
+                    value={note}
+                    onChange={e => setNote(e.target.value)}
+                    placeholder="Anotá algo durante la llamada..."
+                    rows={3}
+                    style={{
+                      width: '100%', boxSizing: 'border-box',
+                      background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(16px)',
+                      border: '1px solid rgba(255,255,255,0.15)', borderRadius: 14,
+                      color: '#fff', fontSize: 14, padding: '10px 14px',
+                      outline: 'none', resize: 'none', fontFamily: 'inherit',
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Hang up */}
               <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                   <button onClick={() => hangup(true)} style={{
@@ -802,7 +1048,7 @@ function RoundBtn({ icon, label, state = 'off', accent = '#39FF14', onClick }) {
       background: 'none', border: 'none', cursor: 'pointer', padding: 0,
     }}>
       <div style={{
-        width: 58, height: 58, borderRadius: '50%',
+        width: 54, height: 54, borderRadius: '50%',
         background: bg, border, backdropFilter: 'blur(16px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         color, transition: 'transform .12s, background .2s',
@@ -815,7 +1061,7 @@ function RoundBtn({ icon, label, state = 'off', accent = '#39FF14', onClick }) {
       >
         {icon}
       </div>
-      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 500, whiteSpace: 'nowrap' }}>{label}</span>
     </button>
   )
 }
@@ -823,16 +1069,17 @@ function RoundBtn({ icon, label, state = 'off', accent = '#39FF14', onClick }) {
 function CallStyles() {
   return (
     <style>{`
-      @keyframes ring { 0%{transform:scale(1);opacity:.7} 100%{transform:scale(1.7);opacity:0} }
-      @keyframes dot { 0%,80%,100%{transform:scale(.5);opacity:.3} 40%{transform:scale(1);opacity:1} }
-      @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
-      @keyframes wfWave { 0%{transform:scaleY(.35)} 100%{transform:scaleY(1)} }
-      @keyframes orbFloat { 0%,100%{transform:translate(0,0) scale(1)} 40%{transform:translate(3%,5%) scale(1.05)} 70%{transform:translate(-2%,2%) scale(.97)} }
-      @keyframes avPulse { 0%,100%{transform:scale(1);opacity:.7} 50%{transform:scale(1.12);opacity:1} }
-      @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-      @keyframes slideDown { from{transform:translateY(-40px);opacity:0} to{transform:translateY(0);opacity:1} }
-      @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+      @keyframes ring        { 0%{transform:scale(1);opacity:.7} 100%{transform:scale(1.7);opacity:0} }
+      @keyframes dot         { 0%,80%,100%{transform:scale(.5);opacity:.3} 40%{transform:scale(1);opacity:1} }
+      @keyframes blink       { 0%,100%{opacity:1} 50%{opacity:.25} }
+      @keyframes wfWave      { 0%{transform:scaleY(.35)} 100%{transform:scaleY(1)} }
+      @keyframes orbFloat    { 0%,100%{transform:translate(0,0) scale(1)} 40%{transform:translate(3%,5%) scale(1.05)} 70%{transform:translate(-2%,2%) scale(.97)} }
+      @keyframes avPulse     { 0%,100%{transform:scale(1);opacity:.7} 50%{transform:scale(1.12);opacity:1} }
+      @keyframes slideUp     { from{transform:translateY(100%)} to{transform:translateY(0)} }
+      @keyframes slideDown   { from{transform:translateY(-40px);opacity:0} to{transform:translateY(0);opacity:1} }
+      @keyframes fadeIn      { from{opacity:0} to{opacity:1} }
       @keyframes acceptPulse { 0%{box-shadow:0 4px 32px rgba(34,197,94,0.45),0 0 0 8px rgba(34,197,94,0.1)} 100%{box-shadow:0 4px 32px rgba(34,197,94,0.65),0 0 0 16px rgba(34,197,94,0.06)} }
+      @keyframes floatUp     { 0%{transform:translateY(0) scale(1);opacity:1} 80%{opacity:1} 100%{transform:translateY(-180px) scale(1.4);opacity:0} }
     `}</style>
   )
 }
