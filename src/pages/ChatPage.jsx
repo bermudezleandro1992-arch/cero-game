@@ -311,6 +311,56 @@ function PinnedBanner({ text, onDismiss }) {
   )
 }
 
+// ── Link Preview ──────────────────────────────────────────────────────────────
+const URL_REGEX = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&/=]*)/g
+
+function LinkPreview({ text }) {
+  const matches = text?.match(URL_REGEX)
+  if (!matches) return null
+  const url = matches[0]
+  let domain = ''
+  try { domain = new URL(url).hostname.replace('www.', '') } catch (_) { return null }
+
+  const isYoutube = domain.includes('youtube.com') || domain.includes('youtu.be')
+  const isTwitter = domain.includes('twitter.com') || domain.includes('x.com')
+  const isInstagram = domain.includes('instagram.com')
+  const isTwitch = domain.includes('twitch.tv')
+
+  const favicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
+
+  const ICONS = {
+    youtube: '▶️', twitter: '🐦', instagram: '📸', twitch: '🎮',
+  }
+  const icon = isYoutube ? ICONS.youtube : isTwitter ? ICONS.twitter : isInstagram ? ICONS.instagram : isTwitch ? ICONS.twitch : null
+
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+      <div style={{
+        marginTop: 6, padding: '8px 10px', borderRadius: 10,
+        background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.08)',
+        display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+      }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.25)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.15)'}
+      >
+        <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+          {icon
+            ? <span style={{ fontSize: 16 }}>{icon}</span>
+            : <img src={favicon} alt="" style={{ width: 18, height: 18 }} onError={e => { e.target.style.display='none' }} />
+          }
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{domain}</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>{url.length > 50 ? url.slice(0, 50) + '…' : url}</div>
+        </div>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+      </div>
+    </a>
+  )
+}
+
 // ── Msg skeleton ──────────────────────────────────────────────────────────────
 function MsgSkeleton() {
   return (
@@ -425,6 +475,9 @@ export default function ChatPage({ onBack }) {
   const [showChatMenu, setShowChatMenu] = useState(false)
   const [autoDeleteHours, setAutoDeleteHours] = useState(null)
   const [showAutoDeletePicker, setShowAutoDeletePicker] = useState(false)
+  const [searchMode, setSearchMode] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const searchInputRef = useRef(null)
   const [mentionQuery, setMentionQuery] = useState(null) // string after @, or null
   const [mentionIndex, setMentionIndex] = useState(0)
   const [recording, setRecording] = useState(false)
@@ -812,7 +865,10 @@ export default function ChatPage({ onBack }) {
     setRecording(false); setRecLocked(false); setRecCancelling(false); setRecDuration(0)
   }
 
-  const grouped = groupByDate(messages.filter(m => !deletedForMe.has(m.id)))
+  const filteredMessages = searchQuery
+    ? messages.filter(m => !deletedForMe.has(m.id) && m.content?.toLowerCase?.().includes(searchQuery.toLowerCase()))
+    : messages.filter(m => !deletedForMe.has(m.id))
+  const grouped = groupByDate(filteredMessages)
   const memberMap = {}
   activeConversation?.members?.forEach(m => { if (m) memberMap[m.id] = m })
   if (otherUser) memberMap[otherUser.id] = otherUser
@@ -1118,6 +1174,13 @@ export default function ChatPage({ onBack }) {
               </svg>
             </HdrBtn>
           )}
+          {/* Search button */}
+          <HdrBtn title="Buscar en chat" onClick={() => { setSearchMode(v => !v); setSearchQuery(''); setTimeout(() => searchInputRef.current?.focus(), 50) }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={searchMode ? C.green : C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </HdrBtn>
+
           {/* Background picker button */}
           <HdrBtn title="Fondo de chat" onClick={() => setShowBgPicker(v => !v)}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={showBgPicker ? C.green : C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1198,6 +1261,29 @@ export default function ChatPage({ onBack }) {
             )}
           </div>
         </div>
+
+        {/* Search bar */}
+        {searchMode && (
+          <div style={{ padding: '8px 12px', background: C.panel, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Buscar en la conversación..."
+              autoFocus
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: C.text, fontSize: 14 }}
+            />
+            {searchQuery && (
+              <span style={{ color: C.textDim, fontSize: 12, fontWeight: 600 }}>
+                {messages.filter(m => m.content?.toLowerCase?.().includes(searchQuery.toLowerCase())).length} resultado{messages.filter(m => m.content?.toLowerCase?.().includes(searchQuery.toLowerCase())).length !== 1 ? 's' : ''}
+              </span>
+            )}
+            <button onClick={() => { setSearchMode(false); setSearchQuery('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 13, fontWeight: 600 }}>✕</button>
+          </div>
+        )}
 
         {/* Pinned message */}
         {pinnedText && !pinnedDismissed && (
@@ -2285,21 +2371,30 @@ function MsgBody({ msg, isMine, otherLastRead }) {
       )
     } catch { return <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}{time}</span> }
   }
-  // Highlight @mentions
+  // Highlight @mentions + link preview
   const content = msg.content || ''
+  const hasUrl = URL_REGEX.test(content); URL_REGEX.lastIndex = 0
   if (content.includes('@')) {
     const parts = content.split(/(@\w[\w ]*)/g)
     return (
-      <span style={{ whiteSpace: 'pre-wrap' }}>
-        {parts.map((p, i) => p.startsWith('@')
-          ? <span key={i} style={{ color: C.green, fontWeight: 700 }}>{p}</span>
-          : p
-        )}
-        {time}
-      </span>
+      <div>
+        <span style={{ whiteSpace: 'pre-wrap' }}>
+          {parts.map((p, i) => p.startsWith('@')
+            ? <span key={i} style={{ color: C.green, fontWeight: 700 }}>{p}</span>
+            : p
+          )}
+          {time}
+        </span>
+        {hasUrl && <LinkPreview text={content} />}
+      </div>
     )
   }
-  return <span style={{ whiteSpace: 'pre-wrap' }}>{content}{time}</span>
+  return (
+    <div>
+      <span style={{ whiteSpace: 'pre-wrap' }}>{content}{time}</span>
+      {hasUrl && <LinkPreview text={content} />}
+    </div>
+  )
 }
 
 function HdrBtn({ children, onClick, title }) {
