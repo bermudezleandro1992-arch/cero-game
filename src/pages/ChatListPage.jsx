@@ -170,6 +170,8 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   const [sortOrder, setSortOrder] = useState('recientes')        // 'recientes' | 'no_leidos' | 'az'
   const [showSortMenu, setShowSortMenu] = useState(false)
   const [confirmDialog, setConfirmDialog] = useState(null)       // {title, message, onConfirm, danger}
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState(new Set())
 
   useEffect(() => { setFilter(initialFilter || 'todos') }, [initialFilter])
   const [showFab, setShowFab] = useState(false)
@@ -402,15 +404,17 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
                 </div>
               )}
             </div>
-            {/* Limpiar todos */}
-            <button onClick={handleClearAll} title="Limpiar todos los chats" style={{
-              width: 32, height: 32, borderRadius: '50%', background: C.panel2,
-              border: `1px solid ${C.border}`, cursor: 'pointer',
+            {/* Seleccionar / cancelar */}
+            <button onClick={() => { setSelectMode(s => !s); setSelected(new Set()) }} title={selectMode ? 'Cancelar selección' : 'Seleccionar chats'} style={{
+              width: 32, height: 32, borderRadius: '50%', cursor: 'pointer',
+              background: selectMode ? C.green : C.panel2,
+              border: `1px solid ${selectMode ? C.green : C.border}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
-              </svg>
+              {selectMode
+                ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="4" height="4" rx="1"/><rect x="3" y="11" width="4" height="4" rx="1"/><rect x="3" y="17" width="4" height="4" rx="1"/><line x1="10" y1="7" x2="21" y2="7"/><line x1="10" y1="13" x2="21" y2="13"/><line x1="10" y1="19" x2="21" y2="19"/></svg>
+              }
             </button>
             <button onClick={() => onProfileClick?.()} title="Perfil" style={{
               width: 32, height: 32, borderRadius: '50%', background: C.panel2,
@@ -573,22 +577,44 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
           const senderName = senderMember?.display_name || senderMember?.username || null
           const memberCount = conv.members?.length || 0
 
+          const isSelected = selected.has(conv.id)
           return (
-            <button key={conv.id} onClick={() => setActiveConversation(conv)}
-              onContextMenu={e => openContextMenu(e, conv)}
+            <button key={conv.id} onClick={() => {
+              if (selectMode) {
+                setSelected(prev => {
+                  const next = new Set(prev)
+                  next.has(conv.id) ? next.delete(conv.id) : next.add(conv.id)
+                  return next
+                })
+              } else {
+                setActiveConversation(conv)
+              }
+            }}
+              onContextMenu={e => !selectMode && openContextMenu(e, conv)}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                 padding: '10px 16px',
-                background: isActive ? `${C.green}0C` : 'none',
+                background: isSelected ? `${C.green}18` : isActive ? `${C.green}0C` : 'none',
                 border: 'none',
-                borderLeft: isActive ? `3px solid ${C.green}` : '3px solid transparent',
+                borderLeft: isSelected ? `3px solid ${C.green}` : isActive ? `3px solid ${C.green}` : '3px solid transparent',
                 borderBottom: `1px solid ${C.border}22`,
                 cursor: 'pointer', textAlign: 'left',
                 transition: 'background .15s',
               }}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = C.panel }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none' }}
+              onMouseEnter={e => { if (!isActive && !isSelected) e.currentTarget.style.background = C.panel }}
+              onMouseLeave={e => { if (!isActive && !isSelected) e.currentTarget.style.background = 'none' }}
             >
+              {/* Checkbox en select mode */}
+              {selectMode && (
+                <div style={{
+                  width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                  border: `2px solid ${isSelected ? C.green : C.border}`,
+                  background: isSelected ? C.green : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="3" strokeLinecap="round"><path d="M5 13l4 4L19 7"/></svg>}
+                </div>
+              )}
               {/* Avatar */}
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 {isGroup
@@ -807,6 +833,55 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
           </svg>
         </button>
       </div>
+
+      {/* Barra de selección */}
+      {selectMode && (
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: C.panel, borderTop: `1px solid ${C.border}`,
+          padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10,
+          zIndex: 50,
+        }}>
+          <button onClick={() => {
+            if (selected.size === filtered.length) setSelected(new Set())
+            else setSelected(new Set(filtered.map(c => c.id)))
+          }} style={{
+            flex: 1, padding: '10px 0', borderRadius: 12,
+            border: `1px solid ${C.border}`, background: 'transparent',
+            color: C.text, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+          }}>
+            {selected.size === filtered.length ? 'Deseleccionar todo' : `Seleccionar todo (${filtered.length})`}
+          </button>
+          <button disabled={selected.size === 0} onClick={() => {
+            if (selected.size === 0) return
+            setConfirmDialog({
+              title: 'Eliminar chats',
+              message: `¿Eliminar ${selected.size} chat${selected.size > 1 ? 's' : ''} de tu lista?`,
+              danger: true,
+              confirmLabel: 'Eliminar',
+              onConfirm: async () => {
+                setConfirmDialog(null)
+                const ids = [...selected]
+                await supabase.from('conversation_members')
+                  .delete()
+                  .in('conversation_id', ids)
+                  .eq('user_id', profile.id)
+                if (ids.includes(activeConversation?.id)) setActiveConversation(null)
+                setSelected(new Set())
+                setSelectMode(false)
+                fetchConversations(profile.id)
+              },
+            })
+          }} style={{
+            flex: 1, padding: '10px 0', borderRadius: 12, border: 'none',
+            background: selected.size === 0 ? C.panel2 : '#ef4444',
+            color: selected.size === 0 ? C.sub : '#fff',
+            fontWeight: 700, fontSize: 13, cursor: selected.size === 0 ? 'not-allowed' : 'pointer',
+          }}>
+            {selected.size === 0 ? 'Eliminar' : `Eliminar (${selected.size})`}
+          </button>
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!confirmDialog}
