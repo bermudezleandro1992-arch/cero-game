@@ -203,7 +203,8 @@ export default function CallPage({
   const [callType] = useState(initType || 'audio')
   const [muted, setMuted] = useState(false)
   const [camOff, setCamOff] = useState(false)
-  const [speaker, setSpeaker] = useState(!window.Capacitor?.isNativePlatform?.())
+  // Audio: video calls default to speaker, audio calls default to earpiece (like WhatsApp)
+  const [speaker, setSpeaker] = useState(initType === 'video')
   const [elapsed, setElapsed] = useState(0)
   const [minimized, setMinimized] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -343,10 +344,23 @@ export default function CallPage({
       ctx.close()
     } catch (_) {}
 
+    // Strong echo cancellation prevents feedback when phones are close
+    const audioConstraints = {
+      echoCancellation: { ideal: true },
+      noiseSuppression: { ideal: true },
+      autoGainControl:  { ideal: true },
+      channelCount:     { ideal: 1 },
+      sampleRate:       { ideal: 48000 },
+      // Chrome/Edge extended constraints
+      googEchoCancellation: true,
+      googAutoGainControl:  true,
+      googNoiseSuppression: true,
+      googHighpassFilter:   true,
+    }
     const stream = await navigator.mediaDevices.getUserMedia(
       callType === 'video'
-        ? { audio: { echoCancellation: true, noiseSuppression: true }, video: { facingMode: 'user', width: 640, height: 480 } }
-        : { audio: { echoCancellation: true, noiseSuppression: true } }
+        ? { audio: audioConstraints, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } }
+        : { audio: audioConstraints }
     )
     localStream.current = stream
     if (localVid.current) { localVid.current.srcObject = stream; localVid.current.muted = true }
@@ -431,6 +445,9 @@ export default function CallPage({
     vibrate([0, 60])
     timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
     startQualityPolling()
+    // Apply audio routing immediately on connect (earpiece for audio, speaker for video)
+    const useSpeaker = callType === 'video'
+    applySpeakerRoute(useSpeaker)
     onAccept?.()
   }
 
@@ -495,24 +512,30 @@ export default function CallPage({
     if (t) { t.enabled = !t.enabled; setCamOff(c => !c) }
   }
 
+  async function applySpeakerRoute(useSpeaker) {
+    const el = remoteAudio.current
+    if (!el) return
+    el.volume = 1.0
+    try {
+      if (typeof el.setSinkId === 'function') {
+        if (useSpeaker) {
+          // Route to speaker: find speaker device or use 'default'
+          const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [])
+          const spk = devices.find(d => d.kind === 'audiooutput' && /speaker/i.test(d.label))
+          await el.setSinkId(spk?.deviceId || 'default').catch(() => {})
+        } else {
+          // Route to earpiece: empty string = system default (earpiece on mobile)
+          await el.setSinkId('').catch(() => {})
+        }
+      }
+    } catch (_) {}
+  }
+
   async function toggleSpeaker() {
     vibrate(25)
     const next = !speaker
     setSpeaker(next)
-    if (remoteAudio.current) {
-      try {
-        if (typeof remoteAudio.current.setSinkId === 'function') {
-          if (next) {
-            const devices = await navigator.mediaDevices.enumerateDevices()
-            const spk = devices.find(d => d.kind === 'audiooutput' && /speaker/i.test(d.label))
-            await remoteAudio.current.setSinkId(spk?.deviceId || 'default').catch(() => {})
-          } else {
-            await remoteAudio.current.setSinkId('').catch(() => {})
-          }
-        }
-      } catch (_) {}
-      remoteAudio.current.volume = 1.0
-    }
+    await applySpeakerRoute(next)
   }
 
   // ── Screen share ───────────────────────────────────────────────────────────
@@ -877,16 +900,20 @@ export default function CallPage({
                     state={muted ? 'danger' : 'off'}
                     onClick={toggleMute}
                   />
-                  {/* Speaker */}
+                  {/* Speaker / Earpiece toggle */}
                   <RoundBtn
-                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                      {speaker
-                        ? <><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></>
-                        : <line x1="23" y1="9" x2="17" y2="15"/>
-                      }
-                    </svg>}
-                    label="Altavoz"
+                    icon={speaker
+                      ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                        </svg>
+                      : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
+                          <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+                        </svg>
+                    }
+                    label={speaker ? 'Altavoz' : 'Auricular'}
                     state={speaker ? 'on' : 'off'}
                     accent={accent}
                     onClick={toggleSpeaker}
