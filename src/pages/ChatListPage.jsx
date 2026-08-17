@@ -862,10 +862,13 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
               onConfirm: async () => {
                 setConfirmDialog(null)
                 const ids = [...selected]
-                await supabase.from('conversation_members')
+                const { error, data } = await supabase.from('conversation_members')
                   .delete()
                   .in('conversation_id', ids)
                   .eq('user_id', profile.id)
+                  .select()
+                console.log('[delete]', { ids, userId: profile.id, error, data })
+                if (error) { alert('Error: ' + error.message); return }
                 if (ids.includes(activeConversation?.id)) setActiveConversation(null)
                 setSelected(new Set())
                 setSelectMode(false)
