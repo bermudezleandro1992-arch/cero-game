@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
@@ -226,6 +227,38 @@ function RankingsSection() {
   )
 }
 
+// ── Confirm Dialog (portal) ───────────────────────────────────────────────────
+function ConfirmDialog({ dialog, onClose }) {
+  if (!dialog) return null
+  return createPortal(
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: C.panel, borderRadius: 20, padding: 24,
+        maxWidth: 320, width: '100%', border: `1px solid ${C.border}`,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+      }}>
+        <p style={{ color: C.text, fontWeight: 800, fontSize: 16, margin: '0 0 8px' }}>{dialog.title}</p>
+        <p style={{ color: C.textDim, fontSize: 13, margin: '0 0 20px', lineHeight: 1.5 }}>{dialog.message}</p>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '11px', borderRadius: 12, border: `1px solid ${C.border}`,
+            background: C.panel2, color: C.text, fontWeight: 700, fontSize: 14, cursor: 'pointer',
+          }}>Cancelar</button>
+          <button onClick={() => { dialog.onConfirm(); onClose() }} style={{
+            flex: 1, padding: '11px', borderRadius: 12, border: 'none',
+            background: '#ef4444', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+          }}>Eliminar</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 // ── Tournaments List ──────────────────────────────────────────────────────────
 function TournamentsList({ profile }) {
   const { setActiveConversation } = useChatStore()
@@ -240,6 +273,9 @@ function TournamentsList({ profile }) {
   const [tDeadline, setTDeadline] = useState('')
   const [tType, setTType] = useState('tournament')
   const [creating, setCreating] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState(new Set())
+  const [confirmDialog, setConfirmDialog] = useState(null)
 
   const TYPE_CFG = {
     tournament: { icon: '🏆', label: 'Torneo' },
@@ -306,10 +342,53 @@ function TournamentsList({ profile }) {
     setCreating(false)
   }
 
-  async function handleDeleteTournament(t) {
-    if (!window.confirm(`¿Eliminar "${t.name}"? Esta acción no se puede deshacer.`)) return
-    await supabase.from('conversations').delete().eq('id', t.id).eq('created_by', profile.id)
+  function toggleSelect(id) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    const myTournaments = filtered.filter(t => t.created_by === profile?.id)
+    setSelected(new Set(myTournaments.map(t => t.id)))
+  }
+
+  async function doDeleteIds(ids) {
+    for (const id of ids) {
+      await supabase.from('conversations').delete().eq('id', id).eq('created_by', profile.id)
+    }
+    setSelected(new Set())
+    setSelectMode(false)
     await loadTournaments()
+  }
+
+  function handleDeleteTournament(t) {
+    setConfirmDialog({
+      title: '¿Eliminar torneo?',
+      message: `"${t.name}" será eliminado permanentemente. Esta acción no se puede deshacer.`,
+      onConfirm: () => doDeleteIds([t.id]),
+    })
+  }
+
+  function handleDeleteSelected() {
+    const ids = [...selected]
+    setConfirmDialog({
+      title: `¿Eliminar ${ids.length} torneo${ids.length > 1 ? 's' : ''}?`,
+      message: 'Los torneos seleccionados serán eliminados permanentemente.',
+      onConfirm: () => doDeleteIds(ids),
+    })
+  }
+
+  function handleDeleteAll() {
+    const myIds = filtered.filter(t => t.created_by === profile?.id).map(t => t.id)
+    if (myIds.length === 0) return
+    setConfirmDialog({
+      title: '¿Eliminar todos?',
+      message: `Se eliminarán ${myIds.length} torneo${myIds.length > 1 ? 's' : ''} creados por vos.`,
+      onConfirm: () => doDeleteIds(myIds),
+    })
   }
 
   async function joinTournament(id) {
@@ -328,8 +407,12 @@ function TournamentsList({ profile }) {
   const maxPlayers = getMaxParticipants(profile)
   const inp = { background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, padding: '10px 12px', outline: 'none', width: '100%', boxSizing: 'border-box' }
 
+  const myTournamentsCount = filtered.filter(t => t.created_by === profile?.id).length
+
   return (
     <div>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
+
       {/* Controls */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -343,12 +426,29 @@ function TournamentsList({ profile }) {
             }}>{f.label}</button>
           ))}
         </div>
-        <button onClick={() => setShowCreate(v => !v)} style={{
-          background: showCreate ? `${C.green}22` : C.green,
-          border: 'none', borderRadius: 10,
-          color: showCreate ? C.green : C.bg,
-          fontSize: 13, fontWeight: 700, padding: '8px 16px', cursor: 'pointer',
-        }}>{showCreate ? '✕ Cancelar' : '+ Crear'}</button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {myTournamentsCount > 0 && !showCreate && (
+            <button onClick={() => { setSelectMode(v => !v); setSelected(new Set()) }} style={{
+              background: selectMode ? `#ef444418` : C.panel2,
+              border: `1px solid ${selectMode ? '#ef4444' : C.border}`,
+              borderRadius: 10, color: selectMode ? '#ef4444' : C.textDim,
+              fontSize: 13, padding: '8px 10px', cursor: 'pointer',
+            }}>☑️</button>
+          )}
+          {myTournamentsCount > 0 && !showCreate && !selectMode && (
+            <button onClick={handleDeleteAll} style={{
+              background: '#ef444412', border: '1px solid #ef444430',
+              borderRadius: 10, color: '#ef4444',
+              fontSize: 12, fontWeight: 700, padding: '8px 12px', cursor: 'pointer',
+            }}>🗑️ Todos</button>
+          )}
+          <button onClick={() => { setShowCreate(v => !v); setSelectMode(false) }} style={{
+            background: showCreate ? `${C.green}22` : C.green,
+            border: 'none', borderRadius: 10,
+            color: showCreate ? C.green : C.bg,
+            fontSize: 13, fontWeight: 700, padding: '8px 16px', cursor: 'pointer',
+          }}>{showCreate ? '✕ Cancelar' : '+ Crear'}</button>
+        </div>
       </div>
 
       {/* Create form */}
@@ -412,10 +512,30 @@ function TournamentsList({ profile }) {
         {filtered.map(t => {
           const statusCfg = STATUS_CFG[t.status] || STATUS_CFG.inscripcion
           const isCreator = t.created_by === profile?.id
+          const isSelected = selected.has(t.id)
           return (
-            <div key={t.id} style={{ background: C.panel, borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+            <div key={t.id} onClick={selectMode && isCreator ? () => toggleSelect(t.id) : undefined}
+              style={{
+                background: isSelected ? `${C.green}12` : C.panel,
+                borderRadius: 16,
+                border: `1px solid ${isSelected ? C.green : C.border}`,
+                overflow: 'hidden',
+                cursor: selectMode && isCreator ? 'pointer' : 'default',
+                transition: 'border-color .15s, background .15s',
+              }}>
               <div style={{ background: `linear-gradient(135deg, ${C.greenDk}44 0%, transparent 60%)`, padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0, background: `${C.green}18`, border: `1px solid ${C.green}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🏆</div>
+                {selectMode && isCreator ? (
+                  <div style={{
+                    width: 24, height: 24, borderRadius: '50%', flexShrink: 0, marginTop: 12,
+                    background: isSelected ? C.green : 'transparent',
+                    border: `2px solid ${isSelected ? C.green : C.textDim}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </div>
+                ) : (
+                  <div style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0, background: `${C.green}18`, border: `1px solid ${C.green}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🏆</div>
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 15 }}>{t.name}</p>
@@ -428,31 +548,58 @@ function TournamentsList({ profile }) {
                 <span style={{ fontSize: 12, color: C.textDim }}>👥 {t.memberCount} participantes</span>
                 <span style={{ fontSize: 12, color: C.textDim }}>📅 {new Date(t.created_at).toLocaleDateString('es-AR')}</span>
               </div>
-              <div style={{ display: 'flex', gap: 8, padding: '8px 16px 14px' }}>
-                <button onClick={() => setActiveConversation({ id: t.id, isGroup: true, isTournament: true, name: t.name, description: t.description, members: [] })} style={{
-                  flex: 1, padding: '9px', borderRadius: 10,
-                  background: `${C.green}18`, border: `1px solid ${C.green}33`,
-                  color: C.green, fontWeight: 700, fontSize: 13, cursor: 'pointer',
-                }}>💬 Chat</button>
-                {!isCreator && (
-                  <button onClick={() => joinTournament(t.id)} style={{
+              {!selectMode && (
+                <div style={{ display: 'flex', gap: 8, padding: '8px 16px 14px' }}>
+                  <button onClick={() => setActiveConversation({ id: t.id, isGroup: true, isTournament: true, name: t.name, description: t.description, members: [] })} style={{
                     flex: 1, padding: '9px', borderRadius: 10,
-                    background: C.green, border: 'none',
-                    color: C.bg, fontWeight: 700, fontSize: 13, cursor: 'pointer',
-                  }}>⚔️ Inscribirse</button>
-                )}
-                {isCreator && (
-                  <button onClick={() => handleDeleteTournament(t)} title="Eliminar" style={{
-                    width: 38, padding: '9px', borderRadius: 10, flexShrink: 0,
-                    background: '#ef444418', border: '1px solid #ef444430',
-                    color: '#ef4444', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-                  }}>🗑️</button>
-                )}
-              </div>
+                    background: `${C.green}18`, border: `1px solid ${C.green}33`,
+                    color: C.green, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  }}>💬 Chat</button>
+                  {!isCreator && (
+                    <button onClick={() => joinTournament(t.id)} style={{
+                      flex: 1, padding: '9px', borderRadius: 10,
+                      background: C.green, border: 'none',
+                      color: C.bg, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                    }}>⚔️ Inscribirse</button>
+                  )}
+                  {isCreator && (
+                    <button onClick={() => handleDeleteTournament(t)} title="Eliminar" style={{
+                      width: 38, padding: '9px', borderRadius: 10, flexShrink: 0,
+                      background: '#ef444418', border: '1px solid #ef444430',
+                      color: '#ef4444', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+                    }}>🗑️</button>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
       </div>
+
+      {/* Select mode bottom bar */}
+      {selectMode && (
+        <div style={{
+          position: 'sticky', bottom: 0, left: 0, right: 0,
+          background: C.panel, borderTop: `1px solid ${C.border}`,
+          padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center',
+          marginTop: 12,
+        }}>
+          <button onClick={() => { setSelectMode(false); setSelected(new Set()) }} style={{
+            padding: '10px 14px', borderRadius: 12, border: `1px solid ${C.border}`,
+            background: C.panel2, color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+          }}>Cancelar</button>
+          <button onClick={selectAll} style={{
+            flex: 1, padding: '10px', borderRadius: 12, border: `1px solid ${C.border}`,
+            background: C.panel2, color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+          }}>Sel. todos ({myTournamentsCount})</button>
+          <button onClick={handleDeleteSelected} disabled={selected.size === 0} style={{
+            flex: 1, padding: '10px', borderRadius: 12, border: 'none',
+            background: selected.size > 0 ? '#ef4444' : C.panel2,
+            color: selected.size > 0 ? '#fff' : C.textDim,
+            fontWeight: 700, fontSize: 13, cursor: selected.size > 0 ? 'pointer' : 'default',
+          }}>🗑️ Eliminar {selected.size > 0 ? `(${selected.size})` : ''}</button>
+        </div>
+      )}
     </div>
   )
 }
