@@ -28,9 +28,10 @@ function buildBracket(players) {
 
 const SIZES = [4, 8, 16, 32]
 
-export default function BracketsPage({ onBack }) {
-  const [input, setInput]     = useState('')
-  const [players, setPlayers] = useState([])
+export default function BracketsPage({ onBack, initialPlayers = [] }) {
+  const initList = initialPlayers.filter(Boolean)
+  const [input, setInput]     = useState(initList.join('\n'))
+  const [players, setPlayers] = useState(initList)
   const [rounds, setRounds]   = useState([])
   const [generated, setGenerated] = useState(false)
   const [editRounds, setEditRounds] = useState([])
