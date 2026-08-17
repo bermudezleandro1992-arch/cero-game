@@ -82,11 +82,11 @@ const PAYMENT_METHODS = [
   },
   {
     id: 'binance',
-    label: 'Binance Pay / Crypto',
+    label: 'Binance / USDT Crypto',
     emoji: '🟡',
-    desc: 'USDT TRC-20 y más — próximamente',
+    desc: 'USDT TRC-20, Binance Pay',
     color: '#F3BA2F',
-    available: false,
+    available: true,
     manual: true,
   },
   {
@@ -107,8 +107,8 @@ const ASTROPAY_DATA = {
 }
 
 const BINANCE_ADDRESS = {
-  USDT_TRC20: 'PRÓXIMAMENTE',
-  BINANCE_ID: 'PRÓXIMAMENTE',
+  USDT_TRC20: 'TYbzEMciAbyp4L4xrDmG7srnChGhmXAmUq',
+  BINANCE_ID: '359177674',
 }
 
 function Section({ label, children }) {
@@ -574,7 +574,7 @@ export default function VipPage({ onBack }) {
             {[
               ['🌟', 'AstroPay'],
               ['🏦', 'Transferencia'],
-              ['🟡', 'Crypto (pronto)'],
+              ['🟡', 'USDT / Binance'],
               ['💳', 'MP Checkout (pronto)'],
             ].map(([emoji, label]) => (
               <div key={label} style={{
