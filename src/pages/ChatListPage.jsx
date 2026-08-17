@@ -119,6 +119,39 @@ function Ticks({ read }) {
   )
 }
 
+// ── Confirm Dialog ────────────────────────────────────────────────────────────
+function ConfirmDialog({ open, title, message, onConfirm, onCancel, confirmLabel = 'Aceptar', danger = false }) {
+  if (!open) return null
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '0 24px',
+    }} onClick={onCancel}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: C.panel, borderRadius: 18, padding: '28px 24px 20px',
+        maxWidth: 340, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 12,
+      }}>
+        {title && <p style={{ margin: 0, fontWeight: 700, fontSize: 17, color: C.text }}>{title}</p>}
+        <p style={{ margin: 0, fontSize: 14, color: C.sub, lineHeight: 1.5 }}>{message}</p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <button onClick={onCancel} style={{
+            flex: 1, padding: '11px 0', borderRadius: 12, border: `1px solid ${C.border}`,
+            background: 'transparent', color: C.text, fontWeight: 600, fontSize: 14, cursor: 'pointer',
+          }}>Cancelar</button>
+          <button onClick={onConfirm} style={{
+            flex: 1, padding: '11px 0', borderRadius: 12, border: 'none',
+            background: danger ? '#ef4444' : C.accent, color: '#fff',
+            fontWeight: 700, fontSize: 14, cursor: 'pointer',
+          }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatListPage({ onProfileClick, initialFilter }) {
   const { profile, signOut } = useAuthStore()
@@ -134,6 +167,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   const [catSubMenu, setCatSubMenu] = useState(false)
   const [sortOrder, setSortOrder] = useState('recientes')        // 'recientes' | 'no_leidos' | 'az'
   const [showSortMenu, setShowSortMenu] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState(null)       // {title, message, onConfirm, danger}
 
   useEffect(() => { setFilter(initialFilter || 'todos') }, [initialFilter])
   const [showFab, setShowFab] = useState(false)
@@ -181,15 +215,23 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
     return () => { clearTimeout(t); document.removeEventListener('click', h) }
   }, [showSortMenu])
 
-  async function handleClearAll() {
-    if (!window.confirm('¿Limpiar el historial de todos los chats? Solo se borrará para vos.')) return
-    const ids = filtered.map(c => c.id)
-    if (!ids.length) return
-    await supabase.from('conversation_members')
-      .update({ cleared_at: new Date().toISOString() })
-      .in('conversation_id', ids)
-      .eq('user_id', profile.id)
-    fetchConversations(profile.id)
+  function handleClearAll() {
+    setConfirmDialog({
+      title: 'Limpiar historial',
+      message: '¿Limpiar el historial de todos los chats? Solo se borrará para vos.',
+      danger: true,
+      confirmLabel: 'Limpiar todo',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        const ids = conversations.map(c => c.id)
+        if (!ids.length) return
+        await supabase.from('conversation_members')
+          .update({ cleared_at: new Date().toISOString() })
+          .in('conversation_id', ids)
+          .eq('user_id', profile.id)
+        fetchConversations(profile.id)
+      },
+    })
   }
 
   async function searchUsers(q) {
@@ -225,25 +267,41 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
     setCatSubMenu(false)
   }
 
-  async function handleClearHistory(conv) {
+  function handleClearHistory(conv) {
     setContextMenu(null)
-    if (!window.confirm('¿Limpiar historial de este chat? Solo se borrará para vos.')) return
-    await supabase.from('conversation_members')
-      .update({ cleared_at: new Date().toISOString() })
-      .eq('conversation_id', conv.id)
-      .eq('user_id', profile.id)
-    fetchConversations(profile.id)
+    setConfirmDialog({
+      title: 'Limpiar historial',
+      message: '¿Limpiar el historial de este chat? Solo se borrará para vos.',
+      danger: false,
+      confirmLabel: 'Limpiar',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await supabase.from('conversation_members')
+          .update({ cleared_at: new Date().toISOString() })
+          .eq('conversation_id', conv.id)
+          .eq('user_id', profile.id)
+        fetchConversations(profile.id)
+      },
+    })
   }
 
-  async function handleDeleteChat(conv) {
+  function handleDeleteChat(conv) {
     setContextMenu(null)
-    if (!window.confirm('¿Borrar este chat de tu lista?')) return
-    await supabase.from('conversation_members')
-      .delete()
-      .eq('conversation_id', conv.id)
-      .eq('user_id', profile.id)
-    if (activeConversation?.id === conv.id) setActiveConversation(null)
-    fetchConversations(profile.id)
+    setConfirmDialog({
+      title: 'Borrar chat',
+      message: '¿Borrar este chat de tu lista?',
+      danger: true,
+      confirmLabel: 'Borrar',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await supabase.from('conversation_members')
+          .delete()
+          .eq('conversation_id', conv.id)
+          .eq('user_id', profile.id)
+        if (activeConversation?.id === conv.id) setActiveConversation(null)
+        fetchConversations(profile.id)
+      },
+    })
   }
 
   async function handleCategorize(conv, category) {
@@ -745,6 +803,16 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
           </svg>
         </button>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDialog}
+        title={confirmDialog?.title}
+        message={confirmDialog?.message}
+        confirmLabel={confirmDialog?.confirmLabel}
+        danger={confirmDialog?.danger}
+        onConfirm={confirmDialog?.onConfirm}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   )
 }
