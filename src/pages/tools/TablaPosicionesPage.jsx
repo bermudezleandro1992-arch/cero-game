@@ -11,8 +11,10 @@ function sorted(teams) {
   )
 }
 
-export default function TablaPosicionesPage({ onBack }) {
-  const [teams, setTeams]           = useState([])
+export default function TablaPosicionesPage({ onBack, initialTeams = [] }) {
+  const [teams, setTeams]           = useState(
+    initialTeams.map((name, i) => ({ ...DEFAULT_TEAM, id: Date.now() + i, name }))
+  )
   const [newName, setNewName]       = useState('')
   const [adding, setAdding]         = useState(false)
   const [resultModal, setResultModal] = useState(false)

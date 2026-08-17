@@ -227,6 +227,145 @@ function RankingsSection() {
   )
 }
 
+// ── Tournament Management Panel ───────────────────────────────────────────────
+function TournamentPanel({ tournament, profile, onClose }) {
+  const [tab, setTab] = useState('participantes')
+  const [participants, setParticipants] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const { data } = await supabase
+        .from('conversation_members')
+        .select('user_id, users(display_name, username, avatar_url)')
+        .eq('conversation_id', tournament.id)
+      setParticipants(data || [])
+      setLoading(false)
+    }
+    load()
+  }, [tournament.id])
+
+  const isCreator = tournament.created_by === profile?.id
+  const playerNames = participants.map(p => p.users?.display_name || p.users?.username || 'Jugador')
+
+  const TABS = [
+    { id: 'participantes', icon: '👥', label: 'Jugadores' },
+    { id: 'brackets',      icon: '🔱', label: 'Brackets'  },
+    { id: 'liga',          icon: '📋', label: 'Liga'      },
+    { id: 'sorteo',        icon: '🎲', label: 'Sorteo'    },
+  ]
+
+  return createPortal(
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+    }}>
+      <div style={{
+        width: '100%', maxWidth: 600, height: '90vh',
+        background: C.bg, borderRadius: '20px 20px 0 0',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '16px 16px 0', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4, display: 'flex' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tournament.name}</p>
+              <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>{tournament.description}</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 0 }}>
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{
+                flex: 1, padding: '9px 4px', background: 'none', border: 'none',
+                borderBottom: `2.5px solid ${tab === t.id ? C.green : 'transparent'}`,
+                color: tab === t.id ? C.green : C.textDim,
+                fontSize: 11, fontWeight: tab === t.id ? 700 : 500,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>{t.icon} {t.label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {/* Participantes */}
+          {tab === 'participantes' && (
+            <div style={{ padding: 16 }}>
+              {loading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[1,2,3].map(i => <div key={i} style={{ height: 56, background: C.panel, borderRadius: 12 }} />)}
+                </div>
+              ) : participants.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: C.textDim }}>
+                  <div style={{ fontSize: 40, marginBottom: 8 }}>👥</div>
+                  <p style={{ margin: 0, fontSize: 14 }}>Sin participantes aún</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 12 }}>Los jugadores se inscriben con el botón "⚔️ Inscribirse"</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <p style={{ margin: '0 0 10px', color: C.textDim, fontSize: 12, fontWeight: 700 }}>
+                    {participants.length} participante{participants.length !== 1 ? 's' : ''} inscripto{participants.length !== 1 ? 's' : ''}
+                  </p>
+                  {participants.map((p, i) => {
+                    const u = p.users || {}
+                    const name = u.display_name || u.username || 'Jugador'
+                    return (
+                      <div key={p.user_id} style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        background: C.panel, borderRadius: 12,
+                        border: `1px solid ${C.border}`, padding: '10px 14px',
+                      }}>
+                        <div style={{
+                          width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                          background: C.panel2, border: `1px solid ${C.border}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 11, fontWeight: 800, color: C.textDim,
+                        }}>{i + 1}</div>
+                        {u.avatar_url
+                          ? <img src={u.avatar_url} alt={name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                          : <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: `${C.green}20`, border: `1px solid ${C.green}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: C.green }}>{name.slice(0,2).toUpperCase()}</div>
+                        }
+                        <div style={{ flex: 1 }}>
+                          <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{name}</div>
+                          {u.username && <div style={{ color: C.textDim, fontSize: 11 }}>@{u.username}</div>}
+                        </div>
+                        {p.user_id === tournament.created_by && (
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: `${C.green}18`, color: C.green, border: `1px solid ${C.green}33` }}>Organizador</span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Brackets */}
+          {tab === 'brackets' && (
+            <BracketsPage onBack={() => setTab('participantes')} initialPlayers={playerNames} />
+          )}
+
+          {/* Liga */}
+          {tab === 'liga' && (
+            <TablaPosicionesPage onBack={() => setTab('participantes')} initialTeams={playerNames} />
+          )}
+
+          {/* Sorteo */}
+          {tab === 'sorteo' && (
+            <SorteoPage onBack={() => setTab('participantes')} />
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 // ── Confirm Dialog (portal) ───────────────────────────────────────────────────
 function ConfirmDialog({ dialog, onClose }) {
   if (!dialog) return null
@@ -276,6 +415,7 @@ function TournamentsList({ profile }) {
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState(new Set())
   const [confirmDialog, setConfirmDialog] = useState(null)
+  const [managingTournament, setManagingTournament] = useState(null)
 
   const TYPE_CFG = {
     tournament: { icon: '🏆', label: 'Torneo' },
@@ -412,6 +552,13 @@ function TournamentsList({ profile }) {
   return (
     <div>
       <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
+      {managingTournament && (
+        <TournamentPanel
+          tournament={managingTournament}
+          profile={profile}
+          onClose={() => setManagingTournament(null)}
+        />
+      )}
 
       {/* Controls */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
@@ -561,6 +708,13 @@ function TournamentsList({ profile }) {
                       background: C.green, border: 'none',
                       color: C.bg, fontWeight: 700, fontSize: 13, cursor: 'pointer',
                     }}>⚔️ Inscribirse</button>
+                  )}
+                  {isCreator && (
+                    <button onClick={() => setManagingTournament(t)} style={{
+                      flex: 1, padding: '9px', borderRadius: 10,
+                      background: C.panel2, border: `1px solid ${C.border}`,
+                      color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                    }}>⚙️ Gestionar</button>
                   )}
                   {isCreator && (
                     <button onClick={() => handleDeleteTournament(t)} title="Eliminar" style={{
