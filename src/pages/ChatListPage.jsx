@@ -300,10 +300,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
       confirmLabel: 'Borrar',
       onConfirm: async () => {
         setConfirmDialog(null)
-        await supabase.from('conversation_members')
-          .delete()
-          .eq('conversation_id', conv.id)
-          .eq('user_id', profile.id)
+        await supabase.rpc('leave_conversations', { conv_ids: [conv.id] })
         if (activeConversation?.id === conv.id) setActiveConversation(null)
         fetchConversations(profile.id)
       },
@@ -862,12 +859,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
               onConfirm: async () => {
                 setConfirmDialog(null)
                 const ids = [...selected]
-                const { error, data } = await supabase.from('conversation_members')
-                  .delete()
-                  .in('conversation_id', ids)
-                  .eq('user_id', profile.id)
-                  .select()
-                console.log('[delete]', { ids, userId: profile.id, error, data })
+                const { error } = await supabase.rpc('leave_conversations', { conv_ids: ids })
                 if (error) { alert('Error: ' + error.message); return }
                 if (ids.includes(activeConversation?.id)) setActiveConversation(null)
                 setSelected(new Set())
