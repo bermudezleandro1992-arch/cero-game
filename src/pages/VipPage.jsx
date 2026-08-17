@@ -72,52 +72,43 @@ const PLANS = [
 
 const PAYMENT_METHODS = [
   {
-    id: 'mercadopago',
-    label: 'Mercado Pago',
-    emoji: '💳',
-    desc: 'Tarjeta, débito, saldo MP, cuotas',
-    color: '#009EE3',
-    available: true,
-  },
-  {
-    id: 'binance',
-    label: 'Binance Pay / Crypto',
-    emoji: '🟡',
-    desc: 'USDT, BNB, BTC, ETH y más',
-    color: '#F3BA2F',
-    available: true,
-    manual: true,
-  },
-  {
     id: 'astropay',
-    label: 'AstroPay',
+    label: 'AstroPay / Transferencia',
     emoji: '🌟',
-    desc: 'Tarjeta prepaga virtual',
+    desc: 'CVU, alias, cualquier billetera o banco',
     color: '#FF6B35',
     available: true,
     manual: true,
   },
   {
-    id: 'transferencia',
-    label: 'Transferencia / Alias MP',
-    emoji: '🏦',
-    desc: 'CVU, alias Mercado Pago, cualquier banco',
-    color: '#3b82f6',
-    available: true,
+    id: 'binance',
+    label: 'Binance Pay / Crypto',
+    emoji: '🟡',
+    desc: 'USDT TRC-20 y más — próximamente',
+    color: '#F3BA2F',
+    available: false,
     manual: true,
+  },
+  {
+    id: 'mercadopago',
+    label: 'Mercado Pago (checkout)',
+    emoji: '💳',
+    desc: 'Próximamente',
+    color: '#009EE3',
+    available: false,
   },
 ]
 
-const BINANCE_ADDRESS = {
-  USDT_TRC20: 'TU_WALLET_USDT_TRC20',   // ← reemplazá con tu wallet TRC-20
-  BINANCE_ID: 'TU_BINANCE_ID',           // ← reemplazá con tu Binance ID
+const ASTROPAY_DATA = {
+  titular: 'Leandro Bermudez',
+  cvu:     '0000177500090225090423',
+  alias:   'somoslfa',
+  banco:   'AstroPay (compatible con cualquier billetera/banco)',
 }
 
-const BANK_DATA = {
-  titular: 'Leandro Bermudez',
-  cbu:     'TU_CBU_ACÁ',        // ← reemplazá con tu CVU de MP
-  alias:   'TU.ALIAS.MP',       // ← reemplazá con tu alias de MP
-  banco:   'Mercado Pago (o cualquier banco/billetera)',
+const BINANCE_ADDRESS = {
+  USDT_TRC20: 'PRÓXIMAMENTE',
+  BINANCE_ID: 'PRÓXIMAMENTE',
 }
 
 function Section({ label, children }) {
@@ -139,6 +130,8 @@ export default function VipPage({ onBack }) {
   const [txHash, setTxHash] = useState('')
   const [txNote, setTxNote] = useState('')
   const [copied, setCopied] = useState(null)
+  const [proofFile, setProofFile] = useState(null)
+  const [proofPreview, setProofPreview] = useState(null)
 
   const plan = PLANS.find(p => p.id === selected)
   const planIdToSend = annual && plan?.annual ? plan.annual.id : selected
@@ -171,18 +164,35 @@ export default function VipPage({ onBack }) {
     setLoading(false)
   }
 
+  function handleProofChange(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setProofFile(file)
+    setProofPreview(URL.createObjectURL(file))
+  }
+
   async function handleManualSubmit() {
-    if (!txHash.trim()) return
+    if (!txHash.trim() && !proofFile) return
     setLoading(true)
     try {
+      let proofUrl = null
+      if (proofFile) {
+        const ext = proofFile.name.split('.').pop()
+        const path = `payments/${profile.id}/${Date.now()}.${ext}`
+        const { error: upErr } = await supabase.storage.from('result-photos').upload(path, proofFile)
+        if (!upErr) {
+          const { data: urlData } = supabase.storage.from('result-photos').getPublicUrl(path)
+          proofUrl = urlData?.publicUrl
+        }
+      }
       await supabase.from('payments').insert({
-        user_id:   profile.id,
-        plan:      selected,
-        method:    payMethod,
+        user_id:    profile.id,
+        plan:       selected,
+        method:     payMethod,
         amount_usd: plan?.priceUSD || 0,
-        status:    'pending',
-        tx_hash:   txHash.trim(),
-        raw_data:  { note: txNote, submitted_at: new Date().toISOString() },
+        status:     'pending',
+        tx_hash:    txHash.trim() || null,
+        raw_data:   { note: txNote, proof_url: proofUrl, submitted_at: new Date().toISOString() },
       })
       setStep('success')
     } catch {
@@ -225,8 +235,8 @@ export default function VipPage({ onBack }) {
   // ── PASO: PAGO MANUAL (Binance / AstroPay) ───────────────────────────────────
   if (step === 'manual') {
     const isBinance = payMethod === 'binance'
-    const isTransfer = payMethod === 'transferencia'
-    const methodLabel = isBinance ? 'Binance' : isTransfer ? 'Transferencia bancaria' : 'AstroPay'
+    const isAstropay = payMethod === 'astropay'
+    const methodLabel = isBinance ? 'Binance' : 'AstroPay / Transferencia'
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
         <Header onBack={() => setStep('payment')} title={`Pagar con ${methodLabel}`} />
@@ -268,30 +278,20 @@ export default function VipPage({ onBack }) {
             </Section>
           )}
 
-          {!isBinance && !isTransfer && (
-            <Section label="Instrucciones AstroPay">
-              <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px', lineHeight: 1.7, fontSize: 13, color: C.text2 }}>
-                <p style={{ margin: '0 0 6px' }}>1. Cargá tu tarjeta AstroPay con el monto exacto en USD</p>
-                <p style={{ margin: '0 0 6px' }}>2. Enviá el pago al email: <strong style={{ color: C.green }}>pagos@mimensajero.com</strong></p>
-                <p style={{ margin: 0 }}>3. Pegá el comprobante o código de transacción abajo</p>
-              </div>
-            </Section>
-          )}
-
-          {isTransfer && (
-            <Section label="Datos bancarios">
+          {isAstropay && (
+            <Section label="Datos para transferir">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
-                  ['Titular', BANK_DATA.titular, 'titular'],
-                  ['CBU / CVU', BANK_DATA.cbu, 'cbu'],
-                  ['Alias', BANK_DATA.alias, 'alias'],
-                  ['Banco', BANK_DATA.banco, 'banco'],
+                  ['Titular', ASTROPAY_DATA.titular, 'titular'],
+                  ['CVU', ASTROPAY_DATA.cvu, 'cvu'],
+                  ['Alias', ASTROPAY_DATA.alias, 'alias'],
+                  ['Billetera', ASTROPAY_DATA.banco, 'banco'],
                 ].map(([label, val, key]) => (
                   <div key={key} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 14px' }}>
                     <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>{label}</p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <p style={{ margin: 0, flex: 1, fontSize: 13, color: C.text, fontFamily: key === 'cbu' || key === 'alias' ? 'monospace' : 'inherit' }}>{val}</p>
-                      {(key === 'cbu' || key === 'alias') && (
+                      <p style={{ margin: 0, flex: 1, fontSize: key === 'cvu' ? 12 : 13, color: C.text, fontFamily: key === 'cvu' || key === 'alias' ? 'monospace' : 'inherit', wordBreak: 'break-all' }}>{val}</p>
+                      {(key === 'cvu' || key === 'alias') && (
                         <button onClick={() => copy(val, key)} style={{
                           background: copied === key ? `${C.green}22` : `${C.green}15`, border: `1px solid ${C.green}33`,
                           borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: C.green, fontSize: 11, fontWeight: 700, flexShrink: 0,
@@ -301,17 +301,38 @@ export default function VipPage({ onBack }) {
                   </div>
                 ))}
               </div>
-              <p style={{ marginTop: 10, fontSize: 12, color: '#3b82f6', lineHeight: 1.5 }}>
-                💡 Transferí desde cualquier banco o billetera (Mercado Pago, Uala, Naranja X, etc.). El importe debe coincidir exactamente.
+              <p style={{ marginTop: 10, fontSize: 12, color: '#FF6B35', lineHeight: 1.5 }}>
+                💡 Transferí desde Mercado Pago, Uala, Naranja X, BBVA o cualquier banco. Podés usar el alias <strong>somoslfa</strong> o el CVU directamente.
               </p>
             </Section>
           )}
 
-          <Section label="Confirmá tu pago">
+          <Section label="Subí tu comprobante">
+            <label style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 10, padding: '20px', borderRadius: 14, cursor: 'pointer',
+              border: `2px dashed ${proofFile ? C.green : C.border}`,
+              background: proofFile ? `${C.green}08` : C.panel,
+              marginBottom: 10,
+            }}>
+              <input type="file" accept="image/*" onChange={handleProofChange} style={{ display: 'none' }} />
+              {proofPreview ? (
+                <img src={proofPreview} alt="comprobante" style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 10, objectFit: 'contain' }} />
+              ) : (
+                <>
+                  <span style={{ fontSize: 36 }}>📸</span>
+                  <p style={{ margin: 0, fontSize: 13, color: C.textDim, textAlign: 'center' }}>
+                    Tocá para subir foto del comprobante<br/>
+                    <span style={{ fontSize: 11 }}>(captura de pantalla, foto, PDF)</span>
+                  </p>
+                </>
+              )}
+            </label>
+
             <input
               value={txHash}
               onChange={e => setTxHash(e.target.value)}
-              placeholder={isBinance ? 'Hash de transacción (ej: 0x1a2b3c...)' : isTransfer ? 'Número de comprobante de transferencia' : 'Código o número de transacción'}
+              placeholder={isBinance ? 'Hash de transacción (ej: 0x1a2b3c...)' : 'N° de operación o comprobante (opcional si subís foto)'}
               style={{
                 width: '100%', boxSizing: 'border-box',
                 background: C.panel2, border: `1px solid ${txHash ? C.green : C.border}`,
@@ -322,7 +343,7 @@ export default function VipPage({ onBack }) {
             <textarea
               value={txNote}
               onChange={e => setTxNote(e.target.value)}
-              placeholder="Nota opcional (ej: enviado desde Binance app, 15/08/2026)"
+              placeholder="Nota opcional (ej: transferí desde Mercado Pago, 17/08/2026)"
               rows={2}
               style={{
                 width: '100%', boxSizing: 'border-box',
@@ -335,7 +356,7 @@ export default function VipPage({ onBack }) {
 
           <button
             onClick={handleManualSubmit}
-            disabled={!txHash.trim() || loading}
+            disabled={(!txHash.trim() && !proofFile) || loading}
             style={{
               width: '100%', padding: '14px 0', borderRadius: 14, border: 'none',
               background: !txHash.trim() ? C.panel2 : plan?.color || C.green,
@@ -385,19 +406,20 @@ export default function VipPage({ onBack }) {
                 <button
                   key={m.id}
                   onClick={() => {
+                    if (!m.available) return
                     setPayMethod(m.id)
-                    if (m.id === 'mercadopago') handleMercadoPago()
-                    else setStep('manual')
+                    setStep('manual')
                   }}
-                  disabled={loading && payMethod === m.id}
+                  disabled={!m.available}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 14,
                     padding: '14px 16px', borderRadius: 14,
                     background: C.panel, border: `1.5px solid ${C.border}`,
-                    cursor: 'pointer', textAlign: 'left',
+                    cursor: m.available ? 'pointer' : 'default',
+                    textAlign: 'left', opacity: m.available ? 1 : 0.5,
                     transition: 'all .15s',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = m.color; e.currentTarget.style.background = `${m.color}0A` }}
+                  onMouseEnter={e => { if (m.available) { e.currentTarget.style.borderColor = m.color; e.currentTarget.style.background = `${m.color}0A` } }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.panel }}
                 >
                   <div style={{
@@ -550,11 +572,10 @@ export default function VipPage({ onBack }) {
           <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Métodos de pago aceptados</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {[
-              ['💳', 'Mercado Pago'],
-              ['🟡', 'Binance Pay'],
               ['🌟', 'AstroPay'],
-              ['💰', 'USDT / Crypto'],
               ['🏦', 'Transferencia'],
+              ['🟡', 'Crypto (pronto)'],
+              ['💳', 'MP Checkout (pronto)'],
             ].map(([emoji, label]) => (
               <div key={label} style={{
                 display: 'flex', alignItems: 'center', gap: 6,
