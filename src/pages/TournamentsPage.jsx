@@ -21,7 +21,146 @@ const STATUS_CFG = {
   cancelado:   { label: 'Cancelado',   color: '#ef4444', bg: '#ef444418' },
 }
 
-const GAMES  = ['FC 26', 'FC 25', 'eFootball', 'FIFA', 'Warzone', 'Otro']
+// ── Game Catalog ──────────────────────────────────────────────────────────────
+const GAME_CATALOG = [
+  { id: 'fc26',          icon: '⚽', label: 'FC 26',          color: '#10b981', category: 'futbol' },
+  { id: 'fc25',          icon: '⚽', label: 'FC 25',          color: '#059669', category: 'futbol' },
+  { id: 'efootball',     icon: '🏟️', label: 'eFootball',      color: '#3b82f6', category: 'futbol' },
+  { id: 'cs2',           icon: '🎯', label: 'CS2',            color: '#f59e0b', category: 'fps'    },
+  { id: 'valorant',      icon: '🔫', label: 'Valorant',       color: '#ef4444', category: 'fps'    },
+  { id: 'warzone',       icon: '💥', label: 'Warzone',        color: '#84cc16', category: 'fps'    },
+  { id: 'pubg',          icon: '🪂', label: 'PUBG',           color: '#f59e0b', category: 'fps'    },
+  { id: 'clashroyale',   icon: '👑', label: 'Clash Royale',   color: '#a855f7', category: 'mobile' },
+  { id: 'clashofclans',  icon: '🏰', label: 'Clash of Clans', color: '#f59e0b', category: 'mobile' },
+  { id: 'brawlstars',    icon: '⭐', label: 'Brawl Stars',    color: '#3b82f6', category: 'mobile' },
+  { id: 'freef',         icon: '🔥', label: 'Free Fire',      color: '#ef4444', category: 'mobile' },
+  { id: 'fortnite',      icon: '🌀', label: 'Fortnite',       color: '#06b6d4', category: 'fps'    },
+  { id: 'rocketleague',  icon: '🚀', label: 'Rocket League',  color: '#3b82f6', category: 'sports' },
+  { id: 'nba2k',         icon: '🏀', label: 'NBA 2K',         color: '#f59e0b', category: 'sports' },
+  { id: 'otro',          icon: '🎮', label: 'Otro',           color: '#6b7280', category: 'otro'   },
+]
+
+const GAME_CONFIG = {
+  fc26: {
+    plataformas: ['PS5', 'PS4', 'Xbox Series X/S', 'Xbox One', 'PC (EA App)'],
+    modos: ['Ultimate Team', 'Volta Football', 'Carrera', 'Partido Amistoso'],
+    tiempos: ['6 min', '8 min', '10 min', '12 min'],
+    dificultades: ['Leyenda', 'Ultimate', 'Mundo', 'Aficionado'],
+    extras: [
+      { id: 'handicap', label: 'Sin Handicap' },
+      { id: 'custom_tactics', label: 'Tácticas libres' },
+      { id: 'divisions_only', label: 'Solo modo Divisiones' },
+    ],
+    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+  },
+  fc25: {
+    plataformas: ['PS5', 'PS4', 'Xbox Series X/S', 'Xbox One', 'PC (EA App)'],
+    modos: ['Ultimate Team', 'Volta Football', 'Carrera', 'Partido Amistoso'],
+    tiempos: ['6 min', '8 min', '10 min', '12 min'],
+    dificultades: ['Leyenda', 'Ultimate', 'Mundo', 'Aficionado'],
+    extras: [
+      { id: 'handicap', label: 'Sin Handicap' },
+      { id: 'custom_tactics', label: 'Tácticas libres' },
+    ],
+    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+  },
+  efootball: {
+    plataformas: ['PS5', 'PS4', 'Xbox Series X/S', 'Xbox One', 'PC (Steam)', 'Mobile (iOS/Android)'],
+    modos: ['Dream Team', 'Club de Fútbol', 'Partido Rápido', 'eFootball Liga'],
+    tiempos: ['10 min', '15 min', '20 min'],
+    divisiones: ['Sin restricción', 'Div 1', 'Div 2', 'Div 3', 'Div 4+'],
+    extras: [
+      { id: 'no_OP', label: 'Sin jugadores OP/TOTY' },
+      { id: 'balanced_team', label: 'Equipo balanceado' },
+      { id: 'same_nation', label: 'Solo jugadores de misma nación' },
+      { id: 'squad_cost', label: 'Límite de costo de plantel' },
+    ],
+    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+  },
+  cs2: {
+    plataformas: ['PC (Steam)'],
+    mapas: ['Dust2', 'Mirage', 'Inferno', 'Overpass', 'Cache', 'Nuke', 'Train', 'Vertigo', 'Anubis', 'Ancient'],
+    rondas: ['MR12 (Competitive)', 'MR15', 'MR24 (Long)'],
+    formatos: ['5vs5', '2vs2', '1vs1 (Pistola)', '3vs3'],
+    extras: [
+      { id: 'knife_round', label: 'Ronda de cuchillo' },
+      { id: 'overtime', label: 'Con overtime' },
+      { id: 'eco_round', label: 'Ronda económica inicial' },
+    ],
+  },
+  valorant: {
+    plataformas: ['PC'],
+    mapas: ['Abyss', 'Ascent', 'Bind', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split', 'Sunset'],
+    modos: ['Competitivo', 'No Ranked', 'Deathmatch'],
+    formatos: ['5vs5', '2vs2 (Retake)', '1vs1'],
+    extras: [
+      { id: 'agent_ban', label: 'Baneo de agentes' },
+      { id: 'map_veto', label: 'Veto de mapa' },
+    ],
+  },
+  warzone: {
+    plataformas: ['PS5', 'PS4', 'Xbox', 'PC'],
+    modos: ['Battle Royale', 'Resurgimiento', 'Plunder', 'Bunker Royale'],
+    formatos: ['Solo', 'Duo', 'Trío', 'Squad (4)'],
+    mapas: ['Verdansk', 'Rebirth Island', 'Fortune\'s Keep', 'Urzikstan'],
+    extras: [
+      { id: 'kill_points', label: 'Puntos por eliminaciones' },
+      { id: 'placement_points', label: 'Puntos por posición' },
+    ],
+  },
+  pubg: {
+    plataformas: ['PC (Steam)', 'PS4/PS5', 'Xbox', 'Mobile'],
+    mapas: ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Karakin', 'Paramo', 'Deston'],
+    perspectivas: ['FPP (Primera persona)', 'TPP (Tercera persona)'],
+    formatos: ['Solo', 'Duo', 'Squad (4)'],
+    extras: [
+      { id: 'kill_points', label: 'Puntos por eliminaciones' },
+      { id: 'zone_points', label: 'Puntos por zona' },
+    ],
+  },
+  clashroyale: {
+    plataformas: ['Mobile (iOS/Android)'],
+    nivelesMax: ['Nivel 9', 'Nivel 11', 'Nivel 14 (Evoluciones ON)', 'Nivel 14 (Evoluciones OFF)'],
+    formatos: ['1vs1 Normal', '1vs1 Doble Elixir', 'Best of 3', 'Best of 5'],
+    extras: [
+      { id: 'no_pass', label: 'Sin Pass Royale requerido' },
+      { id: 'deck_submit', label: 'Mazo enviado antes' },
+      { id: 'card_ban', label: 'Cartas baneadas' },
+    ],
+  },
+  freef: {
+    plataformas: ['Mobile (iOS/Android)'],
+    modos: ['Battle Royale', 'Clash Squad', 'Lone Wolf'],
+    formatos: ['Solo', 'Duo', 'Squad (4)'],
+    mapas: ['Bermuda', 'Purgatory', 'Kalahari', 'Alpyne'],
+    extras: [
+      { id: 'kill_points', label: 'Puntos por eliminaciones' },
+    ],
+  },
+  fortnite: {
+    plataformas: ['PC', 'PS5', 'PS4', 'Xbox', 'Switch', 'Mobile'],
+    modos: ['Battle Royale', 'Zero Build', 'Creativo', 'LEGO Fortnite'],
+    formatos: ['Solo', 'Duo', 'Trío', 'Squad (4)'],
+    extras: [
+      { id: 'kill_points', label: 'Puntos por eliminaciones' },
+      { id: 'placement_points', label: 'Puntos por posición' },
+      { id: 'no_build', label: 'Zero Build obligatorio' },
+    ],
+  },
+  rocketleague: {
+    plataformas: ['PC (Epic)', 'PS5', 'PS4', 'Xbox', 'Switch'],
+    modos: ['Soccar', 'Hoops', 'Rumble', 'Dropshot', 'Snow Day'],
+    formatos: ['1vs1', '2vs2', '3vs3'],
+    extras: [
+      { id: 'no_boost', label: 'Sin boost ilimitado' },
+    ],
+  },
+  otro: {
+    plataformas: ['PC', 'PS5', 'PS4', 'Xbox', 'Mobile', 'Switch', 'Multiplataforma'],
+    formatos: ['1vs1', '2vs2', 'Equipos', 'Liga', 'Copa', 'Bracket', 'Grupos + Playoffs'],
+  },
+}
+
 const FORMATS = ['1vs1', '2vs2', 'Equipos', 'Liga', 'Copa', 'Bracket', 'Grupos + Playoffs']
 
 // ── Plan check — community plan free for all during beta ─────────────────────
@@ -399,29 +538,59 @@ function ConfirmDialog({ dialog, onClose }) {
 }
 
 // ── Tournaments List ──────────────────────────────────────────────────────────
+const TYPE_CFG = {
+  tournament: { icon: '🏆', label: 'Torneo' },
+  liga:       { icon: '📋', label: 'Liga' },
+  clan:       { icon: '⚔️', label: 'Clanes' },
+  bracket:    { icon: '🔱', label: 'Bracket' },
+}
+
 function TournamentsList({ profile }) {
   const { setActiveConversation } = useChatStore()
   const [tournaments, setTournaments] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [filter, setFilter] = useState('all')
-  const [tName, setTName] = useState('')
-  const [tGame, setTGame] = useState('FC 26')
-  const [tFormat, setTFormat] = useState('1vs1')
-  const [tMaxPl, setTMaxPl] = useState('16')
-  const [tDeadline, setTDeadline] = useState('')
-  const [tType, setTType] = useState('tournament')
   const [creating, setCreating] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState(new Set())
   const [confirmDialog, setConfirmDialog] = useState(null)
   const [managingTournament, setManagingTournament] = useState(null)
 
-  const TYPE_CFG = {
-    tournament: { icon: '🏆', label: 'Torneo' },
-    liga:       { icon: '📋', label: 'Liga' },
-    clan:       { icon: '⚔️', label: 'Clanes' },
-    bracket:    { icon: '🔱', label: 'Bracket' },
+  // Create form state
+  const [tType,       setTType]       = useState('tournament')
+  const [tGameId,     setTGameId]     = useState('fc26')
+  const [tName,       setTName]       = useState('')
+  const [tMaxPl,      setTMaxPl]      = useState('16')
+  const [tDeadline,   setTDeadline]   = useState('')
+  const [tFormat,     setTFormat]     = useState('1vs1')
+  const [tPlataforma, setTPlataforma] = useState('')
+  const [tModo,       setTModo]       = useState('')
+  const [tTiempo,     setTTiempo]     = useState('')
+  const [tExtras,     setTExtras]     = useState([])
+  const [tMapas,      setTMapas]      = useState([])
+  const [tNivelMax,   setTNivelMax]   = useState('')
+  const [tDivision,   setTDivision]   = useState('')
+  const [tRondas,     setTRondas]     = useState('')
+  const [tPerspectiva,setTPerspectiva]= useState('')
+  const [tReglas,     setTReglas]     = useState('')
+
+  const gameCfg = GAME_CONFIG[tGameId] || GAME_CONFIG.otro
+  const gameInfo = GAME_CATALOG.find(g => g.id === tGameId) || GAME_CATALOG[GAME_CATALOG.length - 1]
+
+  function resetCreate() {
+    setTType('tournament'); setTGameId('fc26'); setTName(''); setTMaxPl('16')
+    setTDeadline(''); setTFormat('1vs1'); setTPlataforma(''); setTModo('')
+    setTTiempo(''); setTExtras([]); setTMapas([]); setTNivelMax('')
+    setTDivision(''); setTRondas(''); setTPerspectiva(''); setTReglas('')
+  }
+
+  function toggleExtra(id) {
+    setTExtras(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  function toggleMapa(m) {
+    setTMapas(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
   }
 
   useEffect(() => { loadTournaments() }, [profile?.id])
@@ -450,9 +619,25 @@ function TournamentsList({ profile }) {
     setCreating(true)
     try {
       const typeLabel = TYPE_CFG[tType]?.label || 'Torneo'
-      const desc = `${typeLabel} · ${tGame} · ${tFormat} · Hasta ${tMaxPl} jugadores${tDeadline ? ` · Cierre: ${tDeadline}` : ''}`
+      const parts = [
+        typeLabel,
+        gameInfo.label,
+        tFormat,
+        tPlataforma,
+        tModo,
+        tTiempo,
+        tNivelMax,
+        tDivision,
+        tRondas,
+        tPerspectiva,
+        tMapas.length > 0 ? `Mapas: ${tMapas.join(', ')}` : '',
+        tExtras.length > 0 ? tExtras.map(id => gameCfg.extras?.find(e => e.id === id)?.label).filter(Boolean).join(' · ') : '',
+        `Hasta ${tMaxPl} jugadores`,
+        tDeadline ? `Cierre: ${tDeadline}` : '',
+        tReglas ? `Reglamento: ${tReglas}` : '',
+      ].filter(Boolean)
+      const desc = parts.join(' · ')
 
-      // Usar RPC que crea conversación + miembro + rol owner atómicamente
       const { data: convId, error: rpcErr } = await supabase.rpc('create_group_with_owner', {
         p_name:        tName.trim(),
         p_is_group:    true,
@@ -462,22 +647,20 @@ function TournamentsList({ profile }) {
       })
       if (rpcErr) throw rpcErr
 
-      // Crear topics (canales del torneo)
       await supabase.from('topics').insert([
         { conversation_id: convId, name: 'Anuncios',   emoji: '📢', topic_type: 'announcements', position: 0 },
         { conversation_id: convId, name: 'Chat',       emoji: '💬', topic_type: 'chat',          position: 1 },
         { conversation_id: convId, name: 'Resultados', emoji: '📸', topic_type: 'chat',          position: 2 },
       ])
 
-      // Mensaje de sistema
       await supabase.from('messages').insert({
         conversation_id: convId, sender_id: profile.id, type: 'system',
-        content: `${TYPE_CFG[tType]?.icon || '🏆'} ${typeLabel} "${tName.trim()}" creado · ${tGame} ${tFormat}`,
+        content: `${TYPE_CFG[tType]?.icon || '🏆'} ${typeLabel} "${tName.trim()}" creado · ${gameInfo.label} · ${tFormat}`,
       })
 
       await loadTournaments()
       setShowCreate(false)
-      setTName(''); setTGame('FC 26'); setTFormat('1vs1'); setTMaxPl('16'); setTDeadline('')
+      resetCreate()
     } catch (e) { alert(`Error al crear: ${e.message}`) }
     setCreating(false)
   }
@@ -546,7 +729,7 @@ function TournamentsList({ profile }) {
   const filtered = filter === 'all' ? tournaments : tournaments.filter(t => t.status === filter)
   const maxPlayers = getMaxParticipants(profile)
   const inp = { background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, padding: '10px 12px', outline: 'none', width: '100%', boxSizing: 'border-box' }
-
+  const labelSt = { margin: '0 0 6px', fontSize: 11, fontWeight: 800, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }
   const myTournamentsCount = filtered.filter(t => t.created_by === profile?.id).length
 
   return (
@@ -600,44 +783,228 @@ function TournamentsList({ profile }) {
 
       {/* Create form */}
       {showCreate && (
-        <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16, marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16, marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ margin: 0, color: C.green, fontWeight: 700, fontSize: 14 }}>🏆 Crear competencia</p>
+            <p style={{ margin: 0, color: C.green, fontWeight: 800, fontSize: 15 }}>🏆 Nueva competencia</p>
             {(() => { const cfg = getRoleCfg(profile?.role || 'member'); return (
               <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}44` }}>
                 {cfg.icon} Máx. {maxPlayers} jugadores
               </span>
             )})()}
           </div>
-          {/* Type */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {Object.entries(TYPE_CFG).map(([key, cfg]) => (
-              <button key={key} onClick={() => setTType(key)} type="button" style={{
-                background: tType === key ? `${C.green}20` : C.panel,
-                border: `1.5px solid ${tType === key ? C.green : C.border}`,
-                borderRadius: 10, color: tType === key ? C.green : C.text2,
-                fontSize: 13, fontWeight: 700, padding: '6px 12px', cursor: 'pointer',
-              }}>{cfg.icon} {cfg.label}</button>
-            ))}
+
+          {/* Tipo */}
+          <div>
+            <p style={labelSt}>Tipo de competencia</p>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {Object.entries(TYPE_CFG).map(([key, cfg]) => (
+                <button key={key} onClick={() => setTType(key)} type="button" style={{
+                  background: tType === key ? `${C.green}20` : C.panel,
+                  border: `1.5px solid ${tType === key ? C.green : C.border}`,
+                  borderRadius: 10, color: tType === key ? C.green : C.text2,
+                  fontSize: 12, fontWeight: 700, padding: '7px 13px', cursor: 'pointer',
+                }}>{cfg.icon} {cfg.label}</button>
+              ))}
+            </div>
           </div>
-          <input value={tName} onChange={e => setTName(e.target.value)} placeholder={`Nombre del ${TYPE_CFG[tType]?.label || 'torneo'} *`} style={inp} />
+
+          {/* Juego */}
+          <div>
+            <p style={labelSt}>Juego</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(95px, 1fr))', gap: 7 }}>
+              {GAME_CATALOG.map(g => (
+                <button key={g.id} onClick={() => { setTGameId(g.id); setTPlataforma(''); setTModo(''); setTTiempo(''); setTExtras([]); setTMapas([]); setTFormat('1vs1') }} style={{
+                  background: tGameId === g.id ? `${g.color}20` : C.panel,
+                  border: `1.5px solid ${tGameId === g.id ? g.color : C.border}`,
+                  borderRadius: 10, padding: '8px 6px', cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                }}>
+                  <span style={{ fontSize: 20 }}>{g.icon}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: tGameId === g.id ? g.color : C.textDim, textAlign: 'center', lineHeight: 1.2 }}>{g.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Nombre */}
+          <div>
+            <p style={labelSt}>Nombre de la competencia *</p>
+            <input value={tName} onChange={e => setTName(e.target.value)}
+              placeholder={`Ej: Copa ${gameInfo.label} ${new Date().getFullYear()}`}
+              style={inp} />
+          </div>
+
+          {/* Plataforma + Formato */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <select value={tGame} onChange={e => setTGame(e.target.value)} style={inp}>
-              {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
-            <select value={tFormat} onChange={e => setTFormat(e.target.value)} style={inp}>
-              {FORMATS.map(f => <option key={f} value={f}>{f}</option>)}
-            </select>
+            {gameCfg.plataformas && (
+              <div>
+                <p style={labelSt}>Plataforma</p>
+                <select value={tPlataforma} onChange={e => setTPlataforma(e.target.value)} style={inp}>
+                  <option value="">Todas</option>
+                  {gameCfg.plataformas.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            )}
+            <div>
+              <p style={labelSt}>Formato</p>
+              <select value={tFormat} onChange={e => setTFormat(e.target.value)} style={inp}>
+                {(gameCfg.formatos || FORMATS).map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
           </div>
+
+          {/* Modo + Tiempo (FC/eFootball) */}
+          {(gameCfg.modos || gameCfg.tiempos) && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {gameCfg.modos && (
+                <div>
+                  <p style={labelSt}>Modo de juego</p>
+                  <select value={tModo} onChange={e => setTModo(e.target.value)} style={inp}>
+                    <option value="">Cualquier modo</option>
+                    {gameCfg.modos.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+              )}
+              {gameCfg.tiempos && (
+                <div>
+                  <p style={labelSt}>Tiempo de partido</p>
+                  <select value={tTiempo} onChange={e => setTTiempo(e.target.value)} style={inp}>
+                    <option value="">Libre</option>
+                    {gameCfg.tiempos.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* División (eFootball) */}
+          {gameCfg.divisiones && (
+            <div>
+              <p style={labelSt}>División mínima requerida</p>
+              <select value={tDivision} onChange={e => setTDivision(e.target.value)} style={inp}>
+                {gameCfg.divisiones.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Rondas (CS2) */}
+          {gameCfg.rondas && (
+            <div>
+              <p style={labelSt}>Sistema de rondas</p>
+              <select value={tRondas} onChange={e => setTRondas(e.target.value)} style={inp}>
+                <option value="">Por defecto</option>
+                {gameCfg.rondas.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Perspectiva (PUBG) */}
+          {gameCfg.perspectivas && (
+            <div>
+              <p style={labelSt}>Perspectiva</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {gameCfg.perspectivas.map(p => (
+                  <button key={p} onClick={() => setTPerspectiva(p)} style={{
+                    flex: 1, padding: '8px', borderRadius: 10, cursor: 'pointer',
+                    background: tPerspectiva === p ? `${C.green}20` : C.panel,
+                    border: `1.5px solid ${tPerspectiva === p ? C.green : C.border}`,
+                    color: tPerspectiva === p ? C.green : C.textDim, fontSize: 12, fontWeight: 600,
+                  }}>{p}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Nivel máximo (Clash Royale) */}
+          {gameCfg.nivelesMax && (
+            <div>
+              <p style={labelSt}>Nivel máximo de cartas</p>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {gameCfg.nivelesMax.map(n => (
+                  <button key={n} onClick={() => setTNivelMax(n)} style={{
+                    padding: '6px 12px', borderRadius: 10, cursor: 'pointer',
+                    background: tNivelMax === n ? `${C.green}20` : C.panel,
+                    border: `1.5px solid ${tNivelMax === n ? C.green : C.border}`,
+                    color: tNivelMax === n ? C.green : C.textDim, fontSize: 12, fontWeight: 600,
+                  }}>{n}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Mapas (CS2, Valorant, PUBG, etc.) */}
+          {gameCfg.mapas && (
+            <div>
+              <p style={labelSt}>Mapas habilitados {tMapas.length > 0 && `(${tMapas.length} sel.)`}</p>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {gameCfg.mapas.map(m => (
+                  <button key={m} onClick={() => toggleMapa(m)} style={{
+                    padding: '5px 11px', borderRadius: 20, cursor: 'pointer',
+                    background: tMapas.includes(m) ? `${C.green}20` : C.panel,
+                    border: `1.5px solid ${tMapas.includes(m) ? C.green : C.border}`,
+                    color: tMapas.includes(m) ? C.green : C.textDim, fontSize: 12,
+                  }}>{m}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Extras/Reglas especiales */}
+          {gameCfg.extras && gameCfg.extras.length > 0 && (
+            <div>
+              <p style={labelSt}>Reglas especiales</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {gameCfg.extras.map(ex => (
+                  <button key={ex.id} onClick={() => toggleExtra(ex.id)} style={{
+                    padding: '9px 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                    background: tExtras.includes(ex.id) ? `${C.green}14` : C.panel,
+                    border: `1.5px solid ${tExtras.includes(ex.id) ? C.green : C.border}`,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                      background: tExtras.includes(ex.id) ? C.green : 'transparent',
+                      border: `2px solid ${tExtras.includes(ex.id) ? C.green : C.textDim}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {tExtras.includes(ex.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                    </div>
+                    <span style={{ color: tExtras.includes(ex.id) ? C.green : C.text, fontSize: 13, fontWeight: 600 }}>{ex.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Jugadores + Fecha */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <input value={tMaxPl} onChange={e => setTMaxPl(e.target.value)} placeholder="Máx. participantes" type="number" style={inp} />
-            <input value={tDeadline} onChange={e => setTDeadline(e.target.value)} type="date" style={inp} />
+            <div>
+              <p style={labelSt}>Máx. participantes</p>
+              <input value={tMaxPl} onChange={e => setTMaxPl(e.target.value)} type="number" min="2" max={maxPlayers} style={inp} />
+            </div>
+            <div>
+              <p style={labelSt}>Fecha de cierre</p>
+              <input value={tDeadline} onChange={e => setTDeadline(e.target.value)} type="date" style={inp} />
+            </div>
           </div>
+
+          {/* Reglamento */}
+          <div>
+            <p style={labelSt}>Reglamento / Reglas adicionales</p>
+            <textarea value={tReglas} onChange={e => setTReglas(e.target.value)}
+              placeholder="Ej: Prohibido el uso de glitches. Los resultados deben enviarse con captura de pantalla dentro de las 24hs. En caso de desconexión se repite el partido. Faltas: 1er aviso → advertencia, 2da → descalificación..."
+              rows={4}
+              style={{ ...inp, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }} />
+          </div>
+
+          {/* Submit */}
           <button onClick={handleCreate} disabled={creating || !tName.trim()} style={{
-            background: creating || !tName.trim() ? C.panel : C.green, border: 'none',
-            borderRadius: 10, color: C.bg, fontWeight: 700, fontSize: 14,
-            padding: '12px', cursor: 'pointer',
-          }}>{creating ? 'Creando...' : `${TYPE_CFG[tType]?.icon} Crear ${TYPE_CFG[tType]?.label}`}</button>
+            background: creating || !tName.trim() ? C.panel2 : C.green, border: 'none',
+            borderRadius: 12, color: creating || !tName.trim() ? C.textDim : C.bg,
+            fontWeight: 800, fontSize: 15, padding: '14px', cursor: creating || !tName.trim() ? 'default' : 'pointer',
+            boxShadow: !creating && tName.trim() ? `0 4px 20px ${C.green}44` : 'none',
+          }}>{creating ? 'Creando...' : `${TYPE_CFG[tType]?.icon} Crear ${TYPE_CFG[tType]?.label} de ${gameInfo.label}`}</button>
         </div>
       )}
 
