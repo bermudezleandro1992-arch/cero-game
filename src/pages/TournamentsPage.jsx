@@ -497,7 +497,8 @@ function TournamentsList({ profile }) {
 
   async function doDeleteIds(ids) {
     const { error } = await supabase.rpc('delete_tournaments', { tournament_ids: ids })
-    if (error) { alert(`Error al eliminar: ${error.message}`); return }
+    console.log('[delete_tournaments]', { ids, error })
+    if (error) { alert(`Error: ${error.message}`); return }
     setSelected(new Set())
     setSelectMode(false)
     await loadTournaments()
