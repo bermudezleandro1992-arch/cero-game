@@ -1,4 +1,21 @@
--- Migration 026: tabla de reportes + privacidad de usuario
+-- Migration 026: bloqueos, reportes y privacidad de usuario
+
+-- Tabla de bloqueos (puede no existir si 012 no se corrió)
+CREATE TABLE IF NOT EXISTS public.blocks (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  blocker_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  blocked_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(blocker_id, blocked_id)
+);
+
+ALTER TABLE public.blocks ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "blocks_owner" ON public.blocks;
+CREATE POLICY "blocks_owner" ON public.blocks
+  FOR ALL TO authenticated
+  USING (blocker_id = auth.uid())
+  WITH CHECK (blocker_id = auth.uid());
 
 -- Tabla de reportes de usuarios/mensajes
 CREATE TABLE IF NOT EXISTS public.reports (
@@ -7,13 +24,17 @@ CREATE TABLE IF NOT EXISTS public.reports (
   reported_user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
   reported_msg_id  uuid REFERENCES public.messages(id) ON DELETE CASCADE,
   reason           text NOT NULL,
-  context          text DEFAULT 'profile', -- 'profile' | 'message' | 'group'
+  context          text DEFAULT 'profile',
   status           text DEFAULT 'pending' CHECK (status IN ('pending','reviewed','dismissed')),
   reviewed_by      uuid REFERENCES public.users(id) ON DELETE SET NULL,
   created_at       timestamptz DEFAULT now()
 );
 
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "reports_insert"      ON public.reports;
+DROP POLICY IF EXISTS "reports_select_own"  ON public.reports;
+DROP POLICY IF EXISTS "reports_admin"       ON public.reports;
 
 CREATE POLICY "reports_insert" ON public.reports
   FOR INSERT TO authenticated WITH CHECK (auth.uid() = reporter_id);
@@ -25,12 +46,9 @@ CREATE POLICY "reports_admin" ON public.reports
   FOR ALL TO authenticated
   USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('ceo','admin')));
 
--- Columna show_last_seen si no existe (ya puede estar en 004)
+-- Columnas de privacidad en users
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS show_last_seen boolean DEFAULT true;
-
--- Columna privacy_dm: quién puede enviarme DMs
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS privacy_dm text DEFAULT 'everyone'
-  CHECK (privacy_dm IN ('everyone','contacts','nobody'));
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS privacy_dm text DEFAULT 'everyone';
 
 -- Índices
 CREATE INDEX IF NOT EXISTS idx_reports_reporter ON public.reports(reporter_id);
