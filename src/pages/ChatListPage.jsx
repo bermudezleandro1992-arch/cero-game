@@ -157,7 +157,7 @@ function ConfirmDialog({ open, title, message, onConfirm, onCancel, confirmLabel
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatListPage({ onProfileClick, initialFilter }) {
   const { profile, signOut } = useAuthStore()
-  const { conversations, fetchConversations, findOrCreateConversation, setActiveConversation, activeConversation } = useChatStore()
+  const { conversations, fetchConversations, fetchMessages, findOrCreateConversation, setActiveConversation, activeConversation } = useChatStore()
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -231,7 +231,8 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
           .update({ cleared_at: new Date().toISOString() })
           .in('conversation_id', ids)
           .eq('user_id', profile.id)
-        fetchConversations(profile.id)
+        await fetchConversations(profile.id)
+        if (activeConversation?.id) fetchMessages(activeConversation.id)
       },
     })
   }
@@ -282,7 +283,8 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
           .update({ cleared_at: new Date().toISOString() })
           .eq('conversation_id', conv.id)
           .eq('user_id', profile.id)
-        fetchConversations(profile.id)
+        await fetchConversations(profile.id)
+        if (activeConversation?.id === conv.id) fetchMessages(conv.id)
       },
     })
   }
