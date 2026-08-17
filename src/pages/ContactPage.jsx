@@ -110,8 +110,18 @@ export default function ContactPage({ user, onBack, onChat }) {
   const initials = displayName.slice(0, 2).toUpperCase()
   const lastSeenText = userData?.show_last_seen !== false ? formatLastSeen(userData?.last_seen_at) : null
 
-  const PLAN_BADGE = { vip: { label: '⭐ VIP', color: '#f59e0b' }, comunidad: { label: '🏆 Pro', color: '#8b5cf6' } }
+  const PLAN_BADGE = { vip: { label: '⭐ VIP', color: '#f59e0b' }, comunidad: { label: '🏆 Comunidad', color: '#8b5cf6' } }
   const planBadge = PLAN_BADGE[userData?.plan]
+
+  const ROLE_BADGE = {
+    ceo:         { label: '👑 CEO',         color: '#f59e0b' },
+    admin:       { label: '🛡️ Admin',       color: '#3b82f6' },
+    organizador: { label: '🎯 Organizador', color: '#10b981' },
+    comunidad:   { label: '🌐 Comunidad',   color: '#8b5cf6' },
+    vip:         { label: '⭐ VIP',         color: '#f59e0b' },
+    miembro:     { label: '👤 Miembro',     color: '#6b7280' },
+  }
+  const roleBadge = ROLE_BADGE[userData?.role]
 
   if (call) {
     return (
@@ -195,10 +205,19 @@ export default function ContactPage({ user, onBack, onChat }) {
           </div>
 
           <div style={{ textAlign: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{ color: C.text, fontSize: 22, fontWeight: 700 }}>{displayName}</span>
               {planBadge && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: `${planBadge.color}22`, color: planBadge.color, border: `1px solid ${planBadge.color}44` }}>{planBadge.label}</span>}
             </div>
+            {roleBadge && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 4,
+                padding: '4px 12px', borderRadius: 20,
+                background: `${roleBadge.color}18`, color: roleBadge.color,
+                border: `1px solid ${roleBadge.color}44`, fontSize: 12, fontWeight: 700,
+              }}>
+                {roleBadge.label}
+              </div>
+            )}
             {nickname && <div style={{ color: C.textDim, fontSize: 13, marginBottom: 2 }}>{userData?.display_name}</div>}
             <div style={{ color: C.green, fontSize: 13, fontWeight: 500 }}>@{userData?.username}</div>
             {lastSeenText && !isBlocked && (
