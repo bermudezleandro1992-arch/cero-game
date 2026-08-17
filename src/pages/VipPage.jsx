@@ -97,12 +97,27 @@ const PAYMENT_METHODS = [
     available: true,
     manual: true,
   },
+  {
+    id: 'transferencia',
+    label: 'Transferencia bancaria',
+    emoji: '🏦',
+    desc: 'CBU / CVU / Alias — Argentina',
+    color: '#3b82f6',
+    available: true,
+    manual: true,
+  },
 ]
 
 const BINANCE_ADDRESS = {
-  USDT_TRC20: 'TU_WALLET_USDT_TRC20_ACÁ',
-  BTC:        'TU_WALLET_BTC_ACÁ',
-  BINANCE_ID: 'TU_BINANCE_ID_ACÁ',
+  USDT_TRC20: 'TU_WALLET_USDT_TRC20',   // ← reemplazá con tu wallet TRC-20
+  BINANCE_ID: 'TU_BINANCE_ID',           // ← reemplazá con tu Binance ID
+}
+
+const BANK_DATA = {
+  titular: 'Leandro Bermudez',
+  cbu:     'TU_CBU_ACÁ',      // ← reemplazá
+  alias:   'TU.ALIAS.ACÁ',    // ← reemplazá
+  banco:   'Banco / Billetera (ej: Mercado Pago, BBVA, Uala)',
 }
 
 function Section({ label, children }) {
@@ -210,9 +225,11 @@ export default function VipPage({ onBack }) {
   // ── PASO: PAGO MANUAL (Binance / AstroPay) ───────────────────────────────────
   if (step === 'manual') {
     const isBinance = payMethod === 'binance'
+    const isTransfer = payMethod === 'transferencia'
+    const methodLabel = isBinance ? 'Binance' : isTransfer ? 'Transferencia bancaria' : 'AstroPay'
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
-        <Header onBack={() => setStep('payment')} title={`Pagar con ${isBinance ? 'Binance' : 'AstroPay'}`} />
+        <Header onBack={() => setStep('payment')} title={`Pagar con ${methodLabel}`} />
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px' }}>
 
           <Section label="Monto a pagar">
@@ -251,7 +268,7 @@ export default function VipPage({ onBack }) {
             </Section>
           )}
 
-          {!isBinance && (
+          {!isBinance && !isTransfer && (
             <Section label="Instrucciones AstroPay">
               <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px', lineHeight: 1.7, fontSize: 13, color: C.text2 }}>
                 <p style={{ margin: '0 0 6px' }}>1. Cargá tu tarjeta AstroPay con el monto exacto en USD</p>
@@ -261,11 +278,40 @@ export default function VipPage({ onBack }) {
             </Section>
           )}
 
+          {isTransfer && (
+            <Section label="Datos bancarios">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  ['Titular', BANK_DATA.titular, 'titular'],
+                  ['CBU / CVU', BANK_DATA.cbu, 'cbu'],
+                  ['Alias', BANK_DATA.alias, 'alias'],
+                  ['Banco', BANK_DATA.banco, 'banco'],
+                ].map(([label, val, key]) => (
+                  <div key={key} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 14px' }}>
+                    <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>{label}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <p style={{ margin: 0, flex: 1, fontSize: 13, color: C.text, fontFamily: key === 'cbu' || key === 'alias' ? 'monospace' : 'inherit' }}>{val}</p>
+                      {(key === 'cbu' || key === 'alias') && (
+                        <button onClick={() => copy(val, key)} style={{
+                          background: copied === key ? `${C.green}22` : `${C.green}15`, border: `1px solid ${C.green}33`,
+                          borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: C.green, fontSize: 11, fontWeight: 700, flexShrink: 0,
+                        }}>{copied === key ? '✓' : '📋'}</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ marginTop: 10, fontSize: 12, color: '#3b82f6', lineHeight: 1.5 }}>
+                💡 Transferí desde cualquier banco o billetera (Mercado Pago, Uala, Naranja X, etc.). El importe debe coincidir exactamente.
+              </p>
+            </Section>
+          )}
+
           <Section label="Confirmá tu pago">
             <input
               value={txHash}
               onChange={e => setTxHash(e.target.value)}
-              placeholder={isBinance ? 'Hash de transacción (ej: 0x1a2b3c...)' : 'Código o número de transacción'}
+              placeholder={isBinance ? 'Hash de transacción (ej: 0x1a2b3c...)' : isTransfer ? 'Número de comprobante de transferencia' : 'Código o número de transacción'}
               style={{
                 width: '100%', boxSizing: 'border-box',
                 background: C.panel2, border: `1px solid ${txHash ? C.green : C.border}`,
