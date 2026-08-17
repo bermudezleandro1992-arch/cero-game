@@ -496,9 +496,8 @@ function TournamentsList({ profile }) {
   }
 
   async function doDeleteIds(ids) {
-    for (const id of ids) {
-      await supabase.from('conversations').delete().eq('id', id).eq('created_by', profile.id)
-    }
+    const { error } = await supabase.rpc('delete_tournaments', { tournament_ids: ids })
+    if (error) { alert(`Error al eliminar: ${error.message}`); return }
     setSelected(new Set())
     setSelectMode(false)
     await loadTournaments()
