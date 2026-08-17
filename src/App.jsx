@@ -242,7 +242,7 @@ export default function App() {
 
         {/* DESKTOP sidebar nav */}
         <nav className="slfa-side-nav">
-          {NAV.map(({ id, label, icon }) => {
+          {NAV.filter(({ id }) => id !== 'admin' || ['ceo','admin'].includes(profile?.role)).map(({ id, label, icon }) => {
             const active = (id === 'ajustes' ? showProfile : !showProfile && tab === id)
             return (
               <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : (setShowProfile(false), setTab(id))} style={{
@@ -283,7 +283,7 @@ export default function App() {
             : tab === 'anuncios'
             ? <AnnouncementsPage />
             : tab === 'admin'
-            ? <AdminPage />
+            ? <AdminPage onBack={() => setTab('chats')} />
             : <ChatListPage onProfileClick={() => setShowProfile(true)} />
           }
         </div>
@@ -303,7 +303,7 @@ export default function App() {
           borderTop: `1px solid ${C.border}`, flexShrink: 0,
           paddingBottom: 'env(safe-area-inset-bottom)',
         }} className="slfa-bottom-nav">
-          {NAV.map(({ id, label, icon }) => {
+          {NAV.filter(({ id }) => id !== 'admin' || ['ceo','admin'].includes(profile?.role)).map(({ id, label, icon }) => {
             const active = (id === 'ajustes' ? showProfile : !showProfile && tab === id)
             return (
               <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : (setShowProfile(false), setTab(id))} style={{
