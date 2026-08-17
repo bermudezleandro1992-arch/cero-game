@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import ContactPage from './ContactPage'
@@ -376,6 +377,39 @@ function MsgSkeleton() {
 
 const REACTION_EMOJIS = ['👍','❤️','😂','🔥','⚽','🏆','😮','👏']
 
+// ── Confirm Dialog ────────────────────────────────────────────────────────────
+function ConfirmDialog({ open, title, message, onConfirm, onCancel, confirmLabel = 'Aceptar', danger = false }) {
+  if (!open) return null
+  return createPortal(
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 24px',
+    }} onClick={onCancel}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#1a1a2e', borderRadius: 18, padding: '28px 24px 20px',
+        maxWidth: 340, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.7)',
+        border: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: 12,
+      }}>
+        {title && <p style={{ margin: 0, fontWeight: 700, fontSize: 17, color: '#fff' }}>{title}</p>}
+        <p style={{ margin: 0, fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>{message}</p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <button onClick={onCancel} style={{
+            flex: 1, padding: '11px 0', borderRadius: 12, border: '1px solid rgba(255,255,255,0.15)',
+            background: 'transparent', color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+          }}>Cancelar</button>
+          <button onClick={onConfirm} style={{
+            flex: 1, padding: '11px 0', borderRadius: 12, border: 'none',
+            background: danger ? '#ef4444' : '#22c55e', color: '#fff',
+            fontWeight: 700, fontSize: 14, cursor: 'pointer',
+          }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatPage({ onBack }) {
   const { profile } = useAuthStore()
@@ -393,6 +427,9 @@ export default function ChatPage({ onBack }) {
   const [longPressMsg, setLongPressMsg] = useState(null)
   const [hoveredMsg, setHoveredMsg] = useState(null)
   const [deleteMenuMsg, setDeleteMenuMsg] = useState(null) // messageId showing delete submenu
+  const [confirmDialog, setConfirmDialog] = useState(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedMsgs, setSelectedMsgs] = useState(new Set())
 
   // "Delete for me" stored in localStorage per user
   const deletedForMeKey = `dfm_${profile?.id}`
@@ -412,24 +449,37 @@ export default function ChatPage({ onBack }) {
     deleteMessage(msgId, activeConversation.id)
     setDeleteMenuMsg(null); setLongPressMsg(null)
   }
-  async function handleClearHistory() {
+  function handleClearHistory() {
     setShowChatMenu(false)
-    if (!window.confirm('¿Limpiar historial? Se borrará solo para vos.')) return
-    await supabase.from('conversation_members')
-      .update({ cleared_at: new Date().toISOString() })
-      .eq('conversation_id', activeConversation.id)
-      .eq('user_id', profile.id)
-    fetchMessages(activeConversation.id)
+    setConfirmDialog({
+      title: 'Limpiar historial',
+      message: 'Se borrarán todos los mensajes solo para vos.',
+      danger: true, confirmLabel: 'Limpiar',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        // Mark all visible messages as deleted-for-me locally
+        const allIds = messages.map(m => m.id)
+        setDeletedForMe(prev => {
+          const next = new Set(prev); allIds.forEach(id => next.add(id))
+          localStorage.setItem(deletedForMeKey, JSON.stringify([...next]))
+          return next
+        })
+      },
+    })
   }
 
-  async function handleDeleteChat() {
+  function handleDeleteChat() {
     setShowChatMenu(false)
-    if (!window.confirm('¿Borrar este chat de tu lista?')) return
-    await supabase.from('conversation_members')
-      .delete()
-      .eq('conversation_id', activeConversation.id)
-      .eq('user_id', profile.id)
-    onBack?.()
+    setConfirmDialog({
+      title: 'Eliminar chat',
+      message: '¿Eliminar este chat de tu lista?',
+      danger: true, confirmLabel: 'Eliminar',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await supabase.rpc('leave_conversations', { conv_ids: [activeConversation.id] })
+        onBack?.()
+      },
+    })
   }
 
   async function handleSetAutoDelete(hours) {
@@ -1242,6 +1292,14 @@ export default function ChatPage({ onBack }) {
                   </div>
                 )}
                 <div
+                  onClick={() => { setShowChatMenu(false); setSelectMode(true); setSelectedMsgs(new Set()) }}
+                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', gap: 8, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
+                  onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span>☑️</span> Seleccionar mensajes
+                </div>
+                <div
                   onClick={handleClearHistory}
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', gap: 8, alignItems: 'center' }}
                   onMouseEnter={e => e.currentTarget.style.background = C.panel2}
@@ -1500,18 +1558,29 @@ export default function ChatPage({ onBack }) {
                   : C.panel2
                 const bubbleBorder = isMine ? `1px solid ${C.green}33` : `1px solid ${C.border}`
 
+                const isMsgSelected = selectedMsgs.has(msg.id)
                 return (
                   <div
                     key={msg.id}
                     className="msg-in"
-                    style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: isLast ? 8 : 2, alignItems: 'flex-end', gap: 7, position: 'relative' }}
-                    onMouseEnter={() => setHoveredMsg(msg.id)}
+                    style={{
+                      display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start',
+                      marginBottom: isLast ? 8 : 2, alignItems: 'flex-end', gap: 7, position: 'relative',
+                      background: isMsgSelected ? 'rgba(34,197,94,0.1)' : 'transparent',
+                      borderRadius: 8, transition: 'background .15s',
+                    }}
+                    onMouseEnter={() => !selectMode && setHoveredMsg(msg.id)}
                     onMouseLeave={() => { setHoveredMsg(null) }}
-                    onMouseDown={() => { longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 500) }}
+                    onMouseDown={() => { if (!selectMode) longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 500) }}
                     onMouseUp={() => clearTimeout(longPressTimer.current)}
-                    onTouchStart={() => { longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 500) }}
+                    onTouchStart={() => { if (!selectMode) longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 500) }}
                     onTouchEnd={() => clearTimeout(longPressTimer.current)}
-                    onClick={e => e.stopPropagation()}
+                    onClick={e => {
+                      e.stopPropagation()
+                      if (selectMode) {
+                        setSelectedMsgs(prev => { const n = new Set(prev); n.has(msg.id) ? n.delete(msg.id) : n.add(msg.id); return n })
+                      }
+                    }}
                   >
                     {/* Hover action buttons — desktop (mis mensajes) */}
                     {isMine && hoveredMsg === msg.id && !msg.is_deleted && (
@@ -2176,6 +2245,66 @@ export default function ChatPage({ onBack }) {
             )}
           </form>
         )}
+
+        {/* Select mode bar */}
+        {selectMode && (
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100,
+            background: C.panel, borderTop: `1px solid ${C.border}`,
+            padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'center',
+          }}>
+            <button onClick={() => setSelectMode(false)} style={{
+              padding: '9px 14px', borderRadius: 12, border: `1px solid ${C.border}`,
+              background: 'transparent', color: C.text, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+            }}>Cancelar</button>
+            <button onClick={() => {
+              const visible = messages.filter(m => !deletedForMe.has(m.id) && !m.is_deleted)
+              if (selectedMsgs.size === visible.length) setSelectedMsgs(new Set())
+              else setSelectedMsgs(new Set(visible.map(m => m.id)))
+            }} style={{
+              flex: 1, padding: '9px 0', borderRadius: 12, border: `1px solid ${C.border}`,
+              background: 'transparent', color: C.text, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+            }}>
+              {selectedMsgs.size === messages.filter(m => !deletedForMe.has(m.id) && !m.is_deleted).length
+                ? 'Deseleccionar todo' : `Seleccionar todo`}
+            </button>
+            <button disabled={selectedMsgs.size === 0} onClick={() => {
+              if (!selectedMsgs.size) return
+              setConfirmDialog({
+                title: 'Eliminar mensajes',
+                message: `¿Eliminar ${selectedMsgs.size} mensaje${selectedMsgs.size > 1 ? 's' : ''} solo para vos?`,
+                danger: true, confirmLabel: 'Eliminar',
+                onConfirm: () => {
+                  setConfirmDialog(null)
+                  setDeletedForMe(prev => {
+                    const next = new Set(prev); selectedMsgs.forEach(id => next.add(id))
+                    localStorage.setItem(deletedForMeKey, JSON.stringify([...next]))
+                    return next
+                  })
+                  setSelectedMsgs(new Set())
+                  setSelectMode(false)
+                },
+              })
+            }} style={{
+              padding: '9px 16px', borderRadius: 12, border: 'none',
+              background: selectedMsgs.size === 0 ? C.panel2 : '#ef4444',
+              color: selectedMsgs.size === 0 ? C.sub : '#fff',
+              fontWeight: 700, fontSize: 13, cursor: selectedMsgs.size === 0 ? 'not-allowed' : 'pointer',
+            }}>
+              {selectedMsgs.size === 0 ? 'Eliminar' : `Eliminar (${selectedMsgs.size})`}
+            </button>
+          </div>
+        )}
+
+        <ConfirmDialog
+          open={!!confirmDialog}
+          title={confirmDialog?.title}
+          message={confirmDialog?.message}
+          confirmLabel={confirmDialog?.confirmLabel}
+          danger={confirmDialog?.danger}
+          onConfirm={confirmDialog?.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
       </div>
     </>
   )
