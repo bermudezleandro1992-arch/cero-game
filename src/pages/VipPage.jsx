@@ -72,22 +72,44 @@ const PLANS = [
 
 const PAYMENT_METHODS = [
   {
-    id: 'astropay',
-    label: 'AstroPay / Transferencia',
-    emoji: '🌟',
-    desc: 'CVU, alias, cualquier billetera o banco',
-    color: '#FF6B35',
+    id: 'ar_transferencia',
+    label: 'Transferencia Argentina',
+    emoji: '🇦🇷',
+    desc: 'CVU / Alias — cualquier banco o billetera',
+    color: '#74b9ff',
     available: true,
     manual: true,
+    category: 'ar',
   },
   {
-    id: 'binance',
-    label: 'Binance / USDT Crypto',
+    id: 'usd_wire',
+    label: 'USD — Wire Transfer',
+    emoji: '🇺🇸',
+    desc: 'Desde cualquier banco al exterior',
+    color: '#00b894',
+    available: true,
+    manual: true,
+    category: 'intl',
+  },
+  {
+    id: 'mxn_transfer',
+    label: 'Pesos Mexicanos (MXN)',
+    emoji: '🇲🇽',
+    desc: 'CLABE — Arcus / ARQ Dólar',
+    color: '#e17055',
+    available: true,
+    manual: true,
+    category: 'intl',
+  },
+  {
+    id: 'crypto',
+    label: 'Crypto — USDT',
     emoji: '🟡',
-    desc: 'USDT TRC-20, Binance Pay',
+    desc: 'TRC-20, ERC-20, Binance Pay',
     color: '#F3BA2F',
     available: true,
     manual: true,
+    category: 'crypto',
   },
   {
     id: 'mercadopago',
@@ -96,20 +118,61 @@ const PAYMENT_METHODS = [
     desc: 'Próximamente',
     color: '#009EE3',
     available: false,
+    category: 'other',
   },
 ]
 
-const ASTROPAY_DATA = {
+// 🇦🇷 Argentina — 2 cuentas
+const AR_ACCOUNTS = [
+  {
+    key: 'astropay',
+    label: 'AstroPay',
+    titular: 'Leandro Bermudez',
+    cvu: '0000177500090225090423',
+    alias: 'somoslfa',
+    banco: 'AstroPay',
+  },
+  {
+    key: 'arq',
+    label: 'ARQ Dólar (AR)',
+    titular: 'Leandro Bermudez',
+    cvu: '0000069703532557685274',
+    alias: 'neles.batazo.arq',
+    banco: 'Garpa S.A.',
+  },
+]
+
+// 🇺🇸 USD Wire
+const USD_WIRE = {
   titular: 'Leandro Bermudez',
-  cvu:     '0000177500090225090423',
-  alias:   'somoslfa',
-  banco:   'AstroPay (compatible con cualquier billetera/banco)',
+  banco: 'Lead Bank',
+  aba: '101019644',
+  cuenta: '218096984037',
+  tipo: 'Corriente',
+  direccion: '1801 Main St, Kansas City, Missouri 64108, EE.UU.',
+  comision: '3 USD',
 }
 
-const BINANCE_ADDRESS = {
-  USDT_TRC20: 'TYbzEMciAbyp4L4xrDmG7srnChGhmXAmUq',
-  BINANCE_ID: '359177674',
+// 🇲🇽 MXN
+const MXN_DATA = {
+  banco: 'Arcus (ARQ Dólar)',
+  clabe: '706969130679795077',
+  comision: 'Gratis',
+  nota: '1 USDc ≈ 17 MXN (varía)',
 }
+
+// 🟡 Crypto wallets — organizadas por comisión (menor primero)
+const CRYPTO_WALLETS = [
+  // ✅ Gratis
+  { key: 'polygon_usdt', label: 'USDT — Polygon',        addr: '0x1e53fFCd7A176A1ec293d5e34a97A81265775FcA', red: 'Polygon',          comision: 'Gratis ✅', color: '#8247e5' },
+  { key: 'polygon_usdc', label: 'USDc — Polygon',        addr: '0x1e53fFCd7A176A1ec293d5e34a97A81265775FcA', red: 'Polygon',          comision: 'Gratis ✅', color: '#8247e5' },
+  { key: 'binance_id',   label: 'Binance Pay (ID)',       addr: '359177674',                                  red: 'Binance Pay',      comision: 'Gratis ✅', color: '#F3BA2F' },
+  // 💛 3 USD/USDT comisión
+  { key: 'trc20_arq',    label: 'USDT — TRC-20 (ARQ)',   addr: 'TUGgg59HrePJpNmL2Kvj36CJ318cSZMRjS',        red: 'Tron (TRC-20)',    comision: '3 USDT',    color: '#ef4444' },
+  { key: 'trc20_bnb',    label: 'USDT — TRC-20 (Binance)',addr: 'TYbzEMciAbyp4L4xrDmG7srnChGhmXAmUq',       red: 'Tron (TRC-20)',    comision: '3 USDT',    color: '#ef4444' },
+  { key: 'erc20_usdt',   label: 'USDT — Ethereum',       addr: '0x1e53fFCd7A176A1ec293d5e34a97A81265775FcA', red: 'Ethereum (ERC-20)', comision: '3 USDc',   color: '#ef4444' },
+  { key: 'erc20_usdc',   label: 'USDc — Ethereum',       addr: '0x1e53fFCd7A176A1ec293d5e34a97A81265775FcA', red: 'Ethereum (ERC-20)', comision: '3 USDc',   color: '#ef4444' },
+]
 
 function Section({ label, children }) {
   return (
@@ -232,14 +295,18 @@ export default function VipPage({ onBack }) {
     )
   }
 
-  // ── PASO: PAGO MANUAL (Binance / AstroPay) ───────────────────────────────────
+  // ── PASO: PAGO MANUAL ────────────────────────────────────────────────────────
   if (step === 'manual') {
-    const isBinance = payMethod === 'binance'
-    const isAstropay = payMethod === 'astropay'
-    const methodLabel = isBinance ? 'Binance' : 'AstroPay / Transferencia'
+    const pm = PAYMENT_METHODS.find(m => m.id === payMethod)
+    const titles = {
+      ar_transferencia: '🇦🇷 Transferencia Argentina',
+      usd_wire:         '🇺🇸 Wire Transfer USD',
+      mxn_transfer:     '🇲🇽 Pesos Mexicanos',
+      crypto:           '🟡 Crypto — USDT / USDc',
+    }
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
-        <Header onBack={() => setStep('payment')} title={`Pagar con ${methodLabel}`} />
+        <Header onBack={() => setStep('payment')} title={titles[payMethod] || 'Pagar'} />
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px' }}>
 
           <Section label="Monto a pagar">
@@ -253,58 +320,94 @@ export default function VipPage({ onBack }) {
             </div>
           </Section>
 
-          {isBinance && (
-            <Section label="Enviá el pago a">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {[
-                  ['💛 USDT (TRC-20)', BINANCE_ADDRESS.USDT_TRC20, 'usdt'],
-                  ['🔶 Binance ID', BINANCE_ADDRESS.BINANCE_ID, 'bid'],
-                ].map(([label, addr, key]) => (
-                  <div key={key} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px' }}>
-                    <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: C.text2 }}>{label}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <p style={{ margin: 0, flex: 1, fontSize: 11, fontFamily: 'monospace', color: C.text, wordBreak: 'break-all' }}>{addr}</p>
-                      <button onClick={() => copy(addr, key)} style={{
-                        background: copied === key ? `${C.green}22` : `${C.green}15`, border: `1px solid ${C.green}33`,
-                        borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: C.green, fontSize: 11, fontWeight: 700, flexShrink: 0,
-                      }}>{copied === key ? '✓' : '📋'}</button>
-                    </div>
+          {/* 🇦🇷 ARGENTINA */}
+          {payMethod === 'ar_transferencia' && (
+            <>
+              {AR_ACCOUNTS.map(acc => (
+                <Section key={acc.key} label={`Cuenta ${acc.label}`}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[['Titular', acc.titular, 'tit_'+acc.key], ['CVU', acc.cvu, 'cvu_'+acc.key], ['Alias', acc.alias, 'ali_'+acc.key], ['Banco', acc.banco, 'ban_'+acc.key]].map(([lbl, val, k]) => (
+                      <div key={k} style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 13px' }}>
+                        <p style={{ margin: '0 0 3px', fontSize: 10, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>{lbl}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <p style={{ margin: 0, flex: 1, fontSize: 12, color: C.text, fontFamily: (lbl === 'CVU' || lbl === 'Alias') ? 'monospace' : 'inherit', wordBreak: 'break-all' }}>{val}</p>
+                          {(lbl === 'CVU' || lbl === 'Alias') && (
+                            <button onClick={() => copy(val, k)} style={{ background: copied===k?`${C.green}22`:`${C.green}15`, border:`1px solid ${C.green}33`, borderRadius:8, padding:'4px 9px', cursor:'pointer', color:C.green, fontSize:11, fontWeight:700, flexShrink:0 }}>{copied===k?'✓':'📋'}</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <p style={{ marginTop: 10, fontSize: 11, color: '#f59e0b', lineHeight: 1.5 }}>
-                ⚠️ Enviá <strong>exactamente</strong> el monto indicado en USD. Usá la red TRC-20 para USDT (comisión mínima).
+                </Section>
+              ))}
+              <p style={{ fontSize: 12, color: '#74b9ff', lineHeight: 1.6, marginBottom: 16 }}>
+                💡 Transferí desde Mercado Pago, Uala, Naranja X, BBVA o cualquier banco/billetera. Usá el alias o el CVU.
               </p>
-            </Section>
+            </>
           )}
 
-          {isAstropay && (
-            <Section label="Datos para transferir">
+          {/* 🇺🇸 USD WIRE */}
+          {payMethod === 'usd_wire' && (
+            <Section label="Datos bancarios — Lead Bank (EE.UU.)">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {[
-                  ['Titular', ASTROPAY_DATA.titular, 'titular'],
-                  ['CVU', ASTROPAY_DATA.cvu, 'cvu'],
-                  ['Alias', ASTROPAY_DATA.alias, 'alias'],
-                  ['Billetera', ASTROPAY_DATA.banco, 'banco'],
-                ].map(([label, val, key]) => (
-                  <div key={key} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 14px' }}>
-                    <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>{label}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <p style={{ margin: 0, flex: 1, fontSize: key === 'cvu' ? 12 : 13, color: C.text, fontFamily: key === 'cvu' || key === 'alias' ? 'monospace' : 'inherit', wordBreak: 'break-all' }}>{val}</p>
-                      {(key === 'cvu' || key === 'alias') && (
-                        <button onClick={() => copy(val, key)} style={{
-                          background: copied === key ? `${C.green}22` : `${C.green}15`, border: `1px solid ${C.green}33`,
-                          borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: C.green, fontSize: 11, fontWeight: 700, flexShrink: 0,
-                        }}>{copied === key ? '✓' : '📋'}</button>
+                {[['Titular', USD_WIRE.titular,'w_tit'],['Banco', USD_WIRE.banco,'w_ban'],['ABA / Routing', USD_WIRE.aba,'w_aba'],['N° de cuenta', USD_WIRE.cuenta,'w_cta'],['Tipo', USD_WIRE.tipo,'w_tip'],['Dirección banco', USD_WIRE.direccion,'w_dir'],['Comisión', USD_WIRE.comision,'w_com']].map(([lbl,val,k]) => (
+                  <div key={k} style={{ background: C.panel2, border:`1px solid ${C.border}`, borderRadius:10, padding:'10px 13px' }}>
+                    <p style={{ margin:'0 0 3px', fontSize:10, fontWeight:700, color:C.textDim, textTransform:'uppercase', letterSpacing:'1px' }}>{lbl}</p>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <p style={{ margin:0, flex:1, fontSize:12, color:C.text, fontFamily:['ABA / Routing','N° de cuenta'].includes(lbl)?'monospace':'inherit', wordBreak:'break-all' }}>{val}</p>
+                      {['ABA / Routing','N° de cuenta'].includes(lbl) && (
+                        <button onClick={() => copy(val, k)} style={{ background:copied===k?`${C.green}22`:`${C.green}15`, border:`1px solid ${C.green}33`, borderRadius:8, padding:'4px 9px', cursor:'pointer', color:C.green, fontSize:11, fontWeight:700, flexShrink:0 }}>{copied===k?'✓':'📋'}</button>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
-              <p style={{ marginTop: 10, fontSize: 12, color: '#FF6B35', lineHeight: 1.5 }}>
-                💡 Transferí desde Mercado Pago, Uala, Naranja X, BBVA o cualquier banco. Podés usar el alias <strong>somoslfa</strong> o el CVU directamente.
-              </p>
+              <p style={{ marginTop:10, fontSize:12, color:'#00b894', lineHeight:1.6 }}>⚠️ Comisión de 3 USD cobrada por el banco intermediario.</p>
             </Section>
+          )}
+
+          {/* 🇲🇽 MXN */}
+          {payMethod === 'mxn_transfer' && (
+            <Section label="CLABE — Arcus / ARQ Dólar">
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {[['Banco', MXN_DATA.banco,'m_ban'],['CLABE', MXN_DATA.clabe,'m_cla'],['Comisión', MXN_DATA.comision,'m_com'],['Tipo de cambio', MXN_DATA.nota,'m_tc']].map(([lbl,val,k]) => (
+                  <div key={k} style={{ background:C.panel2, border:`1px solid ${C.border}`, borderRadius:10, padding:'10px 13px' }}>
+                    <p style={{ margin:'0 0 3px', fontSize:10, fontWeight:700, color:C.textDim, textTransform:'uppercase', letterSpacing:'1px' }}>{lbl}</p>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <p style={{ margin:0, flex:1, fontSize:12, color:C.text, fontFamily:lbl==='CLABE'?'monospace':'inherit', wordBreak:'break-all' }}>{val}</p>
+                      {lbl==='CLABE' && <button onClick={() => copy(val,k)} style={{ background:copied===k?`${C.green}22`:`${C.green}15`, border:`1px solid ${C.green}33`, borderRadius:8, padding:'4px 9px', cursor:'pointer', color:C.green, fontSize:11, fontWeight:700, flexShrink:0 }}>{copied===k?'✓':'📋'}</button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ marginTop:10, fontSize:12, color:'#e17055', lineHeight:1.6 }}>💡 El tipo de cambio puede variar. Enviá el equivalente en MXN al monto USD del plan.</p>
+            </Section>
+          )}
+
+          {/* 🟡 CRYPTO */}
+          {payMethod === 'crypto' && (
+            <>
+              <p style={{ margin:'0 0 12px', fontSize:12, color:C.textDim, lineHeight:1.6 }}>
+                💡 <strong style={{color:C.green}}>Recomendado: Polygon</strong> — comisión gratis. Enviá exactamente el monto en USD equivalente.
+              </p>
+              <Section label="Wallets disponibles">
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {CRYPTO_WALLETS.map(w => (
+                    <div key={w.key} style={{ background:C.panel2, border:`1px solid ${C.border}`, borderRadius:12, padding:'12px 14px' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                        <p style={{ margin:0, fontSize:12, fontWeight:700, color:C.text }}>{w.label}</p>
+                        <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20, background:w.comision.includes('Gratis')?`${C.green}22`:'#f59e0b22', color:w.comision.includes('Gratis')?C.green:'#f59e0b' }}>{w.comision}</span>
+                      </div>
+                      <p style={{ margin:'0 0 6px', fontSize:10, color:C.textDim }}>Red: {w.red}</p>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <p style={{ margin:0, flex:1, fontSize:11, fontFamily:'monospace', color:C.text, wordBreak:'break-all' }}>{w.addr}</p>
+                        <button onClick={() => copy(w.addr, w.key)} style={{ background:copied===w.key?`${C.green}22`:`${C.green}15`, border:`1px solid ${C.green}33`, borderRadius:8, padding:'5px 10px', cursor:'pointer', color:C.green, fontSize:11, fontWeight:700, flexShrink:0 }}>{copied===w.key?'✓':'📋'}</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            </>
           )}
 
           <Section label="Subí tu comprobante">
@@ -572,10 +675,11 @@ export default function VipPage({ onBack }) {
           <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Métodos de pago aceptados</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {[
-              ['🌟', 'AstroPay'],
-              ['🏦', 'Transferencia'],
-              ['🟡', 'USDT / Binance'],
-              ['💳', 'MP Checkout (pronto)'],
+              ['🇦🇷', 'Transferencia AR'],
+              ['🇺🇸', 'Wire USD'],
+              ['🇲🇽', 'Pesos MXN'],
+              ['🟡', 'Crypto / USDT'],
+              ['💳', 'MP (pronto)'],
             ].map(([emoji, label]) => (
               <div key={label} style={{
                 display: 'flex', alignItems: 'center', gap: 6,
