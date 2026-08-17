@@ -99,9 +99,9 @@ const PAYMENT_METHODS = [
   },
   {
     id: 'transferencia',
-    label: 'Transferencia bancaria',
+    label: 'Transferencia / Alias MP',
     emoji: '🏦',
-    desc: 'CBU / CVU / Alias — Argentina',
+    desc: 'CVU, alias Mercado Pago, cualquier banco',
     color: '#3b82f6',
     available: true,
     manual: true,
@@ -115,9 +115,9 @@ const BINANCE_ADDRESS = {
 
 const BANK_DATA = {
   titular: 'Leandro Bermudez',
-  cbu:     'TU_CBU_ACÁ',      // ← reemplazá
-  alias:   'TU.ALIAS.ACÁ',    // ← reemplazá
-  banco:   'Banco / Billetera (ej: Mercado Pago, BBVA, Uala)',
+  cbu:     'TU_CBU_ACÁ',        // ← reemplazá con tu CVU de MP
+  alias:   'TU.ALIAS.MP',       // ← reemplazá con tu alias de MP
+  banco:   'Mercado Pago (o cualquier banco/billetera)',
 }
 
 function Section({ label, children }) {
