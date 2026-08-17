@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { supabase } from '../lib/supabase'
@@ -122,7 +123,7 @@ function Ticks({ read }) {
 // ── Confirm Dialog ────────────────────────────────────────────────────────────
 function ConfirmDialog({ open, title, message, onConfirm, onCancel, confirmLabel = 'Aceptar', danger = false }) {
   if (!open) return null
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9999,
       background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
@@ -148,7 +149,8 @@ function ConfirmDialog({ open, title, message, onConfirm, onCancel, confirmLabel
           }}>{confirmLabel}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
