@@ -714,15 +714,34 @@ export default function CallPage({
     transition: 'transform .45s cubic-bezier(.34,1.2,.64,1), opacity .35s ease',
   }
 
+  const isDesktop = window.innerWidth >= 768
+
   return (
     <>
       <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
 
+      {/* Desktop: overlay + centered window */}
+      {isDesktop && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 199,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)',
+        }} />
+      )}
+
       <div style={{
-        position: 'fixed', inset: 0, zIndex: 200,
+        position: 'fixed', zIndex: 200,
         fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
         userSelect: 'none', overflow: 'hidden',
-        ...slideBase,
+        ...(isDesktop ? {
+          top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 380, height: 680,
+          borderRadius: 28,
+          boxShadow: '0 32px 80px rgba(0,0,0,0.8)',
+        } : {
+          inset: 0,
+          ...slideBase,
+        }),
       }}
         onTouchStart={phase === 'active' ? onTS : undefined}
         onTouchMove={phase === 'active' ? onTM : undefined}
