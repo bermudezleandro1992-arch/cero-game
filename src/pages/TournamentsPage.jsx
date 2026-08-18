@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { C } from '../theme'
-import { getMaxParticipants, getRoleCfg } from '../lib/roles'
+import { getMaxParticipants, getLimits, getRoleCfg } from '../lib/roles'
 import BannerAd from '../components/BannerAd'
 import SorteoPage from './tools/SorteoPage'
 import BracketsPage from './tools/BracketsPage'
@@ -666,7 +666,29 @@ function TournamentsList({ profile }) {
 
   async function handleCreate() {
     if (!tName.trim()) return
+
+    // Validar límites de plan (frontend rápido + backend definitivo)
+    const limits = getLimits(profile)
+    const reqMax = parseInt(tMaxPl) || 2
+    if (reqMax > limits.maxParticipants) {
+      alert(`Tu rol (${profile?.role || 'member'}) permite máximo ${limits.maxParticipants} participantes. Reducí el número o contactá al admin.`)
+      return
+    }
+
     setCreating(true)
+    // Validación backend: límite diario y participantes
+    const { data: validation } = await supabase.rpc('validate_tournament_creation', { p_max_participants: reqMax })
+    if (validation && !validation.ok) {
+      setCreating(false)
+      if (validation.error === 'participant_limit_exceeded') {
+        alert(`Tu rol permite máximo ${validation.max_participants} participantes.`)
+      } else if (validation.error === 'daily_limit_reached') {
+        alert(`Alcanzaste el límite diario de competencias para tu rol. Volvé mañana.`)
+      } else {
+        alert('No tenés permiso para crear esta competencia.')
+      }
+      return
+    }
     try {
       const typeLabel = TYPE_CFG[tType]?.label || 'Torneo'
       const parts = [
@@ -1232,14 +1254,14 @@ export default function TournamentsPage() {
       {/* Header */}
       <div style={{ padding: '16px 16px 0', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <span style={{ fontSize: 24 }}>🌐</span>
+          <span style={{ fontSize: 24 }}>🏆</span>
           <div>
-            <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 18 }}>Comunidad</p>
-            <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>Centro de organización y competencias</p>
+            <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 18 }}>Torneos & Ligas</p>
+            <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>eFootball · FC 26 · FC 27 · y más</p>
           </div>
           {isCommunity && (
-            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: '#3b82f614', color: '#3b82f6', border: '1px solid #3b82f644' }}>
-              🌐 Plan Comunidad
+            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: `${C.green}14`, color: C.green, border: `1px solid ${C.green}44` }}>
+              PRO
             </span>
           )}
         </div>
