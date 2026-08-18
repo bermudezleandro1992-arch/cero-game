@@ -19,7 +19,7 @@ function formatLastSeen(ts) {
 
 export default function ContactPage({ user, onBack, onChat }) {
   const { profile } = useAuthStore()
-  const { findOrCreateConversation, setActiveConversation } = useChatStore()
+  const { findOrCreateConversation, setActiveConversation, fetchConversations } = useChatStore()
   const [isSaved, setIsSaved] = useState(false)
   const [nickname, setNickname] = useState('')
   const [editingNick, setEditingNick] = useState(false)
@@ -31,8 +31,11 @@ export default function ContactPage({ user, onBack, onChat }) {
   const [reportReason, setReportReason] = useState('')
   const [reportSent, setReportSent] = useState(false)
   const [userData, setUserData] = useState(user)
+  const [invitationStatus, setInvitationStatus] = useState(null) // null | 'pending_sent' | 'pending_received'
+  const [invitationId, setInvitationId] = useState(null)
+  const [invLoading, setInvLoading] = useState(false)
 
-  useEffect(() => { checkContact(); checkBlock(); loadUserData() }, [user?.id])
+  useEffect(() => { checkContact(); checkBlock(); loadUserData(); checkInvitation() }, [user?.id])
 
   async function loadUserData() {
     if (!user?.id) return
@@ -47,6 +50,45 @@ export default function ContactPage({ user, onBack, onChat }) {
     const { data } = await supabase.from('contacts').select('nickname')
       .eq('owner_id', profile.id).eq('contact_id', user.id).single()
     if (data) { setIsSaved(true); setNickname(data.nickname || '') }
+  }
+
+  async function checkInvitation() {
+    if (!user?.id || !profile?.id) return
+    const { data } = await supabase
+      .from('chat_invitations')
+      .select('id, from_user_id, status')
+      .or(`and(from_user_id.eq.${profile.id},to_user_id.eq.${user.id}),and(from_user_id.eq.${user.id},to_user_id.eq.${profile.id})`)
+      .eq('status', 'pending')
+      .maybeSingle()
+    if (data) {
+      setInvitationId(data.id)
+      setInvitationStatus(data.from_user_id === profile.id ? 'pending_sent' : 'pending_received')
+    }
+  }
+
+  async function sendInvitation() {
+    setInvLoading(true)
+    const { data, error } = await supabase
+      .from('chat_invitations')
+      .insert({ from_user_id: profile.id, to_user_id: user.id })
+      .select('id').single()
+    if (!error && data) { setInvitationId(data.id); setInvitationStatus('pending_sent') }
+    setInvLoading(false)
+  }
+
+  async function acceptInvitation() {
+    if (!invitationId) return
+    setInvLoading(true)
+    const { data, error } = await supabase.rpc('accept_chat_invitation', { p_invitation_id: invitationId })
+    if (!error && data?.ok) {
+      setIsSaved(true)
+      setInvitationStatus(null)
+      if (data.conversation_id) {
+        setActiveConversation({ id: data.conversation_id, isGroup: false })
+        onChat()
+      }
+    }
+    setInvLoading(false)
   }
 
   async function checkBlock() {
@@ -229,7 +271,7 @@ export default function ContactPage({ user, onBack, onChat }) {
           </div>
 
           {/* Action buttons */}
-          {!isBlocked && (
+          {!isBlocked && isSaved && (
             <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
               {[
                 { label: 'Mensaje', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, action: handleChat },
@@ -244,6 +286,30 @@ export default function ContactPage({ user, onBack, onChat }) {
                   <span style={{ fontSize: 11, color: C.textDim, fontWeight: 500 }}>{label}</span>
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Invitation actions for non-contacts */}
+          {!isBlocked && !isSaved && (
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: '100%', maxWidth: 280 }}>
+              {invitationStatus === 'pending_sent' && (
+                <div style={{ padding: '8px 20px', borderRadius: 20, background: C.panel2, border: `1px solid ${C.border}`, color: C.textDim, fontSize: 13, fontWeight: 600 }}>
+                  ⏳ Invitación pendiente
+                </div>
+              )}
+              {invitationStatus === 'pending_received' && (
+                <button onClick={acceptInvitation} disabled={invLoading} style={{ padding: '10px 24px', borderRadius: 12, border: 'none', background: C.green, color: C.bg, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: `0 2px 12px ${C.green}44` }}>
+                  {invLoading ? '...' : '✓ Aceptar invitación'}
+                </button>
+              )}
+              {!invitationStatus && (
+                <button onClick={sendInvitation} disabled={invLoading} style={{ padding: '10px 24px', borderRadius: 12, border: 'none', background: C.green, color: C.bg, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: `0 2px 12px ${C.green}44` }}>
+                  {invLoading ? '...' : '💬 Invitar a chatear'}
+                </button>
+              )}
+              <p style={{ margin: 0, color: C.textDim, fontSize: 11, textAlign: 'center' }}>
+                Las llamadas y mensajes se habilitan al aceptar la invitación
+              </p>
             </div>
           )}
         </div>
