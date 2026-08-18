@@ -379,6 +379,8 @@ function TournamentPanel({ tournament, profile, onClose }) {
   const [tab, setTab] = useState('participantes')
   const [participants, setParticipants] = useState([])
   const [loading, setLoading] = useState(true)
+  const [starting, setStarting] = useState(false)
+  const [tStatus, setTStatus] = useState(tournament.status || 'inscripcion')
 
   useEffect(() => {
     async function load() {
@@ -393,8 +395,20 @@ function TournamentPanel({ tournament, profile, onClose }) {
     load()
   }, [tournament.id])
 
+  async function handleStart() {
+    if (participants.length < 2) { alert('Necesitás al menos 2 participantes para iniciar.'); return }
+    setStarting(true)
+    const { data, error } = await supabase.rpc('start_tournament', { p_tournament_id: tournament.id })
+    setStarting(false)
+    if (error || data?.ok === false) { alert(data?.error || error?.message || 'Error al iniciar'); return }
+    setTStatus('en_curso')
+    setTab(tournament.group_type === 'liga' ? 'liga' : 'brackets')
+  }
+
   const isCreator = tournament.created_by === profile?.id
+  const isLiga = tournament.group_type === 'liga'
   const playerNames = participants.map(p => p.users?.display_name || p.users?.username || 'Jugador')
+  const playerIds = participants.map(p => p.user_id)
 
   const TABS = [
     { id: 'participantes', icon: '👥', label: 'Jugadores' },
@@ -425,6 +439,21 @@ function TournamentPanel({ tournament, profile, onClose }) {
               <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>{tournament.description}</p>
             </div>
           </div>
+          {isCreator && tStatus === 'inscripcion' && (
+            <button
+              onClick={handleStart}
+              disabled={starting || participants.length < 2}
+              style={{
+                width: '100%', marginBottom: 8, padding: '10px',
+                background: starting || participants.length < 2 ? C.panel2 : C.green,
+                color: starting || participants.length < 2 ? C.textDim : C.bg,
+                border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14,
+                cursor: starting || participants.length < 2 ? 'default' : 'pointer',
+              }}
+            >
+              {starting ? '⏳ Iniciando...' : `🚀 Iniciar ${isLiga ? 'Liga' : 'Torneo'} (${participants.length} jugadores)`}
+            </button>
+          )}
           <div style={{ display: 'flex', gap: 0 }}>
             {TABS.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -494,12 +523,22 @@ function TournamentPanel({ tournament, profile, onClose }) {
 
           {/* Brackets */}
           {tab === 'brackets' && (
-            <BracketsPage onBack={() => setTab('participantes')} initialPlayers={playerNames} />
+            <BracketsPage
+              onBack={() => setTab('participantes')}
+              initialPlayers={playerNames}
+              tournamentId={tournament.id}
+              isOrganizer={isCreator}
+            />
           )}
 
           {/* Liga */}
           {tab === 'liga' && (
-            <TablaPosicionesPage onBack={() => setTab('participantes')} initialTeams={playerNames} />
+            <TablaPosicionesPage
+              onBack={() => setTab('participantes')}
+              initialTeams={playerNames}
+              tournamentId={tournament.id}
+              isOrganizer={isCreator}
+            />
           )}
 
           {/* Sorteo */}
@@ -607,17 +646,20 @@ function TournamentsList({ profile }) {
     setLoading(true)
     const { data: rows } = await supabase
       .from('conversations')
-      .select('id, name, description, created_at, created_by, group_type, status')
-      .eq('group_type', 'tournament')
+      .select('id, name, description, created_at, created_by, group_type, status, game, format, max_participants, is_public')
+      .in('group_type', ['tournament', 'liga'])
       .order('created_at', { ascending: false })
 
     if (rows) {
-      const enriched = await Promise.all(rows.map(async (t) => {
-        const { count } = await supabase.from('conversation_members')
-          .select('*', { count: 'exact', head: true }).eq('conversation_id', t.id)
-        return { ...t, memberCount: count || 0 }
-      }))
-      setTournaments(enriched)
+      // single query for all member counts
+      const ids = rows.map(r => r.id)
+      const { data: counts } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .in('conversation_id', ids)
+      const countMap = {}
+      ;(counts || []).forEach(c => { countMap[c.conversation_id] = (countMap[c.conversation_id] || 0) + 1 })
+      setTournaments(rows.map(t => ({ ...t, memberCount: countMap[t.id] || 0 })))
     }
     setLoading(false)
   }
@@ -646,14 +688,23 @@ function TournamentsList({ profile }) {
       ].filter(Boolean)
       const desc = parts.join(' · ')
 
+      const dbGroupType = tType === 'liga' ? 'liga' : 'tournament'
       const { data: convId, error: rpcErr } = await supabase.rpc('create_group_with_owner', {
         p_name:        tName.trim(),
         p_is_group:    true,
-        p_group_type:  'tournament',
+        p_group_type:  dbGroupType,
         p_description: desc,
         p_created_by:  profile.id,
       })
       if (rpcErr) throw rpcErr
+
+      // store structured fields in new columns
+      await supabase.from('conversations').update({
+        game:             tGameId,
+        format:           tFormat,
+        max_participants: parseInt(tMaxPl) || null,
+        registration_deadline: tDeadline ? new Date(tDeadline).toISOString() : null,
+      }).eq('id', convId)
 
       await supabase.from('topics').insert([
         { conversation_id: convId, name: 'Anuncios',   emoji: '📢', topic_type: 'announcements', position: 0 },
@@ -729,7 +780,11 @@ function TournamentsList({ profile }) {
       setActiveConversation({ id, isGroup: true, isTournament: true, name: tournaments.find(t => t.id === id)?.name })
       return
     }
-    await supabase.from('conversation_members').insert({ conversation_id: id, user_id: profile.id })
+    const { data, error } = await supabase.rpc('join_tournament', { p_tournament_id: id })
+    if (error || data?.ok === false) {
+      alert(data?.error || error?.message || 'Error al inscribirse')
+      return
+    }
     alert('¡Inscripto!')
     await loadTournaments()
   }
