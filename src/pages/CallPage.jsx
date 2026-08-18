@@ -381,11 +381,22 @@ export default function CallPage({
       googNoiseSuppression: true,
       googHighpassFilter:   true,
     }
-    const stream = await navigator.mediaDevices.getUserMedia(
-      callType === 'video'
-        ? { audio: audioConstraints, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } }
-        : { audio: audioConstraints }
-    )
+    let stream
+    if (callType === 'video') {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraints,
+          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        })
+      } catch (videoErr) {
+        // Cámara ocupada o sin permiso → fallback audio only
+        console.warn('Video unavailable, falling back to audio:', videoErr.message)
+        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
+        setCamOff(true)
+      }
+    } else {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
+    }
     localStream.current = stream
     if (localVid.current) { localVid.current.srcObject = stream; localVid.current.muted = true }
     return stream
