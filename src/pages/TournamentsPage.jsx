@@ -503,7 +503,7 @@ function TournamentPanel({ tournament, profile, onClose }) {
 
           {/* Sorteo */}
           {tab === 'sorteo' && (
-            <SorteoPage onBack={() => setTab('participantes')} />
+            <SorteoPage onBack={() => setTab('participantes')} initialPlayers={playerNames} />
           )}
         </div>
       </div>
@@ -1305,18 +1305,26 @@ export default function TournamentsPage() {
 
         {/* ── HERRAMIENTAS ── */}
         {tab === 'herramientas' && (
-          <div style={{ position: 'relative' }}>
-            {!isCommunity && <LockOverlay onRequest={() => setShowPlanModal(true)} />}
-            <SectionHeader icon="🛠️" title="Herramientas de Organización" desc="Todo para gestionar tu comunidad" />
-            <div className="comm-grid">
-              <FeatureCard icon="🎲" title="Sorteo en Vivo" desc="Sorteá participantes o premios en tiempo real frente a tu comunidad" color="#f59e0b" onClick={() => setActiveTool('sorteo')} />
+          <div>
+            {/* Herramientas gratuitas para todos */}
+            <SectionHeader icon="🎲" title="Herramientas gratuitas" desc="Disponibles para todos los jugadores" />
+            <div className="comm-grid" style={{ marginBottom: 20 }}>
+              <FeatureCard icon="🎲" title="Sorteo en Vivo" desc="Sorteá participantes o premios en tiempo real" color="#f59e0b" onClick={() => setActiveTool('sorteo')} />
               <FeatureCard icon="🔱" title="Generador de Brackets" desc="Cuadros de eliminación directa automáticos" color="#06b6d4" onClick={() => setActiveTool('brackets')} />
               <FeatureCard icon="📋" title="Tabla de Posiciones" desc="Seguí el puntaje en tiempo real de tu liga" color="#3b82f6" onClick={() => setActiveTool('tabla')} />
-              <FeatureCard icon="🗳️" title="Votaciones" desc="Creá encuestas para tu comunidad" color="#a855f7" onClick={() => setActiveTool('votaciones')} />
-              <FeatureCard icon="📸" title="Carga de Resultados" desc="Los jugadores suben fotos de sus resultados para validación" color={C.green} onClick={() => setActiveTool('resultados')} />
-              <FeatureCard icon="🌍" title="Rankings por Zona" desc="Clasificaciones separadas por país, región o plataforma" color={C.green} onClick={() => setTab('rankings')} />
-              <FeatureCard icon="🏅" title="Sistema de Premios" desc="Asigná premios y trofeos a los ganadores de tus torneos" color="#f59e0b" onClick={() => setActiveTool('premios')} />
-              <FeatureCard icon="📅" title="Calendario de Eventos" desc="Programá fechas y partidos con recordatorios automáticos" color="#3b82f6" onClick={() => setActiveTool('calendario')} />
+            </div>
+
+            {/* Herramientas avanzadas — requieren plan Comunidad */}
+            <div style={{ position: 'relative' }}>
+              {!isCommunity && <LockOverlay onRequest={() => setShowPlanModal(true)} />}
+              <SectionHeader icon="🛠️" title="Herramientas avanzadas" desc="Requieren plan Comunidad" />
+              <div className="comm-grid">
+                <FeatureCard icon="🗳️" title="Votaciones" desc="Creá encuestas para tu comunidad" color="#a855f7" onClick={() => setActiveTool('votaciones')} />
+                <FeatureCard icon="📸" title="Carga de Resultados" desc="Los jugadores suben fotos de sus resultados para validación" color={C.green} onClick={() => setActiveTool('resultados')} />
+                <FeatureCard icon="🌍" title="Rankings por Zona" desc="Clasificaciones separadas por país, región o plataforma" color={C.green} onClick={() => setTab('rankings')} />
+                <FeatureCard icon="🏅" title="Sistema de Premios" desc="Asigná premios y trofeos a los ganadores de tus torneos" color="#f59e0b" onClick={() => setActiveTool('premios')} />
+                <FeatureCard icon="📅" title="Calendario de Eventos" desc="Programá fechas y partidos con recordatorios automáticos" color="#3b82f6" onClick={() => setActiveTool('calendario')} />
+              </div>
             </div>
 
             <div style={{ marginTop: 20, background: `${C.green}10`, border: `1px solid ${C.green}33`, borderRadius: 16, padding: '16px 18px' }}>

@@ -30,9 +30,9 @@ function confetti(canvas) {
   setTimeout(() => { cancelAnimationFrame(frame); ctx.clearRect(0, 0, canvas.width, canvas.height) }, 3500)
 }
 
-export default function SorteoPage({ onBack }) {
+export default function SorteoPage({ onBack, initialPlayers = [] }) {
   const [input, setInput]       = useState('')
-  const [items, setItems]       = useState([])
+  const [items, setItems]       = useState(() => initialPlayers.length ? [...initialPlayers] : [])
   const [winner, setWinner]     = useState(null)
   const [spinning, setSpinning] = useState(false)
   const [history, setHistory]   = useState([])
