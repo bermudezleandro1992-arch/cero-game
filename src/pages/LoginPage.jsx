@@ -12,10 +12,22 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [birthdate, setBirthdate] = useState('')
+  const [termsAccepted, setTermsAccepted] = useState(false)
   const [mode, setMode] = useState('login') // 'login' | 'register' | 'magic'
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  function getAge(dateStr) {
+    if (!dateStr) return null
+    const dob = new Date(dateStr)
+    const today = new Date()
+    let age = today.getFullYear() - dob.getFullYear()
+    const m = today.getMonth() - dob.getMonth()
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--
+    return age
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -27,6 +39,10 @@ export default function LoginPage() {
       })
       if (error) setError(error.message); else setSent(true)
     } else if (mode === 'register') {
+      const age = getAge(birthdate)
+      if (!birthdate || age === null) { setError('Ingresá tu fecha de nacimiento'); setLoading(false); return }
+      if (age < 13) { setError('Debés tener al menos 13 años para registrarte.'); setLoading(false); return }
+      if (!termsAccepted) { setError('Aceptá los términos y condiciones para continuar'); setLoading(false); return }
       const { error } = await supabase.auth.signUp({
         email, password,
         options: {
@@ -124,8 +140,18 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
             {mode === 'register' && (
-              <input type="text" placeholder="Tu nombre" value={name}
-                onChange={e => setName(e.target.value)} autoFocus style={inp} />
+              <>
+                <input type="text" placeholder="Tu nombre" value={name}
+                  onChange={e => setName(e.target.value)} autoFocus style={inp} />
+                <div>
+                  <label style={{ fontSize: 11, color: C.textDim, display: 'block', marginBottom: 4 }}>
+                    Fecha de nacimiento <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input type="date" value={birthdate} onChange={e => setBirthdate(e.target.value)}
+                    max={new Date(new Date().setFullYear(new Date().getFullYear() - 13)).toISOString().split('T')[0]}
+                    required style={{ ...inp, colorScheme: 'dark' }} />
+                </div>
+              </>
             )}
 
             <input type="email" placeholder="tu@email.com" value={email}
@@ -137,6 +163,24 @@ export default function LoginPage() {
                 placeholder={mode === 'register' ? 'Elegí una contraseña' : 'Contraseña'}
                 value={password} onChange={e => setPassword(e.target.value)}
                 required style={inp} />
+            )}
+
+            {mode === 'register' && (
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '4px 0' }}>
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={e => setTermsAccepted(e.target.checked)}
+                  style={{ marginTop: 2, accentColor: C.green, width: 16, height: 16, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>
+                  Tengo al menos 13 años y acepto los{' '}
+                  <span style={{ color: C.green, fontWeight: 600 }}>Términos de Uso</span>
+                  {' '}y la{' '}
+                  <span style={{ color: C.green, fontWeight: 600 }}>Política de Privacidad</span>.
+                  Los menores de 18 años requieren autorización de un tutor legal.
+                </span>
+              </label>
             )}
 
             {error && (
