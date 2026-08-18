@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { C } from '../theme'
 
-const LAST_UPDATE = '17 de agosto de 2026'
+const LAST_UPDATE = '18 de agosto de 2026'
 const CONTACT_EMAIL = 'legal@mimensajero.app'
 const APP_NAME = 'Mi Mensajero'
 
@@ -30,7 +30,7 @@ const SECTIONS = [
       },
       {
         subtitle: '5. Torneos, ligas y competencias',
-        text: `Los torneos y ligas organizados dentro de ${APP_NAME} son gestionados por sus organizadores, quienes son responsables exclusivos del correcto desarrollo de la competencia, incluyendo premios, reglas y resolución de disputas. ${APP_NAME} provee la infraestructura tecnológica pero no interviene en conflictos entre participantes ni garantiza premios ofrecidos por terceros organizadores. Cualquier premio ofrecido es responsabilidad exclusiva del organizador del evento.`,
+        text: `${APP_NAME} es una plataforma de mensajería y comunidades que incluye herramientas para organizar torneos de videojuegos. Las competencias organizadas en la plataforma son de habilidad (videojuegos competitivos), no de azar. Los organizadores son responsables exclusivos del correcto desarrollo de cada competencia, incluyendo premios, reglas y resolución de disputas. ${APP_NAME} provee la infraestructura tecnológica pero no interviene en conflictos entre participantes ni garantiza premios ofrecidos por terceros. Cualquier premio ofrecido es responsabilidad exclusiva del organizador del evento. La plataforma no recibe ni intermedia dinero entre participantes.`,
       },
       {
         subtitle: '6. Propiedad intelectual',
@@ -74,7 +74,7 @@ const SECTIONS = [
       },
       {
         subtitle: '5. Retención y eliminación de datos',
-        text: `Los mensajes se conservan mientras tu cuenta esté activa. Las historias/estados expiran automáticamente a las 24 horas. Los mensajes de "única vez" son marcados como vistos y su contenido no puede recuperarse. Podés eliminar tu cuenta desde Ajustes → Perfil. Tras la solicitud de eliminación, tus datos serán borrados dentro de los 30 días, excepto aquellos que debamos conservar por obligaciones legales.`,
+        text: `Los mensajes se conservan mientras tu cuenta esté activa. Las historias/estados expiran automáticamente a las 24 horas. Los mensajes de "única vez" son marcados como vistos y su contenido no puede recuperarse. Podés eliminar tu cuenta en cualquier momento desde Ajustes → Cuenta → Eliminar mi cuenta. La eliminación es inmediata e irreversible: se borran tu perfil, mensajes, historial, torneos creados y todos los datos asociados. Esto cumple con lo establecido por la Ley 25.326 (Argentina) y el RGPD (Europa).`,
       },
       {
         subtitle: '6. Tus derechos',
@@ -134,7 +134,7 @@ const SECTIONS = [
       },
       {
         subtitle: 'Premios y dinero en competencias',
-        text: `${APP_NAME} no intermedia ni garantiza premios económicos en torneos. Si un organizador ofrece premios monetarios, esto es un acuerdo exclusivamente entre el organizador y los participantes. Recomendamos a los participantes verificar la seriedad del organizador antes de inscribirse en competencias con premios.`,
+        text: `${APP_NAME} no intermedia ni garantiza premios económicos en torneos, de la misma forma en que WhatsApp o Telegram no son responsables de acuerdos entre sus usuarios. Si un organizador ofrece premios monetarios, esto es un acuerdo exclusivamente entre el organizador y los participantes. Los torneos en la plataforma son de habilidad en videojuegos, no juegos de azar. Recomendamos a los participantes verificar la seriedad del organizador antes de inscribirse en competencias con premios. ${APP_NAME} no garantiza, avala ni recibe porcentaje de ningún premio organizado por terceros.`,
       },
       {
         subtitle: 'Moderación de contenido',

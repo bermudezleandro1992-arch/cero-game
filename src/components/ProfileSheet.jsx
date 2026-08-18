@@ -56,6 +56,9 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const [showBotApi, setShowBotApi] = useState(false)
   const [showVip, setShowVip] = useState(false)
   const [showDonations, setShowDonations] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [section, setSection] = useState('perfil') // 'perfil' | 'cuenta' | 'preferencias'
 
   const defaultName = (!profile?.display_name || profile.display_name === 'Usuario' || profile.display_name.startsWith('user_')) ? '' : profile.display_name
@@ -117,6 +120,18 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
 
   const initials = (name || profile?.display_name || '?').slice(0, 2).toUpperCase()
   const disabled = saving || !name.trim()
+
+  async function handleDeleteAccount() {
+    setDeleting(true); setDeleteError('')
+    try {
+      const { error } = await supabase.rpc('delete_user_account')
+      if (error) throw error
+      await supabase.auth.signOut()
+    } catch (err) {
+      setDeleteError(err.message || 'Error al eliminar la cuenta. Intentá de nuevo.')
+      setDeleting(false)
+    }
+  }
 
   if (showLegal) return <LegalPage onBack={() => setShowLegal(false)} />
   if (showBotApi) return <BotApiPage onBack={() => setShowBotApi(false)} />
@@ -433,6 +448,47 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
                 </svg>
               </button>
             ))}
+
+            {/* Danger zone — delete account */}
+            <div style={{
+              background: '#ef444410', border: `1px solid #ef444430`,
+              borderRadius: 16, padding: '16px 18px', marginTop: 8,
+            }}>
+              <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: '#ef4444', letterSpacing: '1.5px', textTransform: 'uppercase' }}>Zona de peligro</p>
+              {!deleteConfirm ? (
+                <button type="button" onClick={() => setDeleteConfirm(true)} style={{
+                  width: '100%', padding: '12px', borderRadius: 12, border: `1px solid #ef444444`,
+                  background: 'transparent', color: '#ef4444', fontSize: 14, fontWeight: 700,
+                  cursor: 'pointer',
+                }}>
+                  🗑️ Eliminar mi cuenta
+                </button>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <p style={{ margin: 0, color: '#ef4444', fontSize: 13, lineHeight: 1.6, fontWeight: 600 }}>
+                    ¿Estás seguro? Esta acción es <strong>irreversible</strong>. Se eliminarán todos tus mensajes, torneos, datos y tu cuenta de forma permanente.
+                  </p>
+                  {deleteError && (
+                    <p style={{ margin: 0, color: '#ef4444', fontSize: 12, background: '#ef444418', borderRadius: 8, padding: '8px 12px' }}>{deleteError}</p>
+                  )}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" onClick={() => { setDeleteConfirm(false); setDeleteError('') }} style={{
+                      flex: 1, padding: '11px', borderRadius: 10, border: `1px solid ${C.border}`,
+                      background: C.panel2, color: C.text, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    }}>
+                      Cancelar
+                    </button>
+                    <button type="button" onClick={handleDeleteAccount} disabled={deleting} style={{
+                      flex: 1, padding: '11px', borderRadius: 10, border: 'none',
+                      background: deleting ? '#ef444444' : '#ef4444', color: '#fff',
+                      fontSize: 13, fontWeight: 700, cursor: deleting ? 'not-allowed' : 'pointer',
+                    }}>
+                      {deleting ? 'Eliminando...' : 'Sí, eliminar todo'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
