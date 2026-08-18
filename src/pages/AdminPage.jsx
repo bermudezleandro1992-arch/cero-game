@@ -10,8 +10,9 @@ const PLAN_OPTIONS = [
 ]
 
 const ROLE_OPTIONS = [
-  { id: 'miembro',      label: 'Miembro' },
+  { id: 'member',       label: 'Miembro' },
   { id: 'organizador',  label: 'Organizador' },
+  { id: 'moderador',    label: 'Moderador' },
   { id: 'vip',          label: 'VIP' },
   { id: 'comunidad',    label: 'Comunidad' },
   { id: 'admin',        label: 'Admin' },

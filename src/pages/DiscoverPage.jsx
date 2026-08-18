@@ -63,18 +63,15 @@ export default function DiscoverPage() {
     setLoading(false)
   }, [category, search])
 
-  // Verificar si el usuario tiene rango para ver comunidades (o es admin)
+  // Verificar acceso: VIP, Comunidad, Moderador, Admin o CEO
   useEffect(() => {
-    if (!profile?.id) return
-    Promise.all([
-      supabase.from('user_roles').select('role').eq('user_id', profile.id),
-      supabase.from('admin_users').select('user_id').eq('user_id', profile.id).maybeSingle(),
-    ]).then(([{ data: roles }, { data: adminRow }]) => {
-      const isAdmin = !!adminRow
-      const ranked = (roles || []).some(r => ['ceo', 'vip', 'community', 'moderator'].includes(r.role))
-      setHasAccess(isAdmin || ranked)
-    })
-  }, [profile?.id])
+    if (!profile) return
+    const role = profile.role || 'member'
+    const plan = profile.plan || 'free'
+    const accessRoles = ['ceo', 'admin', 'moderador', 'comunidad', 'vip', 'organizador']
+    const accessPlans = ['vip', 'comunidad']
+    setHasAccess(accessRoles.includes(role) || accessPlans.includes(plan))
+  }, [profile])
 
   // Load my joined groups
   useEffect(() => {
@@ -128,10 +125,10 @@ export default function DiscoverPage() {
         <div style={{ fontSize: 56 }}>🔐</div>
         <h2 style={{ margin: 0, color: C.text, fontSize: 20, fontWeight: 800 }}>Acceso con rango</h2>
         <p style={{ margin: 0, color: C.textDim, fontSize: 14, lineHeight: 1.6, maxWidth: 280 }}>
-          Las comunidades son privadas. Para acceder necesitás que un administrador te asigne un rango.
+          Necesitás el plan VIP o que un administrador te asigne un rango.
         </p>
-        <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {[['⭐', 'VIP', '#f59e0b'], ['🌐', 'Comunidad', '#8b5cf6'], ['🛡️', 'Moderador', '#3b82f6']].map(([emoji, label, color]) => (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {[['⭐', 'Plan VIP', '#f59e0b'], ['🌐', 'Comunidad', '#8b5cf6'], ['🛡️', 'Moderador', '#06b6d4'], ['🎖️', 'Organizador', '#10b981']].map(([emoji, label, color]) => (
             <span key={label} style={{
               padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
               background: color + '20', color,
@@ -141,7 +138,7 @@ export default function DiscoverPage() {
           ))}
         </div>
         <p style={{ margin: 0, color: C.textDim, fontSize: 12, maxWidth: 260 }}>
-          Contactá a un admin para que te habilite el acceso.
+          Activá el plan VIP en Ajustes o contactá a un admin.
         </p>
       </div>
     )
