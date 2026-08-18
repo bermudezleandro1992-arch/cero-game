@@ -5,6 +5,7 @@ import { useChatStore } from '../store/chatStore'
 import { supabase } from '../lib/supabase'
 import NewGroupPage from './NewGroupPage'
 import { StoriesBar, useStoryUserIds, openStoryForUser } from './StoriesPage'
+import BannerAd from '../components/BannerAd'
 import { useOnlineUsers } from '../hooks/usePresence'
 import { C } from '../theme'
 
@@ -488,6 +489,9 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
       {/* ── STORIES BAR ── */}
       <StoriesBar />
+
+      {/* ── BANNER ── */}
+      <BannerAd position="chats" style={{ marginTop: 8 }} />
 
       {/* ── LIST ── */}
       <div style={{ flex: 1, overflowY: 'auto', overflowAnchor: 'none' }}>

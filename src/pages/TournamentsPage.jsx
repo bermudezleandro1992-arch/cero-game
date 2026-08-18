@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { C } from '../theme'
 import { getMaxParticipants, getRoleCfg } from '../lib/roles'
+import BannerAd from '../components/BannerAd'
 import SorteoPage from './tools/SorteoPage'
 import BracketsPage from './tools/BracketsPage'
 import TablaPosicionesPage from './tools/TablaPosicionesPage'
@@ -1276,6 +1277,8 @@ export default function TournamentsPage() {
               <FeatureCard icon="🔱" title="Brackets" desc="Cuadros de eliminación automáticos y visuales" color="#06b6d4" onClick={() => setActiveTool('brackets')} />
               <FeatureCard icon="📊" title="Rankings" desc="Posiciones por zonas, países y plataformas" color={C.green} onClick={() => setTab('rankings')} />
             </div>
+
+            <BannerAd position="torneos" style={{ marginBottom: 16 }} />
 
             <SectionHeader icon="📢" title="Novedades" desc="Últimas competencias y eventos" />
             <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, padding: '14px 16px' }}>
