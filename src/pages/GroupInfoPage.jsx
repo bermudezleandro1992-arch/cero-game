@@ -190,6 +190,18 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [media, setMedia] = useState([])
   const [mediaLoading, setMediaLoading] = useState(false)
 
+  // Stats
+  const [stats, setStats] = useState(null)
+  const [statsLoading, setStatsLoading] = useState(false)
+
+  // Roles PRO
+  const [customRoles, setCustomRoles] = useState([])
+  const [rolesLoading, setRolesLoading] = useState(false)
+  const [showRoleForm, setShowRoleForm] = useState(false)
+  const [roleForm, setRoleForm] = useState({ name: '', color: '#8b5cf6', icon: '' })
+  const [savingRole, setSavingRole] = useState(false)
+  const [deletingRole, setDeletingRole] = useState(null)
+
   const members = conversation?.members || []
   const allMembers = [
     { id: profile?.id, display_name: profile?.display_name, username: profile?.username, avatar_url: profile?.avatar_url, isMe: true },
@@ -229,6 +241,28 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
       .limit(60)
       .then(({ data }) => { setMedia(data || []); setMediaLoading(false) })
   }, [tab, conversation?.id])
+
+  // ── Load stats ──
+  useEffect(() => {
+    if (tab !== 'stats' || !conversation?.id || !isAdmin) return
+    setStatsLoading(true)
+    supabase.from('community_stats')
+      .select('*')
+      .eq('conversation_id', conversation.id)
+      .single()
+      .then(({ data }) => { setStats(data || null); setStatsLoading(false) })
+  }, [tab, conversation?.id, isAdmin])
+
+  // ── Load custom roles ──
+  useEffect(() => {
+    if (tab !== 'roles' || !conversation?.id || !isAdmin) return
+    setRolesLoading(true)
+    supabase.from('community_custom_roles')
+      .select('*')
+      .eq('conversation_id', conversation.id)
+      .order('priority', { ascending: false })
+      .then(({ data }) => { setCustomRoles(data || []); setRolesLoading(false) })
+  }, [tab, conversation?.id, isAdmin])
 
   // ── Load join requests ──
   useEffect(() => {
@@ -276,6 +310,31 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
     setSavingPin(true)
     await pinMessage(conversation.id, pinText.trim())
     setSavingPin(false); setEditingPin(false)
+  }
+
+  async function saveCustomRole() {
+    if (!roleForm.name.trim()) return
+    setSavingRole(true)
+    const { data, error } = await supabase.from('community_custom_roles').insert({
+      conversation_id: conversation.id,
+      name: roleForm.name.trim(),
+      color: roleForm.color,
+      icon: roleForm.icon.trim() || null,
+      priority: customRoles.length,
+    }).select().single()
+    if (!error && data) {
+      setCustomRoles(prev => [data, ...prev])
+      setShowRoleForm(false)
+      setRoleForm({ name: '', color: '#8b5cf6', icon: '' })
+    }
+    setSavingRole(false)
+  }
+
+  async function deleteCustomRole(roleId) {
+    setDeletingRole(roleId)
+    await supabase.from('community_custom_roles').delete().eq('id', roleId)
+    setCustomRoles(prev => prev.filter(r => r.id !== roleId))
+    setDeletingRole(null)
   }
 
   async function togglePublic() {
@@ -418,11 +477,16 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
       )
     : allMembers
 
+  const isCommunity = conversation?.group_type === 'community'
+  const isPROOwner  = ['ceo', 'admin', 'comunidad'].includes(conversation?.owner_role || '')
+
   const TABS = [
     { id: 'info',     label: '📋 Info' },
     { id: 'members',  label: '👥 Miembros' },
     { id: 'perms',    label: '🔐 Permisos' },
     ...(isAdmin && requireApproval ? [{ id: 'requests', label: `📬 Solicitudes${joinRequests.length ? ` (${joinRequests.length})` : ''}` }] : []),
+    ...(isCommunity && isAdmin ? [{ id: 'stats', label: '📊 Stats' }] : []),
+    ...(isCommunity && isAdmin ? [{ id: 'roles', label: '🎭 Roles' }] : []),
     { id: 'media',    label: '🖼 Medios' },
   ]
 
@@ -990,6 +1054,184 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                 )
               })}
             </div>
+          </>
+        )}
+
+        {/* ════ TAB: ESTADÍSTICAS ════ */}
+        {tab === 'stats' && isCommunity && isAdmin && (
+          <>
+            {statsLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+                <div style={{ width: 28, height: 28, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+              </div>
+            ) : !stats ? (
+              <div style={{ padding: '60px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📊</div>
+                <p style={{ margin: 0, color: C.text2 }}>No hay estadísticas disponibles aún.</p>
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: C.textDim }}>Requiere ejecutar migración 035.</p>
+              </div>
+            ) : (
+              <div style={{ padding: '16px' }}>
+                {/* Tarjetas de stats */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                  {[
+                    { label: 'Miembros totales', value: stats.total_members, icon: '👥', color: C.green },
+                    { label: 'Nuevos (7 días)',  value: stats.new_members_7d,  icon: '📈', color: '#3b82f6' },
+                    { label: 'Nuevos (30 días)', value: stats.new_members_30d, icon: '📅', color: '#8b5cf6' },
+                    { label: 'Mensajes (7 días)',value: stats.messages_7d,     icon: '💬', color: '#f59e0b' },
+                    { label: 'Torneos',          value: stats.total_tournaments,icon: '🏆',color: '#ef4444' },
+                    { label: 'Eventos',          value: stats.total_events,    icon: '📅', color: '#06b6d4' },
+                  ].map(s => (
+                    <div key={s.label} style={{
+                      background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14,
+                      padding: '14px', display: 'flex', flexDirection: 'column', gap: 6,
+                    }}>
+                      <span style={{ fontSize: 24 }}>{s.icon}</span>
+                      <span style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value ?? 0}</span>
+                      <span style={{ fontSize: 11, color: C.textDim, lineHeight: 1.3 }}>{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px' }}>
+                  <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    Mensajes totales
+                  </p>
+                  <p style={{ margin: 0, fontSize: 28, fontWeight: 800, color: C.text }}>
+                    {(stats.total_messages ?? 0).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ════ TAB: ROLES PERSONALIZADOS ════ */}
+        {tab === 'roles' && isCommunity && isAdmin && (
+          <>
+            {/* Header con botón crear */}
+            <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, color: C.text, fontSize: 14 }}>Roles de la comunidad</p>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>
+                  Roles personalizados para organizar a tus miembros.
+                </p>
+              </div>
+              <button onClick={() => setShowRoleForm(v => !v)} style={{
+                background: C.green, border: 'none', borderRadius: 10, padding: '8px 14px',
+                color: C.bg, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                boxShadow: `0 2px 8px ${C.green}33`,
+              }}>
+                {showRoleForm ? 'Cancelar' : '+ Nuevo rol'}
+              </button>
+            </div>
+
+            {/* Formulario crear rol */}
+            {showRoleForm && (
+              <div style={{ padding: '14px 16px', background: `${C.green}08`, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <input
+                    placeholder="Nombre del rol"
+                    value={roleForm.name}
+                    onChange={e => setRoleForm(f => ({ ...f, name: e.target.value }))}
+                    maxLength={30}
+                    style={{
+                      flex: 1, minWidth: 120, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+                      color: C.text, fontSize: 13, padding: '8px 12px', outline: 'none',
+                    }}
+                  />
+                  <input
+                    placeholder="Emoji (opcional)"
+                    value={roleForm.icon}
+                    onChange={e => setRoleForm(f => ({ ...f, icon: e.target.value }))}
+                    maxLength={4}
+                    style={{
+                      width: 70, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+                      color: C.text, fontSize: 16, padding: '8px 10px', outline: 'none', textAlign: 'center',
+                    }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label style={{ fontSize: 12, color: C.textDim }}>Color:</label>
+                    <input
+                      type="color" value={roleForm.color}
+                      onChange={e => setRoleForm(f => ({ ...f, color: e.target.value }))}
+                      style={{ width: 36, height: 36, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'none', padding: 0 }}
+                    />
+                  </div>
+                </div>
+
+                {/* Preview */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, color: C.textDim }}>Vista previa:</span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, borderRadius: 4, padding: '2px 8px',
+                    color: roleForm.color, background: `${roleForm.color}18`,
+                    border: `1px solid ${roleForm.color}44`,
+                  }}>
+                    {roleForm.icon} {roleForm.name || 'Nombre del rol'}
+                  </span>
+                </div>
+
+                <button
+                  onClick={saveCustomRole}
+                  disabled={savingRole || !roleForm.name.trim()}
+                  style={{
+                    background: savingRole || !roleForm.name.trim() ? C.panel2 : C.green,
+                    border: 'none', borderRadius: 8, padding: '8px 20px',
+                    color: C.bg, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  }}
+                >
+                  {savingRole ? 'Guardando...' : 'Guardar rol'}
+                </button>
+              </div>
+            )}
+
+            {/* Lista de roles */}
+            {rolesLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                <div style={{ width: 24, height: 24, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+              </div>
+            ) : customRoles.length === 0 ? (
+              <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>🎭</div>
+                <p style={{ margin: 0, color: C.text2, fontWeight: 600 }}>Sin roles personalizados</p>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: C.textDim }}>
+                  Creá roles para organizar mejor a los miembros de la comunidad.
+                </p>
+              </div>
+            ) : (
+              customRoles.map(role => (
+                <div key={role.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                  borderBottom: `1px solid ${C.border}11`,
+                }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, borderRadius: 6, padding: '3px 10px',
+                    color: role.color, background: `${role.color}18`,
+                    border: `1px solid ${role.color}44`, flexShrink: 0, whiteSpace: 'nowrap',
+                  }}>
+                    {role.icon} {role.name}
+                  </span>
+                  <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {role.can_publish_announcements && <span style={{ fontSize: 10, color: C.textDim, background: C.panel2, borderRadius: 4, padding: '1px 6px' }}>📢 Anuncios</span>}
+                    {role.can_manage_members && <span style={{ fontSize: 10, color: C.textDim, background: C.panel2, borderRadius: 4, padding: '1px 6px' }}>👥 Miembros</span>}
+                    {role.can_create_tournaments && <span style={{ fontSize: 10, color: C.textDim, background: C.panel2, borderRadius: 4, padding: '1px 6px' }}>🏆 Torneos</span>}
+                    {role.can_create_events && <span style={{ fontSize: 10, color: C.textDim, background: C.panel2, borderRadius: 4, padding: '1px 6px' }}>📅 Eventos</span>}
+                  </div>
+                  <button
+                    onClick={() => deleteCustomRole(role.id)}
+                    disabled={deletingRole === role.id}
+                    style={{
+                      background: '#ef444418', border: 'none', borderRadius: 6, padding: '6px 10px',
+                      color: '#ef4444', fontSize: 11, cursor: 'pointer', flexShrink: 0,
+                      opacity: deletingRole === role.id ? 0.5 : 1,
+                    }}
+                  >
+                    {deletingRole === role.id ? '...' : '🗑'}
+                  </button>
+                </div>
+              ))
+            )}
           </>
         )}
 
