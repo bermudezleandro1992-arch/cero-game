@@ -14,13 +14,13 @@ export const ROLE_CFG = {
 
 // Tier limits per role
 export const ROLE_LIMITS = {
-  ceo:         { maxParticipants: 9999, maxTournamentsPerDay: 999, canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
-  admin:       { maxParticipants: 9999, maxTournamentsPerDay: 99,  canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
-  comunidad:   { maxParticipants: 9999, maxTournamentsPerDay: 20,  canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
-  vip:         { maxParticipants: 128,  maxTournamentsPerDay: 10,  canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: false },
-  moderador:   { maxParticipants: 64,   maxTournamentsPerDay: 5,   canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: false },
-  organizador: { maxParticipants: 32,   maxTournamentsPerDay: 3,   canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: false },
-  member:      { maxParticipants: 16,   maxTournamentsPerDay: 1,   canPublishAnnouncements: false, canCreateGroup: true, canCreateCommunity: false },
+  ceo:         { maxParticipants: 9999, maxCommunityMembers: 9999, maxTournamentsPerDay: 999, canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
+  admin:       { maxParticipants: 9999, maxCommunityMembers: 9999, maxTournamentsPerDay: 99,  canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
+  comunidad:   { maxParticipants: 9999, maxCommunityMembers: 10000,maxTournamentsPerDay: 20,  canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
+  vip:         { maxParticipants: 128,  maxCommunityMembers: 1000, maxTournamentsPerDay: 10,  canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
+  moderador:   { maxParticipants: 64,   maxCommunityMembers: 50,   maxTournamentsPerDay: 5,   canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
+  organizador: { maxParticipants: 32,   maxCommunityMembers: 50,   maxTournamentsPerDay: 3,   canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
+  member:      { maxParticipants: 16,   maxCommunityMembers: 50,   maxTournamentsPerDay: 1,   canPublishAnnouncements: false, canCreateGroup: true, canCreateCommunity: true },
 }
 
 export function getRoleCfg(role) {

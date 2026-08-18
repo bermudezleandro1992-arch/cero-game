@@ -45,7 +45,15 @@ const TABS = [
   { id: 'community', label: 'Comunidades', emoji: '🌐' },
   { id: 'group',     label: 'Grupos',      emoji: '👥' },
   { id: 'tournament',label: 'Torneos',     emoji: '🏆' },
+  { id: 'event',     label: 'Eventos',     emoji: '📅' },
 ]
+
+const EVENT_TYPE_CFG = {
+  general:     { label: 'General',    icon: '📢' },
+  competitive: { label: 'Competitivo',icon: '⚔️' },
+  special:     { label: 'Especial',   icon: '⭐' },
+  meeting:     { label: 'Reunión',    icon: '🤝' },
+}
 
 const GAMES_FILTER = [
   { id: '', label: 'Todos' },
@@ -82,6 +90,20 @@ export default function DiscoverPage() {
       if (search.trim()) q = q.ilike('name', `%${search.trim()}%`)
       if (gameFilter)    q = q.eq('game', gameFilter)
       if (statusFilter)  q = q.eq('status', statusFilter)
+
+      const { data } = await q
+      setItems(data || [])
+    } else if (tab === 'event') {
+      let q = supabase
+        .from('events')
+        .select('id, title, description, event_type, start_at, end_at, location, max_participants, is_public, created_by, conversation_id, conversations(name)')
+        .eq('is_active', true)
+        .eq('is_public', true)
+        .gte('start_at', new Date().toISOString())
+        .order('start_at', { ascending: true })
+        .limit(60)
+
+      if (search.trim()) q = q.ilike('title', `%${search.trim()}%`)
 
       const { data } = await q
       setItems(data || [])
@@ -156,6 +178,51 @@ export default function DiscoverPage() {
   function renderCard(item, i) {
     const isMine = isJoined(item.id)
     const isLoading = joining === item.id
+
+    if (tab === 'event') {
+      const cfg = EVENT_TYPE_CFG[item.event_type] || EVENT_TYPE_CFG.general
+      const startDate = new Date(item.start_at)
+      const dateStr = startDate.toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })
+      const timeStr = startDate.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+      const isPast = startDate < new Date()
+
+      return (
+        <div key={item.id} style={{
+          background: C.panel, borderRadius: 16, overflow: 'hidden',
+          border: `1px solid ${C.border}`, marginBottom: 10,
+          opacity: isPast ? 0.6 : 1,
+        }}>
+          <div style={{
+            background: `${isPast ? '#6b728018' : '#3b82f618'}`,
+            padding: '5px 14px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: isPast ? C.textDim : '#3b82f6' }}>
+              {cfg.icon} {cfg.label}
+            </span>
+            {item.conversations?.name && (
+              <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>
+                🌐 {item.conversations.name}
+              </span>
+            )}
+          </div>
+
+          <div style={{ padding: '12px 16px' }}>
+            <p style={{ margin: '0 0 6px', color: C.text, fontWeight: 800, fontSize: 14 }}>{item.title}</p>
+            {item.description && (
+              <p style={{ margin: '0 0 8px', color: C.textDim, fontSize: 12, lineHeight: 1.5 }}>{item.description}</p>
+            )}
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: C.text2 }}>📅 {dateStr} · {timeStr}</span>
+              {item.location && <span style={{ fontSize: 12, color: C.text2 }}>📍 {item.location}</span>}
+              {item.max_participants && (
+                <span style={{ fontSize: 12, color: C.text2 }}>👥 Hasta {item.max_participants} participantes</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    }
 
     if (tab === 'tournament') {
       const gameInfo = Object.values(GAME_CATALOG).find(g => g.label === item.game)
@@ -317,7 +384,7 @@ export default function DiscoverPage() {
             </svg>
             <input
               type="text"
-              placeholder={`Buscar ${tab === 'community' ? 'comunidades' : tab === 'group' ? 'grupos' : 'torneos'}...`}
+              placeholder={`Buscar ${tab === 'community' ? 'comunidades' : tab === 'group' ? 'grupos' : tab === 'tournament' ? 'torneos' : 'eventos'}...`}
               value={search}
               onChange={e => setSearch(e.target.value)}
               style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 14, padding: '9px 0' }}
@@ -389,17 +456,19 @@ export default function DiscoverPage() {
         {!loading && items.length === 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '64px 32px', gap: 14, textAlign: 'center' }}>
             <div style={{ fontSize: 48 }}>
-              {tab === 'community' ? '🌐' : tab === 'group' ? '👥' : '🏆'}
+              {tab === 'community' ? '🌐' : tab === 'group' ? '👥' : tab === 'tournament' ? '🏆' : '📅'}
             </div>
             <p style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>
               {search ? `Sin resultados para "${search}"` :
                tab === 'community' ? 'No hay comunidades públicas aún' :
                tab === 'group'     ? 'No hay grupos públicos aún' :
-                                    'No hay torneos públicos aún'}
+               tab === 'tournament'? 'No hay torneos públicos aún' :
+                                    'No hay eventos próximos'}
             </p>
             <p style={{ margin: 0, color: C.textDim, fontSize: 13, lineHeight: 1.5, maxWidth: 260 }}>
               {search ? 'Probá con otro nombre o quitá los filtros.' :
                tab === 'tournament' ? 'Los torneos públicos aparecen acá para que cualquiera pueda unirse.' :
+               tab === 'event'      ? 'Los eventos públicos de comunidades aparecen acá.' :
                'Los grupos y comunidades públicas aparecen acá cuando sus creadores los hacen visibles.'}
             </p>
           </div>
@@ -409,7 +478,7 @@ export default function DiscoverPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             <BannerAd position="explorar" style={{ margin: '4px 12px 8px' }} />
 
-            {tab === 'tournament' ? (
+            {tab === 'tournament' || tab === 'event' ? (
               <div style={{ padding: '0 12px' }}>
                 {items.map((item, i) => renderCard(item, i))}
               </div>
