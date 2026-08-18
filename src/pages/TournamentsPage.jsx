@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { C } from '../theme'
-import { getMaxParticipants, getRoleCfg } from '../lib/roles'
+import { getMaxParticipants, getLimits, getRoleCfg } from '../lib/roles'
 import BannerAd from '../components/BannerAd'
 import SorteoPage from './tools/SorteoPage'
 import BracketsPage from './tools/BracketsPage'
@@ -666,7 +666,29 @@ function TournamentsList({ profile }) {
 
   async function handleCreate() {
     if (!tName.trim()) return
+
+    // Validar límites de plan (frontend rápido + backend definitivo)
+    const limits = getLimits(profile)
+    const reqMax = parseInt(tMaxPl) || 2
+    if (reqMax > limits.maxParticipants) {
+      alert(`Tu rol (${profile?.role || 'member'}) permite máximo ${limits.maxParticipants} participantes. Reducí el número o contactá al admin.`)
+      return
+    }
+
     setCreating(true)
+    // Validación backend: límite diario y participantes
+    const { data: validation } = await supabase.rpc('validate_tournament_creation', { p_max_participants: reqMax })
+    if (validation && !validation.ok) {
+      setCreating(false)
+      if (validation.error === 'participant_limit_exceeded') {
+        alert(`Tu rol permite máximo ${validation.max_participants} participantes.`)
+      } else if (validation.error === 'daily_limit_reached') {
+        alert(`Alcanzaste el límite diario de competencias para tu rol. Volvé mañana.`)
+      } else {
+        alert('No tenés permiso para crear esta competencia.')
+      }
+      return
+    }
     try {
       const typeLabel = TYPE_CFG[tType]?.label || 'Torneo'
       const parts = [

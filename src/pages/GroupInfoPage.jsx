@@ -181,8 +181,11 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [requireApproval,  setRequireApproval]  = useState(conversation?.require_approval  || false)
   const [savingPerms, setSavingPerms] = useState(false)
 
-  // Invite link
-  const [inviteLink, setInviteLink] = useState(conversation?.invite_link || '')
+  // Invite link — token stored in DB, full URL shown to user
+  const rawToken = conversation?.invite_link || ''
+  const [inviteLink, setInviteLink] = useState(
+    rawToken ? `${window.location.origin}/join/${rawToken}` : ''
+  )
   const [generatingLink, setGeneratingLink] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 

@@ -110,7 +110,7 @@ export default function DiscoverPage() {
     } else {
       let q = supabase
         .from('conversations')
-        .select('id, name, description, avatar_url, group_type, member_count, tags, is_group, created_at')
+        .select('id, name, description, avatar_url, group_type, member_count, tags, is_group, created_at, game')
         .eq('is_group', true)
         .eq('is_public', true)
         .eq('group_type', tab)
@@ -311,6 +311,11 @@ export default function DiscoverPage() {
     const typeColor = tab === 'community' ? '#8b5cf6' : C.green
     const members = item.member_count || 0
 
+    // Parse tags for game display
+    const rawTags = Array.isArray(item.tags) ? item.tags : (typeof item.tags === 'string' ? (item.tags.startsWith('[') ? JSON.parse(item.tags) : item.tags.split(',').map(t => t.trim())) : [])
+    const knownGameKeys = Object.keys(GAME_CATALOG)
+    const gameTags = rawTags.filter(t => knownGameKeys.includes(t.toLowerCase()))
+
     return (
       <div
         key={item.id}
@@ -347,9 +352,19 @@ export default function DiscoverPage() {
               {item.description}
             </p>
           )}
-          <p style={{ margin: '3px 0 0', color: C.textDim, fontSize: 11 }}>
-            {members > 0 ? `${members.toLocaleString()} miembro${members !== 1 ? 's' : ''}` : 'Sin miembros aún'}
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+            <span style={{ color: C.textDim, fontSize: 11 }}>
+              {members > 0 ? `👥 ${members.toLocaleString()} miembro${members !== 1 ? 's' : ''}` : '👥 Sin miembros aún'}
+            </span>
+            {gameTags.map(t => {
+              const g = GAME_CATALOG[t.toLowerCase()]
+              return g ? (
+                <span key={t} style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: `${C.green}15`, color: C.green, border: `1px solid ${C.green}30` }}>
+                  {g.icon} {g.label}
+                </span>
+              ) : null
+            })}
+          </div>
         </div>
 
         {isMine ? (

@@ -16,6 +16,7 @@ import TournamentsPage from './pages/TournamentsPage'
 import DiscoverPage from './pages/DiscoverPage'
 import AnnouncementsPage from './pages/AnnouncementsPage'
 import AdminPage from './pages/AdminPage'
+import InviteJoinPage from './pages/InviteJoinPage'
 import ProfileSheet from './components/ProfileSheet'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
@@ -107,6 +108,10 @@ export default function App() {
   const { conversations, activeConversation, setActiveConversation, fetchConversations, subscribeToConversations } = useChatStore()
   const [tab, setTab] = useState('chats')
   const [showProfile, setShowProfile] = useState(false)
+  const [inviteToken, setInviteToken] = useState(() => {
+    const m = window.location.pathname.match(/^\/join\/([^/]+)/)
+    return m ? m[1] : null
+  })
   usePresence(user?.id)
 
   // Fix keyboard overlap — shrink root height when keyboard opens (iOS + Android)
@@ -206,6 +211,14 @@ export default function App() {
   if (loading) return <Splash />
   if (!user) return <LoginPage />
   if (!profile) return <Splash />
+
+  // Invite link handler — show join page before normal app
+  if (inviteToken) {
+    return <InviteJoinPage token={inviteToken} onBack={() => {
+      setInviteToken(null)
+      window.history.replaceState(null, '', '/')
+    }} />
+  }
 
   const needsSetup = !profile.display_name || profile.display_name === 'Usuario'
     || profile.display_name.startsWith('user_') || !profile.username || profile.username.startsWith('user_')

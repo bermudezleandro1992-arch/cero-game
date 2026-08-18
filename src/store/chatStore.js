@@ -143,7 +143,13 @@ export const useChatStore = create((set, get) => ({
           unread: unreadMap[convId] || 0,
         }
       })
-      .filter(c => c.isGroup || c.user)
+      .filter(c => {
+        if (!c.isGroup && !c.user) return false
+        // Torneos y ligas no van en el chat list — se acceden desde la sección Torneos
+        const meta = convMeta[c.id]
+        if (meta?.group_type === 'tournament' || meta?.group_type === 'liga') return false
+        return true
+      })
       .sort((a, b) => {
         const ta = a.lastMessage?.created_at || a.id
         const tb = b.lastMessage?.created_at || b.id
