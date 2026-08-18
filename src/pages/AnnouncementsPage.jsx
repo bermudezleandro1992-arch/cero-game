@@ -60,7 +60,23 @@ function NewAnnouncementForm({ onClose, onCreate }) {
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [saving, setSaving]     = useState(false)
+  const [myCommunities, setMyCommunities] = useState([])
+  const [selectedCommunity, setSelectedCommunity] = useState('')
   const fileRef = useRef()
+
+  useEffect(() => {
+    if (!profile?.id) return
+    supabase
+      .from('group_roles')
+      .select('conversation_id, conversations(id, name, group_type)')
+      .eq('user_id', profile.id)
+      .in('role', ['owner', 'admin'])
+      .then(({ data }) => {
+        const convs = (data || []).map(r => r.conversations).filter(Boolean)
+        setMyCommunities(convs)
+        if (convs.length === 1) setSelectedCommunity(convs[0].id)
+      })
+  }, [profile?.id])
 
   function pickImage(e) {
     const f = e.target.files?.[0]
@@ -89,7 +105,8 @@ function NewAnnouncementForm({ onClose, onCreate }) {
         category,
         link_url: linkUrl.trim() || null,
         link_label: linkUrl.trim() ? (linkLabel.trim() || 'Ver más') : null,
-      }).select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url)').single()
+        conversation_id: selectedCommunity || null,
+      }).select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url), community:conversations!announcements_conversation_id_fkey(id, name, group_type)').single()
       if (error) throw new Error(error.message)
       onCreate(data)
     } catch (err) {
@@ -149,6 +166,21 @@ function NewAnnouncementForm({ onClose, onCreate }) {
               </button>
             )}
           </div>
+
+          {/* Comunidad origen */}
+          {myCommunities.length > 0 && (
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Publicar como</label>
+              <select value={selectedCommunity} onChange={e => setSelectedCommunity(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                <option value="">Mi perfil (sin comunidad)</option>
+                {myCommunities.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.group_type === 'community' ? '🌐' : '👥'} {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Title */}
           <div>
@@ -300,12 +332,19 @@ function AnnouncementCard({ ann, myId, onLike, onDelete }) {
           </a>
         )}
 
-        {/* Footer: author + time + actions */}
+        {/* Footer: author + community + time + actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
           <Avatar name={ann.author?.display_name} url={ann.author?.avatar_url} size={28} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: C.text2 }}>{ann.author?.display_name || 'Anónimo'}</span>
-            <span style={{ fontSize: 11, color: C.textDim }}> · {timeAgo(ann.created_at)}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.text2 }}>{ann.author?.display_name || 'Anónimo'}</span>
+              {ann.community && (
+                <span style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600, background: '#8b5cf614', padding: '1px 7px', borderRadius: 10 }}>
+                  {ann.community.group_type === 'community' ? '🌐' : '👥'} {ann.community.name}
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: 11, color: C.textDim }}>{timeAgo(ann.created_at)}</span>
           </div>
 
           {/* Like */}
@@ -358,7 +397,7 @@ export default function AnnouncementsPage() {
     setLoading(true)
     let q = supabase
       .from('announcements')
-      .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url)')
+      .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url), community:conversations!announcements_conversation_id_fkey(id, name, group_type)')
       .eq('is_active', true)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })

@@ -464,12 +464,12 @@ export const useChatStore = create((set, get) => ({
     }))
   },
 
-  createGroup: async (name, memberIds, createdBy, type = 'group', description = '') => {
+  createGroup: async (name, memberIds, createdBy, type = 'group', description = '', isPublic = true) => {
     const isCommunity = type === 'community'
     const insertData = { name, is_group: true, created_by: createdBy }
-    // Attach extra fields if columns exist (migration 009)
     if (isCommunity) {
       insertData.group_type = 'community'
+      insertData.is_public = isPublic
     }
     if (description) {
       insertData.description = description

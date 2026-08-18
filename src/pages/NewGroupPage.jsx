@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
+import { getLimits } from '../lib/roles'
 import { C } from '../theme'
 
 const AVATAR_COLORS = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100','#c62828']
@@ -11,16 +12,28 @@ function avatarColor(id) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
+function LimitBadge({ label, value, suffix = '' }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.text2 }}>
+      <span style={{ color: C.textDim }}>·</span>
+      <span>{label}: <strong style={{ color: C.text }}>{value === 9999 ? '∞' : value}{suffix}</strong></span>
+    </div>
+  )
+}
+
 export default function NewGroupPage({ onBack, onCreated, initialType }) {
   const { profile } = useAuthStore()
   const { createGroup } = useChatStore()
-  const [step, setStep] = useState(1)
+  const limits = getLimits(profile)
+
+  const [step, setStep] = useState(initialType === 'community' ? 2 : 1)
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [selected, setSelected] = useState([])
   const [groupName, setGroupName] = useState('')
-  const [groupType, setGroupType] = useState(initialType || 'group') // 'group' | 'community'
+  const [groupType, setGroupType] = useState(initialType || 'group')
   const [description, setDescription] = useState('')
+  const [isPublic, setIsPublic] = useState(true)
   const [creating, setCreating] = useState(false)
   const [searching, setSearching] = useState(false)
 
@@ -45,12 +58,24 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
   }
 
   async function handleCreate() {
-    if (!groupName.trim() || selected.length === 0) return
+    if (!groupName.trim()) return
+    if (groupType === 'group' && selected.length === 0) return
     setCreating(true)
-    const convId = await createGroup(groupName.trim(), selected.map(u => u.id), profile.id, groupType, description.trim())
+    const memberIds = groupType === 'community' ? selected.map(u => u.id) : selected.map(u => u.id)
+    const convId = await createGroup(
+      groupName.trim(),
+      memberIds,
+      profile.id,
+      groupType,
+      description.trim(),
+      isPublic
+    )
     setCreating(false)
     onCreated(convId, groupName.trim(), selected)
   }
+
+  const isCommunity = groupType === 'community'
+  const canProceedStep1 = isCommunity || selected.length > 0
 
   return (
     <div style={{
@@ -73,7 +98,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
         </button>
         <div style={{ flex: 1 }}>
           <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>
-            {step === 1 ? 'Nuevo grupo / comunidad' : groupType === 'community' ? 'Nueva comunidad' : 'Nuevo grupo'}
+            {step === 1 ? 'Nuevo grupo / comunidad' : isCommunity ? 'Nueva comunidad' : 'Nuevo grupo'}
           </h2>
           {step === 1 && (
             <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>
@@ -81,7 +106,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             </p>
           )}
         </div>
-        {step === 1 && selected.length > 0 && (
+        {step === 1 && canProceedStep1 && (
           <button onClick={() => setStep(2)} style={{
             width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
             background: C.green, border: 'none', cursor: 'pointer',
@@ -97,6 +122,35 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
 
       {step === 1 && (
         <>
+          {/* Type selector at top of step 1 */}
+          <div style={{ padding: '12px 16px', background: C.panel2, borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 8, flexShrink: 0 }}>
+            {[
+              { value: 'group', label: 'Grupo', icon: '👥' },
+              { value: 'community', label: 'Comunidad', icon: '🌐' },
+            ].map(opt => (
+              <button key={opt.value} onClick={() => setGroupType(opt.value)} style={{
+                flex: 1, padding: '8px 10px', borderRadius: 10, border: `1.5px solid`,
+                borderColor: groupType === opt.value ? C.green : C.border,
+                background: groupType === opt.value ? `${C.green}14` : C.panel,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: 6, fontSize: 13, fontWeight: 600,
+                color: groupType === opt.value ? C.green : C.text2,
+                transition: 'all .15s',
+              }}>
+                <span>{opt.icon}</span> {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Community tip */}
+          {isCommunity && (
+            <div style={{ padding: '10px 16px', background: `${C.green}0A`, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+              <p style={{ margin: 0, fontSize: 12, color: C.green }}>
+                🌐 Las comunidades pueden empezar vacías. Podés agregar miembros ahora o después.
+              </p>
+            </div>
+          )}
+
           {/* Selected chips */}
           {selected.length > 0 && (
             <div style={{
@@ -162,10 +216,26 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
               <p style={{ textAlign: 'center', padding: '20px', color: C.textDim, fontSize: 13 }}>Buscando...</p>
             )}
             {!search && !searching && (
-              <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>👥</div>
-                <p style={{ color: C.text2, fontSize: 14, margin: '0 0 4px', fontWeight: 600 }}>Agregar participantes</p>
-                <p style={{ color: C.textDim, fontSize: 12, margin: 0 }}>Buscá a las personas para agregar al grupo</p>
+              <div style={{ textAlign: 'center', padding: '40px 24px' }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>{isCommunity ? '🌐' : '👥'}</div>
+                <p style={{ color: C.text2, fontSize: 14, margin: '0 0 4px', fontWeight: 600 }}>
+                  {isCommunity ? 'Agregar miembros (opcional)' : 'Agregar participantes'}
+                </p>
+                <p style={{ color: C.textDim, fontSize: 12, margin: '0 0 16px' }}>
+                  {isCommunity
+                    ? 'Buscá usuarios para invitar, o continuá sin agregar ninguno'
+                    : 'Buscá a las personas para agregar al grupo'
+                  }
+                </p>
+                {isCommunity && (
+                  <button onClick={() => setStep(2)} style={{
+                    padding: '10px 24px', borderRadius: 20, border: 'none',
+                    background: C.green, color: C.bg, fontSize: 13, fontWeight: 700,
+                    cursor: 'pointer', boxShadow: `0 2px 12px ${C.green}44`,
+                  }}>
+                    Continuar sin agregar →
+                  </button>
+                )}
               </div>
             )}
             {searchResults.map(u => {
@@ -175,15 +245,13 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
                   width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                   padding: '10px 16px', background: isSel ? `${C.green}0C` : 'none',
                   border: 'none', borderBottom: `1px solid ${C.border}22`,
-                  cursor: 'pointer', textAlign: 'left',
-                  transition: 'background .15s',
+                  cursor: 'pointer', textAlign: 'left', transition: 'background .15s',
                 }}>
                   <div style={{
                     width: 46, height: 46, borderRadius: '50%', flexShrink: 0,
                     background: isSel ? C.green : avatarColor(u.id),
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 16, fontWeight: 700,
-                    color: isSel ? C.bg : '#fff',
+                    fontSize: 16, fontWeight: 700, color: isSel ? C.bg : '#fff',
                     transition: 'background .15s',
                   }}>
                     {isSel
@@ -203,31 +271,33 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
       )}
 
       {step === 2 && (
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 24px', gap: 24 }}>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 24px', gap: 22 }}>
 
-          {/* Type selector */}
-          <div style={{ width: '100%', display: 'flex', gap: 10 }}>
-            {[
-              { value: 'group', label: 'Grupo', desc: 'Conversación privada entre miembros', icon: '👥' },
-              { value: 'community', label: 'Comunidad', desc: 'Canal público con descripción y reglas', icon: '🏆' },
-            ].map(opt => (
-              <button key={opt.value} onClick={() => setGroupType(opt.value)} style={{
-                flex: 1, padding: '14px 10px', borderRadius: 14, border: `2px solid`,
-                borderColor: groupType === opt.value ? C.green : C.border,
-                background: groupType === opt.value ? `${C.green}0D` : C.panel,
-                cursor: 'pointer', textAlign: 'center', transition: 'all .15s',
-              }}>
-                <div style={{ fontSize: 24, marginBottom: 6 }}>{opt.icon}</div>
-                <p style={{ margin: '0 0 4px', color: groupType === opt.value ? C.green : C.text, fontWeight: 700, fontSize: 14 }}>{opt.label}</p>
-                <p style={{ margin: 0, color: C.textDim, fontSize: 11, lineHeight: 1.4 }}>{opt.desc}</p>
-              </button>
-            ))}
-          </div>
+          {/* Plan limits info for communities */}
+          {isCommunity && (
+            <div style={{
+              width: '100%', background: C.panel, borderRadius: 12,
+              padding: '12px 16px', border: `1px solid ${C.border}`,
+            }}>
+              <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>
+                Tu plan — {profile?.role === 'comunidad' ? 'Comunidad PRO' : profile?.role === 'vip' ? 'VIP' : 'Gratis'}
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+                <LimitBadge label="Miembros máx." value={limits.maxCommunityMembers} />
+                <LimitBadge label="Torneos/día" value={limits.maxTournamentsPerDay} />
+              </div>
+              {(profile?.role === 'member' || !profile?.role) && (
+                <p style={{ margin: '8px 0 0', fontSize: 11, color: '#f59e0b' }}>
+                  ⭐ Con VIP o Comunidad PRO ampliás los límites.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Avatar preview */}
           <div style={{
             width: 90, height: 90,
-            borderRadius: groupType === 'community' ? 24 : '50%',
+            borderRadius: isCommunity ? 24 : '50%',
             background: groupName ? `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})` : C.panel2,
             border: `2px solid ${groupName ? C.green : C.border}44`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -235,17 +305,17 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             boxShadow: groupName ? `0 0 24px ${C.green}22` : 'none',
             transition: 'all .2s',
           }}>
-            {groupName ? groupName.slice(0, 2).toUpperCase() : (groupType === 'community' ? '🏆' : '👥')}
+            {groupName ? groupName.slice(0, 2).toUpperCase() : (isCommunity ? '🌐' : '👥')}
           </div>
 
           {/* Name */}
           <div style={{ width: '100%' }}>
             <label style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
-              {groupType === 'community' ? 'Nombre de la comunidad' : 'Nombre del grupo'}
+              {isCommunity ? 'Nombre de la comunidad' : 'Nombre del grupo'}
             </label>
             <input
               type="text"
-              placeholder={groupType === 'community' ? 'Ej: SomosLFA Oficial' : 'Ej: Equipo Relámpago ⚡'}
+              placeholder={isCommunity ? 'Ej: eFootball Argentina' : 'Ej: Equipo Relámpago ⚡'}
               value={groupName}
               onChange={e => setGroupName(e.target.value)}
               maxLength={50} autoFocus
@@ -259,47 +329,71 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{groupName.length}/50</p>
           </div>
 
-          {/* Description (communities) */}
-          {groupType === 'community' && (
+          {/* Description */}
+          <div style={{ width: '100%' }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+              Descripción (opcional)
+            </label>
+            <textarea
+              placeholder={isCommunity ? 'De qué trata esta comunidad...' : 'Descripción del grupo...'}
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              maxLength={200}
+              rows={3}
+              style={{
+                width: '100%', background: C.panel, border: `1px solid ${C.border}`,
+                borderRadius: 10, color: C.text, fontSize: 14, padding: '10px 12px',
+                outline: 'none', resize: 'none', boxSizing: 'border-box', lineHeight: 1.5,
+              }}
+            />
+            <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{description.length}/200</p>
+          </div>
+
+          {/* Visibility toggle (communities only) */}
+          {isCommunity && (
             <div style={{ width: '100%' }}>
               <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
-                Descripción (opcional)
+                Visibilidad
               </label>
-              <textarea
-                placeholder="De qué trata esta comunidad..."
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                maxLength={200}
-                rows={3}
-                style={{
-                  width: '100%', background: C.panel, border: `1px solid ${C.border}`,
-                  borderRadius: 10, color: C.text, fontSize: 14, padding: '10px 12px',
-                  outline: 'none', resize: 'none', boxSizing: 'border-box',
-                  lineHeight: 1.5,
-                }}
-              />
-              <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{description.length}/200</p>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {[
+                  { value: true,  icon: '🌐', label: 'Pública', desc: 'Aparece en Explorar' },
+                  { value: false, icon: '🔒', label: 'Privada', desc: 'Solo por invitación' },
+                ].map(opt => (
+                  <button key={String(opt.value)} onClick={() => setIsPublic(opt.value)} style={{
+                    flex: 1, padding: '12px 10px', borderRadius: 12, border: `2px solid`,
+                    borderColor: isPublic === opt.value ? C.green : C.border,
+                    background: isPublic === opt.value ? `${C.green}0D` : C.panel,
+                    cursor: 'pointer', textAlign: 'center', transition: 'all .15s',
+                  }}>
+                    <div style={{ fontSize: 20, marginBottom: 4 }}>{opt.icon}</div>
+                    <p style={{ margin: '0 0 2px', color: isPublic === opt.value ? C.green : C.text, fontWeight: 700, fontSize: 13 }}>{opt.label}</p>
+                    <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Members preview */}
           <div style={{ width: '100%', background: C.panel, borderRadius: 12, padding: '12px 16px', border: `1px solid ${C.border}` }}>
             <p style={{ margin: '0 0 8px', fontSize: 11, color: C.textDim, fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase' }}>
-              {selected.length + 1} participantes
+              {selected.length + 1} {isCommunity ? 'miembro' : 'participante'}{selected.length + 1 !== 1 ? 's' : ''}
             </p>
             <p style={{ margin: 0, fontSize: 13, color: C.text2, lineHeight: 1.6 }}>
               {profile?.display_name}{selected.map(u => `, ${u.display_name}`).join('')}
+              {isCommunity && selected.length === 0 && <span style={{ color: C.textDim }}> (podés agregar más después)</span>}
             </p>
           </div>
 
           {/* Create button */}
           <button
             onClick={handleCreate}
-            disabled={creating || !groupName.trim()}
+            disabled={creating || !groupName.trim() || (groupType === 'group' && selected.length === 0)}
             style={{
               width: 60, height: 60, borderRadius: '50%', border: 'none',
-              background: creating || !groupName.trim() ? C.panel2 : C.green,
-              cursor: creating || !groupName.trim() ? 'not-allowed' : 'pointer',
+              background: (creating || !groupName.trim() || (groupType === 'group' && selected.length === 0)) ? C.panel2 : C.green,
+              cursor: (creating || !groupName.trim() || (groupType === 'group' && selected.length === 0)) ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: !groupName.trim() ? 'none' : `0 4px 20px ${C.green}44`,
               transition: 'all .2s',
@@ -312,7 +406,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             }
           </button>
           <p style={{ margin: '-16px 0 0', fontSize: 12, color: C.textDim }}>
-            {groupType === 'community' ? 'Crear comunidad' : 'Crear grupo'}
+            {isCommunity ? 'Crear comunidad' : 'Crear grupo'}
           </p>
         </div>
       )}
