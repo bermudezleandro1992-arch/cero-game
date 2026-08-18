@@ -298,6 +298,7 @@ export default function VipPage({ onBack }) {
   // ── PASO: PAGO MANUAL ────────────────────────────────────────────────────────
   if (step === 'manual') {
     const pm = PAYMENT_METHODS.find(m => m.id === payMethod)
+    const isBinance = payMethod === 'crypto'
     const titles = {
       ar_transferencia: '🇦🇷 Transferencia Argentina',
       usd_wire:         '🇺🇸 Wire Transfer USD',

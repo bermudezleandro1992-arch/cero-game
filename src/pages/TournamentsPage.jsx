@@ -23,24 +23,31 @@ const STATUS_CFG = {
 
 // ── Game Catalog ──────────────────────────────────────────────────────────────
 const GAME_CATALOG = [
-  { id: 'fc26',          icon: '⚽', label: 'FC 26',          color: '#10b981', category: 'futbol' },
-  { id: 'fc25',          icon: '⚽', label: 'FC 25',          color: '#059669', category: 'futbol' },
-  { id: 'efootball',     icon: '🏟️', label: 'eFootball',      color: '#3b82f6', category: 'futbol' },
-  { id: 'cs2',           icon: '🎯', label: 'CS2',            color: '#f59e0b', category: 'fps'    },
-  { id: 'valorant',      icon: '🔫', label: 'Valorant',       color: '#ef4444', category: 'fps'    },
-  { id: 'warzone',       icon: '💥', label: 'Warzone',        color: '#84cc16', category: 'fps'    },
-  { id: 'pubg',          icon: '🪂', label: 'PUBG',           color: '#f59e0b', category: 'fps'    },
-  { id: 'clashroyale',   icon: '👑', label: 'Clash Royale',   color: '#a855f7', category: 'mobile' },
-  { id: 'clashofclans',  icon: '🏰', label: 'Clash of Clans', color: '#f59e0b', category: 'mobile' },
-  { id: 'brawlstars',    icon: '⭐', label: 'Brawl Stars',    color: '#3b82f6', category: 'mobile' },
-  { id: 'freef',         icon: '🔥', label: 'Free Fire',      color: '#ef4444', category: 'mobile' },
-  { id: 'fortnite',      icon: '🌀', label: 'Fortnite',       color: '#06b6d4', category: 'fps'    },
-  { id: 'rocketleague',  icon: '🚀', label: 'Rocket League',  color: '#3b82f6', category: 'sports' },
-  { id: 'nba2k',         icon: '🏀', label: 'NBA 2K',         color: '#f59e0b', category: 'sports' },
-  { id: 'otro',          icon: '🎮', label: 'Otro',           color: '#6b7280', category: 'otro'   },
+  { id: 'fc26',        icon: '⚽', label: 'FC 26',        color: '#10b981', soon: false },
+  { id: 'fc27',        icon: '⚽', label: 'FC 27',        color: '#059669', soon: false },
+  { id: 'efootball',   icon: '⚽', label: 'eFootball',    color: '#3b82f6', soon: false },
+  { id: 'cs2',         icon: '🎯', label: 'CS2',          color: '#f59e0b', soon: true  },
+  { id: 'valorant',    icon: '🎯', label: 'Valorant',     color: '#ef4444', soon: true  },
+  { id: 'warzone',     icon: '🔫', label: 'Warzone',      color: '#84cc16', soon: true  },
+  { id: 'pubg',        icon: '🔫', label: 'PUBG',         color: '#f59e0b', soon: true  },
+  { id: 'clashroyale', icon: '👑', label: 'Clash Royale', color: '#a855f7', soon: true  },
+  { id: 'freef',       icon: '🔥', label: 'Free Fire',    color: '#ef4444', soon: true  },
 ]
 
 const GAME_CONFIG = {
+  fc27: {
+    plataformas: ['PS5', 'PS4', 'Xbox Series X/S', 'Xbox One', 'PC (EA App)'],
+    modos: ['Ultimate Team', 'Volta Football', 'Carrera', 'Partido Amistoso', 'Rush'],
+    tiempos: ['6 min', '8 min', '10 min', '12 min'],
+    dificultades: ['Leyenda', 'Ultimate', 'Mundo', 'Aficionado'],
+    extras: [
+      { id: 'handicap', label: 'Sin Handicap' },
+      { id: 'custom_tactics', label: 'Tácticas libres' },
+      { id: 'divisions_only', label: 'Solo modo Divisiones' },
+      { id: 'no_sbcs', label: 'Sin cartas SBC/Evolutions' },
+    ],
+    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+  },
   fc26: {
     plataformas: ['PS5', 'PS4', 'Xbox Series X/S', 'Xbox One', 'PC (EA App)'],
     modos: ['Ultimate Team', 'Volta Football', 'Carrera', 'Partido Amistoso'],
@@ -814,14 +821,20 @@ function TournamentsList({ profile }) {
             <p style={labelSt}>Juego</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(95px, 1fr))', gap: 7 }}>
               {GAME_CATALOG.map(g => (
-                <button key={g.id} onClick={() => { setTGameId(g.id); setTPlataforma(''); setTModo(''); setTTiempo(''); setTExtras([]); setTMapas([]); setTFormat('1vs1') }} style={{
-                  background: tGameId === g.id ? `${g.color}20` : C.panel,
-                  border: `1.5px solid ${tGameId === g.id ? g.color : C.border}`,
-                  borderRadius: 10, padding: '8px 6px', cursor: 'pointer',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                }}>
+                <button key={g.id}
+                  disabled={g.soon}
+                  onClick={() => { if (!g.soon) { setTGameId(g.id); setTPlataforma(''); setTModo(''); setTTiempo(''); setTExtras([]); setTMapas([]); setTFormat('1vs1') } }}
+                  style={{
+                    background: tGameId === g.id ? `${g.color}20` : C.panel,
+                    border: `1.5px solid ${tGameId === g.id ? g.color : C.border}`,
+                    borderRadius: 10, padding: '8px 6px',
+                    cursor: g.soon ? 'default' : 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    opacity: g.soon ? 0.55 : 1, position: 'relative',
+                  }}>
                   <span style={{ fontSize: 20 }}>{g.icon}</span>
                   <span style={{ fontSize: 10, fontWeight: 700, color: tGameId === g.id ? g.color : C.textDim, textAlign: 'center', lineHeight: 1.2 }}>{g.label}</span>
+                  {g.soon && <span style={{ fontSize: 8, fontWeight: 800, color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b44', borderRadius: 4, padding: '1px 4px', lineHeight: 1.4 }}>PRONTO</span>}
                 </button>
               ))}
             </div>
