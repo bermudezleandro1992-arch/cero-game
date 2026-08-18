@@ -1216,13 +1216,7 @@ export default function TournamentsPage() {
   const { profile } = useAuthStore()
   const [tab, setTab] = useState('hub')
   const [activeTool, setActiveTool] = useState(null)
-  const [showPlanModal, setShowPlanModal] = useState(false)
   const { isCommunity } = usePlan(profile)
-
-  function requirePlan(fn) {
-    if (!isCommunity) { setShowPlanModal(true); return }
-    fn()
-  }
 
   if (activeTool && TOOL_COMPONENTS[activeTool]) {
     const ToolPage = TOOL_COMPONENTS[activeTool]
@@ -1266,35 +1260,6 @@ export default function TournamentsPage() {
         </div>
       </div>
 
-      {/* Plan modal */}
-      {showPlanModal && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 100,
-          background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-        }} onClick={() => setShowPlanModal(false)}>
-          <div onClick={e => e.stopPropagation()} style={{
-            background: C.panel, borderRadius: 20, padding: 28, maxWidth: 340, width: '100%',
-            border: `1px solid ${C.green}33`,
-          }}>
-            <div style={{ textAlign: 'center', marginBottom: 20 }}>
-              <span style={{ fontSize: 48 }}>🌐</span>
-              <h3 style={{ color: C.text, margin: '8px 0 4px', fontWeight: 800 }}>Plan Comunidad</h3>
-              <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>Activá el plan gratis para crear y organizar comunidades</p>
-            </div>
-            {['Crear torneos y ligas', 'Brackets automáticos', 'Sorteos en vivo', 'Rankings por zonas y países', 'Gestión de clanes', 'Estadísticas avanzadas'].map(f => (
-              <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                <span style={{ color: C.text, fontSize: 13 }}>{f}</span>
-              </div>
-            ))}
-            <button onClick={() => setShowPlanModal(false)} style={{
-              width: '100%', marginTop: 16, padding: '13px', borderRadius: 12, border: 'none',
-              background: C.green, color: C.bg, fontWeight: 800, fontSize: 15,
-              cursor: 'pointer', boxShadow: `0 4px 20px ${C.green}44`,
-            }}>Activar gratis — durante beta</button>
-          </div>
-        </div>
-      )}
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
@@ -1302,26 +1267,6 @@ export default function TournamentsPage() {
         {/* ── HUB ── */}
         {tab === 'hub' && (
           <div>
-            {/* Banner plan */}
-            {!isCommunity && (
-              <div style={{
-                background: 'linear-gradient(135deg, #3b82f614, #a855f708)',
-                border: '1.5px solid #3b82f644',
-                borderRadius: 16, padding: '16px 18px', marginBottom: 16,
-                display: 'flex', alignItems: 'center', gap: 14,
-              }}>
-                <span style={{ fontSize: 32 }}>🌐</span>
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: 0, color: '#3b82f6', fontWeight: 800, fontSize: 14 }}>Plan Comunidad — Gratis</p>
-                  <p style={{ margin: '2px 0 0', color: C.textDim, fontSize: 12 }}>Activá tu acceso para organizar torneos, ligas y clanes</p>
-                </div>
-                <button onClick={() => setShowPlanModal(true)} style={{
-                  background: '#3b82f6', border: 'none', borderRadius: 10,
-                  color: '#fff', fontWeight: 700, fontSize: 12,
-                  padding: '8px 14px', cursor: 'pointer', flexShrink: 0,
-                }}>Activar</button>
-              </div>
-            )}
 
             <SectionHeader icon="🚀" title="Acceso rápido" desc="Tus herramientas de comunidad" />
             <div className="comm-grid" style={{ marginBottom: 20 }}>
@@ -1347,7 +1292,6 @@ export default function TournamentsPage() {
         {/* ── TORNEOS ── */}
         {tab === 'torneos' && (
           <div style={{ position: 'relative' }}>
-            {!isCommunity && <LockOverlay onRequest={() => setShowPlanModal(true)} />}
             <SectionHeader icon="🏆" title="Competencias" desc="Torneos, ligas y clanes" />
             <TournamentsList profile={profile} />
           </div>
@@ -1372,10 +1316,9 @@ export default function TournamentsPage() {
               <FeatureCard icon="📋" title="Tabla de Posiciones" desc="Seguí el puntaje en tiempo real de tu liga" color="#3b82f6" onClick={() => setActiveTool('tabla')} />
             </div>
 
-            {/* Herramientas avanzadas — requieren plan Comunidad */}
+            {/* Herramientas avanzadas */}
             <div style={{ position: 'relative' }}>
-              {!isCommunity && <LockOverlay onRequest={() => setShowPlanModal(true)} />}
-              <SectionHeader icon="🛠️" title="Herramientas avanzadas" desc="Requieren plan Comunidad" />
+              <SectionHeader icon="🛠️" title="Herramientas avanzadas" desc="Para organizadores de comunidades" />
               <div className="comm-grid">
                 <FeatureCard icon="🗳️" title="Votaciones" desc="Creá encuestas para tu comunidad" color="#a855f7" onClick={() => setActiveTool('votaciones')} />
                 <FeatureCard icon="📸" title="Carga de Resultados" desc="Los jugadores suben fotos de sus resultados para validación" color={C.green} onClick={() => setActiveTool('resultados')} />
