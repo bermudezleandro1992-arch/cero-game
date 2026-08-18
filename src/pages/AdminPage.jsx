@@ -55,6 +55,8 @@ export default function AdminPage({ onBack }) {
   const [tab, setTab] = useState('payments')
   const [payments, setPayments] = useState([])
   const [users, setUsers] = useState([])
+  const [banners, setBanners] = useState([])
+  const [bannerForm, setBannerForm] = useState(null) // null | {} (new/edit)
   const [searchUser, setSearchUser] = useState('')
   const [loading, setLoading] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState(null)
@@ -123,6 +125,31 @@ export default function AdminPage({ onBack }) {
 
   const pendingCount = payments.filter(p => p.status === 'pending').length
 
+  async function loadBanners() {
+    const { data } = await supabase.from('banners').select('*').order('priority', { ascending: false })
+    setBanners(data || [])
+  }
+
+  async function saveBanner(b) {
+    if (b.id) {
+      await supabase.from('banners').update(b).eq('id', b.id)
+    } else {
+      await supabase.from('banners').insert(b)
+    }
+    setBannerForm(null)
+    loadBanners()
+  }
+
+  async function deleteBanner(id) {
+    await supabase.from('banners').delete().eq('id', id)
+    loadBanners()
+  }
+
+  async function toggleBanner(id, active) {
+    await supabase.from('banners').update({ active }).eq('id', id)
+    loadBanners()
+  }
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
       <Header onBack={onBack} title="Panel Admin" />
@@ -131,6 +158,7 @@ export default function AdminPage({ onBack }) {
       <div style={{ display: 'flex', background: C.panel, borderBottom: `1px solid ${C.border}` }}>
         <Tab label="Pagos" active={tab === 'payments'} count={pendingCount} onClick={() => setTab('payments')} />
         <Tab label="Usuarios" active={tab === 'users'} count={0} onClick={() => setTab('users')} />
+        <Tab label="Banners" active={tab === 'banners'} count={0} onClick={() => { setTab('banners'); loadBanners() }} />
       </div>
 
       {/* Mensaje de feedback */}
@@ -389,6 +417,88 @@ export default function AdminPage({ onBack }) {
               })}
             </div>
           </>
+        )}
+
+        {/* ── BANNERS ── */}
+        {tab === 'banners' && (
+          <div style={{ padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <p style={{ margin: 0, fontWeight: 700, color: C.text, fontSize: 15 }}>Banners / Sponsors</p>
+              <button onClick={() => setBannerForm({ title: '', subtitle: '', emoji: '🎮', bg_color: '#0f172a', accent_color: '#22c55e', position: 'all', priority: 0, active: true, link_url: '' })} style={{ background: C.green, border: 'none', borderRadius: 8, color: C.bg, fontWeight: 700, fontSize: 12, padding: '7px 14px', cursor: 'pointer' }}>
+                + Nuevo Banner
+              </button>
+            </div>
+
+            {bannerForm && (
+              <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
+                <p style={{ margin: '0 0 12px', fontWeight: 700, color: C.green, fontSize: 13 }}>{bannerForm.id ? 'Editar Banner' : 'Nuevo Banner'}</p>
+                {[
+                  ['Título *', 'title', 'text'],
+                  ['Subtítulo', 'subtitle', 'text'],
+                  ['Emoji', 'emoji', 'text'],
+                  ['URL imagen', 'image_url', 'text'],
+                  ['URL destino (link)', 'link_url', 'text'],
+                  ['Color fondo (hex)', 'bg_color', 'text'],
+                  ['Color acento (hex)', 'accent_color', 'text'],
+                  ['Prioridad (número)', 'priority', 'number'],
+                ].map(([label, key, type]) => (
+                  <div key={key} style={{ marginBottom: 10 }}>
+                    <p style={{ margin: '0 0 4px', fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>{label}</p>
+                    <input
+                      type={type}
+                      value={bannerForm[key] || ''}
+                      onChange={e => setBannerForm(f => ({ ...f, [key]: type === 'number' ? Number(e.target.value) : e.target.value }))}
+                      style={{ width: '100%', boxSizing: 'border-box', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none' }}
+                    />
+                  </div>
+                ))}
+                <div style={{ marginBottom: 12 }}>
+                  <p style={{ margin: '0 0 4px', fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>Posición</p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {['all','chats','explorar','torneos'].map(p => (
+                      <button key={p} onClick={() => setBannerForm(f => ({ ...f, position: p }))} style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${bannerForm.position === p ? C.green : C.border}`, background: bannerForm.position === p ? `${C.green}20` : C.panel2, color: bannerForm.position === p ? C.green : C.textDim, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setBannerForm(null)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                  <button onClick={() => saveBanner(bannerForm)} disabled={!bannerForm.title} style={{ flex: 2, padding: '10px', borderRadius: 10, border: 'none', background: bannerForm.title ? C.green : C.panel2, color: bannerForm.title ? C.bg : C.textDim, fontWeight: 700, fontSize: 13, cursor: bannerForm.title ? 'pointer' : 'default' }}>
+                    💾 Guardar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {banners.length === 0 && !bannerForm && (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: C.textDim }}>
+                <div style={{ fontSize: 40, marginBottom: 8 }}>📢</div>
+                <p style={{ margin: 0, fontSize: 13 }}>Sin banners activos. Tocá "+ Nuevo Banner" para agregar uno.</p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {banners.map(b => (
+                <div key={b.id} style={{ background: C.panel, border: `1px solid ${b.active ? b.accent_color + '44' : C.border}`, borderRadius: 12, padding: '12px 14px', opacity: b.active ? 1 : 0.5 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 8, background: b.bg_color, border: `1px solid ${b.accent_color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{b.emoji || '🎮'}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: C.text }}>{b.title}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>{b.position} · prioridad {b.priority}</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => toggleBanner(b.id, !b.active)} style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${C.border}`, background: b.active ? `${C.green}20` : C.panel2, color: b.active ? C.green : C.textDim, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                        {b.active ? '✅ ON' : '⏸ OFF'}
+                      </button>
+                      <button onClick={() => setBannerForm({ ...b })} style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${C.border}`, background: C.panel2, color: C.textDim, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✏️</button>
+                      <button onClick={() => deleteBanner(b.id)} style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid #ef444433', background: '#ef444410', color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>🗑️</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
