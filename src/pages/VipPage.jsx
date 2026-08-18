@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { C } from '../theme'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
@@ -70,26 +70,40 @@ const PLANS = [
   },
 ]
 
+// Tasas de cambio fijas de respaldo (se actualizan si la API falla)
+const FALLBACK_RATES = {
+  ARS: 1250,   // Argentina
+  MXN: 17.5,   // México
+  BRL: 5.75,   // Brasil
+  COP: 4200,   // Colombia
+  CLP: 980,    // Chile
+  UYU: 42,     // Uruguay
+  PEN: 3.75,   // Perú
+  PYG: 7800,   // Paraguay
+}
+
 const PAYMENT_METHODS = [
   {
     id: 'ar_transferencia',
     label: 'Transferencia Argentina',
     emoji: '🇦🇷',
-    desc: 'CVU / Alias — cualquier banco o billetera',
+    desc: 'Pesos ARS — CVU/Alias, cualquier banco o billetera',
     color: '#74b9ff',
     available: true,
     manual: true,
-    category: 'ar',
+    currency: 'ARS',
+    currencySymbol: '$',
+    currencyLabel: 'ARS',
   },
   {
-    id: 'usd_wire',
-    label: 'USD — Wire Transfer',
-    emoji: '🇺🇸',
-    desc: 'Desde cualquier banco al exterior',
-    color: '#00b894',
+    id: 'astropay_latam',
+    label: 'AstroPay — LATAM',
+    emoji: '🌎',
+    desc: 'Colombia, Chile, Brasil, Uruguay, Perú, Paraguay + más',
+    color: '#a855f7',
     available: true,
     manual: true,
-    category: 'intl',
+    currency: null, // se elige el país dentro
   },
   {
     id: 'mxn_transfer',
@@ -99,7 +113,9 @@ const PAYMENT_METHODS = [
     color: '#e17055',
     available: true,
     manual: true,
-    category: 'intl',
+    currency: 'MXN',
+    currencySymbol: '$',
+    currencyLabel: 'MXN',
   },
   {
     id: 'crypto',
@@ -109,7 +125,17 @@ const PAYMENT_METHODS = [
     color: '#F3BA2F',
     available: true,
     manual: true,
-    category: 'crypto',
+    currency: 'USD',
+  },
+  {
+    id: 'usd_wire',
+    label: 'USD — Wire Transfer',
+    emoji: '🇺🇸',
+    desc: 'Desde cualquier banco al exterior',
+    color: '#00b894',
+    available: true,
+    manual: true,
+    currency: 'USD',
   },
   {
     id: 'mercadopago',
@@ -118,8 +144,17 @@ const PAYMENT_METHODS = [
     desc: 'Próximamente',
     color: '#009EE3',
     available: false,
-    category: 'other',
   },
+]
+
+// Países LATAM para AstroPay
+const ASTROPAY_COUNTRIES = [
+  { id: 'co', flag: '🇨🇴', name: 'Colombia',  currency: 'COP', symbol: '$',  bank: 'Nequi / Bancolombia', currencyLabel: 'COP' },
+  { id: 'cl', flag: '🇨🇱', name: 'Chile',     currency: 'CLP', symbol: '$',  bank: 'Cuenta RUT / banco',  currencyLabel: 'CLP' },
+  { id: 'br', flag: '🇧🇷', name: 'Brasil',    currency: 'BRL', symbol: 'R$', bank: 'PIX',                 currencyLabel: 'BRL' },
+  { id: 'uy', flag: '🇺🇾', name: 'Uruguay',   currency: 'UYU', symbol: '$',  bank: 'Transferencia',       currencyLabel: 'UYU' },
+  { id: 'pe', flag: '🇵🇪', name: 'Perú',      currency: 'PEN', symbol: 'S/', bank: 'Yape / Plin / banco', currencyLabel: 'PEN' },
+  { id: 'py', flag: '🇵🇾', name: 'Paraguay',  currency: 'PYG', symbol: '₲',  bank: 'Tigo Money / banco',  currencyLabel: 'PYG' },
 ]
 
 // 🇦🇷 Argentina — 2 cuentas
@@ -196,8 +231,43 @@ export default function VipPage({ onBack }) {
   const [proofFile, setProofFile] = useState(null)
   const [proofPreview, setProofPreview] = useState(null)
 
+  const [rates, setRates] = useState(FALLBACK_RATES)
+  const [ratesUpdated, setRatesUpdated] = useState(null)
+  const [latamCountry, setLatamCountry] = useState(null)
+
+  useEffect(() => {
+    fetch('https://open.er-api.com/v6/latest/USD')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.rates) {
+          setRates({
+            ARS: data.rates.ARS || FALLBACK_RATES.ARS,
+            MXN: data.rates.MXN || FALLBACK_RATES.MXN,
+            BRL: data.rates.BRL || FALLBACK_RATES.BRL,
+            COP: data.rates.COP || FALLBACK_RATES.COP,
+            CLP: data.rates.CLP || FALLBACK_RATES.CLP,
+            UYU: data.rates.UYU || FALLBACK_RATES.UYU,
+            PEN: data.rates.PEN || FALLBACK_RATES.PEN,
+            PYG: data.rates.PYG || FALLBACK_RATES.PYG,
+          })
+          setRatesUpdated(new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }))
+        }
+      })
+      .catch(() => {}) // usa fallback si falla
+  }, [])
+
+  function toLocal(usd, currency) {
+    const rate = rates[currency] || 1
+    const amount = usd * rate
+    if (amount >= 1000) return Math.round(amount).toLocaleString('es')
+    return amount.toFixed(2)
+  }
+
   const plan = PLANS.find(p => p.id === selected)
   const planIdToSend = annual && plan?.annual ? plan.annual.id : selected
+  const planUSD = annual && plan?.annual
+    ? parseFloat(plan.annual.price.replace('$', ''))
+    : (plan?.priceUSD || 0)
 
   async function handleMercadoPago() {
     setLoading(true)
@@ -311,14 +381,40 @@ export default function VipPage({ onBack }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px' }}>
 
           <Section label="Monto a pagar">
-            <div style={{ background: C.panel, border: `1px solid ${plan?.color}44`, borderRadius: 14, padding: '16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 32, fontWeight: 900, color: plan?.color }}>
-                ${annual && plan?.annual ? plan.annual.price.replace('$','') : plan?.priceUSD} USD
-              </div>
-              <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
-                {plan?.emoji} {plan?.name} {annual ? '(anual)' : '(mensual)'}
-              </div>
-            </div>
+            {(() => {
+              const pm = PAYMENT_METHODS.find(m => m.id === payMethod)
+              const activeCurrency = payMethod === 'astropay_latam' && latamCountry
+                ? latamCountry.currency
+                : pm?.currency
+              const activeSymbol = payMethod === 'astropay_latam' && latamCountry
+                ? latamCountry.symbol
+                : (activeCurrency === 'ARS' ? '$' : activeCurrency === 'MXN' ? '$' : '')
+              const activeLabel = payMethod === 'astropay_latam' && latamCountry
+                ? latamCountry.currencyLabel
+                : (pm?.currencyLabel || pm?.currency || 'USD')
+              const showLocal = activeCurrency && activeCurrency !== 'USD'
+              return (
+                <div style={{ background: C.panel, border: `1px solid ${plan?.color}44`, borderRadius: 14, padding: '16px', textAlign: 'center' }}>
+                  {showLocal ? (
+                    <>
+                      <div style={{ fontSize: 32, fontWeight: 900, color: plan?.color }}>
+                        {activeSymbol} {toLocal(planUSD, activeCurrency)} <span style={{ fontSize: 14 }}>{activeLabel}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: C.textDim, marginTop: 4 }}>
+                        ≈ ${planUSD} USD · {ratesUpdated ? `cotización ${ratesUpdated}` : 'cotización de referencia'}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 32, fontWeight: 900, color: plan?.color }}>
+                      ${planUSD} <span style={{ fontSize: 14 }}>USD</span>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 13, color: C.textDim, marginTop: 6 }}>
+                    {plan?.emoji} {plan?.name} {annual ? '(anual)' : '(mensual)'}
+                  </div>
+                </div>
+              )
+            })()}
           </Section>
 
           {/* 🇦🇷 ARGENTINA */}
@@ -344,6 +440,48 @@ export default function VipPage({ onBack }) {
               <p style={{ fontSize: 12, color: '#74b9ff', lineHeight: 1.6, marginBottom: 16 }}>
                 💡 Transferí desde Mercado Pago, Uala, Naranja X, BBVA o cualquier banco/billetera. Usá el alias o el CVU.
               </p>
+            </>
+          )}
+
+          {/* 🌎 ASTROPAY LATAM */}
+          {payMethod === 'astropay_latam' && (
+            <>
+              <Section label="Seleccioná tu país">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+                  {ASTROPAY_COUNTRIES.map(c => (
+                    <button key={c.id} onClick={() => setLatamCountry(c)} style={{
+                      padding: '10px 6px', borderRadius: 12, border: `1.5px solid ${latamCountry?.id === c.id ? '#a855f7' : C.border}`,
+                      background: latamCountry?.id === c.id ? '#a855f720' : C.panel,
+                      cursor: 'pointer', textAlign: 'center',
+                    }}>
+                      <div style={{ fontSize: 22 }}>{c.flag}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.text, marginTop: 3 }}>{c.name}</div>
+                      <div style={{ fontSize: 10, color: C.textDim }}>{c.bank}</div>
+                    </button>
+                  ))}
+                </div>
+              </Section>
+              {latamCountry && (
+                <Section label={`Instrucciones — ${latamCountry.flag} ${latamCountry.name}`}>
+                  <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 13, color: C.text, fontWeight: 700 }}>Cómo pagar vía AstroPay</p>
+                    <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: C.textDim, lineHeight: 1.8 }}>
+                      <li>Abrí AstroPay en tu dispositivo</li>
+                      <li>Cargá saldo desde {latamCountry.bank}</li>
+                      <li>Enviá el monto equivalente a <strong style={{ color: C.text }}>somoslfa</strong> (alias/usuario AstroPay)</li>
+                      <li>Subí el comprobante abajo</li>
+                    </ol>
+                    <div style={{ marginTop: 10, padding: '10px 12px', background: `#a855f715`, border: `1px solid #a855f733`, borderRadius: 10 }}>
+                      <p style={{ margin: 0, fontSize: 11, color: C.textDim }}>Monto a enviar</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 18, fontWeight: 900, color: '#a855f7' }}>
+                        {latamCountry.symbol} {toLocal(planUSD, latamCountry.currency)} {latamCountry.currencyLabel}
+                        <span style={{ fontSize: 11, fontWeight: 400, color: C.textDim, marginLeft: 8 }}>≈ ${planUSD} USD</span>
+                      </p>
+                      {ratesUpdated && <p style={{ margin: '3px 0 0', fontSize: 10, color: C.textDim }}>Cotización actualizada a las {ratesUpdated}</p>}
+                    </div>
+                  </div>
+                </Section>
+              )}
             </>
           )}
 
