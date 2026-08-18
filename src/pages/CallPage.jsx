@@ -4,16 +4,21 @@ import { sounds, ringtone, outgoingRing, busyTone } from '../lib/sounds'
 
 const TURN_USER = import.meta.env.VITE_TURN_USERNAME || 'openrelayproject'
 const TURN_CRED = import.meta.env.VITE_TURN_CREDENTIAL || 'openrelayproject'
-const TURN_HOST = import.meta.env.VITE_TURN_USERNAME ? 'a.relay.metered.ca' : 'a.relay.metered.ca'
 
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: `turn:${TURN_HOST}:80`, username: TURN_USER, credential: TURN_CRED },
-    { urls: `turn:${TURN_HOST}:80?transport=tcp`, username: TURN_USER, credential: TURN_CRED },
-    { urls: `turns:${TURN_HOST}:443?transport=tcp`, username: TURN_USER, credential: TURN_CRED },
+    { urls: 'stun:stun.relay.metered.ca:80' },
+    { urls: 'turn:a.relay.metered.ca:80',            username: TURN_USER, credential: TURN_CRED },
+    { urls: 'turn:a.relay.metered.ca:80?transport=tcp', username: TURN_USER, credential: TURN_CRED },
+    { urls: 'turn:a.relay.metered.ca:443',           username: TURN_USER, credential: TURN_CRED },
+    { urls: 'turns:a.relay.metered.ca:443?transport=tcp', username: TURN_USER, credential: TURN_CRED },
+    { urls: 'turn:global.relay.metered.ca:80',       username: TURN_USER, credential: TURN_CRED },
+    { urls: 'turn:global.relay.metered.ca:443',      username: TURN_USER, credential: TURN_CRED },
+    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: TURN_USER, credential: TURN_CRED },
   ],
   iceCandidatePoolSize: 10,
   iceTransportPolicy: 'all',
@@ -236,6 +241,8 @@ export default function CallPage({
   const remoteVid = useRef(null)
   const remoteAudio = useRef(null)
   const pendingIce = useRef([])
+  const sessionChReady = useRef(false)
+  const pendingOutIce = useRef([])  // ICE candidates queued until sessionCh is ready
   const touchY0 = useRef(0)
 
   const name = contact?.display_name || 'Usuario'
@@ -248,30 +255,47 @@ export default function CallPage({
   useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
 
   useEffect(() => {
-    sessionCh.current = supabase.channel(`call-session:${conversationId}`)
+    sessionCh.current = supabase.channel(`call-session:${conversationId}`, {
+      config: { broadcast: { ack: false } },
+    })
       .on('broadcast', { event: 'call-answer' }, async ({ payload }) => {
         if (!pc.current) return
-        await pc.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
-        for (const c of pendingIce.current) {
-          try { await pc.current.addIceCandidate(new RTCIceCandidate(c)) } catch (_) {}
-        }
-        pendingIce.current = []
+        try {
+          const desc = typeof payload.answer === 'string'
+            ? new RTCSessionDescription(JSON.parse(payload.answer))
+            : new RTCSessionDescription(payload.answer)
+          await pc.current.setRemoteDescription(desc)
+          for (const c of pendingIce.current) {
+            try { await pc.current.addIceCandidate(new RTCIceCandidate(c)) } catch (_) {}
+          }
+          pendingIce.current = []
+        } catch (e) { console.error('[call-answer]', e) }
       })
       .on('broadcast', { event: 'call-ice' }, async ({ payload }) => {
         if (payload.from === myUserId) return
-        const cand = new RTCIceCandidate(payload.candidate)
-        if (pc.current?.remoteDescription) {
-          try { await pc.current.addIceCandidate(cand) } catch (_) {}
-        } else { pendingIce.current.push(payload.candidate) }
+        try {
+          const cand = new RTCIceCandidate(payload.candidate)
+          if (pc.current?.remoteDescription) {
+            await pc.current.addIceCandidate(cand)
+          } else { pendingIce.current.push(payload.candidate) }
+        } catch (_) {}
       })
       .on('broadcast', { event: 'call-end' }, () => hangup(false))
       .on('broadcast', { event: 'call-reject' }, () => { busyTone.start(); setTimeout(() => busyTone.stop(), 3000); hangup(false) })
-      // ── New events ──────────────────────────────────────────────────────────
       .on('broadcast', { event: 'call-reaction' }, ({ payload }) => {
         if (payload.from === myUserId) return
         addReaction(payload.emoji)
       })
-      .subscribe()
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          sessionChReady.current = true
+          // Flush queued outgoing ICE candidates
+          for (const c of pendingOutIce.current) {
+            try { await sessionCh.current.send({ type: 'broadcast', event: 'call-ice', payload: { candidate: c, from: myUserId } }) } catch (_) {}
+          }
+          pendingOutIce.current = []
+        }
+      })
 
     if (!isIncoming) {
       startOutgoing(); outgoingRing.start()
@@ -376,7 +400,12 @@ export default function CallPage({
       if (remoteVid.current) { remoteVid.current.srcObject = s; remoteVid.current.play().catch(() => {}) }
     }
     conn.onicecandidate = e => {
-      if (e.candidate) sessionCh.current?.send({ type: 'broadcast', event: 'call-ice', payload: { candidate: e.candidate, from: myUserId } })
+      if (!e.candidate) return
+      if (sessionChReady.current) {
+        sessionCh.current?.send({ type: 'broadcast', event: 'call-ice', payload: { candidate: e.candidate, from: myUserId } })
+      } else {
+        pendingOutIce.current.push(e.candidate)
+      }
     }
     conn.onconnectionstatechange = () => {
       if (conn.connectionState === 'connected') {
@@ -402,9 +431,11 @@ export default function CallPage({
     try {
       const stream = await getMedia()
       const conn = makePc(stream)
-      const offer = await conn.createOffer()
+      const offer = await conn.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: callType === 'video' })
       await conn.setLocalDescription(offer)
-      const ch = supabase.channel(`user-calls:${contact.id}`)
+
+      // Send offer via dedicated user channel (callee is listening here)
+      const ch = supabase.channel(`user-calls:${contact.id}`, { config: { broadcast: { ack: false } } })
       await new Promise(r => ch.subscribe(s => s === 'SUBSCRIBED' && r()))
       await ch.send({ type: 'broadcast', event: 'call-offer', payload: { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer } })
       supabase.removeChannel(ch)
@@ -425,15 +456,30 @@ export default function CallPage({
     try {
       const stream = await getMedia()
       const conn = makePc(stream)
-      await conn.setRemoteDescription(new RTCSessionDescription(incomingOffer))
+
+      // Offer can arrive as object (Realtime broadcast) or JSON string (push notification)
+      const offerDesc = typeof incomingOffer === 'string'
+        ? new RTCSessionDescription(JSON.parse(incomingOffer))
+        : new RTCSessionDescription(incomingOffer)
+      await conn.setRemoteDescription(offerDesc)
+
       for (const c of pendingIce.current) {
         try { await conn.addIceCandidate(new RTCIceCandidate(c)) } catch (_) {}
       }
       pendingIce.current = []
+
       const answer = await conn.createAnswer()
       await conn.setLocalDescription(answer)
+
+      // Wait for channel to be ready before sending answer
+      if (!sessionChReady.current) {
+        await new Promise(resolve => {
+          const iv = setInterval(() => { if (sessionChReady.current) { clearInterval(iv); resolve() } }, 100)
+          setTimeout(() => { clearInterval(iv); resolve() }, 5000)
+        })
+      }
       sessionCh.current?.send({ type: 'broadcast', event: 'call-answer', payload: { answer } })
-    } catch (e) { alert(`Error: ${e.message}`); hangup(true) }
+    } catch (e) { console.error('[acceptCall]', e); alert(`Error: ${e.message}`); hangup(true) }
   }
 
   function goActive() {
