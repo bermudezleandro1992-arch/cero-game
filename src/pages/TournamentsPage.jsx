@@ -1232,14 +1232,14 @@ export default function TournamentsPage() {
       {/* Header */}
       <div style={{ padding: '16px 16px 0', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <span style={{ fontSize: 24 }}>🌐</span>
+          <span style={{ fontSize: 24 }}>🏆</span>
           <div>
-            <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 18 }}>Comunidad</p>
-            <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>Centro de organización y competencias</p>
+            <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 18 }}>Torneos & Ligas</p>
+            <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>eFootball · FC 26 · FC 27 · y más</p>
           </div>
           {isCommunity && (
-            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: '#3b82f614', color: '#3b82f6', border: '1px solid #3b82f644' }}>
-              🌐 Plan Comunidad
+            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: `${C.green}14`, color: C.green, border: `1px solid ${C.green}44` }}>
+              PRO
             </span>
           )}
         </div>

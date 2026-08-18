@@ -221,11 +221,13 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
       .select('user_id, role')
       .eq('conversation_id', conversation.id)
       .then(({ data }) => {
-        if (data) {
-          const map = {}
-          data.forEach(r => { map[r.user_id] = r.role })
-          setRoles(map)
+        const map = {}
+        ;(data || []).forEach(r => { map[r.user_id] = r.role })
+        // Si el creador no tiene entrada en group_roles, lo marcamos como owner localmente
+        if (conversation.created_by && !map[conversation.created_by]) {
+          map[conversation.created_by] = 'owner'
         }
+        setRoles(map)
       })
   }, [conversation?.id])
 
