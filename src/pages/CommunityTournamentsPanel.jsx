@@ -54,6 +54,45 @@ function getStructures(mode, type) {
 
 const ALL_SIZES = [2, 4, 8, 12, 16, 32, 64, 128]
 
+const PLATFORMS = [
+  { id: 'crossplay', label: 'Crossplay', icon: '🌐', desc: 'PC / PS5 / PS4 / Xbox' },
+  { id: 'ps5',       label: 'PS5',       icon: '🎮', desc: 'PlayStation 5' },
+  { id: 'ps4',       label: 'PS4',       icon: '🎮', desc: 'PlayStation 4' },
+  { id: 'pc',        label: 'PC',        icon: '🖥️', desc: 'PC' },
+  { id: 'xbox',      label: 'Xbox',      icon: '🟢', desc: 'Xbox Series X/S / Xbox One' },
+]
+
+const RESULT_MODES = [
+  { id: 'jugadores', label: '⚡ Automático', desc: 'Jugadores reportan sus resultados con foto' },
+  { id: 'manual',    label: '🎯 Manual',     desc: 'El organizador carga los resultados' },
+]
+
+const DISPUTE_TIMES = [2, 5, 10, 15, 30, 60, 120]
+
+// Common countries + global
+const COUNTRIES = [
+  { code: 'global', label: '🌐 Global (todos los países)' },
+  { code: 'AR', label: '🇦🇷 Argentina' },
+  { code: 'CL', label: '🇨🇱 Chile' },
+  { code: 'MX', label: '🇲🇽 México' },
+  { code: 'CO', label: '🇨🇴 Colombia' },
+  { code: 'PE', label: '🇵🇪 Perú' },
+  { code: 'UY', label: '🇺🇾 Uruguay' },
+  { code: 'BR', label: '🇧🇷 Brasil' },
+  { code: 'VE', label: '🇻🇪 Venezuela' },
+  { code: 'EC', label: '🇪🇨 Ecuador' },
+  { code: 'BO', label: '🇧🇴 Bolivia' },
+  { code: 'PY', label: '🇵🇾 Paraguay' },
+  { code: 'US', label: '🇺🇸 Estados Unidos' },
+  { code: 'ES', label: '🇪🇸 España' },
+  { code: 'GB', label: '🇬🇧 Reino Unido' },
+  { code: 'DE', label: '🇩🇪 Alemania' },
+  { code: 'FR', label: '🇫🇷 Francia' },
+  { code: 'IT', label: '🇮🇹 Italia' },
+  { code: 'LA', label: '🌎 Latinoamérica' },
+  { code: 'EU', label: '🇪🇺 Europa' },
+]
+
 function getPlanLimits(profile) {
   const role = profile?.role || 'member'
   if (['ceo', 'admin', 'comunidad'].includes(role)) return { max: 9999, label: 'Sin límite' }
@@ -77,15 +116,28 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
   const planLimits = getPlanLimits(profile)
   const isFree = planLimits.max <= 8
 
-  const [type,      setType]      = useState('tournament')
-  const [name,      setName]      = useState('')
-  const [desc,      setDesc]      = useState('')
-  const [game,      setGame]      = useState(communityTags?.[0] || '')
-  const [mode,      setMode]      = useState('1vs1')
-  const [structure, setStructure] = useState('eliminatorias')
-  const [maxPl,     setMaxPl]     = useState(Math.min(8, planLimits.max))
-  const [busy,      setBusy]      = useState(false)
-  const [err,       setErr]       = useState('')
+  const [type,        setType]        = useState('tournament')
+  const [name,        setName]        = useState('')
+  const [desc,        setDesc]        = useState('')
+  const [game,        setGame]        = useState(communityTags?.[0] || '')
+  const [mode,        setMode]        = useState('1vs1')
+  const [structure,   setStructure]   = useState('eliminatorias')
+  const [maxPl,       setMaxPl]       = useState(Math.min(8, planLimits.max))
+  const [resultMode,    setResultMode]    = useState('jugadores')
+  const [disputeMin,    setDisputeMin]    = useState(10)
+  const [platform,      setPlatform]      = useState('crossplay')
+  const [country,       setCountry]       = useState('global')
+  const [startDate,     setStartDate]     = useState('')
+  const [closeDate,     setCloseDate]     = useState('')
+  const [rules,         setRules]         = useState('')
+  const [fee,           setFee]           = useState('')
+  // Liga-specific
+  const [ligaTipo,      setLigaTipo]      = useState('genuino')
+  const [temporada,     setTemporada]     = useState(1)
+  const [division,      setDivision]      = useState('A')
+  const [clasificaCopa, setClasificaCopa] = useState(8)
+  const [busy,          setBusy]          = useState(false)
+  const [err,           setErr]           = useState('')
 
   const structures = getStructures(mode, type)
   // Reset structure if current not valid for new type/mode
@@ -121,6 +173,20 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
         tournament_mode: mode,
         tournament_format: validStruct,
         tournament_status: 'inscripcion',
+        result_mode: resultMode,
+        dispute_time_min: disputeMin,
+        platform: platform,
+        country_restriction: country,
+        start_date: startDate || null,
+        registration_close: closeDate || null,
+        rules: rules.trim() || null,
+        inscription_fee: fee.trim() || null,
+        ...(type === 'liga' ? {
+          liga_tipo: ligaTipo,
+          temporada: temporada,
+          division: division,
+          clasifica_copa: clasificaCopa,
+        } : {}),
       }).select('id').single()
       if (convErr) throw convErr
 
@@ -236,6 +302,153 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
         <p style={{ margin: 0, fontSize: 11, color: isFree ? '#f59e0b' : C.textDim }}>
           {isFree ? '⚠️ Plan Gratis — máximo 8 jugadores. Subí de plan para más.' : `✓ ${planLimits.label}`}
         </p>
+      </div>
+
+      {/* Descripción */}
+      <div>
+        <span style={lbl}>Descripción</span>
+        <textarea style={{ ...inp, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }}
+          placeholder="Descripción opcional del torneo..." value={desc}
+          onChange={e => setDesc(e.target.value)} maxLength={400} />
+      </div>
+
+      {/* Liga-specific fields */}
+      {type === 'liga' && (<>
+        <div>
+          <span style={lbl}>Tipo de liga</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {[{id:'genuino',label:'🎮 Genuino',desc:'Equipos reales, jugadores auténticos'},{id:'dreamteam',label:'⭐ DreamTeam',desc:'Equipo propio (Ultimate Team)'}].map(t => (
+              <button key={t.id} onClick={() => setLigaTipo(t.id)} style={{
+                flex: 1, padding: '8px 6px', borderRadius: 10, cursor: 'pointer',
+                border: `2px solid ${ligaTipo === t.id ? C.green : C.border + '66'}`,
+                background: ligaTipo === t.id ? `${C.green}15` : C.panel2,
+                color: ligaTipo === t.id ? C.green : C.text2, fontWeight: 700, fontSize: 11, textAlign: 'center',
+              }}>
+                <div>{t.label}</div>
+                <div style={{ fontSize: 10, fontWeight: 400, color: C.textDim, marginTop: 2 }}>{t.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <span style={lbl}>Temporada</span>
+            <input type="number" min={1} style={inp} value={temporada}
+              onChange={e => setTemporada(parseInt(e.target.value) || 1)} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <span style={lbl}>División de inicio</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {['A','B','C','D'].map(d => (
+                <button key={d} onClick={() => setDivision(d)} style={{
+                  flex: 1, padding: '9px 0', borderRadius: 10, cursor: 'pointer',
+                  border: `2px solid ${division === d ? C.green : C.border + '66'}`,
+                  background: division === d ? `${C.green}15` : C.panel2,
+                  color: division === d ? C.green : C.text2, fontWeight: 800, fontSize: 13,
+                }}>Div {d}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div>
+          <span style={lbl}>Clasifican a Copa</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {[4,6,8,12,16].map(n => (
+              <button key={n} onClick={() => setClasificaCopa(n)} style={chip(clasificaCopa === n, false)}>
+                Top {n}
+              </button>
+            ))}
+          </div>
+          <p style={{ margin: '4px 0 0', fontSize: 11, color: C.textDim }}>Jugadores que clasifican a Copa LFA al final de la temporada</p>
+        </div>
+      </>)}
+
+      {/* Modo resultado */}
+      <div>
+        <span style={lbl}>Carga de resultados</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {RESULT_MODES.map(m => (
+            <button key={m.id} onClick={() => setResultMode(m.id)} style={{
+              flex: 1, padding: '8px 6px', borderRadius: 10, cursor: 'pointer',
+              border: `2px solid ${resultMode === m.id ? C.green : C.border + '66'}`,
+              background: resultMode === m.id ? `${C.green}15` : C.panel2,
+              color: resultMode === m.id ? C.green : C.text2, fontWeight: 700, fontSize: 11, textAlign: 'center',
+            }}>
+              <div>{m.label}</div>
+              <div style={{ fontSize: 10, fontWeight: 400, color: C.textDim, marginTop: 2 }}>{m.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tiempo disputa */}
+      <div>
+        <span style={lbl}>Tiempo de disputa</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {DISPUTE_TIMES.map(t => (
+            <button key={t} onClick={() => setDisputeMin(t)} style={chip(disputeMin === t, false)}>
+              {t < 60 ? `${t} min` : `${t / 60}h`}
+            </button>
+          ))}
+        </div>
+        <p style={{ margin: '4px 0 0', fontSize: 11, color: C.textDim }}>
+          Tiempo que tiene el staff para resolver una disputa de resultado
+        </p>
+      </div>
+
+      {/* Plataforma */}
+      <div>
+        <span style={lbl}>Plataforma</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {PLATFORMS.map(p => (
+            <button key={p.id} onClick={() => setPlatform(p.id)} style={chip(platform === p.id, false)}>
+              {p.icon} {p.label}
+            </button>
+          ))}
+        </div>
+        <p style={{ margin: '4px 0 0', fontSize: 11, color: C.textDim }}>
+          {PLATFORMS.find(p => p.id === platform)?.desc}
+        </p>
+      </div>
+
+      {/* Restricción de país */}
+      <div>
+        <span style={lbl}>Restricción de país</span>
+        <select value={country} onChange={e => setCountry(e.target.value)}
+          style={{ ...inp, cursor: 'pointer' }}>
+          {COUNTRIES.map(c => (
+            <option key={c.code} value={c.code}>{c.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Inscripción fee */}
+      <div>
+        <span style={lbl}>Inscripción</span>
+        <input style={inp} placeholder="Ej: Gratis / USD 5 / 500 LFC" value={fee}
+          onChange={e => setFee(e.target.value)} maxLength={60} />
+      </div>
+
+      {/* Fechas opcionales */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <span style={lbl}>Cierre de inscripciones</span>
+          <input type="datetime-local" style={inp} value={closeDate}
+            onChange={e => setCloseDate(e.target.value)} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <span style={lbl}>Fecha de inicio</span>
+          <input type="datetime-local" style={inp} value={startDate}
+            onChange={e => setStartDate(e.target.value)} />
+        </div>
+      </div>
+
+      {/* Reglamento de sala */}
+      <div>
+        <span style={lbl}>Reglamento de sala</span>
+        <textarea style={{ ...inp, minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }}
+          placeholder="Reglas específicas de este torneo (comportamiento, configuración de sala, etc.)"
+          value={rules} onChange={e => setRules(e.target.value)} maxLength={2000} />
       </div>
 
       {err && <p style={{ margin: 0, fontSize: 12, color: '#ef4444' }}>{err}</p>}
@@ -901,7 +1114,42 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
 
         {/* ── LIGA ── */}
         {activeTab === 'liga' && (
-          <TablaPosicionesPage tournamentId={item.id} tournamentName={item.name} embedded={true} />
+          <TablaPosicionesPage
+            tournamentId={item.id}
+            tournamentName={item.name}
+            embedded={true}
+            isOrganizer={canManage}
+            ligaData={item}
+            onLigaAction={async (action, payload) => {
+              if (action === 'set_fase') {
+                await supabase.from('conversations').update({ liga_fase: payload }).eq('id', item.id)
+                setItem(prev => ({ ...prev, liga_fase: payload }))
+              } else if (action === 'finalizar') {
+                await supabase.from('conversations').update({ tournament_status: 'finalizado' }).eq('id', item.id)
+                setItem(prev => ({ ...prev, tournament_status: 'finalizado' }))
+              } else if (action === 'generar_fixture') {
+                // Round-robin fixture: each player vs each other (home + away)
+                const pts = participants
+                const jornadas = []
+                let jornadaNum = 1
+                for (let i = 0; i < pts.length; i++) {
+                  for (let j = i + 1; j < pts.length; j++) {
+                    jornadas.push({ player1_id: pts[i].user_id, player2_id: pts[j].user_id, jornada_number: jornadaNum, match_number: 1 })
+                    jornadas.push({ player1_id: pts[j].user_id, player2_id: pts[i].user_id, jornada_number: jornadaNum + Math.ceil(pts.length / 2), match_number: 1 })
+                    jornadaNum++
+                  }
+                }
+                const rows = jornadas.map(j => ({
+                  tournament_id: item.id, round: 1, status: 'pendiente', ...j,
+                }))
+                if (rows.length > 0) {
+                  await supabase.from('tournament_matches').insert(rows)
+                }
+                await supabase.from('conversations').update({ tournament_status: 'en_curso' }).eq('id', item.id)
+                setItem(prev => ({ ...prev, tournament_status: 'en_curso' }))
+              }
+            }}
+          />
         )}
       </div>
 

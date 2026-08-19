@@ -43,14 +43,34 @@ export default function LoginPage() {
       if (!birthdate || age === null) { setError('Ingresá tu fecha de nacimiento'); setLoading(false); return }
       if (age < 13) { setError('Debés tener al menos 13 años para registrarte.'); setLoading(false); return }
       if (!termsAccepted) { setError('Aceptá los términos y condiciones para continuar'); setLoading(false); return }
+
+      // Geolocate by IP to capture country at registration
+      let countryCode = null
+      try {
+        const geo = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(4000) })
+        if (geo.ok) {
+          const geoData = await geo.json()
+          countryCode = geoData.country_code || null
+        }
+      } catch { /* silent — non-blocking */ }
+
       const { error } = await supabase.auth.signUp({
         email, password,
         options: {
-          data: { display_name: name || email.split('@')[0] },
+          data: { display_name: name || email.split('@')[0], country_code: countryCode },
           emailRedirectTo: window.location.origin,
         }
       })
-      if (error) setError(error.message); else setSent(true)
+      if (error) { setError(error.message) } else {
+        // Also save country_code in users table after signup
+        if (countryCode) {
+          setTimeout(async () => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) await supabase.from('users').update({ country_code: countryCode }).eq('id', user.id)
+          }, 2000)
+        }
+        setSent(true)
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) setError('Email o contraseña incorrectos')
