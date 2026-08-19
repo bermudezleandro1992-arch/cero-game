@@ -140,103 +140,95 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
     width: '100%', boxSizing: 'border-box', outline: 'none',
   }
 
-  const label = { margin: '0 0 7px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }
+  const lbl = { margin: '0 0 6px', fontSize: 10, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1.5px', display: 'block' }
+  const chip = (selected, locked) => ({
+    padding: '6px 13px', borderRadius: 20, border: `1px solid ${selected ? C.green : locked ? C.border + '44' : C.border}`,
+    background: selected ? C.green : locked ? `${C.panel2}88` : C.panel2,
+    color: selected ? C.bg : locked ? C.textDim : C.text2,
+    fontWeight: selected ? 700 : 500, fontSize: 12, cursor: locked ? 'not-allowed' : 'pointer',
+    opacity: locked ? 0.4 : 1,
+  })
+
+  // Only show games the community has set up, or all if none configured
+  const gameOptions = communityTags?.length
+    ? GAME_CATALOG.filter(g => communityTags.includes(g.id))
+    : GAME_CATALOG
 
   return (
     <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.text }}>Crear competencia</p>
-
-      {/* Torneo / Liga */}
-      <div style={{ display: 'flex', gap: 8 }}>
+      {/* Type toggle */}
+      <div style={{ display: 'flex', gap: 6, background: C.panel2, borderRadius: 12, padding: 4 }}>
         {Object.entries(TYPE_CFG).map(([k, v]) => (
           <button key={k} onClick={() => setType(k)} style={{
-            flex: 1, padding: '9px', borderRadius: 10, border: 'none', cursor: 'pointer',
-            background: type === k ? C.green : C.panel2,
-            color: type === k ? C.bg : C.text2, fontWeight: 600, fontSize: 13,
+            flex: 1, padding: '8px', borderRadius: 9, border: 'none', cursor: 'pointer',
+            background: type === k ? C.green : 'transparent',
+            color: type === k ? C.bg : C.text2, fontWeight: 700, fontSize: 13,
+            transition: 'background .15s',
           }}>{v.icon} {v.label}</button>
         ))}
       </div>
 
-      <input style={inp} placeholder="Nombre *" value={name} onChange={e => setName(e.target.value)} maxLength={60} />
-      <textarea style={{ ...inp, resize: 'vertical', minHeight: 56, fontFamily: 'inherit' }} placeholder="Descripción (opcional)" value={desc} onChange={e => setDesc(e.target.value)} maxLength={300} />
+      <input style={{
+        background: C.panel2, border: `1px solid ${C.border}`,
+        borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14,
+        width: '100%', boxSizing: 'border-box', outline: 'none',
+      }} placeholder="Nombre del torneo *" value={name} onChange={e => setName(e.target.value)} maxLength={60} />
 
-      {/* Juego */}
-      <div>
-        <p style={label}>Juego</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {GAME_CATALOG.map(g => (
-            <button key={g.id} onClick={() => setGame(g.id)} style={{
-              padding: '5px 11px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12,
-              background: game === g.id ? C.green : C.panel2,
-              color: game === g.id ? C.bg : C.text2, fontWeight: game === g.id ? 700 : 400,
-            }}>{g.icon} {g.label}</button>
-          ))}
+      {/* Juego — solo los de la comunidad */}
+      {gameOptions.length > 0 && (
+        <div>
+          <span style={lbl}>Juego</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {gameOptions.map(g => (
+              <button key={g.id} onClick={() => setGame(g.id)} style={chip(game === g.id, false)}>
+                {g.icon} {g.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Modo */}
       <div>
-        <p style={label}>Modo</p>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <span style={lbl}>Modo</span>
+        <div style={{ display: 'flex', gap: 6 }}>
           {MODES.map(m => (
             <button key={m.id} onClick={() => setMode(m.id)} style={{
-              flex: 1, padding: '9px 6px', borderRadius: 10, border: `2px solid ${mode === m.id ? C.green : C.border}`,
-              background: mode === m.id ? `${C.green}18` : C.panel2, cursor: 'pointer',
+              flex: 1, padding: '8px 4px', borderRadius: 10,
+              border: `2px solid ${mode === m.id ? C.green : C.border + '66'}`,
+              background: mode === m.id ? `${C.green}15` : C.panel2, cursor: 'pointer',
               color: mode === m.id ? C.green : C.text2, fontWeight: 700, fontSize: 12,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-            }}>
-              <span style={{ fontSize: 18 }}>{m.icon}</span>
-              {m.label}
-            </button>
+            }}>{m.label}</button>
           ))}
         </div>
       </div>
 
-      {/* Estructura */}
+      {/* Estructura como chips */}
       <div>
-        <p style={label}>Estructura</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={lbl}>Estructura</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {structures.map(s => (
-            <div key={s.id} onClick={() => setStructure(s.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
-              border: `2px solid ${validStruct === s.id ? C.green : C.border + '44'}`,
-              background: validStruct === s.id ? `${C.green}10` : C.panel2,
-              transition: 'border .15s, background .15s',
-            }}>
-              <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{s.icon}</span>
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: validStruct === s.id ? C.green : C.text }}>{s.label}</p>
-                <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>{s.desc}</p>
-              </div>
-              <div style={{
-                width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                border: `2px solid ${validStruct === s.id ? C.green : C.border}`,
-                background: validStruct === s.id ? C.green : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {validStruct === s.id && <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.bg }} />}
-              </div>
-            </div>
+            <button key={s.id} onClick={() => setStructure(s.id)} style={chip(validStruct === s.id, false)}>
+              {s.icon} {s.label}
+            </button>
           ))}
         </div>
+        <p style={{ margin: '5px 0 0', fontSize: 11, color: C.textDim }}>
+          {structures.find(s => s.id === validStruct)?.desc}
+        </p>
       </div>
 
       {/* Jugadores */}
       <div>
-        <p style={label}>Jugadores por torneo</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+        <span style={lbl}>Jugadores</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 5 }}>
           {ALL_SIZES.map(n => {
             const locked = n > planLimits.max
             const selected = maxPl === n
             return (
               <button key={n} onClick={() => !locked && setMaxPl(n)} style={{
-                padding: '7px 14px', borderRadius: 10, border: `2px solid ${selected ? C.green : locked ? C.border + '44' : C.border}`,
-                background: selected ? `${C.green}18` : locked ? C.panel2 + '88' : C.panel2,
-                color: selected ? C.green : locked ? C.textDim : C.text2,
-                fontWeight: selected ? 800 : 500, fontSize: 13, cursor: locked ? 'not-allowed' : 'pointer',
-                opacity: locked ? 0.45 : 1,
-                display: 'flex', alignItems: 'center', gap: 4,
+                ...chip(selected, locked),
+                display: 'flex', alignItems: 'center', gap: 3,
               }}>
                 {locked && <span style={{ fontSize: 10 }}>🔒</span>}
                 {n}
