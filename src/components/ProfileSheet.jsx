@@ -293,7 +293,6 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
           </div>
         )}
       </div>
-      )}
 
       {/* Section tabs */}
       {!forceSetup && (
