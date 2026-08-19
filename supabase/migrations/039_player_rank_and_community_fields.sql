@@ -7,4 +7,5 @@ ALTER TABLE public.group_roles
 ALTER TABLE public.conversations
   ADD COLUMN IF NOT EXISTS torneos_enabled boolean DEFAULT true,
   ADD COLUMN IF NOT EXISTS ligas_enabled   boolean DEFAULT true,
-  ADD COLUMN IF NOT EXISTS clanes_enabled  boolean DEFAULT false;
+  ADD COLUMN IF NOT EXISTS clanes_enabled  boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS game_rules      jsonb   DEFAULT '{}';
