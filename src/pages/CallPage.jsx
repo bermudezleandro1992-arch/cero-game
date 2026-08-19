@@ -218,8 +218,6 @@ export default function CallPage({
   // ── New features state ──────────────────────────────────────────────────────
   const [quality, setQuality] = useState(null)          // signal quality
   const [latency, setLatency] = useState(null)          // ms
-  const [debugLogs, setDebugLogs] = useState([])
-  const [showDebug, setShowDebug] = useState(true)
   const [reactions, setReactions] = useState([])        // floating emojis
   const [showReactions, setShowReactions] = useState(false)
   const [showBgPicker, setShowBgPicker] = useState(false)
@@ -229,13 +227,7 @@ export default function CallPage({
   const [note, setNote] = useState('')
   const [showNote, setShowNote] = useState(false)
 
-  const dbg = useCallback((msg) => {
-    const t = new Date().toISOString().slice(11,19)
-    setDebugLogs(l => [...l.slice(-30), `${t} ${msg}`])
-    console.log('[CALL]', msg)
-  }, [])
-
-  const pc = useRef(null)
+const pc = useRef(null)
   const localStream = useRef(null)
   const screenStream = useRef(null)
   const sessionCh = useRef(null)
@@ -395,8 +387,8 @@ export default function CallPage({
   }
 
   async function getMedia() {
-    dbg('getMedia start mediaDevices=' + !!navigator.mediaDevices)
-    if (!navigator.mediaDevices?.getUserMedia) { dbg('ERR: no mediaDevices'); throw new Error('getUserMedia no disponible') }
+    console.log('[CALL]','getMedia start mediaDevices=' + !!navigator.mediaDevices)
+    if (!navigator.mediaDevices?.getUserMedia) { console.log('[CALL]','ERR: no mediaDevices'); throw new Error('getUserMedia no disponible') }
 
     const withTimeout = (promise, ms) => Promise.race([
       promise,
@@ -405,11 +397,11 @@ export default function CallPage({
 
     let stream
     try {
-      dbg('getUserMedia simple...')
+      console.log('[CALL]','getUserMedia simple...')
       stream = await withTimeout(navigator.mediaDevices.getUserMedia({ audio: true }), 8000)
-      dbg('getUserMedia OK tracks=' + stream.getTracks().length)
+      console.log('[CALL]','getUserMedia OK tracks=' + stream.getTracks().length)
     } catch (e1) {
-      dbg('getUserMedia ERR: ' + e1.name + ' ' + e1.message)
+      console.log('[CALL]','getUserMedia ERR: ' + e1.name + ' ' + e1.message)
       throw e1
     }
     localStream.current = stream
@@ -418,10 +410,10 @@ export default function CallPage({
   }
 
   function makePc(stream) {
-    dbg('makePc TURN_HOST=' + TURN_HOST)
+    console.log('[CALL]','makePc TURN_HOST=' + TURN_HOST)
     let conn
-    try { conn = new RTCPeerConnection(ICE_SERVERS); dbg('RTCPeerConnection OK') }
-    catch(e) { dbg('RTCPeerConnection ERR: ' + e.message); throw e }
+    try { conn = new RTCPeerConnection(ICE_SERVERS); console.log('[CALL]','RTCPeerConnection OK') }
+    catch(e) { console.log('[CALL]','RTCPeerConnection ERR: ' + e.message); throw e }
     stream.getTracks().forEach(t => conn.addTrack(t, stream))
     conn.ontrack = e => {
       const s = e.streams[0]
@@ -438,7 +430,7 @@ export default function CallPage({
       }
     }
     conn.onconnectionstatechange = () => {
-      dbg('conn=' + conn.connectionState)
+      console.log('[CALL]','conn=' + conn.connectionState)
       if (conn.connectionState === 'connected') {
         clearTimeout(connectTimeoutRef.current)
         goActive()
@@ -446,7 +438,7 @@ export default function CallPage({
       if (conn.connectionState === 'failed') hangup(true)
     }
     conn.oniceconnectionstatechange = () => {
-      dbg('ice=' + conn.iceConnectionState)
+      console.log('[CALL]','ice=' + conn.iceConnectionState)
       if (conn.iceConnectionState === 'disconnected') {
         try { conn.restartIce() } catch (_) {}
       }
@@ -460,13 +452,13 @@ export default function CallPage({
   }
 
   async function startOutgoing() {
-    dbg('startOutgoing')
+    console.log('[CALL]','startOutgoing')
     try {
       const stream = await getMedia()
-      dbg('getMedia OK tracks=' + stream.getTracks().length)
+      console.log('[CALL]','getMedia OK tracks=' + stream.getTracks().length)
       const conn = makePc(stream)
       const offer = await conn.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: callType === 'video' })
-      dbg('offer created')
+      console.log('[CALL]','offer created')
       await conn.setLocalDescription(offer)
 
       // Send offer via dedicated user channel — retry up to 3 times so mobile→PC works even on slow connections
@@ -485,7 +477,7 @@ export default function CallPage({
           payload: { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer: JSON.stringify(offer) },
         }
       }).catch(() => {})
-    } catch (e) { dbg('ERR startOutgoing: ' + e.name + ' ' + e.message); alert(`Error: ${e.message}`); onEnd() }
+    } catch (e) { console.log('[CALL]','ERR startOutgoing: ' + e.name + ' ' + e.message); alert(`Error: ${e.message}`); onEnd() }
   }
 
   async function acceptCall() {
@@ -828,18 +820,6 @@ export default function CallPage({
     <>
       <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
 
-      {/* DEBUG OVERLAY — remove after testing */}
-      {showDebug && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-          background: 'rgba(0,0,0,0.85)', color: '#0f0', fontFamily: 'monospace',
-          fontSize: 11, padding: '4px 8px', maxHeight: '40vh', overflowY: 'auto',
-          pointerEvents: 'auto',
-        }} onClick={() => setShowDebug(false)}>
-          <div style={{ color: '#ff0', marginBottom: 2 }}>🐛 DEBUG (tap to hide)</div>
-          {debugLogs.map((l, i) => <div key={i}>{l}</div>)}
-        </div>
-      )}
 
       {/* Desktop: overlay + centered window */}
       {isDesktop && (
