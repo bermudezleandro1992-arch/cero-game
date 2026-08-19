@@ -98,6 +98,18 @@ export default function InviteJoinPage({ token, onBack }) {
           { onConflict: 'conversation_id,user_id' }
         )
       }
+
+      // Registrar referido: solo si no tiene uno ya asignado
+      if (conv.created_by && conv.created_by !== profile.id) {
+        await supabase
+          .from('users')
+          .update({ invited_by: conv.created_by, invite_source: token })
+          .eq('id', profile.id)
+          .is('invited_by', null)
+      }
+
+      // Limpiar token pendiente
+      localStorage.removeItem('mm_pending_invite')
       setAlreadyMember(true)
       await fetchConversations(profile.id)
       setActiveConversation({ id: conv.id, name: conv.name, isGroup: true, isCommunity: conv.group_type === 'community' })
