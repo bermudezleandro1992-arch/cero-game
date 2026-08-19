@@ -13,6 +13,7 @@ import VotacionesPage from './tools/VotacionesPage'
 import CargaResultadosPage from './tools/CargaResultadosPage'
 import CalendarioPage from './tools/CalendarioPage'
 import SistemaPremiosPage from './tools/SistemaPremiosPage'
+import CommunityTournamentsPanel from './CommunityTournamentsPanel'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -1218,6 +1219,7 @@ function TournamentsList({ profile }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const TABS = [
+  { id: 'mis',         icon: '🌐', label: 'Mis Comunidades' },
   { id: 'hub',         icon: '🏠', label: 'Hub'        },
   { id: 'torneos',     icon: '🏆', label: 'Torneos'    },
   { id: 'rankings',    icon: '📊', label: 'Rankings'   },
@@ -1236,9 +1238,52 @@ const TOOL_COMPONENTS = {
 
 export default function TournamentsPage() {
   const { profile } = useAuthStore()
-  const [tab, setTab] = useState('hub')
+  const [tab, setTab] = useState('mis')
   const [activeTool, setActiveTool] = useState(null)
   const { isCommunity } = usePlan(profile)
+  const [managedCommunities, setManagedCommunities] = useState([])
+  const [loadingComm, setLoadingComm] = useState(false)
+  const [selectedCommunity, setSelectedCommunity] = useState(null)
+
+  // Load communities where user is owner or admin
+  useEffect(() => {
+    if (!profile?.id || tab !== 'mis') return
+    setLoadingComm(true)
+    ;(async () => {
+      // Communities created by user
+      const { data: owned } = await supabase
+        .from('conversations')
+        .select('id, name, description, avatar_url, group_type, tags, created_by')
+        .eq('group_type', 'community')
+        .eq('created_by', profile.id)
+
+      // Communities where user has admin/owner role
+      const { data: roleRows } = await supabase
+        .from('group_roles')
+        .select('conversation_id')
+        .eq('user_id', profile.id)
+        .in('role', ['owner', 'admin', 'moderador'])
+
+      const managedIds = new Set((roleRows || []).map(r => r.conversation_id))
+      if (managedIds.size > 0) {
+        const { data: managed } = await supabase
+          .from('conversations')
+          .select('id, name, description, avatar_url, group_type, tags, created_by')
+          .eq('group_type', 'community')
+          .in('id', [...managedIds])
+        ;(managed || []).forEach(c => {
+          if (!(owned || []).find(o => o.id === c.id)) owned?.push(c)
+        })
+      }
+
+      setManagedCommunities(owned || [])
+      setLoadingComm(false)
+    })()
+  }, [profile?.id, tab])
+
+  if (selectedCommunity) {
+    return <CommunityTournamentsPanel community={selectedCommunity} onClose={() => setSelectedCommunity(null)} />
+  }
 
   if (activeTool && TOOL_COMPONENTS[activeTool]) {
     const ToolPage = TOOL_COMPONENTS[activeTool]
@@ -1285,6 +1330,70 @@ export default function TournamentsPage() {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+
+        {/* ── MIS COMUNIDADES ── */}
+        {tab === 'mis' && (
+          <div>
+            <p style={{ margin: '0 0 14px', fontSize: 13, color: C.textDim, lineHeight: 1.5 }}>
+              Seleccioná una comunidad para gestionar sus torneos y ligas.
+            </p>
+            {loadingComm ? (
+              <p style={{ color: C.textDim, textAlign: 'center', marginTop: 40 }}>Cargando…</p>
+            ) : managedCommunities.length === 0 ? (
+              <div style={{ textAlign: 'center', marginTop: 60 }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>🌐</div>
+                <p style={{ color: C.textDim, fontSize: 14, margin: 0 }}>No administrás ninguna comunidad.</p>
+                <p style={{ color: C.textDim, fontSize: 12, margin: '4px 0 0' }}>Creá una desde la sección Chats o pedile al dueño que te asigne como admin.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {managedCommunities.map(comm => (
+                  <button key={comm.id} onClick={() => setSelectedCommunity(comm)} style={{
+                    display: 'flex', alignItems: 'center', gap: 14,
+                    background: C.panel, border: `1px solid ${C.border}`,
+                    borderRadius: 14, padding: '14px 16px', cursor: 'pointer',
+                    textAlign: 'left', width: '100%',
+                    transition: 'border-color .15s',
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = C.green}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+                  >
+                    <div style={{
+                      width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
+                      background: `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})`,
+                      border: `2px solid ${C.green}44`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 18, fontWeight: 800, color: C.text, overflow: 'hidden',
+                    }}>
+                      {comm.avatar_url
+                        ? <img src={comm.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : comm.name?.slice(0, 2).toUpperCase()
+                      }
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {comm.name}
+                      </p>
+                      {comm.tags?.length > 0 && (
+                        <p style={{ margin: '3px 0 0', fontSize: 11, color: C.textDim }}>
+                          {comm.tags.join(' · ')}
+                        </p>
+                      )}
+                      {comm.description && (
+                        <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {comm.description}
+                        </p>
+                      )}
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 18l6-6-6-6"/>
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── HUB ── */}
         {tab === 'hub' && (
