@@ -182,6 +182,8 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [clanesEnabled,   setClanesEnabled]   = useState(conversation?.clanes_enabled   || false)
   const [communityGames,  setCommunityGames]  = useState(conversation?.tags || [])
   const [savingTorneos,   setSavingTorneos]   = useState(false)
+  const [gameRules,       setGameRules]       = useState(conversation?.game_rules || {})
+  const [rulesTab,        setRulesTab]        = useState('efootball')
 
   // Privacidad avanzada
   const [allowExport,      setAllowExport]      = useState(conversation?.allow_export      !== false)
@@ -465,8 +467,20 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
       ligas_enabled:   ligasEnabled,
       clanes_enabled:  clanesEnabled,
       tags:            communityGames,
+      game_rules:      gameRules,
     }).eq('id', conversation.id)
     setSavingTorneos(false)
+  }
+
+  function setRule(game, key, value) {
+    setGameRules(prev => ({
+      ...prev,
+      [game]: { ...(prev[game] || {}), [key]: value },
+    }))
+  }
+
+  function getRule(game, key, defaultVal) {
+    return gameRules?.[game]?.[key] ?? defaultVal
   }
 
   async function handleLeave() {
@@ -1391,30 +1405,137 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                 )}
               </div>
 
-              {/* Game-specific rules for soccer games */}
-              {(communityGames.includes('efootball') || communityGames.includes('fc26') || communityGames.includes('fc27')) && (
-                <div style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <p style={{ margin: '16px 16px 8px', fontSize: 10, fontWeight: 800, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
-                    Reglas para fútbol
-                  </p>
-                  <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {[
-                      ['Sin handicap / igualador de equipo', '⚖️'],
-                      ['Sin cartas OP/TOTY/Evolutions', '🚫'],
-                      ['Mazo/equipo enviado antes del partido', '📋'],
-                      ['Tácticas libres', '🎯'],
-                      ['Restricción de división mínima', '🏅'],
-                    ].map(([rule, icon]) => (
-                      <div key={rule} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: C.panel2, borderRadius: 10, fontSize: 13, color: C.text2 }}>
-                        <span>{icon}</span><span>{rule}</span>
-                      </div>
-                    ))}
-                    <p style={{ margin: '4px 0 0', fontSize: 11, color: C.textDim }}>
-                      Estas opciones se configuran torneo por torneo al crearlo.
+              {/* Reglamento de sala editable por juego */}
+              {(() => {
+                const soccerGames = [
+                  communityGames.includes('efootball') && { id: 'efootball', label: 'eFootball', icon: '⚽' },
+                  (communityGames.includes('fc26') || communityGames.includes('fc27')) && { id: 'fc', label: 'FC 26/27', icon: '⚽' },
+                ].filter(Boolean)
+                if (!soccerGames.length) return null
+
+                // Which rules tab is valid
+                const validTab = soccerGames.find(g => g.id === rulesTab) ? rulesTab : soccerGames[0].id
+
+                const EFOOTBALL_RULES = [
+                  { key: 'sin_handicap',       icon: '⚖️', label: 'Sin handicap / igualador de equipo' },
+                  { key: 'sin_cartas_op',       icon: '🚫', label: 'Sin cartas OP/TOTY/Evolutions' },
+                  { key: 'envio_mazo',          icon: '📋', label: 'Mazo/equipo enviado antes del partido' },
+                  { key: 'tacticas_libres',     icon: '🎯', label: 'Tácticas libres' },
+                  { key: 'restriccion_division',icon: '🏅', label: 'Restricción de división mínima' },
+                  { key: 'sin_manager_legend',  icon: '👤', label: 'Sin Manager/Leyenda' },
+                  { key: 'penales_5',           icon: '🥅', label: 'Penales máx. 5 en empate' },
+                ]
+                const FC_RULES = [
+                  { key: 'sin_handicap',        icon: '⚖️', label: 'Sin handicap / asistencia de puntería' },
+                  { key: 'sin_cartas_op',        icon: '🚫', label: 'Sin cartas TOTY/TOTS/Héroe' },
+                  { key: 'envio_equipo',         icon: '📋', label: 'Equipo enviado antes del partido' },
+                  { key: 'sin_icon',             icon: '⭐', label: 'Sin íconos/leyendas' },
+                  { key: 'restriccion_overall',  icon: '🏅', label: 'Restricción de overall máximo' },
+                  { key: 'tacticas_libres',      icon: '🎯', label: 'Tácticas libres' },
+                  { key: 'prohibido_press',      icon: '🛡️', label: 'Prohibido pressing constante' },
+                ]
+
+                const rules = validTab === 'efootball' ? EFOOTBALL_RULES : FC_RULES
+
+                return (
+                  <div style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <p style={{ margin: '16px 16px 8px', fontSize: 10, fontWeight: 800, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+                      Reglamento de sala
                     </p>
+
+                    {/* Game tabs */}
+                    {soccerGames.length > 1 && (
+                      <div style={{ display: 'flex', gap: 6, padding: '0 16px 12px' }}>
+                        {soccerGames.map(g => (
+                          <button key={g.id} onClick={() => setRulesTab(g.id)} style={{
+                            padding: '5px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                            background: validTab === g.id ? C.green : C.panel2,
+                            color: validTab === g.id ? C.bg : C.text2,
+                          }}>{g.icon} {g.label}</button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Toggleable rules */}
+                    <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {rules.map(r => {
+                        const on = getRule(validTab, r.key, false)
+                        return (
+                          <div key={r.key} style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 12px', borderRadius: 10,
+                            background: on ? `${C.green}10` : C.panel2,
+                            border: `1px solid ${on ? C.green + '44' : C.border + '44'}`,
+                            cursor: isAdmin ? 'pointer' : 'default',
+                            transition: 'background .15s',
+                          }}
+                          onClick={() => isAdmin && setRule(validTab, r.key, !on)}
+                          >
+                            <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{r.icon}</span>
+                            <span style={{ flex: 1, fontSize: 13, color: on ? C.text : C.text2 }}>{r.label}</span>
+                            {isAdmin
+                              ? <Toggle value={on} onChange={v => setRule(validTab, r.key, v)} />
+                              : <span style={{ fontSize: 11, fontWeight: 700, color: on ? C.green : C.textDim }}>{on ? 'ON' : '—'}</span>
+                            }
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* División mínima (texto) — solo si está activada */}
+                    {validTab === 'efootball' && getRule('efootball', 'restriccion_division', false) && (
+                      <div style={{ padding: '8px 16px' }}>
+                        <input
+                          value={getRule('efootball', 'division_minima_texto', '')}
+                          onChange={e => setRule('efootball', 'division_minima_texto', e.target.value)}
+                          placeholder="Ej: División 1 o superior"
+                          disabled={!isAdmin}
+                          style={{
+                            width: '100%', boxSizing: 'border-box',
+                            background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+                            color: C.text, fontSize: 13, padding: '8px 12px', outline: 'none',
+                            opacity: isAdmin ? 1 : 0.6,
+                          }}
+                        />
+                      </div>
+                    )}
+                    {validTab === 'fc' && getRule('fc', 'restriccion_overall', false) && (
+                      <div style={{ padding: '8px 16px' }}>
+                        <input
+                          value={getRule('fc', 'overall_max_texto', '')}
+                          onChange={e => setRule('fc', 'overall_max_texto', e.target.value)}
+                          placeholder="Ej: Overall máximo 85"
+                          disabled={!isAdmin}
+                          style={{
+                            width: '100%', boxSizing: 'border-box',
+                            background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+                            color: C.text, fontSize: 13, padding: '8px 12px', outline: 'none',
+                            opacity: isAdmin ? 1 : 0.6,
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Reglas adicionales / texto libre */}
+                    <div style={{ padding: '8px 16px 16px' }}>
+                      <p style={{ margin: '0 0 6px', fontSize: 11, color: C.textDim, fontWeight: 600 }}>Reglas adicionales (texto libre)</p>
+                      <textarea
+                        value={getRule(validTab, 'custom', '')}
+                        onChange={e => setRule(validTab, 'custom', e.target.value)}
+                        placeholder={isAdmin ? 'Escribí reglas específicas de tu comunidad...' : 'Sin reglas adicionales'}
+                        disabled={!isAdmin}
+                        rows={3}
+                        style={{
+                          width: '100%', boxSizing: 'border-box', resize: 'vertical',
+                          background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+                          color: C.text, fontSize: 13, padding: '8px 12px', outline: 'none', fontFamily: 'inherit',
+                          opacity: isAdmin ? 1 : 0.6,
+                        }}
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* Save button — only for admins */}
               {isAdmin && (
