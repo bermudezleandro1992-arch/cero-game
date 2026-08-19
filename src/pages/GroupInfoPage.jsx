@@ -212,7 +212,20 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [customRoles, setCustomRoles] = useState([])
   const [rolesLoading, setRolesLoading] = useState(false)
   const [showRoleForm, setShowRoleForm] = useState(false)
-  const [roleForm, setRoleForm] = useState({ name: '', color: '#8b5cf6', icon: '' })
+  const ROLE_PERMS_DEFAULT = {
+    can_send_messages: true,
+    can_create_tournaments: false,
+    can_manage_tournaments: false,
+    can_create_events: false,
+    can_publish_announcements: false,
+    can_manage_members: false,
+    can_kick_members: false,
+    can_manage_roles: false,
+    can_view_stats: false,
+    can_manage_bots: false,
+  }
+  const [roleForm, setRoleForm] = useState({ name: '', color: '#8b5cf6', icon: '', ...ROLE_PERMS_DEFAULT })
+  const [editingRole, setEditingRole] = useState(null) // role object being edited
   const [savingRole, setSavingRole] = useState(false)
   const [deletingRole, setDeletingRole] = useState(null)
 
@@ -332,22 +345,77 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
     setSavingPin(false); setEditingPin(false)
   }
 
+    const PERM_GROUPS = [
+    {
+      label: 'General',
+      items: [
+        { key: 'can_send_messages', label: 'Enviar mensajes', desc: 'Puede escribir en los canales de la comunidad' },
+        { key: 'can_view_stats', label: 'Ver estadísticas', desc: 'Acceso a la pestaña de stats de la comunidad' },
+      ],
+    },
+    {
+      label: 'Torneos & Eventos',
+      items: [
+        { key: 'can_create_tournaments', label: 'Crear torneos', desc: 'Puede crear torneos y ligas dentro de la comunidad' },
+        { key: 'can_manage_tournaments', label: 'Gestionar torneos', desc: 'Puede editar y eliminar torneos existentes' },
+        { key: 'can_create_events', label: 'Crear eventos', desc: 'Puede publicar eventos en la comunidad' },
+      ],
+    },
+    {
+      label: 'Moderación',
+      items: [
+        { key: 'can_publish_announcements', label: 'Publicar anuncios', desc: 'Puede publicar anuncios para todos los miembros' },
+        { key: 'can_manage_members', label: 'Gestionar miembros', desc: 'Puede ver y administrar la lista de miembros' },
+        { key: 'can_kick_members', label: 'Expulsar miembros', desc: 'Puede expulsar miembros de la comunidad' },
+      ],
+    },
+    {
+      label: 'Administración',
+      items: [
+        { key: 'can_manage_roles', label: 'Gestionar roles', desc: 'Puede crear, editar y asignar roles personalizados' },
+        { key: 'can_manage_bots', label: 'Gestionar bots', desc: 'Puede configurar bots de la comunidad' },
+      ],
+    },
+  ]
+
+  function openRoleForm(role = null) {
+    if (role) {
+      setEditingRole(role)
+      setRoleForm({ name: role.name, color: role.color, icon: role.icon || '', ...Object.fromEntries(Object.keys(ROLE_PERMS_DEFAULT).map(k => [k, role[k] ?? ROLE_PERMS_DEFAULT[k]])) })
+    } else {
+      setEditingRole(null)
+      setRoleForm({ name: '', color: '#8b5cf6', icon: '', ...ROLE_PERMS_DEFAULT })
+    }
+    setShowRoleForm(true)
+  }
+
+  function closeRoleForm() {
+    setShowRoleForm(false)
+    setEditingRole(null)
+    setRoleForm({ name: '', color: '#8b5cf6', icon: '', ...ROLE_PERMS_DEFAULT })
+  }
+
   async function saveCustomRole() {
     if (!roleForm.name.trim()) return
     setSavingRole(true)
-    const { data, error } = await supabase.from('community_custom_roles').insert({
-      conversation_id: conversation.id,
-      name: roleForm.name.trim(),
-      color: roleForm.color,
-      icon: roleForm.icon.trim() || null,
-      priority: customRoles.length,
-    }).select().single()
-    if (!error && data) {
-      setCustomRoles(prev => [data, ...prev])
-      setShowRoleForm(false)
-      setRoleForm({ name: '', color: '#8b5cf6', icon: '' })
+    const perms = Object.fromEntries(Object.keys(ROLE_PERMS_DEFAULT).map(k => [k, !!roleForm[k]]))
+    if (editingRole) {
+      const { data, error } = await supabase.from('community_custom_roles').update({
+        name: roleForm.name.trim(), color: roleForm.color,
+        icon: roleForm.icon.trim() || null, ...perms,
+      }).eq('id', editingRole.id).select().single()
+      if (!error && data) setCustomRoles(prev => prev.map(r => r.id === data.id ? data : r))
+    } else {
+      const { data, error } = await supabase.from('community_custom_roles').insert({
+        conversation_id: conversation.id,
+        name: roleForm.name.trim(), color: roleForm.color,
+        icon: roleForm.icon.trim() || null,
+        priority: customRoles.length, ...perms,
+      }).select().single()
+      if (!error && data) setCustomRoles(prev => [data, ...prev])
     }
     setSavingRole(false)
+    closeRoleForm()
   }
 
   async function deleteCustomRole(roleId) {
@@ -1205,7 +1273,7 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                   Roles personalizados para organizar a tus miembros.
                 </p>
               </div>
-              <button onClick={() => setShowRoleForm(v => !v)} style={{
+              <button onClick={() => showRoleForm ? closeRoleForm() : openRoleForm()} style={{
                 background: C.green, border: 'none', borderRadius: 10, padding: '8px 14px',
                 color: C.bg, fontSize: 12, fontWeight: 700, cursor: 'pointer',
                 boxShadow: `0 2px 8px ${C.green}33`,
@@ -1214,10 +1282,14 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
               </button>
             </div>
 
-            {/* Formulario crear rol */}
+            {/* Formulario crear/editar rol */}
             {showRoleForm && (
-              <div style={{ padding: '14px 16px', background: `${C.green}08`, borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+              <div style={{ padding: '16px', background: `${C.green}08`, borderBottom: `1px solid ${C.border}` }}>
+                {/* Nombre + emoji + color */}
+                <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  {editingRole ? `Editando: ${editingRole.name}` : 'Nuevo rol'}
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                   <input
                     placeholder="Nombre del rol"
                     value={roleForm.name}
@@ -1229,27 +1301,24 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                     }}
                   />
                   <input
-                    placeholder="Emoji (opcional)"
+                    placeholder="🏆"
                     value={roleForm.icon}
                     onChange={e => setRoleForm(f => ({ ...f, icon: e.target.value }))}
                     maxLength={4}
                     style={{
-                      width: 70, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
-                      color: C.text, fontSize: 16, padding: '8px 10px', outline: 'none', textAlign: 'center',
+                      width: 52, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+                      color: C.text, fontSize: 18, padding: '6px 8px', outline: 'none', textAlign: 'center',
                     }}
                   />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <label style={{ fontSize: 12, color: C.textDim }}>Color:</label>
-                    <input
-                      type="color" value={roleForm.color}
-                      onChange={e => setRoleForm(f => ({ ...f, color: e.target.value }))}
-                      style={{ width: 36, height: 36, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'none', padding: 0 }}
-                    />
-                  </div>
+                  <input
+                    type="color" value={roleForm.color}
+                    onChange={e => setRoleForm(f => ({ ...f, color: e.target.value }))}
+                    style={{ width: 42, height: 40, border: 'none', borderRadius: 8, cursor: 'pointer', background: 'none', padding: 0 }}
+                  />
                 </div>
 
                 {/* Preview */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                   <span style={{ fontSize: 11, color: C.textDim }}>Vista previa:</span>
                   <span style={{
                     fontSize: 11, fontWeight: 700, borderRadius: 4, padding: '2px 8px',
@@ -1260,16 +1329,49 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                   </span>
                 </div>
 
+                {/* Permisos */}
+                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+                  <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: C.text }}>🔐 Permisos del rol</p>
+                  {PERM_GROUPS.map(group => (
+                    <div key={group.label} style={{ marginBottom: 14 }}>
+                      <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                        {group.label}
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {group.items.map(({ key, label, desc }) => (
+                          <label key={key} style={{
+                            display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                            background: roleForm[key] ? `${roleForm.color}12` : C.panel2,
+                            border: `1px solid ${roleForm[key] ? roleForm.color + '44' : C.border}`,
+                            borderRadius: 8, padding: '8px 10px', transition: 'all .15s',
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={!!roleForm[key]}
+                              onChange={e => setRoleForm(f => ({ ...f, [key]: e.target.checked }))}
+                              style={{ width: 16, height: 16, accentColor: roleForm.color, flexShrink: 0, cursor: 'pointer' }}
+                            />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: roleForm[key] ? 700 : 500, color: roleForm[key] ? C.text : C.textDim }}>{label}</div>
+                              <div style={{ fontSize: 10, color: C.textDim, marginTop: 1, lineHeight: 1.3 }}>{desc}</div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 <button
                   onClick={saveCustomRole}
                   disabled={savingRole || !roleForm.name.trim()}
                   style={{
-                    background: savingRole || !roleForm.name.trim() ? C.panel2 : C.green,
-                    border: 'none', borderRadius: 8, padding: '8px 20px',
-                    color: C.bg, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    marginTop: 4, background: savingRole || !roleForm.name.trim() ? C.panel2 : C.green,
+                    border: 'none', borderRadius: 8, padding: '10px 24px',
+                    color: C.bg, fontSize: 13, fontWeight: 700, cursor: 'pointer', width: '100%',
                   }}
                 >
-                  {savingRole ? 'Guardando...' : 'Guardar rol'}
+                  {savingRole ? 'Guardando...' : editingRole ? '✓ Actualizar rol' : '✓ Guardar rol'}
                 </button>
               </div>
             )}
@@ -1288,37 +1390,58 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                 </p>
               </div>
             ) : (
-              customRoles.map(role => (
-                <div key={role.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-                  borderBottom: `1px solid ${C.border}11`,
-                }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700, borderRadius: 6, padding: '3px 10px',
-                    color: role.color, background: `${role.color}18`,
-                    border: `1px solid ${role.color}44`, flexShrink: 0, whiteSpace: 'nowrap',
+              customRoles.map(role => {
+                const activePerms = PERM_GROUPS.flatMap(g => g.items).filter(({ key }) => role[key])
+                return (
+                  <div key={role.id} style={{
+                    padding: '12px 16px', borderBottom: `1px solid ${C.border}11`,
                   }}>
-                    {role.icon} {role.name}
-                  </span>
-                  <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {role.can_publish_announcements && <span style={{ fontSize: 10, color: C.textDim, background: C.panel2, borderRadius: 4, padding: '1px 6px' }}>📢 Anuncios</span>}
-                    {role.can_manage_members && <span style={{ fontSize: 10, color: C.textDim, background: C.panel2, borderRadius: 4, padding: '1px 6px' }}>👥 Miembros</span>}
-                    {role.can_create_tournaments && <span style={{ fontSize: 10, color: C.textDim, background: C.panel2, borderRadius: 4, padding: '1px 6px' }}>🏆 Torneos</span>}
-                    {role.can_create_events && <span style={{ fontSize: 10, color: C.textDim, background: C.panel2, borderRadius: 4, padding: '1px 6px' }}>📅 Eventos</span>}
+                    {/* Row: badge + actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: activePerms.length ? 8 : 0 }}>
+                      <span style={{
+                        fontSize: 12, fontWeight: 700, borderRadius: 6, padding: '3px 10px',
+                        color: role.color, background: `${role.color}18`,
+                        border: `1px solid ${role.color}44`, flexShrink: 0, whiteSpace: 'nowrap',
+                      }}>
+                        {role.icon} {role.name}
+                      </span>
+                      <div style={{ flex: 1 }} />
+                      <button
+                        onClick={() => openRoleForm(role)}
+                        style={{
+                          background: `${role.color}18`, border: `1px solid ${role.color}44`,
+                          borderRadius: 6, padding: '5px 10px', color: role.color,
+                          fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+                        }}
+                      >✏️ Editar</button>
+                      <button
+                        onClick={() => deleteCustomRole(role.id)}
+                        disabled={deletingRole === role.id}
+                        style={{
+                          background: '#ef444412', border: 'none', borderRadius: 6, padding: '5px 9px',
+                          color: '#ef4444', fontSize: 11, cursor: 'pointer', flexShrink: 0,
+                          opacity: deletingRole === role.id ? 0.5 : 1,
+                        }}
+                      >
+                        {deletingRole === role.id ? '...' : '🗑'}
+                      </button>
+                    </div>
+                    {/* Permisos activos */}
+                    {activePerms.length > 0 ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {activePerms.map(({ key, label }) => (
+                          <span key={key} style={{
+                            fontSize: 10, color: role.color, background: `${role.color}12`,
+                            border: `1px solid ${role.color}30`, borderRadius: 4, padding: '1px 7px',
+                          }}>{label}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 11, color: C.textDim }}>Sin permisos especiales — solo puede leer</span>
+                    )}
                   </div>
-                  <button
-                    onClick={() => deleteCustomRole(role.id)}
-                    disabled={deletingRole === role.id}
-                    style={{
-                      background: '#ef444418', border: 'none', borderRadius: 6, padding: '6px 10px',
-                      color: '#ef4444', fontSize: 11, cursor: 'pointer', flexShrink: 0,
-                      opacity: deletingRole === role.id ? 0.5 : 1,
-                    }}
-                  >
-                    {deletingRole === role.id ? '...' : '🗑'}
-                  </button>
-                </div>
-              ))
+                )
+              })
             )}
           </>
         )}
