@@ -217,6 +217,8 @@ export default function CallPage({
   // ── New features state ──────────────────────────────────────────────────────
   const [quality, setQuality] = useState(null)          // signal quality
   const [latency, setLatency] = useState(null)          // ms
+  const [debugLogs, setDebugLogs] = useState([])
+  const [showDebug, setShowDebug] = useState(true)
   const [reactions, setReactions] = useState([])        // floating emojis
   const [showReactions, setShowReactions] = useState(false)
   const [showBgPicker, setShowBgPicker] = useState(false)
@@ -225,6 +227,12 @@ export default function CallPage({
   const [remoteScreenSharing, setRemoteScreenSharing] = useState(false)
   const [note, setNote] = useState('')
   const [showNote, setShowNote] = useState(false)
+
+  const dbg = useCallback((msg) => {
+    const t = new Date().toISOString().slice(11,19)
+    setDebugLogs(l => [...l.slice(-30), `${t} ${msg}`])
+    console.log('[CALL]', msg)
+  }, [])
 
   const pc = useRef(null)
   const localStream = useRef(null)
@@ -435,7 +443,10 @@ export default function CallPage({
   }
 
   function makePc(stream) {
-    const conn = new RTCPeerConnection(ICE_SERVERS)
+    dbg('makePc TURN_HOST=' + TURN_HOST)
+    let conn
+    try { conn = new RTCPeerConnection(ICE_SERVERS); dbg('RTCPeerConnection OK') }
+    catch(e) { dbg('RTCPeerConnection ERR: ' + e.message); throw e }
     stream.getTracks().forEach(t => conn.addTrack(t, stream))
     conn.ontrack = e => {
       const s = e.streams[0]
@@ -452,6 +463,7 @@ export default function CallPage({
       }
     }
     conn.onconnectionstatechange = () => {
+      dbg('conn=' + conn.connectionState)
       if (conn.connectionState === 'connected') {
         clearTimeout(connectTimeoutRef.current)
         goActive()
@@ -459,6 +471,7 @@ export default function CallPage({
       if (conn.connectionState === 'failed') hangup(true)
     }
     conn.oniceconnectionstatechange = () => {
+      dbg('ice=' + conn.iceConnectionState)
       if (conn.iceConnectionState === 'disconnected') {
         try { conn.restartIce() } catch (_) {}
       }
@@ -472,10 +485,13 @@ export default function CallPage({
   }
 
   async function startOutgoing() {
+    dbg('startOutgoing')
     try {
       const stream = await getMedia()
+      dbg('getMedia OK tracks=' + stream.getTracks().length)
       const conn = makePc(stream)
       const offer = await conn.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: callType === 'video' })
+      dbg('offer created')
       await conn.setLocalDescription(offer)
 
       // Send offer via dedicated user channel — retry up to 3 times so mobile→PC works even on slow connections
@@ -836,6 +852,19 @@ export default function CallPage({
   return (
     <>
       <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
+
+      {/* DEBUG OVERLAY — remove after testing */}
+      {showDebug && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          background: 'rgba(0,0,0,0.85)', color: '#0f0', fontFamily: 'monospace',
+          fontSize: 11, padding: '4px 8px', maxHeight: '40vh', overflowY: 'auto',
+          pointerEvents: 'auto',
+        }} onClick={() => setShowDebug(false)}>
+          <div style={{ color: '#ff0', marginBottom: 2 }}>🐛 DEBUG (tap to hide)</div>
+          {debugLogs.map((l, i) => <div key={i}>{l}</div>)}
+        </div>
+      )}
 
       {/* Desktop: overlay + centered window */}
       {isDesktop && (
