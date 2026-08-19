@@ -53,6 +53,7 @@ function Tab({ label, active, count, onClick }) {
 export default function AdminPage({ onBack }) {
   const { profile } = useAuthStore()
   const [tab, setTab] = useState('payments')
+  const [referrals, setReferrals] = useState([])
   const [payments, setPayments] = useState([])
   const [users, setUsers] = useState([])
   const [banners, setBanners] = useState([])
@@ -125,6 +126,11 @@ export default function AdminPage({ onBack }) {
 
   const pendingCount = payments.filter(p => p.status === 'pending').length
 
+  async function loadReferrals() {
+    const { data } = await supabase.from('referral_stats').select('*').limit(50)
+    setReferrals(data || [])
+  }
+
   async function loadBanners() {
     const { data } = await supabase.from('banners').select('*').order('priority', { ascending: false })
     setBanners(data || [])
@@ -159,6 +165,7 @@ export default function AdminPage({ onBack }) {
         <Tab label="Pagos" active={tab === 'payments'} count={pendingCount} onClick={() => setTab('payments')} />
         <Tab label="Usuarios" active={tab === 'users'} count={0} onClick={() => setTab('users')} />
         <Tab label="Banners" active={tab === 'banners'} count={0} onClick={() => { setTab('banners'); loadBanners() }} />
+        <Tab label="Referidos" active={tab === 'referrals'} count={0} onClick={() => { setTab('referrals'); loadReferrals() }} />
       </div>
 
       {/* Mensaje de feedback */}
@@ -494,6 +501,69 @@ export default function AdminPage({ onBack }) {
                       <button onClick={() => setBannerForm({ ...b })} style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${C.border}`, background: C.panel2, color: C.textDim, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✏️</button>
                       <button onClick={() => deleteBanner(b.id)} style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid #ef444433', background: '#ef444410', color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>🗑️</button>
                     </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── REFERIDOS ── */}
+        {tab === 'referrals' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <p style={{ margin: 0, fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Top referidores del mes
+              </p>
+              <button onClick={loadReferrals} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', color: C.textDim, fontSize: 11 }}>
+                🔄 Actualizar
+              </button>
+            </div>
+
+            {referrals.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: C.textDim, fontSize: 13 }}>
+                <div style={{ fontSize: 40, marginBottom: 8 }}>🔗</div>
+                <p style={{ margin: 0 }}>Aún no hay referidos registrados este mes.</p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {referrals.map((r, idx) => (
+                <div key={r.referrer_id} style={{
+                  background: C.panel, borderRadius: 12,
+                  border: `1.5px solid ${idx === 0 ? '#f59e0b44' : C.border}`,
+                  padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12,
+                }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                    background: idx === 0 ? '#f59e0b22' : C.panel2,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontWeight: 800, fontSize: 13,
+                    color: idx === 0 ? '#f59e0b' : idx === 1 ? '#94a3b8' : idx === 2 ? '#cd7f32' : C.textDim,
+                  }}>
+                    {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                  </div>
+                  {r.referrer_avatar
+                    ? <img src={r.referrer_avatar} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                    : <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: C.panel2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>👤</div>
+                  }
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: C.text }}>
+                      {r.referrer_name || r.referrer_username}
+                      {r.referrer_username && <span style={{ color: C.textDim, fontWeight: 400, fontSize: 11 }}> · @{r.referrer_username}</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
+                      {r.total_referrals} total · <strong style={{ color: C.green }}>{r.referrals_this_month} este mes</strong>
+                    </div>
+                  </div>
+                  <div style={{
+                    background: `${C.green}18`, border: `1px solid ${C.green}33`,
+                    borderRadius: 10, padding: '4px 12px', textAlign: 'center', flexShrink: 0,
+                  }}>
+                    <div style={{ fontWeight: 800, fontSize: 18, color: C.green, fontVariantNumeric: 'tabular-nums' }}>
+                      {r.referrals_this_month}
+                    </div>
+                    <div style={{ fontSize: 9, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.5px' }}>este mes</div>
                   </div>
                 </div>
               ))}

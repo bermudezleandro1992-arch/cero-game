@@ -99,7 +99,8 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false)
   const [inviteToken, setInviteToken] = useState(() => {
     const m = window.location.pathname.match(/^\/join\/([^/]+)/)
-    return m ? m[1] : null
+    if (m) { localStorage.setItem('mm_pending_invite', m[1]); return m[1] }
+    return localStorage.getItem('mm_pending_invite') || null
   })
   usePresence(user?.id)
 

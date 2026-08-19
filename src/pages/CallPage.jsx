@@ -11,13 +11,24 @@ const TURN_HOST = import.meta.env.VITE_TURN_HOST || 'openrelay.metered.ca'
 // Strip protocol (https://) and port from TURN_HOST so URLs are valid
 const TURN_HOST_CLEAN = TURN_HOST.replace(/^https?:\/\//, '').split(':')[0]
 
+// Always include the free public relay as guaranteed fallback
+const FREE_TURN = [
+  { urls: 'turn:openrelay.metered.ca:80',                               username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443',                              username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turns:openrelay.metered.ca:443?transport=tcp',               username: 'openrelayproject', credential: 'openrelayproject' },
+]
+const USER_TURN = TURN_HOST_CLEAN !== 'openrelay.metered.ca' ? [
+  { urls: `turn:${TURN_HOST_CLEAN}:443`,                username: TURN_USER, credential: TURN_CRED },
+  { urls: `turns:${TURN_HOST_CLEAN}:443?transport=tcp`, username: TURN_USER, credential: TURN_CRED },
+] : []
+
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: `turn:${TURN_HOST_CLEAN}:443`,                username: TURN_USER, credential: TURN_CRED },
-    { urls: `turns:${TURN_HOST_CLEAN}:443?transport=tcp`, username: TURN_USER, credential: TURN_CRED },
+    ...USER_TURN,
+    ...FREE_TURN,
   ],
   iceCandidatePoolSize: 10,
   iceTransportPolicy: 'all',
@@ -488,11 +499,12 @@ const pc = useRef(null)
       const stream = await getMedia()
       const conn = makePc(stream)
 
-      // Offer can arrive as object (Realtime broadcast) or JSON string (push notification)
+      console.log('[CALL]', 'setRemoteDesc offer')
       const offerDesc = typeof incomingOffer === 'string'
         ? new RTCSessionDescription(JSON.parse(incomingOffer))
         : new RTCSessionDescription(incomingOffer)
       await conn.setRemoteDescription(offerDesc)
+      console.log('[CALL]', 'setRemoteDesc OK, draining ' + pendingIce.current.length + ' ice')
 
       for (const c of pendingIce.current) {
         try { await conn.addIceCandidate(new RTCIceCandidate(c)) } catch (_) {}
@@ -501,16 +513,19 @@ const pc = useRef(null)
 
       const answer = await conn.createAnswer()
       await conn.setLocalDescription(answer)
+      console.log('[CALL]', 'answer created, sending')
 
       // Wait for channel to be ready before sending answer
       if (!sessionChReady.current) {
+        console.log('[CALL]', 'waiting for sessionCh...')
         await new Promise(resolve => {
           const iv = setInterval(() => { if (sessionChReady.current) { clearInterval(iv); resolve() } }, 100)
           setTimeout(() => { clearInterval(iv); resolve() }, 5000)
         })
       }
-      sessionCh.current?.send({ type: 'broadcast', event: 'call-answer', payload: { answer } })
-    } catch (e) { console.error('[acceptCall]', e); alert(`Error: ${e.message}`); hangup(true) }
+      await sessionCh.current?.send({ type: 'broadcast', event: 'call-answer', payload: { answer } })
+      console.log('[CALL]', 'answer sent')
+    } catch (e) { console.log('[CALL]', 'ERR acceptCall: ' + e.name + ' ' + e.message); alert(`Error: ${e.message}`); hangup(true) }
   }
 
   function goActive() {
