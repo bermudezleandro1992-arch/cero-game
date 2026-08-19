@@ -76,7 +76,7 @@ export const useChatStore = create((set, get) => ({
     let convMeta = {}
     const { data: metaRows } = await supabase
       .from('conversations')
-      .select('id, name, is_group, created_by, avatar_url, group_type, description')
+      .select('id, name, is_group, created_by, avatar_url, group_type, description, is_public, is_locked, who_can_send, who_can_add, who_can_edit_info, slow_mode_seconds, auto_delete_hours, allow_export, allow_auto_save, announcement_only, require_approval, invite_link, pinned_message, torneos_enabled, ligas_enabled, clanes_enabled, tags, member_count')
       .in('id', convIds0)
     metaRows?.forEach(r => { convMeta[r.id] = r })
 
@@ -133,9 +133,30 @@ export const useChatStore = create((set, get) => ({
           id: convId,
           isGroup,
           isCommunity: meta?.group_type === 'community',
+          group_type: meta?.group_type,
           name: isGroup ? meta?.name : null,
           description: meta?.description,
           avatarUrl: meta?.avatar_url,
+          avatar_url: meta?.avatar_url,
+          created_by: meta?.created_by,
+          is_public: meta?.is_public,
+          is_locked: meta?.is_locked,
+          who_can_send: meta?.who_can_send,
+          who_can_add: meta?.who_can_add,
+          who_can_edit_info: meta?.who_can_edit_info,
+          slow_mode_seconds: meta?.slow_mode_seconds,
+          auto_delete_hours: meta?.auto_delete_hours,
+          allow_export: meta?.allow_export,
+          allow_auto_save: meta?.allow_auto_save,
+          announcement_only: meta?.announcement_only,
+          require_approval: meta?.require_approval,
+          invite_link: meta?.invite_link,
+          pinned_message: meta?.pinned_message,
+          torneos_enabled: meta?.torneos_enabled,
+          ligas_enabled: meta?.ligas_enabled,
+          clanes_enabled: meta?.clanes_enabled,
+          tags: meta?.tags,
+          member_count: meta?.member_count,
           user: isGroup ? null : members[0],  // for 1-on-1
           members,                              // for groups
           lastMessage: lastMsgMap[convId],
