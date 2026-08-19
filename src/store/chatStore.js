@@ -76,7 +76,7 @@ export const useChatStore = create((set, get) => ({
     let convMeta = {}
     const { data: metaRows } = await supabase
       .from('conversations')
-      .select('id, name, is_group, created_by, avatar_url, group_type, description, is_public, is_locked, who_can_send, who_can_add, who_can_edit_info, slow_mode_seconds, auto_delete_hours, allow_export, allow_auto_save, announcement_only, require_approval, invite_link, pinned_message, torneos_enabled, ligas_enabled, clanes_enabled, tags, member_count')
+      .select('id, name, is_group, created_by, avatar_url, group_type, description, is_public, is_locked, who_can_send, who_can_add, who_can_edit_info, slow_mode_seconds, auto_delete_hours, allow_export, allow_auto_save, announcement_only, require_approval, invite_link, pinned_message, torneos_enabled, ligas_enabled, clanes_enabled, tags, member_count, game_rules')
       .in('id', convIds0)
     metaRows?.forEach(r => { convMeta[r.id] = r })
 
@@ -157,6 +157,7 @@ export const useChatStore = create((set, get) => ({
           clanes_enabled: meta?.clanes_enabled,
           tags: meta?.tags,
           member_count: meta?.member_count,
+          game_rules: meta?.game_rules,
           user: isGroup ? null : members[0],  // for 1-on-1
           members,                              // for groups
           lastMessage: lastMsgMap[convId],
