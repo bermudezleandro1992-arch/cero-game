@@ -12,8 +12,14 @@ function sorted(teams) {
   )
 }
 
+const FASES = [
+  { id: 'apertura', label: '⚡ Apertura', color: '#22c55e' },
+  { id: 'clausura', label: '🍂 Clausura', color: '#f59e0b' },
+  { id: 'copa',     label: '🏆 Copa LFA', color: '#8b5cf6' },
+]
+
 // ── DB-connected mode (liga con tournament_standings) ─────────────────────────
-function DBLigaView({ tournamentId, isOrganizer }) {
+function DBLigaView({ tournamentId, isOrganizer, ligaData, onLigaAction }) {
   const [standings, setStandings] = useState([])
   const [matches, setMatches] = useState([])
   const [userMap, setUserMap] = useState({})
@@ -35,9 +41,9 @@ function DBLigaView({ tournamentId, isOrganizer }) {
     ;(st || []).forEach(s => uids.add(s.user_id))
     ;(mx || []).forEach(m => { if (m.player1_id) uids.add(m.player1_id); if (m.player2_id) uids.add(m.player2_id) })
 
-    const { data: users } = await supabase.from('users').select('id, display_name, username').in('id', [...uids])
+    const { data: users } = await supabase.from('users').select('id, display_name, username, avatar_url').in('id', [...uids])
     const map = {}
-    ;(users || []).forEach(u => { map[u.id] = u.display_name || u.username || 'Jugador' })
+    ;(users || []).forEach(u => { map[u.id] = { name: u.display_name || u.username || 'Jugador', avatar: u.avatar_url } })
 
     setUserMap(map)
     setStandings(st || [])
@@ -74,11 +80,57 @@ function DBLigaView({ tournamentId, isOrganizer }) {
 
   const jornadas = [...new Set(matches.map(m => m.jornada_number))].sort((a,b) => a-b)
   const statusColor = { pendiente: C.textDim, en_juego: '#f59e0b', finalizado: C.green }
+  const ligaFase = ligaData?.liga_fase
+  const clasifica = ligaData?.clasifica_copa || 8
+
+  async function handleFase(faseId) {
+    if (!onLigaAction) return
+    await onLigaAction('set_fase', faseId)
+  }
+
+  async function handleFinalizarLiga() {
+    if (!onLigaAction) return
+    if (!confirm('¿Finalizar la liga permanentemente?')) return
+    await onLigaAction('finalizar')
+  }
+
+  async function handleGenerarFixture() {
+    if (!onLigaAction) return
+    await onLigaAction('generar_fixture')
+    await load()
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+
+      {/* Fases — visible para todos */}
+      {ligaData && (
+        <div style={{ padding: '10px 14px', background: C.panel2, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1.5px' }}>Fase y estado</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {FASES.map(f => {
+              const active = ligaFase === f.id
+              return (
+                <button key={f.id} onClick={() => isOrganizer && handleFase(f.id)} style={{
+                  padding: '6px 14px', borderRadius: 20, border: `1px solid ${active ? f.color : C.border}`,
+                  background: active ? f.color + '25' : C.panel, color: active ? f.color : C.textDim,
+                  fontWeight: active ? 800 : 500, fontSize: 12,
+                  cursor: isOrganizer ? 'pointer' : 'default',
+                }}>{f.label}</button>
+              )
+            })}
+            {isOrganizer && (
+              <button onClick={handleFinalizarLiga} style={{
+                padding: '6px 14px', borderRadius: 20, border: `1px solid #ef444466`,
+                background: '#ef444412', color: '#ef4444', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+              }}>✓ Finalizar liga</button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        {[['tabla','📊 Tabla'],['partidos','⚽ Partidos']].map(([id, lbl]) => (
+        {[['tabla','📊 Tabla'],['partidos','⚽ Fixture']].map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)} style={{
             flex: 1, padding: '10px 6px', background: 'none', border: 'none', cursor: 'pointer',
             fontSize: 11, fontWeight: 600,
@@ -107,17 +159,23 @@ function DBLigaView({ tournamentId, isOrganizer }) {
                 </thead>
                 <tbody>
                   {standings.map((s, i) => {
-                    const name = userMap[s.user_id] || 'Jugador'
+                    const uInfo = userMap[s.user_id] || {}
+                    const name = uInfo.name || 'Jugador'
+                    const avatar = uInfo.avatar
                     const diff = s.gf - s.gc
+                    const inZone = i < clasifica
+                    const medal = i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : null
                     return (
-                      <tr key={s.id} style={{ borderBottom: `1px solid ${C.border}11`, background: i < 4 ? `${C.green}05` : 'transparent' }}>
-                        <td style={{ padding: '10px 8px', textAlign: 'center', color: i < 4 ? C.green : C.textDim, fontWeight: 700 }}>{i+1}</td>
-                        <td style={{ padding: '10px 8px', color: C.text, fontWeight: i === 0 ? 700 : 400 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            {i === 0 && <span>🥇</span>}
-                            {i === 1 && <span>🥈</span>}
-                            {i === 2 && <span>🥉</span>}
-                            {name}
+                      <tr key={s.id} style={{ borderBottom: `1px solid ${C.border}22`, background: inZone ? `${C.green}06` : 'transparent' }}>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', color: inZone ? C.green : C.textDim, fontWeight: 700, fontSize: 13 }}>{i+1}</td>
+                        <td style={{ padding: '10px 6px', color: C.text, fontWeight: i === 0 ? 700 : 400 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                            {avatar
+                              ? <img src={avatar} alt="" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                              : <div style={{ width: 24, height: 24, borderRadius: '50%', background: C.panel2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: C.textDim, flexShrink: 0 }}>{name[0]}</div>
+                            }
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}>{name}</span>
+                            {medal && <span style={{ fontSize: 14 }}>{medal}</span>}
                           </div>
                         </td>
                         <td style={{ padding: '10px 8px', textAlign: 'center', color: C.text2 }}>{s.pj}</td>
@@ -142,7 +200,15 @@ function DBLigaView({ tournamentId, isOrganizer }) {
           <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
             {jornadas.length === 0 ? (
               <div style={{ padding: '40px 20px', textAlign: 'center', color: C.textDim }}>
-                <p>La liga no ha iniciado todavía.</p>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>📅</div>
+                <p style={{ margin: '0 0 6px' }}>Sin fixture generado.</p>
+                <p style={{ margin: '0 0 20px', fontSize: 12 }}>Se generará un todos contra todos con Ida (Apertura) y Vuelta (Clausura). Necesitás al menos 2 jugadores.</p>
+                {isOrganizer && (
+                  <button onClick={handleGenerarFixture} style={{
+                    padding: '12px 24px', borderRadius: 12, border: 'none',
+                    background: C.green, color: C.bg, fontWeight: 800, fontSize: 14, cursor: 'pointer',
+                  }}>⚽ Generar Fixture Automático</button>
+                )}
               </div>
             ) : (
               jornadas.map(j => (
@@ -150,8 +216,8 @@ function DBLigaView({ tournamentId, isOrganizer }) {
                   <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Jornada {j}</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {matches.filter(m => m.jornada_number === j).map(match => {
-                      const p1 = match.player1_id ? userMap[match.player1_id] || 'Jugador' : 'BYE'
-                      const p2 = match.player2_id ? userMap[match.player2_id] || 'Jugador' : 'BYE'
+                      const p1 = match.player1_id ? (userMap[match.player1_id]?.name || 'Jugador') : 'BYE'
+                      const p2 = match.player2_id ? (userMap[match.player2_id]?.name || 'Jugador') : 'BYE'
                       const done = match.status === 'finalizado'
                       const inPlay = match.status === 'en_juego'
                       return (
@@ -216,7 +282,7 @@ function DBLigaView({ tournamentId, isOrganizer }) {
 }
 
 // ── Standalone mode ───────────────────────────────────────────────────────────
-export default function TablaPosicionesPage({ onBack, initialTeams = [], tournamentId, isOrganizer, embedded = false }) {
+export default function TablaPosicionesPage({ onBack, initialTeams = [], tournamentId, isOrganizer, embedded = false, ligaData, onLigaAction }) {
   const [teams, setTeams]           = useState(
     initialTeams.map((name, i) => ({ ...DEFAULT_TEAM, id: Date.now() + i, name }))
   )
@@ -274,7 +340,7 @@ export default function TablaPosicionesPage({ onBack, initialTeams = [], tournam
 
       {/* DB-connected mode: delegate to DBLigaView */}
       {tournamentId ? (
-        <DBLigaView tournamentId={tournamentId} isOrganizer={isOrganizer} />
+        <DBLigaView tournamentId={tournamentId} isOrganizer={isOrganizer} ligaData={ligaData} onLigaAction={onLigaAction} />
       ) : (
         <>
           <div style={{ display: 'flex', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
