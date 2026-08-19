@@ -14,6 +14,35 @@ import { acquireWakeLock } from '../lib/appStartup'
 import { detectSpam, applyAutoSanction, checkSanction, reportMessage, sanctionMessage } from '../lib/antispam'
 import { C } from '../theme'
 
+// ── Support bot trigger ────────────────────────────────────────────────────────
+const SUPABASE_FUNCTIONS_URL = (import.meta.env.VITE_SUPABASE_URL || 'https://gxberqtxbnrnudawwyzd.supabase.co')
+  .replace('supabase.co', 'supabase.co/functions/v1')
+const SUPPORT_BOT_SECRET = import.meta.env.VITE_SUPPORT_BOT_SECRET || ''
+
+let _supportGroupId = undefined // undefined = not fetched; null = not set
+
+async function getSupportGroupId() {
+  if (_supportGroupId !== undefined) return _supportGroupId
+  try {
+    const { supabase: sb } = await import('../lib/supabase')
+    const { data } = await sb.from('app_config').select('value').eq('key', 'support_group_id').single()
+    _supportGroupId = data?.value ?? null
+  } catch { _supportGroupId = null }
+  return _supportGroupId
+}
+
+async function triggerSupportBot(conversationId, senderId, content, messageId) {
+  try {
+    const supportGroupId = await getSupportGroupId()
+    if (!supportGroupId || conversationId !== supportGroupId) return
+    fetch(`${SUPABASE_FUNCTIONS_URL}/support-bot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPPORT_BOT_SECRET}` },
+      body: JSON.stringify({ conversation_id: conversationId, sender_id: senderId, content, message_id: messageId }),
+    }).catch(() => {})
+  } catch {}
+}
+
 const EMOJI_CATS = [
   { id: 'recientes', label: '🕐', title: 'Recientes', emojis: [] },
   { id: 'caritas',   label: '😀', title: 'Caritas',   emojis: ['😀','😁','😂','🤣','😃','😄','😅','😆','😇','😈','😉','😊','😋','😌','😍','😎','😏','😐','😑','😒','😓','😔','😕','😖','😗','😘','😙','😚','😛','😜','😝','😞','😟','😠','😡','😢','😣','😤','😥','😦','😧','😨','😩','😪','😫','😬','😭','😮','😯','😰','😱','😲','😳','😴','😵','😶','😷','🤐','🤑','🤒','🤓','🤔','🤕','🤗','🤘','🤙','🤚','🤛','🤜','🤝','🤞','🤟','🤠','🤡','🤢','🤣','🤤','🤥','🤦','🤧','🤨','🤩','🤪','🤫','🤬','🤭','🤮','🤯','🥰','🥱','🥲','🥳','🥴','🥵','🥶','🥸','🥹','🥺','🫠','🫡','🫣','🫤','🫥','🫦','🫨','🙂','🙃','🙄','🙁','🙂‍↔️','☺️','😺','😸','😹','😻','😼','😽','🙀','😿','😾'] },
@@ -708,8 +737,10 @@ export default function ChatPage({ onBack }) {
       : rawText
     setReplyTo(null); setText('')
     try {
-      await sendMessage(activeConversation.id, profile.id, content, 'text', null, activeTopicId)
+      const msg = await sendMessage(activeConversation.id, profile.id, content, 'text', null, activeTopicId)
       sounds.msgSent()
+      // If this is the support group, trigger the support bot
+      triggerSupportBot(activeConversation.id, profile.id, content, msg?.id)
     } catch (err) { alert(`Error: ${err.message}`); setText(content) }
     setSending(false)
     // On mobile: blur to dismiss keyboard after send; on desktop: keep focus

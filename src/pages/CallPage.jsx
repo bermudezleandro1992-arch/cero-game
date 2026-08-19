@@ -2,23 +2,24 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { sounds, ringtone, outgoingRing, busyTone } from '../lib/sounds'
 
+// openrelay.metered.ca is the free public TURN that works with openrelayproject credentials
+// For production, set VITE_TURN_USERNAME / VITE_TURN_CREDENTIAL + VITE_TURN_HOST in .env
 const TURN_USER = import.meta.env.VITE_TURN_USERNAME || 'openrelayproject'
 const TURN_CRED = import.meta.env.VITE_TURN_CREDENTIAL || 'openrelayproject'
+const TURN_HOST = import.meta.env.VITE_TURN_HOST || 'openrelay.metered.ca'
 
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: `stun:${TURN_HOST}:80` },
+    { urls: `turn:${TURN_HOST}:80`,                      username: TURN_USER, credential: TURN_CRED },
+    { urls: `turn:${TURN_HOST}:80?transport=tcp`,         username: TURN_USER, credential: TURN_CRED },
+    { urls: `turn:${TURN_HOST}:443`,                     username: TURN_USER, credential: TURN_CRED },
+    { urls: `turns:${TURN_HOST}:443?transport=tcp`,      username: TURN_USER, credential: TURN_CRED },
+    // Cloudflare STUN as extra fallback
     { urls: 'stun:stun.relay.metered.ca:80' },
-    { urls: 'turn:a.relay.metered.ca:80',            username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turn:a.relay.metered.ca:80?transport=tcp', username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turn:a.relay.metered.ca:443',           username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turns:a.relay.metered.ca:443?transport=tcp', username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turn:global.relay.metered.ca:80',       username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turn:global.relay.metered.ca:443',      username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: TURN_USER, credential: TURN_CRED },
   ],
   iceCandidatePoolSize: 10,
   iceTransportPolicy: 'all',
