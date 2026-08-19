@@ -246,11 +246,109 @@ export const sounds = {
   callEnd()     { play('callEnd') },
 }
 
-// ── Ringtones (same across all packs but themed) ───────────────────────────────
+// ── Ringtone & outgoing tone settings ────────────────────────────────────────
+const KEY_RINGTONE = 'mm_ringtone'
+const KEY_OUTTONE  = 'mm_outtone'
+
+export const ringSettings = {
+  getRing: () => localStorage.getItem(KEY_RINGTONE) || 'classic',
+  setRing: (id) => localStorage.setItem(KEY_RINGTONE, id),
+  getOut:  () => localStorage.getItem(KEY_OUTTONE)  || 'standard',
+  setOut:  (id) => localStorage.setItem(KEY_OUTTONE, id),
+}
+
+// ── Ringtone catalog (incoming) ───────────────────────────────────────────────
+export const RINGTONES = {
+  classic: {
+    id: 'classic', label: 'Clásico', emoji: '📳',
+    desc: 'Acorde ascendente limpio',
+    play() { tone(523,0.18,0.45); tone(659,0.18,0.45,0.22); tone(784,0.22,0.45,0.44) },
+  },
+  digital: {
+    id: 'digital', label: 'Digital', emoji: '📱',
+    desc: 'Tono moderno de celular',
+    play() {
+      tone(880,0.07,0.35,0,'square'); tone(1100,0.07,0.35,0.09,'square')
+      tone(880,0.07,0.35,0.18,'square'); tone(1100,0.1,0.35,0.27,'square')
+    },
+  },
+  retro: {
+    id: 'retro', label: 'Retro', emoji: '☎️',
+    desc: 'Timbre de teléfono analógico',
+    play() {
+      // Doble timbre estilo campana analógica
+      for (let i = 0; i < 2; i++) {
+        const d = i * 0.22
+        tone(1480,0.09,0.5,d,'sine'); tone(1760,0.09,0.4,d+0.05,'sine')
+        tone(1480,0.09,0.4,d+0.1,'sine')
+      }
+    },
+  },
+  gaming: {
+    id: 'gaming', label: 'Gaming', emoji: '🎮',
+    desc: 'Alerta estilo videojuego',
+    play() {
+      tone(262,0.05,0.4,0,'square'); tone(330,0.05,0.4,0.06,'square')
+      tone(392,0.05,0.4,0.12,'square'); tone(523,0.05,0.4,0.18,'square')
+      tone(659,0.05,0.4,0.24,'square'); tone(784,0.12,0.45,0.3,'square')
+      noise(0.06,0.12,0.36)
+    },
+  },
+  soft: {
+    id: 'soft', label: 'Suave', emoji: '🎵',
+    desc: 'Melodía delicada y discreta',
+    play() {
+      tone(784,0.2,0.18,0,'sine'); tone(880,0.2,0.16,0.22,'sine')
+      tone(988,0.2,0.16,0.44,'sine'); tone(1047,0.35,0.2,0.66,'sine')
+    },
+  },
+  pulse: {
+    id: 'pulse', label: 'Pulso', emoji: '💓',
+    desc: 'Beeps rítmicos cortos',
+    play() {
+      tone(1200,0.06,0.3,0); tone(1200,0.06,0.3,0.1)
+      tone(1200,0.06,0.3,0.28); tone(1200,0.06,0.3,0.38)
+    },
+  },
+}
+
+// ── Outgoing tone catalog (llamando…) ────────────────────────────────────────
+export const OUTGOING_TONES = {
+  standard: {
+    id: 'standard', label: 'Estándar', emoji: '📞',
+    desc: 'Tono largo clásico',
+    play() { tone(440,0.8,0.2); tone(480,0.8,0.1,0) },
+  },
+  european: {
+    id: 'european', label: 'Europeo', emoji: '🇪🇺',
+    desc: 'Tono doble estilo Europa',
+    play() { tone(425,0.4,0.25); tone(425,0.4,0.22,0.5) },
+  },
+  mobile: {
+    id: 'mobile', label: 'Celular', emoji: '📲',
+    desc: 'Beep moderno de celular',
+    play() {
+      tone(700,0.08,0.3,0,'sine'); tone(900,0.08,0.25,0.1,'sine')
+      tone(700,0.08,0.25,0.22,'sine')
+    },
+  },
+  gaming: {
+    id: 'gaming', label: 'Gaming', emoji: '🎮',
+    desc: 'Searching estilo juego online',
+    play() {
+      tone(440,0.05,0.25,0,'square'); tone(554,0.05,0.25,0.12,'square')
+      tone(659,0.08,0.25,0.24,'square')
+    },
+  },
+}
+
+// ── Ringtones (incoming call) ─────────────────────────────────────────────────
 let ringHandle = null
 export const ringtone = {
   start() {
-    const r = () => { tone(523,0.18,0.45); tone(659,0.18,0.45,0.22); tone(784,0.22,0.45,0.44) }
+    const id = ringSettings.getRing()
+    const rt = RINGTONES[id] || RINGTONES.classic
+    const r = () => rt.play()
     r(); ringHandle = setInterval(r, 2200)
   },
   stop() { if (ringHandle) { clearInterval(ringHandle); ringHandle = null } },
@@ -259,7 +357,9 @@ export const ringtone = {
 let outRingHandle = null
 export const outgoingRing = {
   start() {
-    const r = () => { tone(440,0.8,0.2); tone(480,0.8,0.1,0) }
+    const id = ringSettings.getOut()
+    const ot = OUTGOING_TONES[id] || OUTGOING_TONES.standard
+    const r = () => ot.play()
     r(); outRingHandle = setInterval(r, 3000)
   },
   stop() { if (outRingHandle) { clearInterval(outRingHandle); outRingHandle = null } },
