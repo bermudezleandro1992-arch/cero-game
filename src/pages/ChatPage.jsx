@@ -6,6 +6,7 @@ import ContactPage from './ContactPage'
 import CallPage from './CallPage'
 import GroupCallPage from './GroupCallPage'
 import GroupInfoPage from './GroupInfoPage'
+import CommunityTournamentsPanel from './CommunityTournamentsPanel'
 import { useContactStatus, formatLastSeen } from '../hooks/useContactStatus'
 import { supabase } from '../lib/supabase'
 import { sounds } from '../lib/sounds'
@@ -519,6 +520,7 @@ export default function ChatPage({ onBack }) {
   const [forwardMsg, setForwardMsg] = useState(null) // message to forward
   const [viewOncePending, setViewOncePending] = useState(null) // { file, type } waiting for view count pick
   const [showTopicsPanel, setShowTopicsPanel] = useState(false)
+  const [showTournamentsPanel, setShowTournamentsPanel] = useState(false)
   const [showNewTopic, setShowNewTopic] = useState(false)
   const [newTopicName, setNewTopicName] = useState('')
   const [newTopicEmoji, setNewTopicEmoji] = useState('💬')
@@ -1144,6 +1146,14 @@ export default function ChatPage({ onBack }) {
         onClick={() => { setLongPressMsg(null); setShowEmoji(false); setDeleteMenuMsg(null); setShowAttachMenu(false); setShowBgPicker(false) }}
       >
 
+        {/* ── COMMUNITY TOURNAMENTS PANEL (overlay) ── */}
+        {activeConversation?.isCommunity && showTournamentsPanel && (
+          <CommunityTournamentsPanel
+            community={activeConversation}
+            onClose={() => setShowTournamentsPanel(false)}
+          />
+        )}
+
         {/* ── HEADER ── */}
         <div style={{
           background: C.panel, display: 'flex', alignItems: 'center',
@@ -1222,6 +1232,12 @@ export default function ChatPage({ onBack }) {
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={showTopicsPanel ? C.green : C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
+            </HdrBtn>
+          )}
+          {/* Tournaments button — only for communities */}
+          {activeConversation?.isCommunity && (
+            <HdrBtn title="Torneos & Ligas" onClick={() => setShowTournamentsPanel(v => !v)}>
+              <span style={{ fontSize: 16, lineHeight: 1, color: showTournamentsPanel ? C.green : C.text2 }}>🏆</span>
             </HdrBtn>
           )}
           {/* Search button */}
