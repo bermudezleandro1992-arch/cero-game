@@ -394,53 +394,22 @@ export default function CallPage({
   }
 
   async function getMedia() {
-    if (window.Capacitor?.isNativePlatform?.()) {
-      try {
-        const { Permissions } = window.Capacitor.Plugins
-        if (Permissions?.requestPermissions) {
-          await Permissions.requestPermissions({ permissions: ['microphone'] })
-        }
-      } catch (_) {}
-    }
-    try {
-      const ctx = new AudioContext()
-      if (ctx.state === 'suspended') await ctx.resume()
-      ctx.close()
-    } catch (_) {}
+    dbg('getMedia start mediaDevices=' + !!navigator.mediaDevices)
+    if (!navigator.mediaDevices?.getUserMedia) { dbg('ERR: no mediaDevices'); throw new Error('getUserMedia no disponible') }
 
-    // Strong echo cancellation prevents feedback when phones are close
-    const audioConstraints = {
-      echoCancellation: { ideal: true },
-      noiseSuppression: { ideal: true },
-      autoGainControl:  { ideal: true },
-      channelCount:     { ideal: 1 },
-      sampleRate:       { ideal: 48000 },
-      // Chrome/Edge extended constraints
-      googEchoCancellation: true,
-      googAutoGainControl:  true,
-      googNoiseSuppression: true,
-      googHighpassFilter:   true,
-    }
+    const withTimeout = (promise, ms) => Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + ms + 'ms')), ms))
+    ])
+
     let stream
-    if (callType === 'video') {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: audioConstraints,
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-        })
-      } catch (videoErr) {
-        // Cámara ocupada o sin permiso → fallback audio only
-        console.warn('Video unavailable, falling back to audio:', videoErr.message)
-        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
-        setCamOff(true)
-      }
-    } else {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
-      } catch (e1) {
-        dbg('getUserMedia err: ' + e1.name + ' — retry simple')
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      }
+    try {
+      dbg('getUserMedia simple...')
+      stream = await withTimeout(navigator.mediaDevices.getUserMedia({ audio: true }), 8000)
+      dbg('getUserMedia OK tracks=' + stream.getTracks().length)
+    } catch (e1) {
+      dbg('getUserMedia ERR: ' + e1.name + ' ' + e1.message)
+      throw e1
     }
     localStream.current = stream
     if (localVid.current) { localVid.current.srcObject = stream; localVid.current.muted = true }
