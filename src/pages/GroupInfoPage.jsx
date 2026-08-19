@@ -242,6 +242,8 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const isAdmin = isOwner || myRole === 'owner' || myRole === 'admin'
   const isMod   = isAdmin || myRole === 'moderador'
   const isOrganizador = isMod || myRole === 'organizador'
+  const isCommunity = conversation?.group_type === 'community'
+  const isPROOwner  = ['ceo', 'admin', 'comunidad'].includes(conversation?.owner_role || '')
 
   // ── Load roles ──
   useEffect(() => {
@@ -649,9 +651,6 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
         (m.username || '').toLowerCase().includes(memberSearch.toLowerCase())
       )
     : allMembers
-
-  const isCommunity = conversation?.group_type === 'community'
-  const isPROOwner  = ['ceo', 'admin', 'comunidad'].includes(conversation?.owner_role || '')
 
   const TABS = [
     { id: 'info',     label: '📋 Info' },
