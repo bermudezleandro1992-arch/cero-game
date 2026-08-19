@@ -216,7 +216,7 @@ function DBLigaView({ tournamentId, isOrganizer }) {
 }
 
 // ── Standalone mode ───────────────────────────────────────────────────────────
-export default function TablaPosicionesPage({ onBack, initialTeams = [], tournamentId, isOrganizer }) {
+export default function TablaPosicionesPage({ onBack, initialTeams = [], tournamentId, isOrganizer, embedded = false }) {
   const [teams, setTeams]           = useState(
     initialTeams.map((name, i) => ({ ...DEFAULT_TEAM, id: Date.now() + i, name }))
   )
@@ -260,15 +260,17 @@ export default function TablaPosicionesPage({ onBack, initialTeams = [], tournam
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: 4, display: 'flex' }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-        </button>
-        <div style={{ flex: 1 }}>
-          <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>📋 Tabla de Posiciones</h2>
-          <p style={{ margin: 0, color: C.textDim, fontSize: 12 }}>{tournamentId ? 'Liga en vivo' : `${teams.length} equipos / jugadores`}</p>
+      {!embedded && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: 4, display: 'flex' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          </button>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>📋 Tabla de Posiciones</h2>
+            <p style={{ margin: 0, color: C.textDim, fontSize: 12 }}>{tournamentId ? 'Liga en vivo' : `${teams.length} equipos / jugadores`}</p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* DB-connected mode: delegate to DBLigaView */}
       {tournamentId ? (

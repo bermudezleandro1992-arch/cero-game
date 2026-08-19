@@ -1219,11 +1219,8 @@ function TournamentsList({ profile }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'mis',         icon: '🌐', label: 'Mis Comunidades' },
-  { id: 'hub',         icon: '🏠', label: 'Hub'        },
-  { id: 'torneos',     icon: '🏆', label: 'Torneos'    },
-  { id: 'rankings',    icon: '📊', label: 'Rankings'   },
-  { id: 'herramientas',icon: '🛠️', label: 'Herramientas' },
+  { id: 'mis',          icon: '🌐', label: 'Mis Comunidades' },
+  { id: 'herramientas', icon: '🛠️', label: 'Herramientas'   },
 ]
 
 const TOOL_COMPONENTS = {
@@ -1395,47 +1392,6 @@ export default function TournamentsPage() {
           </div>
         )}
 
-        {/* ── HUB ── */}
-        {tab === 'hub' && (
-          <div>
-
-            <SectionHeader icon="🚀" title="Acceso rápido" desc="Tus herramientas de comunidad" />
-            <div className="comm-grid" style={{ marginBottom: 20 }}>
-              <FeatureCard icon="🏆" title="Crear Torneo" desc="Organizá competencias por eliminación, grupos o liga" color={C.green} onClick={() => setTab('torneos')} />
-              <FeatureCard icon="📋" title="Crear Liga" desc="Sistema de puntos con tabla de posiciones" color="#3b82f6" onClick={() => setTab('torneos')} />
-              <FeatureCard icon="⚔️" title="Torneo de Clanes" desc="Enfrentá grupos de jugadores organizados en clanes" color="#a855f7" onClick={() => setTab('torneos')} />
-              <FeatureCard icon="🎲" title="Sorteo en Vivo" desc="Sorteá enfrentamientos y premios en tiempo real" color="#f59e0b" onClick={() => setActiveTool('sorteo')} />
-              <FeatureCard icon="🔱" title="Brackets" desc="Cuadros de eliminación automáticos y visuales" color="#06b6d4" onClick={() => setActiveTool('brackets')} />
-              <FeatureCard icon="📊" title="Rankings" desc="Posiciones por zonas, países y plataformas" color={C.green} onClick={() => setTab('rankings')} />
-            </div>
-
-            <BannerAd position="torneos" style={{ marginBottom: 16 }} />
-
-            <SectionHeader icon="📢" title="Novedades" desc="Últimas competencias y eventos" />
-            <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, padding: '14px 16px' }}>
-              <p style={{ color: C.textDim, fontSize: 13, margin: 0, textAlign: 'center' }}>
-                Próximamente — feed de actividad de tu comunidad
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ── TORNEOS ── */}
-        {tab === 'torneos' && (
-          <div style={{ position: 'relative' }}>
-            <SectionHeader icon="🏆" title="Competencias" desc="Torneos, ligas y clanes" />
-            <TournamentsList profile={profile} />
-          </div>
-        )}
-
-        {/* ── RANKINGS ── */}
-        {tab === 'rankings' && (
-          <div>
-            <SectionHeader icon="📊" title="Rankings" desc="Clasificaciones globales y por categoría" />
-            <RankingsSection />
-          </div>
-        )}
-
         {/* ── HERRAMIENTAS ── */}
         {tab === 'herramientas' && (
           <div>
@@ -1453,7 +1409,7 @@ export default function TournamentsPage() {
               <div className="comm-grid">
                 <FeatureCard icon="🗳️" title="Votaciones" desc="Creá encuestas para tu comunidad" color="#a855f7" onClick={() => setActiveTool('votaciones')} />
                 <FeatureCard icon="📸" title="Carga de Resultados" desc="Los jugadores suben fotos de sus resultados para validación" color={C.green} onClick={() => setActiveTool('resultados')} />
-                <FeatureCard icon="🌍" title="Rankings por Zona" desc="Clasificaciones separadas por país, región o plataforma" color={C.green} onClick={() => setTab('rankings')} />
+                <FeatureCard icon="🌍" title="Rankings por Zona" desc="Clasificaciones separadas por país, región o plataforma" color={C.green} onClick={() => setActiveTool('tabla')} />
                 <FeatureCard icon="🏅" title="Sistema de Premios" desc="Asigná premios y trofeos a los ganadores de tus torneos" color="#f59e0b" onClick={() => setActiveTool('premios')} />
                 <FeatureCard icon="📅" title="Calendario de Eventos" desc="Programá fechas y partidos con recordatorios automáticos" color="#3b82f6" onClick={() => setActiveTool('calendario')} />
               </div>
