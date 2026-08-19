@@ -614,11 +614,15 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
 
   async function uploadAvatar(file) {
     if (!file) return
-    const ext = file.name.split('.').pop()
+    const ext = file.name.split('.').pop().toLowerCase().replace('jpeg', 'jpg')
     const path = `group-avatars/${conversation.id}.${ext}`
-    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    if (error) return
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+    const { error } = await supabase.storage.from('avatars').upload(path, file, {
+      upsert: true,
+      contentType: file.type || 'image/jpeg',
+    })
+    if (error) { alert('Error al subir imagen: ' + error.message); return }
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+    const publicUrl = data.publicUrl + '?t=' + Date.now()
     await supabase.from('conversations').update({ avatar_url: publicUrl }).eq('id', conversation.id)
   }
 

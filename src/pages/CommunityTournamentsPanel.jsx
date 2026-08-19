@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
-import { getLimits } from '../lib/roles'
 import { C } from '../theme'
-import BracketsPage from './tools/BracketsPage'
 import TablaPosicionesPage from './tools/TablaPosicionesPage'
 
 const STATUS_CFG = {
@@ -126,7 +124,6 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
       }).select('id').single()
       if (convErr) throw convErr
 
-      await supabase.from('conversation_members').insert({ conversation_id: conv.id, user_id: profile.id })
       onCreated()
     } catch (e) {
       setErr(e.message || 'Error al crear.')
@@ -261,11 +258,12 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
 }
 
 // ── Card ──────────────────────────────────────────────────────────────────────
-function TournamentCard({ item, onOpenBracket, onOpenStandings, onJoin, myId }) {
+function TournamentCard({ item, onManage, onJoin, onChat, myId, isStaff }) {
   const st = STATUS_CFG[item.tournament_status] || STATUS_CFG.inscripcion
   const ty = TYPE_CFG[item.group_type] || TYPE_CFG.tournament
   const isCreator = item.created_by === myId
-  const joined = !isCreator && item.members?.some(m => m.user_id === myId)
+  const joined = item.members?.some(m => m.user_id === myId)
+  const canManageThis = isStaff || isCreator
 
   return (
     <div style={{
@@ -303,56 +301,706 @@ function TournamentCard({ item, onOpenBracket, onOpenStandings, onJoin, myId }) 
         <span style={{ fontSize: 11, color: C.textDim, background: C.panel2, padding: '3px 8px', borderRadius: 20 }}>
           👥 {item.members?.length || 0}/{item.max_participants || '?'}
         </span>
+        {isCreator && (
+          <span style={{ fontSize: 11, color: '#f59e0b', background: '#f59e0b18', padding: '3px 8px', borderRadius: 20, fontWeight: 700 }}>
+            ⚙️ Organizador
+          </span>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 6 }}>
-        {isCreator ? (
-          <span style={{ flex: 1, textAlign: 'center', fontSize: 11, color: '#f59e0b', fontWeight: 700, padding: '7px' }}>
-            ⚙️ Organizador
-          </span>
-        ) : item.tournament_status === 'inscripcion' && !joined ? (
+        {canManageThis && (
+          <button onClick={() => onManage(item)} style={{
+            flex: 1, padding: '8px', borderRadius: 8, border: 'none',
+            background: C.green, color: C.bg, fontWeight: 700, fontSize: 12, cursor: 'pointer',
+          }}>
+            ⚙️ Gestionar
+          </button>
+        )}
+        {!canManageThis && item.tournament_status === 'inscripcion' && !joined && (
           <button onClick={() => onJoin(item.id)} style={{
-            flex: 1, padding: '7px', borderRadius: 8, border: 'none',
+            flex: 1, padding: '8px', borderRadius: 8, border: 'none',
             background: C.green, color: C.bg, fontWeight: 700, fontSize: 12, cursor: 'pointer',
           }}>
             Inscribirme
           </button>
-        ) : joined ? (
-          <span style={{ flex: 1, textAlign: 'center', fontSize: 12, color: C.green, fontWeight: 700, padding: '7px' }}>
-            ✓ Inscripto
-          </span>
-        ) : null}
-        <button onClick={() => onOpenBracket(item)} style={{
-          padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.border}`,
+        )}
+        {!canManageThis && joined && (
+          <button onClick={() => onManage(item)} style={{
+            flex: 1, padding: '8px', borderRadius: 8, border: `1px solid ${C.border}`,
+            background: 'none', color: C.text2, fontWeight: 700, fontSize: 12, cursor: 'pointer',
+          }}>
+            👁️ Ver
+          </button>
+        )}
+        {!canManageThis && !joined && item.tournament_status !== 'inscripcion' && (
+          <button onClick={() => onManage(item)} style={{
+            flex: 1, padding: '8px', borderRadius: 8, border: `1px solid ${C.border}`,
+            background: 'none', color: C.text2, fontWeight: 700, fontSize: 12, cursor: 'pointer',
+          }}>
+            👁️ Ver
+          </button>
+        )}
+        <button onClick={() => onChat(item)} style={{
+          padding: '8px 14px', borderRadius: 8, border: `1px solid ${C.border}`,
           background: 'none', color: C.text2, fontSize: 12, cursor: 'pointer',
         }}>
-          🏆 Bracket
-        </button>
-        <button onClick={() => onOpenStandings(item)} style={{
-          padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.border}`,
-          background: 'none', color: C.text2, fontSize: 12, cursor: 'pointer',
-        }}>
-          📊 Tabla
+          💬 Chat
         </button>
       </div>
     </div>
   )
 }
 
+// ── Tournament Detail ─────────────────────────────────────────────────────────
+function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
+  const [item, setItem] = useState(initItem)
+  const [activeTab, setActiveTab] = useState('jugadores')
+  const [participants, setParticipants] = useState([])
+  const [userMap, setUserMap] = useState({})
+  const [busy, setBusy] = useState(false)
+  const [drawResult, setDrawResult] = useState(null) // bolillero result
+  const [showDraw, setShowDraw] = useState(false)
+  const [drawAnimating, setDrawAnimating] = useState(false)
+  const [matches, setMatches] = useState([])
+  const [loadingMatches, setLoadingMatches] = useState(false)
+  const [selectedMatch, setSelectedMatch] = useState(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [disputes, setDisputes] = useState([])
+
+  const isCreator = item.created_by === myId
+  const canManage = isStaff || isCreator
+  const isLiga = item.group_type === 'liga'
+  const status = item.tournament_status
+  const joined = participants.some(p => p.user_id === myId)
+
+  const TABS = [
+    { id: 'jugadores', label: '👥 Jugadores' },
+    { id: 'sorteo',    label: '🎲 Sorteo'    },
+    { id: 'brackets',  label: '🏆 Brackets'  },
+    ...(isLiga ? [{ id: 'liga', label: '📊 Liga' }] : []),
+  ]
+
+  async function loadParticipants() {
+    const { data } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', item.id)
+    setParticipants(data || [])
+    if ((data || []).length > 0) {
+      const ids = data.map(r => r.user_id)
+      const { data: users } = await supabase.from('users').select('id, display_name, username, avatar_url').in('id', ids)
+      const map = {}
+      ;(users || []).forEach(u => { map[u.id] = u })
+      setUserMap(map)
+    }
+  }
+
+  async function loadMatches() {
+    setLoadingMatches(true)
+    const { data } = await supabase
+      .from('tournament_matches')
+      .select('*')
+      .eq('tournament_id', item.id)
+      .order('round_number').order('match_number')
+    setMatches(data || [])
+    setLoadingMatches(false)
+  }
+
+  async function reloadItem() {
+    const { data } = await supabase
+      .from('conversations')
+      .select('id, name, description, group_type, tournament_status, tournament_format, tournament_mode, game, max_participants, created_by, avatar_url, members:conversation_members(user_id)')
+      .eq('id', item.id).single()
+    if (data) setItem(data)
+  }
+
+  useEffect(() => { loadParticipants() }, [item.id])
+  useEffect(() => { if (activeTab === 'brackets') loadMatches() }, [activeTab, item.id])
+
+  async function handleJoin() {
+    await supabase.from('conversation_members').upsert({ conversation_id: item.id, user_id: myId }, { onConflict: 'conversation_id,user_id' })
+    await loadParticipants()
+    await reloadItem()
+  }
+
+  async function handleLeave() {
+    if (!confirm('¿Salir del torneo?')) return
+    await supabase.from('conversation_members').delete().eq('conversation_id', item.id).eq('user_id', myId)
+    await loadParticipants()
+    await reloadItem()
+  }
+
+  async function handleKick(userId) {
+    if (!confirm('¿Eliminar este jugador del torneo?')) return
+    await supabase.from('conversation_members').delete().eq('conversation_id', item.id).eq('user_id', userId)
+    await loadParticipants()
+    await reloadItem()
+  }
+
+  async function handleStart() {
+    if (!confirm(`¿Iniciar el torneo con ${participants.length} jugadores? Se realizará el sorteo automáticamente.`)) return
+    setBusy(true)
+    // Run automatic draw then start
+    await runDraw(true)
+    const { error } = await supabase.from('conversations').update({ tournament_status: 'en_curso' }).eq('id', item.id)
+    if (error) alert(error.message)
+    await reloadItem()
+    setBusy(false)
+    setActiveTab('brackets')
+  }
+
+  async function handleFinish() {
+    if (!confirm('¿Finalizar el torneo?')) return
+    await supabase.from('conversations').update({ tournament_status: 'finalizado' }).eq('id', item.id)
+    await reloadItem()
+  }
+
+  // Bolillero: shuffle participants randomly, assign to bracket positions
+  async function runDraw(autoSave = false) {
+    setDrawAnimating(true)
+    const names = participants.map(p => {
+      const u = userMap[p.user_id]
+      return { userId: p.user_id, name: u?.display_name || u?.username || 'Jugador' }
+    })
+    // Fisher-Yates shuffle
+    const shuffled = [...names]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    // Animate reveal with 300ms delay per player
+    setDrawResult(null)
+    await new Promise(r => setTimeout(r, 400))
+    setDrawResult(shuffled)
+    setDrawAnimating(false)
+
+    if (autoSave && shuffled.length > 0) {
+      // Save bracket matches to DB using RPC if available, else insert manually
+      const bracketSize = Math.pow(2, Math.ceil(Math.log2(shuffled.length)))
+      const seeded = [...shuffled]
+      while (seeded.length < bracketSize) seeded.push(null) // BYE slots
+
+      const matchInserts = []
+      for (let i = 0; i < seeded.length; i += 2) {
+        matchInserts.push({
+          tournament_id: item.id,
+          round_number: 1,
+          match_number: i / 2 + 1,
+          player1_id: seeded[i]?.userId || null,
+          player2_id: seeded[i + 1]?.userId || null,
+          status: seeded[i + 1] === null ? 'bye' : 'pendiente',
+          winner_id: seeded[i + 1] === null ? seeded[i]?.userId : null,
+        })
+      }
+      // Clear existing matches first
+      await supabase.from('tournament_matches').delete().eq('tournament_id', item.id).eq('round_number', 1)
+      if (matchInserts.length > 0) {
+        await supabase.from('tournament_matches').insert(matchInserts)
+      }
+    }
+  }
+
+  // Match result upload
+  async function handleSubmitScore(matchId, score1, score2, photoUrl) {
+    setBusy(true)
+    const { error } = await supabase.rpc('submit_match_result', {
+      p_match_id: matchId, p_score1: score1, p_score2: score2, p_photo_url: photoUrl || null,
+    })
+    if (error) alert(error.message)
+    await loadMatches()
+    setSelectedMatch(null)
+    setBusy(false)
+  }
+
+  async function handleApproveResult(matchId) {
+    setBusy(true)
+    const { error } = await supabase.rpc('approve_match_result', { p_match_id: matchId })
+    if (error) alert(error.message)
+    await loadMatches()
+    setSelectedMatch(null)
+    setBusy(false)
+  }
+
+  async function handleDisputeResult(matchId, reason) {
+    setBusy(true)
+    await supabase.from('tournament_matches').update({ status: 'disputa', dispute_reason: reason }).eq('id', matchId)
+    await loadMatches()
+    setSelectedMatch(null)
+    setBusy(false)
+  }
+
+  async function uploadResultPhoto(file) {
+    setUploadingPhoto(true)
+    const ext = file.name.split('.').pop()
+    const path = `match-results/${item.id}/${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    setUploadingPhoto(false)
+    if (error) { alert('Error al subir foto'); return null }
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+    return data.publicUrl
+  }
+
+  const st = STATUS_CFG[status] || STATUS_CFG.inscripcion
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 200, background: C.bg, display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: '4px 8px 4px 0' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {isLiga ? '🥇' : '🏆'} {item.name}
+            </p>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 700, background: st.bg, color: st.color }}>{st.label}</span>
+              <span style={{ fontSize: 11, color: C.textDim }}>👥 {participants.length}/{item.max_participants}</span>
+            </div>
+          </div>
+          {canManage && status === 'inscripcion' && (
+            <button onClick={handleStart} disabled={busy || participants.length < 2} style={{
+              background: participants.length >= 2 ? C.green : C.panel2,
+              color: participants.length >= 2 ? C.bg : C.textDim,
+              border: 'none', borderRadius: 10, padding: '7px 12px',
+              fontWeight: 700, fontSize: 12, cursor: participants.length >= 2 ? 'pointer' : 'default',
+            }}>
+              🚀 Iniciar ({participants.length})
+            </button>
+          )}
+          {canManage && status === 'en_curso' && (
+            <button onClick={handleFinish} style={{
+              background: '#ef4444', color: '#fff',
+              border: 'none', borderRadius: 10, padding: '7px 12px',
+              fontWeight: 700, fontSize: 12, cursor: 'pointer',
+            }}>
+              🏁 Finalizar
+            </button>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', borderTop: `1px solid ${C.border}44` }}>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
+              flex: 1, padding: '10px 4px', background: 'none', border: 'none',
+              borderBottom: `2.5px solid ${activeTab === t.id ? C.green : 'transparent'}`,
+              color: activeTab === t.id ? C.green : C.textDim,
+              fontSize: 11, fontWeight: activeTab === t.id ? 700 : 400,
+              cursor: 'pointer', whiteSpace: 'nowrap',
+            }}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+
+        {/* ── JUGADORES ── */}
+        {activeTab === 'jugadores' && (
+          <div>
+            {status === 'inscripcion' && !joined && !canManage && (
+              <button onClick={handleJoin} style={{
+                width: '100%', padding: 12, borderRadius: 12, border: 'none',
+                background: C.green, color: C.bg, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginBottom: 14,
+              }}>
+                ✅ Inscribirme al torneo
+              </button>
+            )}
+            {status === 'inscripcion' && joined && !canManage && (
+              <button onClick={handleLeave} style={{
+                width: '100%', padding: 11, borderRadius: 12, border: `1px solid #ef4444`,
+                background: 'none', color: '#ef4444', fontWeight: 700, fontSize: 13, cursor: 'pointer', marginBottom: 14,
+              }}>
+                🚪 Salir del torneo
+              </button>
+            )}
+            <p style={{ margin: '0 0 10px', fontSize: 12, color: C.textDim, fontWeight: 700 }}>
+              {participants.length} participante{participants.length !== 1 ? 's' : ''} inscripto{participants.length !== 1 ? 's' : ''}
+            </p>
+            {participants.length === 0 ? (
+              <p style={{ color: C.textDim, textAlign: 'center', marginTop: 40 }}>Sin inscriptos aún.</p>
+            ) : participants.map((p, i) => {
+              const u = userMap[p.user_id]
+              return (
+                <div key={p.user_id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                  background: C.panel, borderRadius: 12, marginBottom: 6,
+                }}>
+                  <span style={{ fontSize: 13, color: C.textDim, minWidth: 24, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                    {i + 1}
+                  </span>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: '50%', background: C.panel2,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 14, fontWeight: 800, color: C.text, overflow: 'hidden', flexShrink: 0,
+                  }}>
+                    {u?.avatar_url
+                      ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : (u?.display_name || u?.username || '?')[0].toUpperCase()
+                    }
+                  </div>
+                  <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: C.text }}>
+                    {u?.display_name || u?.username || 'Jugador'}
+                    {p.user_id === item.created_by && (
+                      <span style={{ marginLeft: 6, fontSize: 11, color: '#f59e0b' }}>⚙️ Org.</span>
+                    )}
+                  </span>
+                  {canManage && p.user_id !== myId && status === 'inscripcion' && (
+                    <button onClick={() => handleKick(p.user_id)} style={{
+                      padding: '4px 10px', borderRadius: 8, border: `1px solid #ef444444`,
+                      background: 'none', color: '#ef4444', fontSize: 11, cursor: 'pointer',
+                    }}>Quitar</button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* ── SORTEO ── */}
+        {activeTab === 'sorteo' && (
+          <div>
+            <div style={{ background: C.panel, borderRadius: 14, padding: 16, marginBottom: 14 }}>
+              <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 14, color: C.text }}>🎲 Bolillero — Sorteo de posiciones</p>
+              <p style={{ margin: 0, fontSize: 12, color: C.textDim }}>
+                Asigna posiciones aleatorias a los jugadores como en un sorteo profesional.
+                {canManage && status === 'inscripcion' && ' Al iniciar el torneo el sorteo se realiza automáticamente.'}
+              </p>
+            </div>
+
+            {participants.length < 2 ? (
+              <p style={{ color: C.textDim, textAlign: 'center', marginTop: 30 }}>Se necesitan al menos 2 jugadores para sortear.</p>
+            ) : (
+              <>
+                {(canManage || status !== 'inscripcion') && (
+                  <button onClick={() => { setShowDraw(true); runDraw(false) }} disabled={drawAnimating} style={{
+                    width: '100%', padding: 13, borderRadius: 12, border: 'none',
+                    background: drawAnimating ? C.panel2 : C.green,
+                    color: drawAnimating ? C.textDim : C.bg,
+                    fontWeight: 700, fontSize: 14, cursor: drawAnimating ? 'default' : 'pointer',
+                    marginBottom: 14,
+                  }}>
+                    {drawAnimating ? '🎲 Sorteando…' : '🎲 Realizar Sorteo'}
+                  </button>
+                )}
+
+                {drawAnimating && (
+                  <div style={{ textAlign: 'center', padding: 40 }}>
+                    <div style={{ fontSize: 48, marginBottom: 12 }}>🎲</div>
+                    <p style={{ color: C.textDim }}>Mezclando jugadores…</p>
+                  </div>
+                )}
+
+                {drawResult && !drawAnimating && (
+                  <div>
+                    <p style={{ margin: '0 0 10px', fontSize: 12, color: C.textDim, fontWeight: 700 }}>Resultado del sorteo:</p>
+                    {drawResult.map((player, i) => (
+                      <div key={player.userId} style={{
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+                        background: C.panel, borderRadius: 12, marginBottom: 6,
+                        border: `1px solid ${C.border}`,
+                        animation: `fadeIn 0.3s ease ${i * 0.08}s both`,
+                      }}>
+                        <div style={{
+                          width: 32, height: 32, borderRadius: '50%',
+                          background: `linear-gradient(135deg, ${C.green}88, ${C.panel2})`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 800, fontSize: 14, color: C.text, flexShrink: 0,
+                        }}>
+                          {i + 1}
+                        </div>
+                        <span style={{ flex: 1, fontWeight: 600, color: C.text }}>{player.name}</span>
+                        <span style={{ fontSize: 11, color: C.textDim }}>Posición #{i + 1}</span>
+                      </div>
+                    ))}
+                    {canManage && status === 'inscripcion' && (
+                      <button onClick={() => runDraw(true)} disabled={busy} style={{
+                        width: '100%', marginTop: 10, padding: 11, borderRadius: 12,
+                        border: `1px solid ${C.green}`, background: `${C.green}15`,
+                        color: C.green, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                      }}>
+                        💾 Guardar este sorteo en brackets
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {!drawResult && !drawAnimating && (
+                  <p style={{ color: C.textDim, textAlign: 'center', marginTop: 20, fontSize: 13 }}>
+                    Presioná "Realizar Sorteo" para asignar posiciones aleatoriamente.
+                  </p>
+                )}
+              </>
+            )}
+            <style>{`@keyframes fadeIn { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:none } }`}</style>
+          </div>
+        )}
+
+        {/* ── BRACKETS ── */}
+        {activeTab === 'brackets' && (
+          <div>
+            {loadingMatches ? (
+              <p style={{ textAlign: 'center', color: C.textDim, marginTop: 40 }}>Cargando…</p>
+            ) : matches.length === 0 ? (
+              <div style={{ textAlign: 'center', marginTop: 40 }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>🏆</div>
+                <p style={{ color: C.textDim, fontSize: 14 }}>
+                  {status === 'inscripcion'
+                    ? 'El torneo aún no ha iniciado. Al iniciar se genera el bracket automáticamente.'
+                    : 'No hay partidos generados aún.'}
+                </p>
+              </div>
+            ) : (
+              <div>
+                {/* Group matches by round */}
+                {Array.from(new Set(matches.map(m => m.round_number))).sort().map(rn => {
+                  const roundMatches = matches.filter(m => m.round_number === rn)
+                  const roundNames = ['Fase 1','Octavos','Cuartos','Semifinal','Final']
+                  const totalRounds = Math.max(...matches.map(m => m.round_number))
+                  const rLabel = rn === totalRounds ? 'Final' : rn === totalRounds - 1 ? 'Semifinal' : rn === totalRounds - 2 ? 'Cuartos' : `Ronda ${rn}`
+                  return (
+                    <div key={rn} style={{ marginBottom: 20 }}>
+                      <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                        {rLabel}
+                      </p>
+                      {roundMatches.map(match => {
+                        const p1 = userMap[match.player1_id]?.display_name || userMap[match.player1_id]?.username || (match.player1_id ? 'Jugador' : 'BYE')
+                        const p2 = userMap[match.player2_id]?.display_name || userMap[match.player2_id]?.username || (match.player2_id ? 'Jugador' : 'BYE')
+                        const done = match.status === 'finalizado' || match.status === 'aprobado'
+                        const inDispute = match.status === 'disputa'
+                        const isMyMatch = match.player1_id === myId || match.player2_id === myId
+                        return (
+                          <button key={match.id} onClick={() => setSelectedMatch(match)} style={{
+                            display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                            background: C.panel, border: `1px solid ${inDispute ? '#ef4444' : done ? C.green + '44' : C.border}`,
+                            borderRadius: 12, padding: '12px 14px', cursor: 'pointer',
+                            textAlign: 'left', marginBottom: 6,
+                          }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, fontWeight: match.winner_id === match.player1_id && done ? 700 : 400, color: match.winner_id === match.player1_id && done ? C.green : C.text }}>
+                                  {p1}
+                                </span>
+                                {done && <span style={{ fontSize: 16, fontWeight: 800, color: C.text, fontVariantNumeric: 'tabular-nums' }}>{match.score1 ?? '—'}</span>}
+                              </div>
+                              <div style={{ height: 1, background: C.border + '44', margin: '6px 0' }} />
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, fontWeight: match.winner_id === match.player2_id && done ? 700 : 400, color: match.winner_id === match.player2_id && done ? C.green : C.text }}>
+                                  {p2}
+                                </span>
+                                {done && <span style={{ fontSize: 16, fontWeight: 800, color: C.text, fontVariantNumeric: 'tabular-nums' }}>{match.score2 ?? '—'}</span>}
+                              </div>
+                            </div>
+                            <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                              {inDispute && <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 700 }}>⚠️ Disputa</span>}
+                              {done && <span style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>✓</span>}
+                              {!done && !inDispute && isMyMatch && <span style={{ fontSize: 11, color: '#f59e0b' }}>Tu partido</span>}
+                              {!done && !inDispute && !isMyMatch && <span style={{ fontSize: 11, color: C.textDim }}>Pendiente</span>}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── LIGA ── */}
+        {activeTab === 'liga' && (
+          <TablaPosicionesPage tournamentId={item.id} tournamentName={item.name} embedded={true} />
+        )}
+      </div>
+
+      {/* Match detail modal */}
+      {selectedMatch && (
+        <MatchModal
+          match={selectedMatch}
+          userMap={userMap}
+          myId={myId}
+          canManage={canManage}
+          busy={busy}
+          onClose={() => setSelectedMatch(null)}
+          onSubmitScore={handleSubmitScore}
+          onApprove={handleApproveResult}
+          onDispute={handleDisputeResult}
+          onUploadPhoto={uploadResultPhoto}
+          uploadingPhoto={uploadingPhoto}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Match Modal ───────────────────────────────────────────────────────────────
+function MatchModal({ match, userMap, myId, canManage, busy, onClose, onSubmitScore, onApprove, onDispute, onUploadPhoto, uploadingPhoto }) {
+  const [s1, setS1] = useState(match.score1 ?? '')
+  const [s2, setS2] = useState(match.score2 ?? '')
+  const [photoUrl, setPhotoUrl] = useState(match.photo_url || '')
+  const [disputeReason, setDisputeReason] = useState('')
+  const [showDispute, setShowDispute] = useState(false)
+
+  const p1 = userMap[match.player1_id]?.display_name || userMap[match.player1_id]?.username || 'Jugador 1'
+  const p2 = userMap[match.player2_id]?.display_name || userMap[match.player2_id]?.username || 'Jugador 2'
+  const isPlayer = match.player1_id === myId || match.player2_id === myId
+  const done = match.status === 'finalizado' || match.status === 'aprobado'
+  const pending = match.status === 'pendiente' || match.status === 'en_curso'
+  const inDispute = match.status === 'disputa'
+  const waitingApproval = match.status === 'resultado_cargado'
+
+  async function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const url = await onUploadPhoto(file)
+    if (url) setPhotoUrl(url)
+  }
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 300,
+      background: '#000000aa', display: 'flex', alignItems: 'flex-end',
+    }} onClick={onClose}>
+      <div style={{
+        width: '100%', background: C.bg, borderRadius: '20px 20px 0 0',
+        padding: '20px 16px 32px', maxHeight: '85vh', overflowY: 'auto',
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: C.border, margin: '0 auto 16px' }} />
+
+        <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 16, color: C.text, textAlign: 'center' }}>
+          {p1} vs {p2}
+        </p>
+        {match.round_number && (
+          <p style={{ margin: '0 0 16px', fontSize: 12, color: C.textDim, textAlign: 'center' }}>
+            Ronda {match.round_number} — Partido {match.match_number}
+          </p>
+        )}
+
+        {/* Scores display */}
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <div style={{ textAlign: 'center', flex: 1 }}>
+            <p style={{ margin: '0 0 4px', fontSize: 13, color: C.text, fontWeight: match.winner_id === match.player1_id && done ? 700 : 400 }}>{p1}</p>
+            <div style={{ fontSize: 36, fontWeight: 900, color: match.winner_id === match.player1_id && done ? C.green : C.text }}>
+              {done || waitingApproval ? (match.score1 ?? '—') : '?'}
+            </div>
+          </div>
+          <div style={{ fontSize: 18, color: C.textDim, fontWeight: 700 }}>VS</div>
+          <div style={{ textAlign: 'center', flex: 1 }}>
+            <p style={{ margin: '0 0 4px', fontSize: 13, color: C.text, fontWeight: match.winner_id === match.player2_id && done ? 700 : 400 }}>{p2}</p>
+            <div style={{ fontSize: 36, fontWeight: 900, color: match.winner_id === match.player2_id && done ? C.green : C.text }}>
+              {done || waitingApproval ? (match.score2 ?? '—') : '?'}
+            </div>
+          </div>
+        </div>
+
+        {/* Photo evidence */}
+        {(photoUrl || match.photo_url) && (
+          <img src={photoUrl || match.photo_url} alt="Resultado" style={{
+            width: '100%', borderRadius: 12, marginBottom: 14, maxHeight: 200, objectFit: 'cover',
+          }} />
+        )}
+
+        {inDispute && match.dispute_reason && (
+          <div style={{ background: '#ef444418', border: '1px solid #ef444444', borderRadius: 10, padding: '10px 12px', marginBottom: 14 }}>
+            <p style={{ margin: 0, fontSize: 12, color: '#ef4444', fontWeight: 700 }}>⚠️ En disputa: {match.dispute_reason}</p>
+          </div>
+        )}
+
+        {/* Score input for players */}
+        {isPlayer && (pending || inDispute) && !waitingApproval && (
+          <div>
+            <p style={{ margin: '0 0 8px', fontSize: 12, color: C.textDim, textAlign: 'center' }}>Cargar resultado</p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+              <input type="number" min="0" value={s1} onChange={e => setS1(e.target.value)}
+                style={{ width: 64, textAlign: 'center', background: C.panel2, border: `1px solid ${C.green}`, borderRadius: 10, padding: '10px 0', color: C.text, fontSize: 24, fontWeight: 800, outline: 'none' }} />
+              <span style={{ color: C.textDim, fontWeight: 700 }}>—</span>
+              <input type="number" min="0" value={s2} onChange={e => setS2(e.target.value)}
+                style={{ width: 64, textAlign: 'center', background: C.panel2, border: `1px solid ${C.green}`, borderRadius: 10, padding: '10px 0', color: C.text, fontSize: 24, fontWeight: 800, outline: 'none' }} />
+            </div>
+            <label style={{ display: 'block', marginBottom: 12 }}>
+              <div style={{ padding: 10, borderRadius: 10, border: `1px dashed ${C.border}`, textAlign: 'center', cursor: 'pointer', color: C.textDim, fontSize: 13 }}>
+                {uploadingPhoto ? 'Subiendo…' : photoUrl ? '✅ Foto cargada — cambiar' : '📸 Subir foto del resultado (opcional)'}
+              </div>
+              <input type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: 'none' }} />
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 12, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={() => onSubmitScore(match.id, parseInt(s1)||0, parseInt(s2)||0, photoUrl)} disabled={busy}
+                style={{ flex: 2, padding: 12, borderRadius: 12, border: 'none', background: C.green, color: C.bg, fontWeight: 700, cursor: 'pointer' }}>
+                {busy ? '…' : 'Enviar resultado'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Staff actions */}
+        {canManage && waitingApproval && (
+          <div>
+            <p style={{ margin: '0 0 10px', fontSize: 13, color: C.textDim, textAlign: 'center' }}>Resultado enviado — pendiente de aprobación</p>
+            {!showDispute ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setShowDispute(true)} style={{ flex: 1, padding: 12, borderRadius: 12, border: `1px solid #ef4444`, background: 'none', color: '#ef4444', fontWeight: 700, cursor: 'pointer' }}>
+                  ⚠️ Disputar
+                </button>
+                <button onClick={() => onApprove(match.id)} disabled={busy} style={{ flex: 2, padding: 12, borderRadius: 12, border: 'none', background: C.green, color: C.bg, fontWeight: 700, cursor: 'pointer' }}>
+                  {busy ? '…' : '✅ Aprobar resultado'}
+                </button>
+              </div>
+            ) : (
+              <div>
+                <textarea value={disputeReason} onChange={e => setDisputeReason(e.target.value)}
+                  placeholder="Motivo de la disputa…"
+                  style={{ width: '100%', boxSizing: 'border-box', background: C.panel2, border: `1px solid #ef4444`, borderRadius: 10, padding: 10, color: C.text, fontSize: 13, resize: 'none', marginBottom: 8, outline: 'none' }}
+                  rows={3}
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setShowDispute(false)} style={{ flex: 1, padding: 11, borderRadius: 12, border: `1px solid ${C.border}`, background: 'none', color: C.text, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
+                  <button onClick={() => onDispute(match.id, disputeReason)} disabled={busy || !disputeReason.trim()} style={{ flex: 2, padding: 11, borderRadius: 12, border: 'none', background: '#ef4444', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+                    Marcar en disputa
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {canManage && inDispute && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => onApprove(match.id)} disabled={busy} style={{ width: '100%', padding: 12, borderRadius: 12, border: 'none', background: C.green, color: C.bg, fontWeight: 700, cursor: 'pointer' }}>
+              {busy ? '…' : '✅ Resolver — Aprobar resultado'}
+            </button>
+          </div>
+        )}
+
+        {!isPlayer && !canManage && (
+          <button onClick={onClose} style={{ width: '100%', padding: 12, borderRadius: 12, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontWeight: 700, cursor: 'pointer' }}>Cerrar</button>
+        )}
+        {done && (
+          <button onClick={onClose} style={{ width: '100%', marginTop: 8, padding: 11, borderRadius: 12, border: `1px solid ${C.border}`, background: 'none', color: C.text2, fontWeight: 700, cursor: 'pointer' }}>Cerrar</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main Panel ────────────────────────────────────────────────────────────────
-export default function CommunityTournamentsPanel({ community, onClose, canManage = false }) {
+export default function CommunityTournamentsPanel({ community, onClose, canManage = false, onOpenChat }) {
   const { profile } = useAuthStore()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
-  const [bracketItem, setBracketItem] = useState(null)
-  const [standingsItem, setStandingsItem] = useState(null)
-  const [filter, setFilter] = useState('all') // all | tournament | liga
-  const [userPerms, setUserPerms] = useState(null) // custom role permissions
+  const [detailItem, setDetailItem] = useState(null)
+  const [filter, setFilter] = useState('all')
+  const [userPerms, setUserPerms] = useState(null)
 
   const communityTags = community?.tags || []
 
-  // Load user's custom role permissions for this community
   useEffect(() => {
     if (!community?.id || !profile?.id) return
     async function loadPerms() {
@@ -367,14 +1015,14 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
     loadPerms()
   }, [community?.id, profile?.id])
 
-  // Effective "can create tournament": canManage prop (admin/owner) OR custom role permission
   const canCreateTournament = canManage || !!userPerms?.can_create_tournaments
+  const isStaff = canManage || !!userPerms?.can_manage_tournaments
 
   async function load() {
     setLoading(true)
     const { data } = await supabase
       .from('conversations')
-      .select('id, name, description, group_type, tournament_status, tournament_format, tournament_mode, game, max_participants, created_by, members:conversation_members(user_id)')
+      .select('id, name, description, group_type, tournament_status, tournament_format, tournament_mode, game, max_participants, created_by, avatar_url, members:conversation_members(user_id)')
       .eq('community_id', community.id)
       .in('group_type', ['tournament', 'liga'])
       .order('created_at', { ascending: false })
@@ -390,10 +1038,21 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
     load()
   }
 
+  function handleChat(item) {
+    if (onOpenChat) onOpenChat(item.id)
+    else alert('Abrí el chat de ' + item.name + ' desde la sección Chats.')
+  }
+
   const filtered = filter === 'all' ? items : items.filter(i => i.group_type === filter)
 
-  if (bracketItem) return <BracketsPage tournamentId={bracketItem.id} tournamentName={bracketItem.name} maxParticipants={bracketItem.max_participants} isOrganizer={bracketItem.created_by === profile?.id} onBack={() => setBracketItem(null)} />
-  if (standingsItem) return <TablaPosicionesPage tournamentId={standingsItem.id} tournamentName={standingsItem.name} onBack={() => setStandingsItem(null)} />
+  if (detailItem) return (
+    <TournamentDetail
+      item={detailItem}
+      onBack={() => { setDetailItem(null); load() }}
+      myId={profile?.id}
+      isStaff={isStaff}
+    />
+  )
 
   return (
     <div style={{
@@ -467,9 +1126,10 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
             key={item.id}
             item={item}
             myId={profile?.id}
+            isStaff={isStaff}
             onJoin={handleJoin}
-            onOpenBracket={setBracketItem}
-            onOpenStandings={setStandingsItem}
+            onManage={setDetailItem}
+            onChat={handleChat}
           />
         ))}
       </div>
