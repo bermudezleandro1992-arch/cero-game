@@ -28,7 +28,7 @@ IMMUTABLE AS $$
     WHEN 'vip'         THEN 128
     WHEN 'moderador'   THEN 64
     WHEN 'organizador' THEN 32
-    ELSE 16  -- member / default
+    ELSE 8   -- member / default (sin plan)
   END;
 $$;
 
