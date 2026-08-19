@@ -491,8 +491,10 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   }
 
   async function handleDeleteGroup() {
-    if (!window.confirm('⚠️ ¿Eliminar el grupo permanentemente? Esto borrará todos los mensajes y no se puede deshacer.')) return
-    await supabase.from('conversations').delete().eq('id', conversation.id)
+    const label = isCommunity ? 'comunidad' : 'grupo'
+    if (!window.confirm(`⚠️ ¿Eliminar la ${label} permanentemente? Esto borrará todos los mensajes y no se puede deshacer.`)) return
+    const { error } = await supabase.from('conversations').delete().eq('id', conversation.id)
+    if (error) { alert('Error al eliminar: ' + error.message); return }
     onLeft?.()
   }
 
@@ -790,10 +792,10 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
 
             {/* Actions */}
             <div style={{ padding: '12px 0', borderBottom: `1px solid ${C.border}` }}>
-              <Row icon="🚩" label="Reportar grupo" onClick={() => alert('Reporte enviado. Gracias.')} />
-              <Row icon="🚪" label="Salir del grupo" danger onClick={handleLeave} />
+              <Row icon="🚩" label={`Reportar ${isCommunity ? 'comunidad' : 'grupo'}`} onClick={() => alert('Reporte enviado. Gracias.')} />
+              <Row icon="🚪" label={`Salir del ${isCommunity ? 'la comunidad' : 'grupo'}`} danger onClick={handleLeave} />
               {isOwner && (
-                <Row icon="💣" label="Eliminar grupo" danger onClick={handleDeleteGroup} />
+                <Row icon="💣" label={`Eliminar ${isCommunity ? 'comunidad' : 'grupo'}`} danger onClick={handleDeleteGroup} />
               )}
             </div>
           </>
@@ -1324,13 +1326,6 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
             { id: 'efootball',   icon: '⚽', label: 'eFootball' },
             { id: 'fc26',        icon: '⚽', label: 'FC 26' },
             { id: 'fc27',        icon: '⚽', label: 'FC 27' },
-            { id: 'cs2',         icon: '🎯', label: 'CS2' },
-            { id: 'valorant',    icon: '🎯', label: 'Valorant' },
-            { id: 'warzone',     icon: '🔫', label: 'Warzone' },
-            { id: 'pubg',        icon: '🔫', label: 'PUBG' },
-            { id: 'clashroyale', icon: '👑', label: 'Clash Royale' },
-            { id: 'freef',       icon: '🔥', label: 'Free Fire' },
-            { id: 'otro',        icon: '🎮', label: 'Otro' },
           ]
           function toggleGame(id) {
             setCommunityGames(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id])
