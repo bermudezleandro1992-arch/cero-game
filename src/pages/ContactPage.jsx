@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { C } from '../theme'
 import CallPage from './CallPage'
+import { useCallStore } from '../store/callStore'
 
 function formatLastSeen(ts) {
   if (!ts) return null
@@ -145,6 +146,7 @@ export default function ContactPage({ user, onBack, onChat }) {
 
   async function startCall(type) {
     const convId = await findOrCreateConversation(profile.id, user.id)
+    useCallStore.getState().setInCall(true)
     setCall({ type, convId })
   }
 
@@ -173,7 +175,8 @@ export default function ContactPage({ user, onBack, onChat }) {
         contact={{ id: user.id, display_name: displayName, avatar_url: userData?.avatar_url }}
         callType={call.type}
         isIncoming={false}
-        onEnd={() => setCall(null)}
+        onEnd={() => { setCall(null); useCallStore.getState().setInCall(false) }}
+        onAccept={() => useCallStore.getState().setInCall(true)}
       />
     )
   }
