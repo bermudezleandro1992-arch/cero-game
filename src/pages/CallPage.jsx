@@ -224,6 +224,7 @@ export default function CallPage({
   const [showBgPicker, setShowBgPicker] = useState(false)
   const [selectedBg, setSelectedBg] = useState('default')
   const [screenSharing, setScreenSharing] = useState(false)
+  const [remoteScreenSharing, setRemoteScreenSharing] = useState(false)
   const [note, setNote] = useState('')
   const [showNote, setShowNote] = useState(false)
 
@@ -301,6 +302,20 @@ export default function CallPage({
       })
       .on('broadcast', { event: 'call-end' }, () => hangup(false))
       .on('broadcast', { event: 'call-reject' }, () => { busyTone.start(); setTimeout(() => busyTone.stop(), 3000); hangup(false) })
+      .on('broadcast', { event: 'call-screen-share' }, ({ payload }) => {
+        if (payload.from === myUserId) return
+        setRemoteScreenSharing(payload.active)
+        // Force video element to reload the track by briefly nulling srcObject
+        if (remoteVid.current && remoteStreamRef.current) {
+          remoteVid.current.srcObject = null
+          setTimeout(() => {
+            if (remoteVid.current && remoteStreamRef.current) {
+              remoteVid.current.srcObject = remoteStreamRef.current
+              remoteVid.current.play().catch(() => {})
+            }
+          }, 80)
+        }
+      })
       .on('broadcast', { event: 'call-reaction' }, ({ payload }) => {
         if (payload.from === myUserId) return
         addReaction(payload.emoji)
@@ -654,6 +669,7 @@ export default function CallPage({
         if (localVid.current) { localVid.current.srcObject = localStream.current }
       }
       setScreenSharing(false)
+      sessionCh.current?.send({ type: 'broadcast', event: 'call-screen-share', payload: { from: myUserId, active: false } }).catch(() => {})
     } else {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
@@ -665,6 +681,7 @@ export default function CallPage({
         setScreenSharing(true)
         // Auto-stop when user ends via browser UI
         screenTrack.onended = () => toggleScreenShare()
+        sessionCh.current?.send({ type: 'broadcast', event: 'call-screen-share', payload: { from: myUserId, active: true } }).catch(() => {})
       } catch (_) { /* user cancelled or not supported */ }
     }
   }
@@ -885,10 +902,15 @@ export default function CallPage({
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)' }} />
         </div>
 
-        {/* Remote video */}
-        {isVideo && phase === 'active' && (
+        {/* Remote video — also shown for screen share even in audio calls */}
+        {(isVideo || remoteScreenSharing) && phase === 'active' && (
           <video ref={remoteVid} autoPlay playsInline
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }} />
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: remoteScreenSharing ? 'contain' : 'cover', zIndex: 1, background: remoteScreenSharing ? '#000' : 'none' }} />
+        )}
+        {remoteScreenSharing && phase === 'active' && (
+          <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10, background: 'rgba(0,0,0,0.7)', borderRadius: 20, padding: '4px 14px', fontSize: 12, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>🖥️</span> {contact?.display_name} está compartiendo pantalla
+          </div>
         )}
 
         {/* Local PiP */}
