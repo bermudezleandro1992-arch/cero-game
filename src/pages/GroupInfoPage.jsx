@@ -493,8 +493,11 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   async function handleDeleteGroup() {
     const label = isCommunity ? 'comunidad' : 'grupo'
     if (!window.confirm(`⚠️ ¿Eliminar la ${label} permanentemente? Esto borrará todos los mensajes y no se puede deshacer.`)) return
-    const { error } = await supabase.from('conversations').delete().eq('id', conversation.id)
-    if (error) { alert('Error al eliminar: ' + error.message); return }
+    const { data, error } = await supabase.rpc('delete_group_or_community', { p_conversation_id: conversation.id })
+    if (error || data?.ok === false) {
+      alert('Error al eliminar: ' + (data?.error || error?.message || 'Error desconocido'))
+      return
+    }
     onLeft?.()
   }
 
