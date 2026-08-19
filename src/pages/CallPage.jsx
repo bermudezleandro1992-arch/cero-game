@@ -240,10 +240,29 @@ export default function CallPage({
   const localVid = useRef(null)
   const remoteVid = useRef(null)
   const remoteAudio = useRef(null)
+  const remoteStreamRef = useRef(null)  // store stream so we can re-apply after DOM mounts
   const pendingIce = useRef([])
   const sessionChReady = useRef(false)
   const pendingOutIce = useRef([])  // ICE candidates queued until sessionCh is ready
   const touchY0 = useRef(0)
+
+  // Re-apply remote stream after DOM re-renders (race: ontrack fires before video element mounts)
+  useEffect(() => {
+    if (phase === 'active' && remoteStreamRef.current) {
+      const s = remoteStreamRef.current
+      if (remoteAudio.current && !remoteAudio.current.srcObject) {
+        remoteAudio.current.srcObject = s
+        remoteAudio.current.play().catch(() => {})
+      }
+      if (remoteVid.current && (!remoteVid.current.srcObject || remoteVid.current.srcObject !== s)) {
+        remoteVid.current.srcObject = s
+        remoteVid.current.play().catch(() => {})
+      }
+    }
+  }, [phase])
+
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  const canScreenShare = !isMobile && typeof navigator.mediaDevices?.getDisplayMedia === 'function'
 
   const name = contact?.display_name || 'Usuario'
   const avatar_url = contact?.avatar_url || null
@@ -407,6 +426,7 @@ export default function CallPage({
     stream.getTracks().forEach(t => conn.addTrack(t, stream))
     conn.ontrack = e => {
       const s = e.streams[0]
+      remoteStreamRef.current = s
       if (remoteAudio.current) { remoteAudio.current.srcObject = s; remoteAudio.current.play().catch(() => {}) }
       if (remoteVid.current) { remoteVid.current.srcObject = s; remoteVid.current.play().catch(() => {}) }
     }
@@ -563,10 +583,31 @@ export default function CallPage({
     }
   }
 
-  function toggleCam() {
+  async function toggleCam() {
     vibrate(25)
     const t = localStream.current?.getVideoTracks()[0]
-    if (t) { t.enabled = !t.enabled; setCamOff(c => !c) }
+    if (t) {
+      t.enabled = !t.enabled
+      setCamOff(c => !c)
+      return
+    }
+    // No video track yet (call fell back to audio-only) — try to get camera now
+    if (!camOff) return
+    try {
+      const cs = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+      const ct = cs.getVideoTracks()[0]
+      localStream.current?.addTrack(ct)
+      if (localVid.current) localVid.current.srcObject = localStream.current
+      const videoSender = pc.current?.getSenders().find(s => s.track?.kind === 'video')
+      if (videoSender) {
+        await videoSender.replaceTrack(ct).catch(() => {})
+      } else {
+        pc.current?.addTrack(ct, localStream.current)
+      }
+      setCamOff(false)
+    } catch (e) {
+      alert('No se pudo acceder a la cámara: ' + e.message)
+    }
   }
 
   async function applySpeakerRoute(useSpeaker) {
@@ -1006,8 +1047,8 @@ export default function CallPage({
                       onClick={toggleCam}
                     />
                   )}
-                  {/* Screen share (video calls + desktop) */}
-                  {isVideo && (
+                  {/* Screen share (video calls, desktop only — not available on mobile browsers) */}
+                  {isVideo && canScreenShare && (
                     <RoundBtn
                       icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
