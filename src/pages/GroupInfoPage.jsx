@@ -1324,13 +1324,6 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
             { id: 'efootball',   icon: '⚽', label: 'eFootball' },
             { id: 'fc26',        icon: '⚽', label: 'FC 26' },
             { id: 'fc27',        icon: '⚽', label: 'FC 27' },
-            { id: 'cs2',         icon: '🎯', label: 'CS2' },
-            { id: 'valorant',    icon: '🎯', label: 'Valorant' },
-            { id: 'warzone',     icon: '🔫', label: 'Warzone' },
-            { id: 'pubg',        icon: '🔫', label: 'PUBG' },
-            { id: 'clashroyale', icon: '👑', label: 'Clash Royale' },
-            { id: 'freef',       icon: '🔥', label: 'Free Fire' },
-            { id: 'otro',        icon: '🎮', label: 'Otro' },
           ]
           function toggleGame(id) {
             setCommunityGames(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id])
