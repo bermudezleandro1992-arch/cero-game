@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
-import { getLimits } from '../lib/roles'
+import { getLimits, getRoleCfg } from '../lib/roles'
 import { C } from '../theme'
 
 const AVATAR_COLORS = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100','#c62828']
@@ -12,13 +12,26 @@ function avatarColor(id) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
-function LimitBadge({ label, value, suffix = '' }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.text2 }}>
-      <span style={{ color: C.textDim }}>·</span>
-      <span>{label}: <strong style={{ color: C.text }}>{value === 9999 ? '∞' : value}{suffix}</strong></span>
-    </div>
-  )
+const GAMES = [
+  { id: 'efootball', label: 'eFootball', icon: '⚽' },
+  { id: 'fc26',      label: 'FC 26',     icon: '⚽' },
+  { id: 'fc27',      label: 'FC 27',     icon: '⚽' },
+  { id: 'valorant',  label: 'Valorant',  icon: '🎯' },
+  { id: 'cs2',       label: 'CS2',       icon: '🎯' },
+  { id: 'warzone',   label: 'Warzone',   icon: '🔫' },
+  { id: 'freef',     label: 'Free Fire', icon: '🔥' },
+  { id: 'clashroyale',label: 'Clash Royale', icon: '👑' },
+]
+
+function planLabel(role) {
+  if (!role || role === 'member') return 'Gratis'
+  if (role === 'ceo')        return 'CEO'
+  if (role === 'admin')      return 'Admin'
+  if (role === 'comunidad')  return 'Comunidad PRO'
+  if (role === 'vip')        return 'VIP'
+  if (role === 'moderador')  return 'Moderador'
+  if (role === 'organizador')return 'Organizador'
+  return role
 }
 
 export default function NewGroupPage({ onBack, onCreated, initialType }) {
@@ -34,6 +47,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
   const [groupType, setGroupType] = useState(initialType || 'group')
   const [description, setDescription] = useState('')
   const [isPublic, setIsPublic] = useState(true)
+  const [selectedGames, setSelectedGames] = useState([])
   const [creating, setCreating] = useState(false)
   const [searching, setSearching] = useState(false)
 
@@ -61,7 +75,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
     if (!groupName.trim()) return
     if (groupType === 'group' && selected.length === 0) return
     setCreating(true)
-    const memberIds = groupType === 'community' ? selected.map(u => u.id) : selected.map(u => u.id)
+    const memberIds = selected.map(u => u.id)
     const convId = await createGroup(
       groupName.trim(),
       memberIds,
@@ -70,8 +84,20 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
       description.trim(),
       isPublic
     )
+    // Guardar tags de juegos si es comunidad y se eligieron juegos
+    if (convId && groupType === 'community' && selectedGames.length > 0) {
+      await supabase.from('conversations')
+        .update({ tags: selectedGames })
+        .eq('id', convId)
+    }
     setCreating(false)
     onCreated(convId, groupName.trim(), selected)
+  }
+
+  function toggleGame(gameId) {
+    setSelectedGames(prev =>
+      prev.includes(gameId) ? prev.filter(g => g !== gameId) : [...prev, gameId]
+    )
   }
 
   const isCommunity = groupType === 'community'
@@ -273,26 +299,59 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
       {step === 2 && (
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 24px', gap: 22 }}>
 
-          {/* Plan limits info for communities */}
-          {isCommunity && (
-            <div style={{
-              width: '100%', background: C.panel, borderRadius: 12,
-              padding: '12px 16px', border: `1px solid ${C.border}`,
-            }}>
-              <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>
-                Tu plan — {profile?.role === 'comunidad' ? 'Comunidad PRO' : profile?.role === 'vip' ? 'VIP' : 'Gratis'}
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
-                <LimitBadge label="Miembros máx." value={limits.maxCommunityMembers} />
-                <LimitBadge label="Torneos/día" value={limits.maxTournamentsPerDay} />
+          {/* Plan info card */}
+          {isCommunity && (() => {
+            const role = profile?.role || 'member'
+            const roleCfg = getRoleCfg(role)
+            const plan = planLabel(role)
+            const isFreeMember = !role || role === 'member'
+            return (
+              <div style={{
+                width: '100%', background: C.panel, borderRadius: 14,
+                border: `1px solid ${isFreeMember ? C.border : roleCfg.color + '44'}`,
+                overflow: 'hidden',
+              }}>
+                {/* Plan header */}
+                <div style={{
+                  background: isFreeMember ? C.panel2 : `${roleCfg.color}18`,
+                  padding: '10px 16px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: isFreeMember ? C.textDim : roleCfg.color, letterSpacing: '.5px' }}>
+                    {roleCfg.icon} Tu plan — {plan}
+                  </span>
+                  {isFreeMember && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b44', borderRadius: 8, padding: '2px 8px' }}>
+                      Límites básicos
+                    </span>
+                  )}
+                </div>
+                {/* Limit rows */}
+                <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.textDim }}>👥 Miembros en la comunidad</span>
+                    <strong style={{ color: C.text }}>{limits.maxCommunityMembers >= 9999 ? '∞' : limits.maxCommunityMembers.toLocaleString()}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.textDim }}>🏆 Torneos que podés crear/día</span>
+                    <strong style={{ color: C.text }}>{limits.maxTournamentsPerDay >= 999 ? '∞' : limits.maxTournamentsPerDay}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.textDim }}>👤 Jugadores por torneo/liga</span>
+                    <strong style={{ color: C.text }}>{limits.maxParticipants >= 9999 ? '∞' : limits.maxParticipants}</strong>
+                  </div>
+                  {isFreeMember && (
+                    <div style={{ marginTop: 4, padding: '8px 10px', background: '#f59e0b10', borderRadius: 8, border: '1px solid #f59e0b30' }}>
+                      <p style={{ margin: 0, fontSize: 11, color: '#f59e0b', lineHeight: 1.5 }}>
+                        ⭐ <strong>VIP</strong>: hasta 128 jugadores, 10 torneos/día<br/>
+                        🌐 <strong>Comunidad PRO</strong>: sin límites prácticos, herramientas avanzadas
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
-              {(profile?.role === 'member' || !profile?.role) && (
-                <p style={{ margin: '8px 0 0', fontSize: 11, color: '#f59e0b' }}>
-                  ⭐ Con VIP o Comunidad PRO ampliás los límites.
-                </p>
-              )}
-            </div>
-          )}
+            )
+          })()}
 
           {/* Avatar preview */}
           <div style={{
@@ -348,6 +407,52 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             />
             <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{description.length}/200</p>
           </div>
+
+          {/* Game selector — communities only */}
+          {isCommunity && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                🎮 Juegos de la comunidad
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {GAMES.map(g => {
+                  const sel = selectedGames.includes(g.id)
+                  return (
+                    <button key={g.id} onClick={() => toggleGame(g.id)} style={{
+                      padding: '7px 14px', borderRadius: 20,
+                      border: `1.5px solid ${sel ? C.green : C.border}`,
+                      background: sel ? `${C.green}18` : C.panel,
+                      color: sel ? C.green : C.text2,
+                      fontSize: 13, fontWeight: sel ? 700 : 500,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                      transition: 'all .15s',
+                    }}>
+                      <span>{g.icon}</span> {g.label}
+                      {sel && <span style={{ fontSize: 10, fontWeight: 800 }}>✓</span>}
+                    </button>
+                  )
+                })}
+              </div>
+              {selectedGames.length > 0 && (
+                <p style={{ margin: '8px 0 0', fontSize: 11, color: C.textDim }}>
+                  Los torneos y ligas de esta comunidad se organizarán para: {selectedGames.map(id => GAMES.find(g => g.id === id)?.label).join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Torneos inside community — info box */}
+          {isCommunity && (
+            <div style={{
+              width: '100%', background: `${C.green}0A`,
+              border: `1px solid ${C.green}30`, borderRadius: 12, padding: '12px 16px',
+            }}>
+              <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 800, color: C.green }}>🏆 Torneos y Ligas dentro de la Comunidad</p>
+              <p style={{ margin: 0, fontSize: 12, color: C.textDim, lineHeight: 1.6 }}>
+                Una vez creada la comunidad, podés organizar torneos y ligas <strong>desde adentro</strong>. Los miembros se inscriben, juegan, cargan resultados y ven las tablas de posiciones — todo en un solo lugar.
+              </p>
+            </div>
+          )}
 
           {/* Visibility toggle (communities only) */}
           {isCommunity && (
