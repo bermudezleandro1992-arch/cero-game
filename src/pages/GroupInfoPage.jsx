@@ -147,6 +147,8 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [inviting, setInviting] = useState(null)
   const [roles, setRoles] = useState({})
   const [playerRanks, setPlayerRanks] = useState({})
+  const [memberCustomRoles, setMemberCustomRoles] = useState({}) // userId -> roleId[]
+  const [customRoleMenuMember, setCustomRoleMenuMember] = useState(null)
   const [leavingGroup, setLeavingGroup] = useState(false)
   const [rankMenuMember, setRankMenuMember] = useState(null)
 
@@ -288,14 +290,29 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
 
   // ── Load custom roles ──
   useEffect(() => {
-    if (tab !== 'roles' || !conversation?.id || !isAdmin) return
-    setRolesLoading(true)
+    if (!conversation?.id || !isCommunity) return
     supabase.from('community_custom_roles')
       .select('*')
       .eq('conversation_id', conversation.id)
       .order('priority', { ascending: false })
-      .then(({ data }) => { setCustomRoles(data || []); setRolesLoading(false) })
-  }, [tab, conversation?.id, isAdmin])
+      .then(({ data }) => setCustomRoles(data || []))
+  }, [conversation?.id, isCommunity])
+
+  // ── Load member custom role assignments ──
+  useEffect(() => {
+    if (!conversation?.id || !isCommunity) return
+    supabase.from('community_role_members')
+      .select('user_id, role_id')
+      .eq('conversation_id', conversation.id)
+      .then(({ data }) => {
+        const map = {}
+        ;(data || []).forEach(r => {
+          if (!map[r.user_id]) map[r.user_id] = []
+          map[r.user_id].push(r.role_id)
+        })
+        setMemberCustomRoles(map)
+      })
+  }, [conversation?.id, isCommunity])
 
   // ── Load join requests ──
   useEffect(() => {
@@ -498,6 +515,32 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
     )
     setPlayerRanks(prev => rank ? { ...prev, [memberId]: rank } : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== memberId)))
     setRankMenuMember(null)
+    setMemberMenu(null)
+  }
+
+  async function assignCustomRole(memberId, roleId) {
+    await supabase.from('community_role_members').upsert(
+      { conversation_id: conversation.id, user_id: memberId, role_id: roleId, assigned_by: profile.id },
+      { onConflict: 'conversation_id,user_id,role_id' }
+    )
+    setMemberCustomRoles(prev => ({
+      ...prev,
+      [memberId]: [...new Set([...(prev[memberId] || []), roleId])],
+    }))
+    setCustomRoleMenuMember(null)
+    setMemberMenu(null)
+  }
+
+  async function removeCustomRole(memberId, roleId) {
+    await supabase.from('community_role_members').delete()
+      .eq('conversation_id', conversation.id)
+      .eq('user_id', memberId)
+      .eq('role_id', roleId)
+    setMemberCustomRoles(prev => ({
+      ...prev,
+      [memberId]: (prev[memberId] || []).filter(id => id !== roleId),
+    }))
+    setCustomRoleMenuMember(null)
     setMemberMenu(null)
   }
 
@@ -930,6 +973,8 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
               const mRole = roles[m.id] || (m.id === conversation?.created_by ? 'owner' : 'member')
               const rcfg = GROUP_ROLE_CFG[mRole] || GROUP_ROLE_CFG.member
               const mRank = playerRanks[m.id]
+              const mCustomRoleIds = memberCustomRoles[m.id] || []
+              const mCustomRoles = customRoles.filter(r => mCustomRoleIds.includes(r.id))
               return (
                 <div key={m.id} style={{ position: 'relative' }}>
                   <div style={{
@@ -950,6 +995,13 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                             textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap',
                           }}>{rcfg.icon} {rcfg.label}</span>
                         )}
+                        {mCustomRoles.map(cr => (
+                          <span key={cr.id} style={{
+                            fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px',
+                            color: cr.color, background: `${cr.color}18`, border: `1px solid ${cr.color}33`,
+                            whiteSpace: 'nowrap',
+                          }}>{cr.icon} {cr.name}</span>
+                        ))}
                         {mRank && (
                           <span style={{
                             fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px',
@@ -961,7 +1013,7 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                       <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>@{m.username}</p>
                     </div>
                     {isMod && !m.isMe && (
-                      <button onClick={() => { setMemberMenu(memberMenu === m.id ? null : m.id); setRankMenuMember(null) }} style={{
+                      <button onClick={() => { setMemberMenu(memberMenu === m.id ? null : m.id); setRankMenuMember(null); setCustomRoleMenuMember(null) }} style={{
                         background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 6, borderRadius: 8, display: 'flex',
                       }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
@@ -1008,6 +1060,38 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                             </div>
                           ) : (
                             <ModeBtn label={mRank ? `⭐ Rango: ${mRank}` : '⭐ Asignar rango'} onClick={() => setRankMenuMember(m.id)} />
+                          )}
+                          <div style={{ height: 1, background: C.border }} />
+                        </>
+                      )}
+                      {isCommunity && isAdmin && customRoles.length > 0 && (
+                        <>
+                          <div style={{ padding: '7px 14px 4px', fontSize: 10, color: C.textDim, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>Roles personalizados</div>
+                          {customRoleMenuMember === m.id ? (
+                            <div style={{ padding: '6px 14px 10px' }}>
+                              {customRoles.map(cr => {
+                                const hasRole = mCustomRoleIds.includes(cr.id)
+                                return (
+                                  <button key={cr.id} onClick={() => hasRole ? removeCustomRole(m.id, cr.id) : assignCustomRole(m.id, cr.id)} style={{
+                                    display: 'flex', width: '100%', alignItems: 'center', gap: 8,
+                                    padding: '6px 8px', borderRadius: 6, border: 'none',
+                                    background: hasRole ? `${cr.color}18` : 'transparent',
+                                    cursor: 'pointer', textAlign: 'left',
+                                  }}>
+                                    <span style={{
+                                      fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '1px 6px',
+                                      color: cr.color, background: `${cr.color}18`, border: `1px solid ${cr.color}33`,
+                                    }}>{cr.icon} {cr.name}</span>
+                                    {hasRole && <span style={{ fontSize: 11, color: '#22c55e', marginLeft: 'auto' }}>✓</span>}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <ModeBtn
+                              label={mCustomRoles.length > 0 ? `🎭 Roles: ${mCustomRoles.map(r => r.name).join(', ')}` : '🎭 Asignar rol personalizado'}
+                              onClick={() => setCustomRoleMenuMember(m.id)}
+                            />
                           )}
                           <div style={{ height: 1, background: C.border }} />
                         </>

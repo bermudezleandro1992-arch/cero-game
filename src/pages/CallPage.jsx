@@ -465,11 +465,15 @@ export default function CallPage({
       const offer = await conn.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: callType === 'video' })
       await conn.setLocalDescription(offer)
 
-      // Send offer via dedicated user channel (callee is listening here)
-      const ch = supabase.channel(`user-calls:${contact.id}`, { config: { broadcast: { ack: false } } })
-      await new Promise(r => ch.subscribe(s => s === 'SUBSCRIBED' && r()))
-      await ch.send({ type: 'broadcast', event: 'call-offer', payload: { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer } })
-      supabase.removeChannel(ch)
+      // Send offer via dedicated user channel — retry up to 3 times so mobile→PC works even on slow connections
+      const offerPayload = { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer }
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const ch = supabase.channel(`user-calls:${contact.id}-${attempt}`, { config: { broadcast: { ack: false } } })
+        await new Promise(r => ch.subscribe(s => s === 'SUBSCRIBED' && r()))
+        await ch.send({ type: 'broadcast', event: 'call-offer', payload: offerPayload })
+        supabase.removeChannel(ch)
+        if (attempt < 2) await new Promise(r => setTimeout(r, 800))
+      }
       supabase.functions.invoke('send-fcm-notification', {
         body: {
           targetUserId: contact.id,

@@ -139,19 +139,24 @@ export default function App() {
     if (!profile?.id) return
     let ch, retryTimer
 
+    const callChannels = []
     function connectCallChannel() {
-      if (ch) supabase.removeChannel(ch)
-      ch = supabase.channel(`user-calls:${profile.id}`, {
-        config: { broadcast: { ack: false } },
-      })
-        .on('broadcast', { event: 'call-offer' }, ({ payload }) => setIncomingCall(payload))
-        .subscribe((status) => {
-          // Auto-reconnect if channel drops (mobile network switches, sleep, etc.)
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            clearTimeout(retryTimer)
-            retryTimer = setTimeout(connectCallChannel, 3000)
-          }
-        })
+      callChannels.forEach(c => supabase.removeChannel(c))
+      callChannels.length = 0
+      // Listen on all 3 channel names (caller retries with -0, -1, -2 suffix)
+      for (let i = 0; i < 3; i++) {
+        const name = i === 0 ? `user-calls:${profile.id}` : `user-calls:${profile.id}-${i - 1}`
+        const c = supabase.channel(name, { config: { broadcast: { ack: false } } })
+          .on('broadcast', { event: 'call-offer' }, ({ payload }) => setIncomingCall(payload))
+          .subscribe((status) => {
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+              clearTimeout(retryTimer)
+              retryTimer = setTimeout(connectCallChannel, 3000)
+            }
+          })
+        callChannels.push(c)
+      }
+      ch = callChannels[0]
     }
 
     connectCallChannel()
@@ -165,7 +170,7 @@ export default function App() {
     return () => {
       clearTimeout(retryTimer)
       document.removeEventListener('visibilitychange', onVisible)
-      if (ch) supabase.removeChannel(ch)
+      callChannels.forEach(c => supabase.removeChannel(c))
     }
   }, [profile?.id])
 

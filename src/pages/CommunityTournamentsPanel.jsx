@@ -348,8 +348,27 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
   const [bracketItem, setBracketItem] = useState(null)
   const [standingsItem, setStandingsItem] = useState(null)
   const [filter, setFilter] = useState('all') // all | tournament | liga
+  const [userPerms, setUserPerms] = useState(null) // custom role permissions
 
   const communityTags = community?.tags || []
+
+  // Load user's custom role permissions for this community
+  useEffect(() => {
+    if (!community?.id || !profile?.id) return
+    async function loadPerms() {
+      const { data } = await supabase
+        .from('community_role_members')
+        .select('role:role_id(can_create_tournaments, can_manage_tournaments, can_manage_members, can_publish_announcements)')
+        .eq('conversation_id', community.id)
+        .eq('user_id', profile.id)
+        .maybeSingle()
+      setUserPerms(data?.role || null)
+    }
+    loadPerms()
+  }, [community?.id, profile?.id])
+
+  // Effective "can create tournament": canManage prop (admin/owner) OR custom role permission
+  const canCreateTournament = canManage || !!userPerms?.can_create_tournaments
 
   async function load() {
     setLoading(true)
@@ -397,7 +416,7 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
           <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.text }}>🏆 Torneos & Ligas</p>
           <p style={{ margin: 0, fontSize: 11, color: C.textDim }}>{community?.name}</p>
         </div>
-        {canManage && (
+        {canCreateTournament && (
           <button onClick={() => setShowCreate(true)} style={{
             background: C.green, border: 'none', borderRadius: 10, padding: '7px 14px',
             color: C.bg, fontWeight: 700, fontSize: 13, cursor: 'pointer',
@@ -420,8 +439,8 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
         ))}
       </div>
 
-      {/* Create form — admin only */}
-      {canManage && showCreate && (
+      {/* Create form */}
+      {canCreateTournament && showCreate && (
         <div style={{ borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
           <CreateForm
             communityId={community.id}
