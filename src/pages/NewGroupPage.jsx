@@ -48,6 +48,10 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
   const [description, setDescription] = useState('')
   const [isPublic, setIsPublic] = useState(true)
   const [selectedGames, setSelectedGames] = useState([])
+  const [torneosEnabled, setTorneosEnabled]   = useState(true)
+  const [ligasEnabled,   setLigasEnabled]     = useState(true)
+  const [clanesEnabled,  setClanesEnabled]    = useState(false)
+  const [defaultMaxPl,   setDefaultMaxPl]     = useState(8)
   const [creating, setCreating] = useState(false)
   const [searching, setSearching] = useState(false)
 
@@ -84,11 +88,15 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
       description.trim(),
       isPublic
     )
-    // Guardar tags de juegos si es comunidad y se eligieron juegos
-    if (convId && groupType === 'community' && selectedGames.length > 0) {
-      await supabase.from('conversations')
-        .update({ tags: selectedGames })
-        .eq('id', convId)
+    // Guardar configuración de torneos para comunidades
+    if (convId && groupType === 'community') {
+      await supabase.from('conversations').update({
+        tags:             selectedGames,
+        torneos_enabled:  torneosEnabled,
+        ligas_enabled:    ligasEnabled,
+        clanes_enabled:   clanesEnabled,
+        max_participants: defaultMaxPl,
+      }).eq('id', convId)
     }
     setCreating(false)
     onCreated(convId, groupName.trim(), selected)
@@ -440,6 +448,89 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
               )}
             </div>
           )}
+
+          {/* Competition types — communities only */}
+          {isCommunity && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                🏆 Competencias habilitadas
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  [torneosEnabled, setTorneosEnabled, '🏆', 'Torneos', 'Eliminación directa, brackets, grupos'],
+                  [ligasEnabled,   setLigasEnabled,   '🥇', 'Ligas',   'Todos vs todos, tabla de posiciones'],
+                  [clanesEnabled,  setClanesEnabled,  '⚔️', 'Torneos de Clanes', 'Equipos o clanes compiten entre sí'],
+                ].map(([val, setter, icon, lbl, desc]) => (
+                  <div key={lbl} onClick={() => setter(!val)} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    background: val ? `${C.green}0D` : C.panel,
+                    border: `1.5px solid ${val ? C.green + '55' : C.border}`,
+                    borderRadius: 12, padding: '11px 14px', cursor: 'pointer',
+                    transition: 'all .15s',
+                  }}>
+                    <span style={{ fontSize: 20 }}>{icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: val ? C.green : C.text }}>{lbl}</p>
+                      <p style={{ margin: '1px 0 0', fontSize: 11, color: C.textDim }}>{desc}</p>
+                    </div>
+                    <div style={{
+                      width: 44, height: 24, borderRadius: 12, border: 'none',
+                      background: val ? C.green : C.panel2,
+                      outline: `1px solid ${val ? C.green : C.border}`,
+                      position: 'relative', flexShrink: 0,
+                    }}>
+                      <div style={{
+                        position: 'absolute', top: 2, left: val ? 22 : 2,
+                        width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.25)', transition: 'left .2s',
+                      }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Max participants per tournament — communities only */}
+          {isCommunity && (torneosEnabled || ligasEnabled || clanesEnabled) && (() => {
+            const ALL_SIZES = [2, 4, 8, 12, 16, 32, 64, 128]
+            const maxAllowed = limits.maxParticipants
+            const available = ALL_SIZES.filter(n => n <= maxAllowed)
+            const locked    = ALL_SIZES.filter(n => n > maxAllowed)
+            return (
+              <div style={{ width: '100%' }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                  👥 Jugadores por torneo / liga
+                </label>
+                <p style={{ margin: '0 0 10px', fontSize: 11, color: C.textDim }}>
+                  Tu plan permite hasta <strong style={{ color: C.text }}>{maxAllowed >= 9999 ? '∞' : maxAllowed}</strong> jugadores por torneo.
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {available.map(n => (
+                    <button key={n} onClick={() => setDefaultMaxPl(n)} style={{
+                      width: 52, height: 44, borderRadius: 10, border: `1.5px solid`,
+                      borderColor: defaultMaxPl === n ? C.green : C.border,
+                      background: defaultMaxPl === n ? `${C.green}18` : C.panel,
+                      color: defaultMaxPl === n ? C.green : C.text,
+                      fontWeight: defaultMaxPl === n ? 800 : 500, fontSize: 14,
+                      cursor: 'pointer', transition: 'all .15s',
+                    }}>{n}</button>
+                  ))}
+                  {locked.map(n => (
+                    <div key={n} title={`Requiere plan superior`} style={{
+                      width: 52, height: 44, borderRadius: 10, border: `1.5px solid ${C.border}`,
+                      background: C.panel2, color: C.textDim, fontSize: 14,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      justifyContent: 'center', gap: 0, opacity: 0.5,
+                    }}>
+                      <span style={{ fontSize: 12 }}>{n}</span>
+                      <span style={{ fontSize: 9 }}>🔒</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Torneos inside community — info box */}
           {isCommunity && (
