@@ -24,8 +24,7 @@ let _supportGroupId = undefined // undefined = not fetched; null = not set
 async function getSupportGroupId() {
   if (_supportGroupId !== undefined) return _supportGroupId
   try {
-    const { supabase: sb } = await import('../lib/supabase')
-    const { data } = await sb.from('app_config').select('value').eq('key', 'support_group_id').single()
+    const { data } = await supabase.from('app_config').select('value').eq('key', 'support_group_id').single()
     _supportGroupId = data?.value ?? null
   } catch { _supportGroupId = null }
   return _supportGroupId
