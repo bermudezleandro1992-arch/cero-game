@@ -8,15 +8,16 @@ const TURN_USER = import.meta.env.VITE_TURN_USERNAME || 'openrelayproject'
 const TURN_CRED = import.meta.env.VITE_TURN_CREDENTIAL || 'openrelayproject'
 const TURN_HOST = import.meta.env.VITE_TURN_HOST || 'openrelay.metered.ca'
 
+// Strip any port from TURN_HOST to avoid double-port URLs like host:3478:443
+const TURN_HOST_CLEAN = TURN_HOST.split(':')[0]
+
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: `turn:${TURN_HOST}:80`,                 username: TURN_USER, credential: TURN_CRED },
-    { urls: `turn:${TURN_HOST}:80?transport=tcp`,   username: TURN_USER, credential: TURN_CRED },
-    { urls: `turn:${TURN_HOST}:443`,                username: TURN_USER, credential: TURN_CRED },
-    { urls: `turns:${TURN_HOST}:443?transport=tcp`, username: TURN_USER, credential: TURN_CRED },
+    { urls: `turn:${TURN_HOST_CLEAN}:443`,                username: TURN_USER, credential: TURN_CRED },
+    { urls: `turns:${TURN_HOST_CLEAN}:443?transport=tcp`, username: TURN_USER, credential: TURN_CRED },
   ],
   iceCandidatePoolSize: 10,
   iceTransportPolicy: 'all',
