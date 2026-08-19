@@ -198,10 +198,10 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
         )}
       </div>
 
-      {/* Hero — avatar + info + badges */}
+      {/* Hero — avatar + info + badges + stats */}
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        padding: '20px 20px 16px',
+        padding: '14px 16px 14px',
         background: `radial-gradient(ellipse at 50% 0%, ${C.greenDk}22 0%, transparent 65%)`,
         borderBottom: `1px solid ${C.border}`, flexShrink: 0,
       }}>
@@ -261,37 +261,38 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
         </div>
 
         {!forceSetup && profile?.bio && (
-          <p style={{ color: C.textDim, fontSize: 13, margin: '10px 0 0', textAlign: 'center', maxWidth: 280, lineHeight: 1.4 }}>{profile.bio}</p>
+          <p style={{ color: C.textDim, fontSize: 12, margin: '6px 0 0', textAlign: 'center', maxWidth: 280, lineHeight: 1.4 }}>{profile.bio}</p>
         )}
-        <p style={{ margin: '6px 0 0', color: C.textDim, fontSize: 11 }}>
+        <p style={{ margin: '4px 0 0', color: C.textDim, fontSize: 10 }}>
           {uploadingAvatar ? 'Subiendo foto...' : 'Tocá la foto para cambiarla'}
         </p>
-      </div>
 
-      {/* Stats */}
-      {!forceSetup && (
-        <div style={{ padding: '16px 20px', background: C.panel2, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Estadísticas</p>
-          <div className="stat-grid">
-            {[
-              { icon: '🏆', label: 'Torneos',     value: profile?.stats_tournaments || 0 },
-              { icon: '🥇', label: 'Campeonatos', value: profile?.stats_wins || 0 },
-              { icon: '⚔️', label: 'Partidos',    value: profile?.stats_matches || 0 },
-              { icon: '✅', label: 'Victorias',   value: profile?.stats_victories || 0 },
-              { icon: '⚽', label: 'Goles',       value: profile?.stats_goals || 0 },
-              { icon: '📊', label: 'Ranking',     value: profile?.stats_ranking ? `#${profile.stats_ranking}` : '--' },
-            ].map(s => (
-              <div key={s.label} className="stat-item" style={{
-                background: C.panel, borderRadius: 12, padding: '10px 6px',
-                border: `1px solid ${C.border}`, textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 18, marginBottom: 2 }}>{s.icon}</div>
-                <div style={{ color: C.text, fontWeight: 800, fontSize: 15 }}>{s.value}</div>
-                <div style={{ color: C.textDim, fontSize: 10, marginTop: 1 }}>{s.label}</div>
-              </div>
-            ))}
+        {/* Stats inline en el hero */}
+        {!forceSetup && (
+          <div style={{ width: '100%', marginTop: 12 }}>
+            <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase', textAlign: 'left' }}>Estadísticas</p>
+            <div className="stat-grid">
+              {[
+                { icon: '🏆', label: 'Torneos',     value: profile?.stats_tournaments || 0 },
+                { icon: '🥇', label: 'Campeonatos', value: profile?.stats_wins || 0 },
+                { icon: '⚔️', label: 'Partidos',    value: profile?.stats_matches || 0 },
+                { icon: '✅', label: 'Victorias',   value: profile?.stats_victories || 0 },
+                { icon: '⚽', label: 'Goles',       value: profile?.stats_goals || 0 },
+                { icon: '📊', label: 'Ranking',     value: profile?.stats_ranking ? `#${profile.stats_ranking}` : '--' },
+              ].map(s => (
+                <div key={s.label} className="stat-item" style={{
+                  background: `${C.panel}cc`, borderRadius: 10, padding: '8px 4px',
+                  border: `1px solid ${C.border}`, textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 16, marginBottom: 1 }}>{s.icon}</div>
+                  <div style={{ color: C.text, fontWeight: 800, fontSize: 14 }}>{s.value}</div>
+                  <div style={{ color: C.textDim, fontSize: 9, marginTop: 1 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+      </div>
       )}
 
       {/* Section tabs */}
