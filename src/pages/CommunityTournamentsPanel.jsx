@@ -702,11 +702,11 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
     setBusy(true)
     const { error } = await supabase.rpc('delete_group_or_community', { p_conversation_id: item.id })
     if (error) {
-      // fallback direct delete
       await supabase.from('conversations').delete().eq('id', item.id)
     }
     onBack()
   }
+
 
   // Bolillero: shuffle participants randomly, assign to bracket positions
   async function runDraw(autoSave = false) {
@@ -1128,7 +1128,6 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
                 await supabase.from('conversations').update({ tournament_status: 'finalizado' }).eq('id', item.id)
                 setItem(prev => ({ ...prev, tournament_status: 'finalizado' }))
               } else if (action === 'generar_fixture') {
-                // Round-robin fixture: each player vs each other (home + away)
                 const pts = participants
                 const jornadas = []
                 let jornadaNum = 1
@@ -1139,12 +1138,8 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
                     jornadaNum++
                   }
                 }
-                const rows = jornadas.map(j => ({
-                  tournament_id: item.id, round: 1, status: 'pendiente', ...j,
-                }))
-                if (rows.length > 0) {
-                  await supabase.from('tournament_matches').insert(rows)
-                }
+                const rows = jornadas.map(j => ({ tournament_id: item.id, round: 1, status: 'pendiente', ...j }))
+                if (rows.length > 0) await supabase.from('tournament_matches').insert(rows)
                 await supabase.from('conversations').update({ tournament_status: 'en_curso' }).eq('id', item.id)
                 setItem(prev => ({ ...prev, tournament_status: 'en_curso' }))
               }
