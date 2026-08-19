@@ -93,7 +93,7 @@ const NAV = [
 
 export default function App() {
   const { user, profile, loading, setUser, setLoading, fetchProfile } = useAuthStore()
-  const { incomingCall, setIncomingCall, clearCall } = useCallStore()
+  const { incomingCall, setIncomingCall, clearCall, inCall, setInCall } = useCallStore()
   const { conversations, activeConversation, setActiveConversation, fetchConversations, subscribeToConversations } = useChatStore()
   const [tab, setTab] = useState('chats')
   const [showProfile, setShowProfile] = useState(false)
@@ -137,7 +137,20 @@ export default function App() {
       for (let i = 0; i < 3; i++) {
         const name = i === 0 ? `user-calls:${profile.id}` : `user-calls:${profile.id}-${i - 1}`
         const c = supabase.channel(name, { config: { broadcast: { ack: false } } })
-          .on('broadcast', { event: 'call-offer' }, ({ payload }) => setIncomingCall(payload))
+          .on('broadcast', { event: 'call-offer' }, ({ payload }) => {
+            // If already in a call, send busy on the session channel so the caller hears it
+            if (inCall) {
+              const busyCh = supabase.channel(`call-session:${payload.convId}`, { config: { broadcast: { ack: false } } })
+              busyCh.subscribe(s => {
+                if (s === 'SUBSCRIBED') {
+                  busyCh.send({ type: 'broadcast', event: 'call-busy', payload: { from: profile.id } })
+                    .finally(() => setTimeout(() => supabase.removeChannel(busyCh), 1000))
+                }
+              })
+              return
+            }
+            setIncomingCall(payload)
+          })
           .subscribe((status) => {
             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
               clearTimeout(retryTimer)
@@ -275,8 +288,8 @@ export default function App() {
           callType={incomingCall.callType}
           isIncoming={true}
           incomingOffer={incomingCall.offer}
-          onEnd={() => { clearCall(); releaseWakeLock() }}
-          onAccept={acquireWakeLock}
+          onEnd={() => { clearCall(); setInCall(false); releaseWakeLock() }}
+          onAccept={() => { setInCall(true); acquireWakeLock() }}
         />
       )}
 
