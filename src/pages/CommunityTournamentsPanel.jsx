@@ -268,24 +268,50 @@ function TournamentCard({ item, onManage, onJoin, onChat, myId, isStaff }) {
   return (
     <div style={{
       background: C.panel, border: `1px solid ${C.border}`,
-      borderRadius: 14, padding: '14px', marginBottom: 10,
+      borderRadius: 14, overflow: 'hidden', marginBottom: 10,
     }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
-        <div style={{ fontSize: 28, lineHeight: 1 }}>{ty.icon}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontWeight: 700, color: C.text, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {item.name}
-          </p>
-          {item.description && (
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {item.description}
+      {/* Banner */}
+      {item.banner_url ? (
+        <div style={{ position: 'relative', height: 110 }}>
+          <img src={item.banner_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to top, #000000cc 40%, transparent)',
+          }} />
+          <div style={{ position: 'absolute', bottom: 8, left: 12, right: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 20 }}>{ty.icon}</span>
+            <p style={{ margin: 0, fontWeight: 800, color: '#fff', fontSize: 14, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {item.name}
             </p>
-          )}
+            <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: st.bg, color: st.color, flexShrink: 0 }}>
+              {st.label}
+            </span>
+          </div>
         </div>
-        <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: st.bg, color: st.color, flexShrink: 0 }}>
-          {st.label}
-        </span>
-      </div>
+      ) : (
+        <div style={{
+          height: 72, display: 'flex', alignItems: 'center',
+          background: `linear-gradient(135deg, ${ty.color}22, ${C.panel2})`,
+          padding: '0 14px', gap: 10, position: 'relative',
+        }}>
+          <span style={{ fontSize: 28 }}>{ty.icon}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontWeight: 800, color: C.text, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {item.name}
+            </p>
+            {item.description && (
+              <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {item.description}
+              </p>
+            )}
+          </div>
+          <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: st.bg, color: st.color, flexShrink: 0 }}>
+            {st.label}
+          </span>
+        </div>
+      )}
+
+      <div style={{ padding: '10px 14px 14px' }}>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
         {item.game && (
@@ -347,6 +373,7 @@ function TournamentCard({ item, onManage, onJoin, onChat, myId, isStaff }) {
         }}>
           💬 Chat
         </button>
+      </div>
       </div>
     </div>
   )
@@ -410,7 +437,7 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
   async function reloadItem() {
     const { data } = await supabase
       .from('conversations')
-      .select('id, name, description, group_type, tournament_status, tournament_format, tournament_mode, game, max_participants, created_by, avatar_url, members:conversation_members(user_id)')
+      .select('id, name, description, group_type, tournament_status, tournament_format, tournament_mode, game, max_participants, created_by, avatar_url, banner_url, members:conversation_members(user_id)')
       .eq('id', item.id).single()
     if (data) setItem(data)
   }
@@ -534,11 +561,23 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
     setUploadingPhoto(true)
     const ext = file.name.split('.').pop()
     const path = `match-results/${item.id}/${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
     setUploadingPhoto(false)
     if (error) { alert('Error al subir foto'); return null }
     const { data } = supabase.storage.from('avatars').getPublicUrl(path)
     return data.publicUrl
+  }
+
+  async function uploadBanner(file) {
+    if (!file) return
+    const ext = file.name.split('.').pop().toLowerCase().replace('jpeg', 'jpg')
+    const path = `tournament-banners/${item.id}.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
+    if (error) { alert('Error al subir banner'); return }
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+    const url = data.publicUrl + '?t=' + Date.now()
+    await supabase.from('conversations').update({ banner_url: url }).eq('id', item.id)
+    setItem(prev => ({ ...prev, banner_url: url }))
   }
 
   const st = STATUS_CFG[status] || STATUS_CFG.inscripcion
@@ -547,6 +586,32 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
     <div style={{ position: 'absolute', inset: 0, zIndex: 200, background: C.bg, display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        {/* Banner */}
+        <div style={{ position: 'relative' }}>
+          {item.banner_url ? (
+            <div style={{ height: 120, position: 'relative' }}>
+              <img src={item.banner_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, #000000bb 30%, transparent)' }} />
+            </div>
+          ) : (
+            <div style={{
+              height: 80,
+              background: `linear-gradient(135deg, ${isLiga ? '#3b82f622' : '#f59e0b22'}, ${C.panel2})`,
+            }} />
+          )}
+          {canManage && (
+            <label style={{ position: 'absolute', bottom: 8, right: 10, cursor: 'pointer' }}>
+              <div style={{
+                padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                background: '#000000aa', color: '#fff', backdropFilter: 'blur(4px)',
+              }}>
+                📷 {item.banner_url ? 'Cambiar banner' : 'Agregar banner'}
+              </div>
+              <input type="file" accept="image/*" onChange={e => uploadBanner(e.target.files?.[0])} style={{ display: 'none' }} />
+            </label>
+          )}
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
           <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: '4px 8px 4px 0' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -1022,7 +1087,7 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
     setLoading(true)
     const { data } = await supabase
       .from('conversations')
-      .select('id, name, description, group_type, tournament_status, tournament_format, tournament_mode, game, max_participants, created_by, avatar_url, members:conversation_members(user_id)')
+      .select('id, name, description, group_type, tournament_status, tournament_format, tournament_mode, game, max_participants, created_by, avatar_url, banner_url, members:conversation_members(user_id)')
       .eq('community_id', community.id)
       .in('group_type', ['tournament', 'liga'])
       .order('created_at', { ascending: false })
