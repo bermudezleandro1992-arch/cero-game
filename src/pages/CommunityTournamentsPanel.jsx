@@ -264,7 +264,8 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
 function TournamentCard({ item, onOpenBracket, onOpenStandings, onJoin, myId }) {
   const st = STATUS_CFG[item.tournament_status] || STATUS_CFG.inscripcion
   const ty = TYPE_CFG[item.group_type] || TYPE_CFG.tournament
-  const joined = item.members?.some(m => m.user_id === myId)
+  const isCreator = item.created_by === myId
+  const joined = !isCreator && item.members?.some(m => m.user_id === myId)
 
   return (
     <div style={{
@@ -305,19 +306,22 @@ function TournamentCard({ item, onOpenBracket, onOpenStandings, onJoin, myId }) 
       </div>
 
       <div style={{ display: 'flex', gap: 6 }}>
-        {item.tournament_status === 'inscripcion' && !joined && (
+        {isCreator ? (
+          <span style={{ flex: 1, textAlign: 'center', fontSize: 11, color: '#f59e0b', fontWeight: 700, padding: '7px' }}>
+            ⚙️ Organizador
+          </span>
+        ) : item.tournament_status === 'inscripcion' && !joined ? (
           <button onClick={() => onJoin(item.id)} style={{
             flex: 1, padding: '7px', borderRadius: 8, border: 'none',
             background: C.green, color: C.bg, fontWeight: 700, fontSize: 12, cursor: 'pointer',
           }}>
             Inscribirme
           </button>
-        )}
-        {joined && (
+        ) : joined ? (
           <span style={{ flex: 1, textAlign: 'center', fontSize: 12, color: C.green, fontWeight: 700, padding: '7px' }}>
             ✓ Inscripto
           </span>
-        )}
+        ) : null}
         <button onClick={() => onOpenBracket(item)} style={{
           padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.border}`,
           background: 'none', color: C.text2, fontSize: 12, cursor: 'pointer',
@@ -351,7 +355,7 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
     setLoading(true)
     const { data } = await supabase
       .from('conversations')
-      .select('id, name, description, group_type, tournament_status, tournament_format, game, max_participants, members:conversation_members(user_id)')
+      .select('id, name, description, group_type, tournament_status, tournament_format, tournament_mode, game, max_participants, created_by, members:conversation_members(user_id)')
       .eq('community_id', community.id)
       .in('group_type', ['tournament', 'liga'])
       .order('created_at', { ascending: false })
@@ -369,7 +373,7 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
 
   const filtered = filter === 'all' ? items : items.filter(i => i.group_type === filter)
 
-  if (bracketItem) return <BracketsPage tournamentId={bracketItem.id} tournamentName={bracketItem.name} onBack={() => setBracketItem(null)} />
+  if (bracketItem) return <BracketsPage tournamentId={bracketItem.id} tournamentName={bracketItem.name} maxParticipants={bracketItem.max_participants} isOrganizer={bracketItem.created_by === profile?.id} onBack={() => setBracketItem(null)} />
   if (standingsItem) return <TablaPosicionesPage tournamentId={standingsItem.id} tournamentName={standingsItem.name} onBack={() => setStandingsItem(null)} />
 
   return (
