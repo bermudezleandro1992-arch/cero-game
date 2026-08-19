@@ -31,7 +31,39 @@ const GAME_CATALOG = [
   { id: 'otro',        icon: '🎮', label: 'Otro' },
 ]
 
-const FORMATS = ['1vs1', '2vs2', 'Equipos', 'Liga', 'Copa', 'Bracket', 'Grupos + Playoffs']
+const MODES = [
+  { id: '1vs1',   label: '1 vs 1',  icon: '👤' },
+  { id: '2vs2',   label: '2 vs 2',  icon: '👥' },
+  { id: 'equipos',label: 'Equipos', icon: '⚔️' },
+]
+
+// Estructuras disponibles según modo y tipo (torneo vs liga)
+function getStructures(mode, type) {
+  if (type === 'liga') {
+    return [
+      { id: 'todos_todos',  label: 'Todos vs Todos',     icon: '🔄', desc: 'Cada uno juega contra todos' },
+      { id: 'grupos',       label: 'Grupos + Playoffs',  icon: '🏅', desc: 'Fase de grupos y eliminatorias' },
+    ]
+  }
+  return [
+    { id: 'eliminatorias',  label: 'Eliminatorias',      icon: '⚡', desc: 'Perder = eliminado' },
+    { id: 'bracket',        label: 'Bracket completo',   icon: '🌳', desc: 'Cuadro con todas las rondas' },
+    { id: 'grupos',         label: 'Fase de grupos',     icon: '🔲', desc: 'Grupos + clasificación a playoffs' },
+    { id: 'grupos_playoffs',label: 'Grupos + Playoffs',  icon: '🏅', desc: 'Doble fase combinada' },
+    { id: 'copa',           label: 'Copa',               icon: '🏆', desc: 'Formato copa, con repechaje' },
+  ]
+}
+
+const ALL_SIZES = [2, 4, 8, 12, 16, 32, 64, 128]
+
+function getPlanLimits(profile) {
+  const role = profile?.role || 'member'
+  if (['ceo', 'admin', 'comunidad'].includes(role)) return { max: 9999, label: 'Sin límite' }
+  if (role === 'vip')        return { max: 128, label: 'VIP — hasta 128 jugadores' }
+  if (role === 'moderador')  return { max: 64,  label: 'Moderador — hasta 64 jugadores' }
+  if (role === 'organizador')return { max: 32,  label: 'Organizador — hasta 32 jugadores' }
+  return { max: 8, label: 'Gratis — máximo 8 jugadores' }
+}
 
 function gameLabel(id) {
   return GAME_CATALOG.find(g => g.id === id)?.label || id || '—'
@@ -44,35 +76,37 @@ function gameIcon(id) {
 // ── Create form ───────────────────────────────────────────────────────────────
 function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
   const { profile } = useAuthStore()
-  const limits = getLimits(profile)
+  const planLimits = getPlanLimits(profile)
+  const isFree = planLimits.max <= 8
 
-  const [type, setType] = useState('tournament')
-  const [name, setName] = useState('')
-  const [desc, setDesc] = useState('')
-  const [game, setGame] = useState(communityTags?.[0] || '')
-  const [maxPl, setMaxPl] = useState(String(Math.min(8, limits.maxParticipants)))
-  const [format, setFormat] = useState(FORMATS[0])
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
+  const [type,      setType]      = useState('tournament')
+  const [name,      setName]      = useState('')
+  const [desc,      setDesc]      = useState('')
+  const [game,      setGame]      = useState(communityTags?.[0] || '')
+  const [mode,      setMode]      = useState('1vs1')
+  const [structure, setStructure] = useState('eliminatorias')
+  const [maxPl,     setMaxPl]     = useState(Math.min(8, planLimits.max))
+  const [busy,      setBusy]      = useState(false)
+  const [err,       setErr]       = useState('')
+
+  const structures = getStructures(mode, type)
+  // Reset structure if current not valid for new type/mode
+  const validStruct = structures.find(s => s.id === structure) ? structure : structures[0].id
 
   async function handleCreate() {
     if (!name.trim()) { setErr('Ponele un nombre.'); return }
-    const reqMax = parseInt(maxPl) || 2
-    if (reqMax > limits.maxParticipants) {
-      setErr(`Tu rol permite máximo ${limits.maxParticipants} participantes.`)
+    if (maxPl > planLimits.max) {
+      setErr(`Tu plan permite máximo ${planLimits.max} jugadores.`)
       return
     }
     setBusy(true); setErr('')
     try {
-      // Backend validation
-      const { data: val } = await supabase.rpc('validate_tournament_creation', { p_max_participants: reqMax })
+      const { data: val } = await supabase.rpc('validate_tournament_creation', { p_max_participants: maxPl })
       if (val && !val.ok) {
         if (val.error === 'daily_limit_reached') {
           setErr(`Límite diario alcanzado (${val.daily_limit} por día).`)
-        } else if (val.error === 'participant_limit_exceeded') {
-          setErr(`Máximo ${val.max_participants} participantes para tu rol.`)
         } else {
-          setErr('No se pudo crear. Revisá tu plan.')
+          setErr(`Máximo ${val.max_participants} jugadores para tu plan.`)
         }
         setBusy(false); return
       }
@@ -85,8 +119,9 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
         community_id: communityId,
         created_by: profile.id,
         game: game || null,
-        max_participants: reqMax,
-        tournament_format: format,
+        max_participants: maxPl,
+        tournament_mode: mode,
+        tournament_format: validStruct,
         tournament_status: 'inscripcion',
       }).select('id').single()
       if (convErr) throw convErr
@@ -105,65 +140,124 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
     width: '100%', boxSizing: 'border-box', outline: 'none',
   }
 
-  return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.text }}>Nuevo {TYPE_CFG[type].label}</p>
+  const label = { margin: '0 0 7px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }
 
-      {/* Type toggle */}
+  return (
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.text }}>Crear competencia</p>
+
+      {/* Torneo / Liga */}
       <div style={{ display: 'flex', gap: 8 }}>
         {Object.entries(TYPE_CFG).map(([k, v]) => (
           <button key={k} onClick={() => setType(k)} style={{
-            flex: 1, padding: '8px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            flex: 1, padding: '9px', borderRadius: 10, border: 'none', cursor: 'pointer',
             background: type === k ? C.green : C.panel2,
             color: type === k ? C.bg : C.text2, fontWeight: 600, fontSize: 13,
-          }}>
-            {v.icon} {v.label}
-          </button>
+          }}>{v.icon} {v.label}</button>
         ))}
       </div>
 
       <input style={inp} placeholder="Nombre *" value={name} onChange={e => setName(e.target.value)} maxLength={60} />
-      <textarea style={{ ...inp, resize: 'vertical', minHeight: 60 }} placeholder="Descripción (opcional)" value={desc} onChange={e => setDesc(e.target.value)} maxLength={300} />
+      <textarea style={{ ...inp, resize: 'vertical', minHeight: 56, fontFamily: 'inherit' }} placeholder="Descripción (opcional)" value={desc} onChange={e => setDesc(e.target.value)} maxLength={300} />
 
-      {/* Game */}
+      {/* Juego */}
       <div>
-        <p style={{ margin: '0 0 6px', fontSize: 12, color: C.textDim }}>Juego</p>
+        <p style={label}>Juego</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {GAME_CATALOG.map(g => (
             <button key={g.id} onClick={() => setGame(g.id)} style={{
-              padding: '5px 10px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12,
+              padding: '5px 11px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12,
               background: game === g.id ? C.green : C.panel2,
               color: game === g.id ? C.bg : C.text2, fontWeight: game === g.id ? 700 : 400,
+            }}>{g.icon} {g.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Modo */}
+      <div>
+        <p style={label}>Modo</p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {MODES.map(m => (
+            <button key={m.id} onClick={() => setMode(m.id)} style={{
+              flex: 1, padding: '9px 6px', borderRadius: 10, border: `2px solid ${mode === m.id ? C.green : C.border}`,
+              background: mode === m.id ? `${C.green}18` : C.panel2, cursor: 'pointer',
+              color: mode === m.id ? C.green : C.text2, fontWeight: 700, fontSize: 12,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
             }}>
-              {g.icon} {g.label}
+              <span style={{ fontSize: 18 }}>{m.icon}</span>
+              {m.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Max participants */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <div style={{ flex: 1 }}>
-          <p style={{ margin: '0 0 6px', fontSize: 12, color: C.textDim }}>Máx. participantes (hasta {limits.maxParticipants})</p>
-          <input style={inp} type="number" min={2} max={limits.maxParticipants} value={maxPl} onChange={e => setMaxPl(e.target.value)} />
+      {/* Estructura */}
+      <div>
+        <p style={label}>Estructura</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {structures.map(s => (
+            <div key={s.id} onClick={() => setStructure(s.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+              border: `2px solid ${validStruct === s.id ? C.green : C.border + '44'}`,
+              background: validStruct === s.id ? `${C.green}10` : C.panel2,
+              transition: 'border .15s, background .15s',
+            }}>
+              <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{s.icon}</span>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: validStruct === s.id ? C.green : C.text }}>{s.label}</p>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>{s.desc}</p>
+              </div>
+              <div style={{
+                width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                border: `2px solid ${validStruct === s.id ? C.green : C.border}`,
+                background: validStruct === s.id ? C.green : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {validStruct === s.id && <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.bg }} />}
+              </div>
+            </div>
+          ))}
         </div>
-        <div style={{ flex: 1 }}>
-          <p style={{ margin: '0 0 6px', fontSize: 12, color: C.textDim }}>Formato</p>
-          <select style={{ ...inp, appearance: 'none' }} value={format} onChange={e => setFormat(e.target.value)}>
-            {FORMATS.map(f => <option key={f}>{f}</option>)}
-          </select>
+      </div>
+
+      {/* Jugadores */}
+      <div>
+        <p style={label}>Jugadores por torneo</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+          {ALL_SIZES.map(n => {
+            const locked = n > planLimits.max
+            const selected = maxPl === n
+            return (
+              <button key={n} onClick={() => !locked && setMaxPl(n)} style={{
+                padding: '7px 14px', borderRadius: 10, border: `2px solid ${selected ? C.green : locked ? C.border + '44' : C.border}`,
+                background: selected ? `${C.green}18` : locked ? C.panel2 + '88' : C.panel2,
+                color: selected ? C.green : locked ? C.textDim : C.text2,
+                fontWeight: selected ? 800 : 500, fontSize: 13, cursor: locked ? 'not-allowed' : 'pointer',
+                opacity: locked ? 0.45 : 1,
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}>
+                {locked && <span style={{ fontSize: 10 }}>🔒</span>}
+                {n}
+              </button>
+            )
+          })}
         </div>
+        <p style={{ margin: 0, fontSize: 11, color: isFree ? '#f59e0b' : C.textDim }}>
+          {isFree ? '⚠️ Plan Gratis — máximo 8 jugadores. Subí de plan para más.' : `✓ ${planLimits.label}`}
+        </p>
       </div>
 
       {err && <p style={{ margin: 0, fontSize: 12, color: '#ef4444' }}>{err}</p>}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
         <button onClick={onCancel} style={{
-          flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${C.border}`,
+          flex: 1, padding: '11px', borderRadius: 10, border: `1px solid ${C.border}`,
           background: 'none', color: C.text2, cursor: 'pointer', fontSize: 14,
         }}>Cancelar</button>
         <button onClick={handleCreate} disabled={busy} style={{
-          flex: 2, padding: '10px', borderRadius: 10, border: 'none',
+          flex: 2, padding: '11px', borderRadius: 10, border: 'none',
           background: busy ? C.panel2 : C.green, color: busy ? C.textDim : C.bg,
           fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontSize: 14,
         }}>
@@ -349,8 +443,9 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', marginTop: 60 }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>🏆</div>
-            <p style={{ color: C.textDim, fontSize: 14, margin: 0 }}>No hay {filter === 'all' ? 'torneos ni ligas' : filter === 'tournament' ? 'torneos' : 'ligas'} aún.</p>
-            <p style={{ color: C.textDim, fontSize: 12, margin: '4px 0 0' }}>Creá el primero con el botón + Crear.</p>
+            <p style={{ color: C.text2, fontSize: 14, fontWeight: 600, margin: 0 }}>
+              {filter === 'all' ? 'No hay torneos ni ligas aún' : filter === 'tournament' ? 'No hay torneos aún' : 'No hay ligas aún'}
+            </p>
           </div>
         ) : filtered.map(item => (
           <TournamentCard
