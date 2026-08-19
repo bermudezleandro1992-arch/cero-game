@@ -250,7 +250,7 @@ function TournamentCard({ item, onOpenBracket, onOpenStandings, onJoin, myId }) 
 }
 
 // ── Main Panel ────────────────────────────────────────────────────────────────
-export default function CommunityTournamentsPanel({ community, onClose }) {
+export default function CommunityTournamentsPanel({ community, onClose, canManage = false }) {
   const { profile } = useAuthStore()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -307,12 +307,14 @@ export default function CommunityTournamentsPanel({ community, onClose }) {
           <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.text }}>🏆 Torneos & Ligas</p>
           <p style={{ margin: 0, fontSize: 11, color: C.textDim }}>{community?.name}</p>
         </div>
-        <button onClick={() => setShowCreate(true)} style={{
-          background: C.green, border: 'none', borderRadius: 10, padding: '7px 14px',
-          color: C.bg, fontWeight: 700, fontSize: 13, cursor: 'pointer',
-        }}>
-          + Crear
-        </button>
+        {canManage && (
+          <button onClick={() => setShowCreate(true)} style={{
+            background: C.green, border: 'none', borderRadius: 10, padding: '7px 14px',
+            color: C.bg, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+          }}>
+            + Crear
+          </button>
+        )}
       </div>
 
       {/* Filter tabs */}
@@ -328,8 +330,8 @@ export default function CommunityTournamentsPanel({ community, onClose }) {
         ))}
       </div>
 
-      {/* Create form */}
-      {showCreate && (
+      {/* Create form — admin only */}
+      {canManage && showCreate && (
         <div style={{ borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
           <CreateForm
             communityId={community.id}

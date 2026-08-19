@@ -110,7 +110,7 @@ export default function DiscoverPage() {
     } else {
       let q = supabase
         .from('conversations')
-        .select('id, name, description, avatar_url, group_type, member_count, tags, is_group, created_at, game')
+        .select('id, name, description, avatar_url, group_type, member_count, tags, is_group, created_at, game, created_by, is_public, is_locked, who_can_send, who_can_add, who_can_edit_info, require_approval, announcement_only, torneos_enabled, ligas_enabled, clanes_enabled, invite_link, pinned_message')
         .eq('is_group', true)
         .eq('is_public', true)
         .eq('group_type', tab)
@@ -178,9 +178,7 @@ export default function DiscoverPage() {
 
   function openGroup(group) {
     setActiveConversation({
-      id: group.id,
-      name: group.name,
-      avatar_url: group.avatar_url,
+      ...group,
       isGroup: true,
       isCommunity: group.group_type === 'community',
     })

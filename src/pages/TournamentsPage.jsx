@@ -1282,7 +1282,7 @@ export default function TournamentsPage() {
   }, [profile?.id, tab])
 
   if (selectedCommunity) {
-    return <CommunityTournamentsPanel community={selectedCommunity} onClose={() => setSelectedCommunity(null)} />
+    return <CommunityTournamentsPanel community={selectedCommunity} onClose={() => setSelectedCommunity(null)} canManage={true} />
   }
 
   if (activeTool && TOOL_COMPONENTS[activeTool]) {

@@ -146,7 +146,9 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [inviteResults, setInviteResults] = useState([])
   const [inviting, setInviting] = useState(null)
   const [roles, setRoles] = useState({})
+  const [playerRanks, setPlayerRanks] = useState({})
   const [leavingGroup, setLeavingGroup] = useState(false)
+  const [rankMenuMember, setRankMenuMember] = useState(null)
 
   // Join requests
   const [joinRequests, setJoinRequests] = useState([])
@@ -228,16 +230,20 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   useEffect(() => {
     if (!conversation?.id) return
     supabase.from('group_roles')
-      .select('user_id, role')
+      .select('user_id, role, player_rank')
       .eq('conversation_id', conversation.id)
       .then(({ data }) => {
-        const map = {}
-        ;(data || []).forEach(r => { map[r.user_id] = r.role })
-        // Si el creador no tiene entrada en group_roles, lo marcamos como owner localmente
-        if (conversation.created_by && !map[conversation.created_by]) {
-          map[conversation.created_by] = 'owner'
+        const roleMap = {}
+        const rankMap = {}
+        ;(data || []).forEach(r => {
+          roleMap[r.user_id] = r.role
+          if (r.player_rank) rankMap[r.user_id] = r.player_rank
+        })
+        if (conversation.created_by && !roleMap[conversation.created_by]) {
+          roleMap[conversation.created_by] = 'owner'
         }
-        setRoles(map)
+        setRoles(roleMap)
+        setPlayerRanks(rankMap)
       })
   }, [conversation?.id])
 
@@ -412,6 +418,16 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
       { onConflict: 'conversation_id,user_id' }
     )
     setRoles(prev => ({ ...prev, [memberId]: role }))
+    setMemberMenu(null)
+  }
+
+  async function setPlayerRank(memberId, rank) {
+    await supabase.from('group_roles').upsert(
+      { conversation_id: conversation.id, user_id: memberId, role: roles[memberId] || 'member', player_rank: rank || null, granted_by: profile.id },
+      { onConflict: 'conversation_id,user_id' }
+    )
+    setPlayerRanks(prev => rank ? { ...prev, [memberId]: rank } : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== memberId)))
+    setRankMenuMember(null)
     setMemberMenu(null)
   }
 
@@ -826,6 +842,7 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
             {filteredMembers.map(m => {
               const mRole = roles[m.id] || (m.id === conversation?.created_by ? 'owner' : 'member')
               const rcfg = GROUP_ROLE_CFG[mRole] || GROUP_ROLE_CFG.member
+              const mRank = playerRanks[m.id]
               return (
                 <div key={m.id} style={{ position: 'relative' }}>
                   <div style={{
@@ -846,11 +863,18 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                             textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap',
                           }}>{rcfg.icon} {rcfg.label}</span>
                         )}
+                        {mRank && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px',
+                            color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b33',
+                            letterSpacing: '0.5px', whiteSpace: 'nowrap',
+                          }}>⭐ {mRank}</span>
+                        )}
                       </div>
                       <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>@{m.username}</p>
                     </div>
                     {isMod && !m.isMe && (
-                      <button onClick={() => setMemberMenu(memberMenu === m.id ? null : m.id)} style={{
+                      <button onClick={() => { setMemberMenu(memberMenu === m.id ? null : m.id); setRankMenuMember(null) }} style={{
                         background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 6, borderRadius: 8, display: 'flex',
                       }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
@@ -869,7 +893,6 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                         boxShadow: '0 8px 32px rgba(0,0,0,0.6)', minWidth: 210,
                       }}
                     >
-                      {/* Role assignment — ordered by hierarchy */}
                       {isAdmin && mRole !== 'owner' && (
                         <>
                           <div style={{ padding: '7px 14px 4px', fontSize: 10, color: C.textDim, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>Asignar rol</div>
@@ -877,6 +900,28 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                           {mRole !== 'moderador'   && <ModeBtn label="🔰 Hacer Moderador"   onClick={() => setRole(m.id, 'moderador')} />}
                           {mRole !== 'organizador' && <ModeBtn label="🎖️ Hacer Organizador" onClick={() => setRole(m.id, 'organizador')} />}
                           {mRole !== 'member'      && <ModeBtn label="👤 Quitar rol"         onClick={() => setRole(m.id, 'member')} />}
+                          <div style={{ height: 1, background: C.border }} />
+                        </>
+                      )}
+                      {isCommunity && isAdmin && (
+                        <>
+                          <div style={{ padding: '7px 14px 4px', fontSize: 10, color: C.textDim, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>Rango de jugador</div>
+                          {rankMenuMember === m.id ? (
+                            <div style={{ padding: '6px 14px 10px' }}>
+                              {['Bronce','Plata','Oro','Platino','Diamante','Élite','Leyenda'].map(rank => (
+                                <button key={rank} onClick={() => setPlayerRank(m.id, rank)} style={{
+                                  display: 'block', width: '100%', textAlign: 'left',
+                                  padding: '6px 8px', borderRadius: 6, border: 'none',
+                                  background: mRank === rank ? '#f59e0b22' : 'transparent',
+                                  color: mRank === rank ? '#f59e0b' : C.text2,
+                                  fontSize: 13, cursor: 'pointer', fontWeight: mRank === rank ? 700 : 400,
+                                }}>⭐ {rank}</button>
+                              ))}
+                              {mRank && <button onClick={() => setPlayerRank(m.id, null)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', borderRadius: 6, border: 'none', background: 'transparent', color: '#ef4444', fontSize: 12, cursor: 'pointer' }}>✕ Quitar rango</button>}
+                            </div>
+                          ) : (
+                            <ModeBtn label={mRank ? `⭐ Rango: ${mRank}` : '⭐ Asignar rango'} onClick={() => setRankMenuMember(m.id)} />
+                          )}
                           <div style={{ height: 1, background: C.border }} />
                         </>
                       )}
