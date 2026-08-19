@@ -207,8 +207,25 @@ export const useChatStore = create((set, get) => ({
           if (idx === -1) return state
           const isActive = state.activeConversation?.id === msg.conversation_id
           const isOwn = msg.sender_id === userId
-          // Play sound for any incoming message from someone else
-          if (!isOwn) sounds.msgReceived()
+          // Play sound and show notification for incoming messages
+          if (!isOwn) {
+            sounds.msgReceived()
+            // Browser notification when tab is hidden/minimized
+            if (document.visibilityState !== 'visible' && Notification.permission === 'granted') {
+              const conv = state.conversations.find(c => c.id === msg.conversation_id)
+              const convName = conv?.name || 'Mi Mensajero'
+              const body = msg.type === 'image' ? '📷 Imagen' : msg.type === 'audio' ? '🎵 Audio' : (msg.content || '').slice(0, 80)
+              try {
+                new Notification(convName, {
+                  body,
+                  icon: '/icon-192.png',
+                  badge: '/icon-192.png',
+                  tag: `msg-${msg.conversation_id}`,
+                  silent: false,
+                })
+              } catch {}
+            }
+          }
           const updated = state.conversations.map(c => {
             if (c.id !== msg.conversation_id) return c
             return {

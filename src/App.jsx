@@ -156,7 +156,7 @@ export default function App() {
 
     connectCallChannel()
 
-    // Also reconnect when tab becomes visible again (tab switch, screen wake)
+    // Reconnect when tab becomes visible after a long background period
     const onVisible = () => {
       if (document.visibilityState === 'visible') connectCallChannel()
     }
@@ -169,13 +169,48 @@ export default function App() {
     }
   }, [profile?.id])
 
-  // Init push notifications: native FCM (APK) + Web Push (PWA)
+  // Show browser notification when incoming call arrives while tab is hidden/minimized
+  useEffect(() => {
+    if (!incomingCall) return
+    if (document.visibilityState === 'visible') return // app is visible — UI handles it
+    if (Notification.permission !== 'granted') return
+
+    const notif = new Notification(`📞 Llamada entrante de ${incomingCall.fromName || 'Usuario'}`, {
+      body: incomingCall.callType === 'video' ? '📹 Videollamada' : '🎙️ Llamada de voz',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: 'incoming-call',
+      requireInteraction: true,
+      vibrate: [200, 100, 200, 100, 200, 100, 200],
+      silent: false,
+    })
+
+    const onNotifClick = () => {
+      window.focus()
+      notif.close()
+    }
+    notif.addEventListener('click', onNotifClick)
+
+    return () => {
+      notif.removeEventListener('click', onNotifClick)
+      notif.close()
+    }
+  }, [incomingCall])
+
+  // Request notification permission and init push
   useEffect(() => {
     if (!profile?.id) return
+    // Request permission proactively (browser will only show dialog once)
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
     initPushNotifications(profile.id, (callPayload) => setIncomingCall(callPayload))
     initWebPush(profile.id)
-    const unlisten = listenNotificationClicks(({ data }) => {
-      if (data?.type === 'call') setIncomingCall(data)
+    const unlisten = listenNotificationClicks(({ action, data }) => {
+      if (data?.type === 'call') {
+        setIncomingCall(data)
+        window.focus()
+      }
     })
     return unlisten
   }, [profile?.id])
