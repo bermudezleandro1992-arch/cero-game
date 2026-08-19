@@ -1256,8 +1256,8 @@ export default function TournamentsPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <span style={{ fontSize: 24 }}>🏆</span>
           <div>
-            <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 18 }}>Torneos & Ligas</p>
-            <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>eFootball · FC 26 · FC 27 · y más</p>
+            <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 18 }}>Comunidad PRO</p>
+            <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>Torneos · Ligas · eFootball · FC 26 · FC 27</p>
           </div>
           {isCommunity && (
             <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: `${C.green}14`, color: C.green, border: `1px solid ${C.green}44` }}>
