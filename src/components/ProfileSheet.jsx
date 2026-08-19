@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
-import { soundSettings, SOUND_PACKS } from '../lib/sounds'
+import { soundSettings, SOUND_PACKS, ringSettings, RINGTONES, OUTGOING_TONES } from '../lib/sounds'
 import LegalPage from '../pages/LegalPage'
 import BotApiPage from '../pages/BotApiPage'
 import VipPage from '../pages/VipPage'
@@ -68,6 +68,8 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const [bio, setBio] = useState(profile?.bio || '')
   const [soundOn, setSoundOn] = useState(soundSettings.isEnabled())
   const [soundPack, setSoundPack] = useState(soundSettings.getPack())
+  const [ringId, setRingId] = useState(ringSettings.getRing())
+  const [outId, setOutId] = useState(ringSettings.getOut())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
@@ -538,6 +540,50 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
                         <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{p.desc}</div>
                       </div>
                       {soundPack === p.id && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+
+                  <p style={{ margin: '10px 0 6px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Tono de llamada entrante</p>
+                  {Object.values(RINGTONES).map(r => (
+                    <button key={r.id} type="button" onClick={() => { ringSettings.setRing(r.id); setRingId(r.id); r.play() }} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                      background: ringId === r.id ? `${C.green}18` : C.panel2,
+                      border: `1.5px solid ${ringId === r.id ? C.green : C.border}`,
+                      transition: 'all .15s',
+                    }}>
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>{r.emoji}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: ringId === r.id ? C.green : C.text, fontWeight: 600, fontSize: 13 }}>{r.label}</div>
+                        <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{r.desc}</div>
+                      </div>
+                      {ringId === r.id && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+
+                  <p style={{ margin: '10px 0 6px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Tono de llamada saliente</p>
+                  {Object.values(OUTGOING_TONES).map(o => (
+                    <button key={o.id} type="button" onClick={() => { ringSettings.setOut(o.id); setOutId(o.id); o.play() }} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                      background: outId === o.id ? `${C.green}18` : C.panel2,
+                      border: `1.5px solid ${outId === o.id ? C.green : C.border}`,
+                      transition: 'all .15s',
+                    }}>
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>{o.emoji}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: outId === o.id ? C.green : C.text, fontWeight: 600, fontSize: 13 }}>{o.label}</div>
+                        <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{o.desc}</div>
+                      </div>
+                      {outId === o.id && (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="20 6 9 17 4 12"/>
                         </svg>
