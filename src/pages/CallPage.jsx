@@ -312,6 +312,11 @@ const pc = useRef(null)
       })
       .on('broadcast', { event: 'call-end' }, () => hangup(false))
       .on('broadcast', { event: 'call-reject' }, () => { busyTone.start(); setTimeout(() => busyTone.stop(), 3000); hangup(false) })
+      .on('broadcast', { event: 'call-busy' }, () => {
+        setPhase('busy')
+        busyTone.start()
+        setTimeout(() => { busyTone.stop(); hangup(false) }, 4000)
+      })
       .on('broadcast', { event: 'call-screen-share' }, ({ payload }) => {
         if (payload.from === myUserId) return
         setRemoteScreenSharing(payload.active)
@@ -989,8 +994,8 @@ const pc = useRef(null)
               {phase === 'active' && (
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: accent, boxShadow: `0 0 8px ${accent}`, animation: 'blink 2s ease-in-out infinite' }} />
               )}
-              <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 17, letterSpacing: '0.1px' }}>
-                {phase === 'connecting' ? 'Llamando...' : phase === 'active' ? fmtTime(elapsed) : 'Llamada finalizada'}
+              <span style={{ color: phase === 'busy' ? '#ef4444' : 'rgba(255,255,255,0.65)', fontSize: 17, letterSpacing: '0.1px' }}>
+                {phase === 'connecting' ? 'Llamando...' : phase === 'active' ? fmtTime(elapsed) : phase === 'busy' ? 'Ocupado' : 'Llamada finalizada'}
               </span>
             </div>
 
