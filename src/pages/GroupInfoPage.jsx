@@ -174,6 +174,13 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [slowMode,   setSlowMode]   = useState(conversation?.slow_mode_seconds || null)
   const [autoDelete, setAutoDelete] = useState(conversation?.auto_delete_hours || null)
 
+  // Community torneos config
+  const [torneosEnabled,  setTorneosEnabled]  = useState(conversation?.torneos_enabled  !== false)
+  const [ligasEnabled,    setLigasEnabled]    = useState(conversation?.ligas_enabled    !== false)
+  const [clanesEnabled,   setClanesEnabled]   = useState(conversation?.clanes_enabled   || false)
+  const [communityGames,  setCommunityGames]  = useState(conversation?.tags || [])
+  const [savingTorneos,   setSavingTorneos]   = useState(false)
+
   // Privacidad avanzada
   const [allowExport,      setAllowExport]      = useState(conversation?.allow_export      !== false)
   const [allowAutoSave,    setAllowAutoSave]    = useState(conversation?.allow_auto_save    !== false)
@@ -435,6 +442,17 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
     fetchConversations(profile.id)
   }
 
+  async function saveTorneosConfig() {
+    setSavingTorneos(true)
+    await supabase.from('conversations').update({
+      torneos_enabled: torneosEnabled,
+      ligas_enabled:   ligasEnabled,
+      clanes_enabled:  clanesEnabled,
+      tags:            communityGames,
+    }).eq('id', conversation.id)
+    setSavingTorneos(false)
+  }
+
   async function handleLeave() {
     if (!window.confirm('¿Salir del grupo?')) return
     setLeavingGroup(true)
@@ -489,6 +507,7 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
     { id: 'info',     label: '📋 Info' },
     { id: 'members',  label: '👥 Miembros' },
     { id: 'perms',    label: '🔐 Permisos' },
+    ...(isCommunity ? [{ id: 'torneos', label: '🏆 Torneos' }] : []),
     ...(isAdmin && requireApproval ? [{ id: 'requests', label: `📬 Solicitudes${joinRequests.length ? ` (${joinRequests.length})` : ''}` }] : []),
     ...(isCommunity && isAdmin ? [{ id: 'stats', label: '📊 Stats' }] : []),
     ...(isCommunity && isAdmin ? [{ id: 'roles', label: '🎭 Roles' }] : []),
@@ -1239,6 +1258,135 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
             )}
           </>
         )}
+
+        {/* ════ TAB: TORNEOS ════ */}
+        {tab === 'torneos' && (() => {
+          const GAMES = [
+            { id: 'efootball',   icon: '⚽', label: 'eFootball' },
+            { id: 'fc26',        icon: '⚽', label: 'FC 26' },
+            { id: 'fc27',        icon: '⚽', label: 'FC 27' },
+            { id: 'cs2',         icon: '🎯', label: 'CS2' },
+            { id: 'valorant',    icon: '🎯', label: 'Valorant' },
+            { id: 'warzone',     icon: '🔫', label: 'Warzone' },
+            { id: 'pubg',        icon: '🔫', label: 'PUBG' },
+            { id: 'clashroyale', icon: '👑', label: 'Clash Royale' },
+            { id: 'freef',       icon: '🔥', label: 'Free Fire' },
+            { id: 'otro',        icon: '🎮', label: 'Otro' },
+          ]
+          function toggleGame(id) {
+            setCommunityGames(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id])
+          }
+          return (
+            <div style={{ padding: '0 0 40px' }}>
+              {/* Header info */}
+              <div style={{ padding: '16px', background: `${C.green}08`, borderBottom: `1px solid ${C.border}` }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text }}>🏆 Torneos & Ligas</p>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: C.textDim, lineHeight: 1.4 }}>
+                  Configurá qué tipo de competencias se pueden organizar dentro de esta comunidad.
+                </p>
+              </div>
+
+              {/* Enable / disable sections */}
+              <div style={{ borderBottom: `1px solid ${C.border}` }}>
+                <p style={{ margin: '16px 16px 8px', fontSize: 10, fontWeight: 800, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+                  Tipos de competencia
+                </p>
+                <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[
+                    ['torneosEnabled', torneosEnabled, setTorneosEnabled, '🏆', 'Torneos', 'Eliminación directa, grupos, bracket'],
+                    ['ligasEnabled',   ligasEnabled,   setLigasEnabled,   '🥇', 'Ligas',   'Todos vs todos, tabla de posiciones'],
+                    ['clanesEnabled',  clanesEnabled,  setClanesEnabled,  '⚔️', 'Torneos de Clanes', 'Equipos o clanes compiten entre sí'],
+                  ].map(([key, val, setter, icon, lbl, desc]) => (
+                    <div key={key} style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      background: val ? `${C.green}08` : C.panel2,
+                      border: `1px solid ${val ? C.green + '44' : C.border}`,
+                      borderRadius: 12, padding: '12px 14px',
+                    }}>
+                      <span style={{ fontSize: 22 }}>{icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text }}>{lbl}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>{desc}</p>
+                      </div>
+                      {isAdmin && <Toggle value={val} onChange={setter} />}
+                      {!isAdmin && (
+                        <span style={{ fontSize: 11, color: val ? C.green : C.textDim, fontWeight: 700 }}>{val ? 'ON' : 'OFF'}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Games */}
+              <div style={{ borderBottom: `1px solid ${C.border}` }}>
+                <p style={{ margin: '16px 16px 8px', fontSize: 10, fontWeight: 800, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+                  Juegos de la comunidad
+                </p>
+                <div style={{ padding: '0 16px 16px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {GAMES.map(g => {
+                    const selected = communityGames.includes(g.id)
+                    return (
+                      <button key={g.id} onClick={() => isAdmin && toggleGame(g.id)} style={{
+                        padding: '7px 14px', borderRadius: 20, border: 'none',
+                        cursor: isAdmin ? 'pointer' : 'default', fontSize: 13,
+                        background: selected ? C.green : C.panel2,
+                        color: selected ? C.bg : C.text2,
+                        fontWeight: selected ? 700 : 400,
+                        opacity: !isAdmin && !selected ? 0.5 : 1,
+                      }}>
+                        {g.icon} {g.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                {communityGames.length > 0 && (
+                  <p style={{ margin: '0 16px 12px', fontSize: 11, color: C.textDim }}>
+                    {communityGames.length} juego{communityGames.length !== 1 ? 's' : ''} seleccionado{communityGames.length !== 1 ? 's' : ''}
+                  </p>
+                )}
+              </div>
+
+              {/* Game-specific rules for soccer games */}
+              {(communityGames.includes('efootball') || communityGames.includes('fc26') || communityGames.includes('fc27')) && (
+                <div style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <p style={{ margin: '16px 16px 8px', fontSize: 10, fontWeight: 800, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+                    Reglas para fútbol
+                  </p>
+                  <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                      ['Sin handicap / igualador de equipo', '⚖️'],
+                      ['Sin cartas OP/TOTY/Evolutions', '🚫'],
+                      ['Mazo/equipo enviado antes del partido', '📋'],
+                      ['Tácticas libres', '🎯'],
+                      ['Restricción de división mínima', '🏅'],
+                    ].map(([rule, icon]) => (
+                      <div key={rule} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: C.panel2, borderRadius: 10, fontSize: 13, color: C.text2 }}>
+                        <span>{icon}</span><span>{rule}</span>
+                      </div>
+                    ))}
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: C.textDim }}>
+                      Estas opciones se configuran torneo por torneo al crearlo.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Save button — only for admins */}
+              {isAdmin && (
+                <div style={{ padding: '16px' }}>
+                  <button onClick={saveTorneosConfig} disabled={savingTorneos} style={{
+                    width: '100%', padding: '12px', borderRadius: 12, border: 'none',
+                    background: savingTorneos ? C.panel2 : C.green,
+                    color: savingTorneos ? C.textDim : C.bg,
+                    fontWeight: 700, fontSize: 14, cursor: savingTorneos ? 'default' : 'pointer',
+                  }}>
+                    {savingTorneos ? 'Guardando…' : '💾 Guardar configuración'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ════ TAB: MEDIOS ════ */}
         {tab === 'media' && (
