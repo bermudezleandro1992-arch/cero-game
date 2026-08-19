@@ -428,7 +428,12 @@ export default function CallPage({
         setCamOff(true)
       }
     } else {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
+      } catch (e1) {
+        dbg('getUserMedia err: ' + e1.name + ' — retry simple')
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      }
     }
     localStream.current = stream
     if (localVid.current) { localVid.current.srcObject = stream; localVid.current.muted = true }
@@ -495,7 +500,7 @@ export default function CallPage({
           payload: { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer: JSON.stringify(offer) },
         }
       }).catch(() => {})
-    } catch (e) { alert(`Error: ${e.message}`); onEnd() }
+    } catch (e) { dbg('ERR startOutgoing: ' + e.name + ' ' + e.message); alert(`Error: ${e.message}`); onEnd() }
   }
 
   async function acceptCall() {
