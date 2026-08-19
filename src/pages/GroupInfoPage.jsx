@@ -491,8 +491,10 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   }
 
   async function handleDeleteGroup() {
-    if (!window.confirm('⚠️ ¿Eliminar el grupo permanentemente? Esto borrará todos los mensajes y no se puede deshacer.')) return
-    await supabase.from('conversations').delete().eq('id', conversation.id)
+    const label = isCommunity ? 'comunidad' : 'grupo'
+    if (!window.confirm(`⚠️ ¿Eliminar la ${label} permanentemente? Esto borrará todos los mensajes y no se puede deshacer.`)) return
+    const { error } = await supabase.from('conversations').delete().eq('id', conversation.id)
+    if (error) { alert('Error al eliminar: ' + error.message); return }
     onLeft?.()
   }
 
@@ -790,10 +792,10 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
 
             {/* Actions */}
             <div style={{ padding: '12px 0', borderBottom: `1px solid ${C.border}` }}>
-              <Row icon="🚩" label="Reportar grupo" onClick={() => alert('Reporte enviado. Gracias.')} />
-              <Row icon="🚪" label="Salir del grupo" danger onClick={handleLeave} />
+              <Row icon="🚩" label={`Reportar ${isCommunity ? 'comunidad' : 'grupo'}`} onClick={() => alert('Reporte enviado. Gracias.')} />
+              <Row icon="🚪" label={`Salir del ${isCommunity ? 'la comunidad' : 'grupo'}`} danger onClick={handleLeave} />
               {isOwner && (
-                <Row icon="💣" label="Eliminar grupo" danger onClick={handleDeleteGroup} />
+                <Row icon="💣" label={`Eliminar ${isCommunity ? 'comunidad' : 'grupo'}`} danger onClick={handleDeleteGroup} />
               )}
             </div>
           </>
