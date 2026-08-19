@@ -54,13 +54,23 @@ const NAV = [
     ),
   },
   {
-    id: 'torneos', label: 'Torneos',
+    id: 'torneos', label: 'Comunidad PRO',
     icon: (a) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
         <path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
         <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
         <path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'comunidad', label: 'Comunidad',
+    icon: (a) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
       </svg>
     ),
   },
@@ -287,6 +297,8 @@ export default function App() {
             ? <ProfileSheet onClose={() => setShowProfile(false)} />
             : tab === 'contactos'
             ? <ContactsListPage />
+            : tab === 'comunidad'
+            ? <ChatListPage onProfileClick={() => setShowProfile(true)} initialFilter="comunidades" />
             : tab === 'grupos'
             ? <ChatListPage onProfileClick={() => setShowProfile(true)} initialFilter="grupos" />
             : tab === 'explorar'
@@ -316,7 +328,7 @@ export default function App() {
           borderTop: `1px solid ${C.border}`, flexShrink: 0,
           paddingBottom: 'env(safe-area-inset-bottom)',
         }} className="slfa-bottom-nav">
-          {NAV.filter(({ id }) => id !== 'admin' || ['ceo','admin'].includes(profile?.role)).map(({ id, label, icon }) => {
+          {NAV.filter(({ id }) => ['chats','comunidad','explorar','torneos','ajustes'].includes(id)).map(({ id, label, icon }) => {
             const active = (id === 'ajustes' ? showProfile : !showProfile && tab === id)
             return (
               <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : (setShowProfile(false), setTab(id))} style={{
