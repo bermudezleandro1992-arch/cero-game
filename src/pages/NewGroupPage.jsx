@@ -503,7 +503,14 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
                   👥 Jugadores por torneo / liga
                 </label>
                 <p style={{ margin: '0 0 10px', fontSize: 11, color: C.textDim }}>
-                  Tu plan permite hasta <strong style={{ color: C.text }}>{maxAllowed >= 9999 ? '∞' : maxAllowed}</strong> jugadores por torneo.
+                  {(() => {
+                    const role = profile?.role || 'member'
+                    if (['ceo','admin','comunidad'].includes(role)) return <><strong style={{ color: C.green }}>Sin límite</strong> — {planLabel(role)}</>
+                    if (role === 'vip')         return <>Plan <strong style={{ color: '#f59e0b' }}>VIP</strong>: hasta <strong style={{ color: C.text }}>128</strong> jugadores por torneo</>
+                    if (role === 'moderador')   return <>Plan <strong style={{ color: '#06b6d4' }}>Moderador</strong>: hasta <strong style={{ color: C.text }}>64</strong> jugadores por torneo</>
+                    if (role === 'organizador') return <>Plan <strong style={{ color: '#10b981' }}>Organizador</strong>: hasta <strong style={{ color: C.text }}>32</strong> jugadores por torneo</>
+                    return <>Plan <strong style={{ color: '#f59e0b' }}>Gratis</strong>: máximo <strong style={{ color: C.text }}>8</strong> jugadores — <span style={{ color: '#f59e0b' }}>upgradeá para más</span></>
+                  })()}
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {available.map(n => (
