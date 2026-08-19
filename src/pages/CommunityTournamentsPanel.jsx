@@ -483,6 +483,18 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
     await reloadItem()
   }
 
+  async function handleDelete() {
+    const label = isLiga ? 'liga' : 'torneo'
+    if (!confirm(`¿Eliminar este ${label} permanentemente? Esta acción no se puede deshacer.`)) return
+    setBusy(true)
+    const { error } = await supabase.rpc('delete_group_or_community', { p_conversation_id: item.id })
+    if (error) {
+      // fallback direct delete
+      await supabase.from('conversations').delete().eq('id', item.id)
+    }
+    onBack()
+  }
+
   // Bolillero: shuffle participants randomly, assign to bracket positions
   async function runDraw(autoSave = false) {
     setDrawAnimating(true)
@@ -644,6 +656,15 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
               fontWeight: 700, fontSize: 12, cursor: 'pointer',
             }}>
               🏁 Finalizar
+            </button>
+          )}
+          {isCreator && (status === 'inscripcion' || status === 'finalizado' || status === 'cancelado') && (
+            <button onClick={handleDelete} disabled={busy} style={{
+              background: 'none', border: `1px solid #ef444466`,
+              borderRadius: 10, padding: '7px 10px',
+              color: '#ef4444', fontSize: 12, cursor: 'pointer',
+            }}>
+              🗑️
             </button>
           )}
         </div>
