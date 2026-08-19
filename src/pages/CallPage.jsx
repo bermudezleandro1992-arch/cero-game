@@ -8,8 +8,8 @@ const TURN_USER = import.meta.env.VITE_TURN_USERNAME || 'openrelayproject'
 const TURN_CRED = import.meta.env.VITE_TURN_CREDENTIAL || 'openrelayproject'
 const TURN_HOST = import.meta.env.VITE_TURN_HOST || 'openrelay.metered.ca'
 
-// Strip any port from TURN_HOST to avoid double-port URLs like host:3478:443
-const TURN_HOST_CLEAN = TURN_HOST.split(':')[0]
+// Strip protocol (https://) and port from TURN_HOST so URLs are valid
+const TURN_HOST_CLEAN = TURN_HOST.replace(/^https?:\/\//, '').split(':')[0]
 
 const ICE_SERVERS = {
   iceServers: [
