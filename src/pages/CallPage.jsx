@@ -13,7 +13,6 @@ const ICE_SERVERS = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:stun.relay.metered.ca:80' },
     { urls: `turn:${TURN_HOST}:80`,                 username: TURN_USER, credential: TURN_CRED },
     { urls: `turn:${TURN_HOST}:80?transport=tcp`,   username: TURN_USER, credential: TURN_CRED },
     { urls: `turn:${TURN_HOST}:443`,                username: TURN_USER, credential: TURN_CRED },
