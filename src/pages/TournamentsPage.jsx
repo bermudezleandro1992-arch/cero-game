@@ -7,12 +7,8 @@ import { C } from '../theme'
 import { getMaxParticipants, getLimits, getRoleCfg } from '../lib/roles'
 import BannerAd from '../components/BannerAd'
 import SorteoPage from './tools/SorteoPage'
-import BracketsPage from './tools/BracketsPage'
-import TablaPosicionesPage from './tools/TablaPosicionesPage'
 import VotacionesPage from './tools/VotacionesPage'
-import CargaResultadosPage from './tools/CargaResultadosPage'
 import CalendarioPage from './tools/CalendarioPage'
-import SistemaPremiosPage from './tools/SistemaPremiosPage'
 import CommunityTournamentsPanel from './CommunityTournamentsPanel'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1225,12 +1221,8 @@ const TABS = [
 
 const TOOL_COMPONENTS = {
   sorteo:        SorteoPage,
-  brackets:      BracketsPage,
-  tabla:         TablaPosicionesPage,
   votaciones:    VotacionesPage,
-  resultados:    CargaResultadosPage,
   calendario:    CalendarioPage,
-  premios:       SistemaPremiosPage,
 }
 
 export default function TournamentsPage() {
@@ -1395,30 +1387,27 @@ export default function TournamentsPage() {
         {/* ── HERRAMIENTAS ── */}
         {tab === 'herramientas' && (
           <div>
-            {/* Herramientas gratuitas para todos */}
-            <SectionHeader icon="🎲" title="Herramientas gratuitas" desc="Disponibles para todos los jugadores" />
+            <SectionHeader icon="🎲" title="Herramientas" desc="Disponibles para tu comunidad" />
             <div className="comm-grid" style={{ marginBottom: 20 }}>
               <FeatureCard icon="🎲" title="Sorteo en Vivo" desc="Sorteá participantes o premios en tiempo real" color="#f59e0b" onClick={() => setActiveTool('sorteo')} />
-              <FeatureCard icon="🔱" title="Generador de Brackets" desc="Cuadros de eliminación directa automáticos" color="#06b6d4" onClick={() => setActiveTool('brackets')} />
-              <FeatureCard icon="📋" title="Tabla de Posiciones" desc="Seguí el puntaje en tiempo real de tu liga" color="#3b82f6" onClick={() => setActiveTool('tabla')} />
+              <FeatureCard icon="🗳️" title="Votaciones" desc="Creá encuestas para tu comunidad" color="#a855f7" onClick={() => setActiveTool('votaciones')} />
+              <FeatureCard icon="📅" title="Calendario de Eventos" desc="Programá fechas y partidos con recordatorios automáticos" color="#3b82f6" onClick={() => setActiveTool('calendario')} />
             </div>
 
-            {/* Herramientas avanzadas */}
-            <div style={{ position: 'relative' }}>
-              <SectionHeader icon="🛠️" title="Herramientas avanzadas" desc="Para organizadores de comunidades" />
-              <div className="comm-grid">
-                <FeatureCard icon="🗳️" title="Votaciones" desc="Creá encuestas para tu comunidad" color="#a855f7" onClick={() => setActiveTool('votaciones')} />
-                <FeatureCard icon="📸" title="Carga de Resultados" desc="Los jugadores suben fotos de sus resultados para validación" color={C.green} onClick={() => setActiveTool('resultados')} />
-                <FeatureCard icon="🌍" title="Rankings por Zona" desc="Clasificaciones separadas por país, región o plataforma" color={C.green} onClick={() => setActiveTool('tabla')} />
-                <FeatureCard icon="🏅" title="Sistema de Premios" desc="Asigná premios y trofeos a los ganadores de tus torneos" color="#f59e0b" onClick={() => setActiveTool('premios')} />
-                <FeatureCard icon="📅" title="Calendario de Eventos" desc="Programá fechas y partidos con recordatorios automáticos" color="#3b82f6" onClick={() => setActiveTool('calendario')} />
-              </div>
-            </div>
-
-            <div style={{ marginTop: 20, background: `${C.green}10`, border: `1px solid ${C.green}33`, borderRadius: 16, padding: '16px 18px' }}>
-              <p style={{ margin: '0 0 4px', color: C.green, fontWeight: 700, fontSize: 14 }}>¿Tenés ideas para nuevas herramientas?</p>
-              <p style={{ margin: 0, color: C.textDim, fontSize: 12 }}>Escribinos en el grupo de soporte — estamos construyendo esto con la comunidad.</p>
-            </div>
+            <button
+              onClick={() => {
+                // Navegar al chat de soporte de Mi Mensajero
+                window.dispatchEvent(new CustomEvent('open-support-chat'))
+              }}
+              style={{
+                marginTop: 8, width: '100%', background: `${C.green}10`,
+                border: `1px solid ${C.green}33`, borderRadius: 16, padding: '16px 18px',
+                cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <p style={{ margin: '0 0 4px', color: C.green, fontWeight: 700, fontSize: 14 }}>💬 ¿Necesitás ayuda o tenés ideas?</p>
+              <p style={{ margin: 0, color: C.textDim, fontSize: 12 }}>Escribinos al soporte técnico de Mi Mensajero.</p>
+            </button>
           </div>
         )}
       </div>
