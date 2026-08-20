@@ -1639,6 +1639,91 @@ export default function ChatPage({ onBack }) {
                   </div>
                 )
 
+                // ── BOT MESSAGE CARD ─────────────────────────────────
+                const isBot = msg.metadata?.bot === true
+                if (isBot) {
+                  const botName = msg.metadata?.bot_name || 'Bot'
+                  const lines = msg.content?.split('\n').filter(Boolean) || []
+                  const reactions = msg.reactions || []
+                  const grouped2 = reactions.reduce((a, r) => { a[r.emoji] = (a[r.emoji] || 0) + 1; return a }, {})
+                  const myReacts2 = new Set(reactions.filter(r => r.user_id === profile?.id).map(r => r.emoji))
+                  const REACTS = ['👍','🔥','⚽','❤️','😮']
+                  return (
+                    <div key={msg.id} style={{ marginBottom: 10, maxWidth: '100%' }}>
+                      <div style={{
+                        background: 'linear-gradient(135deg, #0f2027 0%, #1a2a1a 100%)',
+                        border: `1px solid ${C.green}44`,
+                        borderRadius: 16, overflow: 'hidden',
+                        maxWidth: 'min(420px, 100%)',
+                        boxShadow: `0 4px 20px ${C.green}18`,
+                      }}>
+                        {/* Header */}
+                        <div style={{
+                          background: `linear-gradient(90deg, ${C.green}22, transparent)`,
+                          borderBottom: `1px solid ${C.green}22`,
+                          padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8,
+                        }}>
+                          <div style={{
+                            width: 28, height: 28, borderRadius: '50%',
+                            background: `${C.green}22`, border: `1.5px solid ${C.green}66`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 14, flexShrink: 0,
+                          }}>🤖</div>
+                          <span style={{ color: C.green, fontWeight: 700, fontSize: 12 }}>{botName}</span>
+                          <span style={{ color: C.textDim, fontSize: 10, marginLeft: 'auto' }}>
+                            {new Date(msg.created_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        {/* Body */}
+                        <div style={{ padding: '12px 14px 10px' }}>
+                          {lines.map((line, li) => {
+                            const isLink = line.startsWith('http')
+                            if (isLink) return (
+                              <a key={li} href={line} target="_blank" rel="noreferrer" style={{
+                                display: 'block', marginTop: 8,
+                                color: C.green, fontSize: 12, wordBreak: 'break-all',
+                                textDecoration: 'none', fontWeight: 600,
+                              }}>🔗 {line}</a>
+                            )
+                            return (
+                              <p key={li} style={{
+                                margin: li === 0 ? 0 : '4px 0 0',
+                                color: li === 0 ? C.text : C.text2,
+                                fontSize: li === 0 ? 14 : 13,
+                                fontWeight: li === 0 ? 600 : 400,
+                                lineHeight: 1.5,
+                                wordBreak: 'break-word',
+                              }}>{line}</p>
+                            )
+                          })}
+                        </div>
+                        {/* Reactions */}
+                        <div style={{
+                          padding: '6px 14px 10px', display: 'flex', gap: 6, flexWrap: 'wrap',
+                          borderTop: `1px solid ${C.green}11`,
+                        }}>
+                          {REACTS.map(em => {
+                            const count = grouped2[em] || 0
+                            const mine = myReacts2.has(em)
+                            return (
+                              <button key={em} onClick={() => reactToMessage(msg.id, profile.id, em)} style={{
+                                background: mine ? `${C.green}22` : 'rgba(255,255,255,0.05)',
+                                border: `1px solid ${mine ? C.green : 'rgba(255,255,255,0.1)'}`,
+                                borderRadius: 20, padding: '3px 8px', cursor: 'pointer',
+                                fontSize: 13, display: 'flex', alignItems: 'center', gap: 3,
+                                color: mine ? C.green : C.textDim, fontWeight: mine ? 700 : 400,
+                                transition: 'all .15s',
+                              }}>
+                                {em}{count > 0 && <span style={{ fontSize: 10 }}>{count}</span>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+
                 const br = isMine
                   ? (isFirst && isLast ? '14px 4px 14px 14px' : isFirst ? '14px 4px 4px 14px' : isLast ? '14px 14px 4px 14px' : '14px 4px 4px 14px')
                   : (isFirst && isLast ? '4px 14px 14px 14px' : isFirst ? '4px 14px 14px 4px' : isLast ? '4px 14px 14px 4px' : '4px 14px 14px 4px')
