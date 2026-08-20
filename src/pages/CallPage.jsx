@@ -246,8 +246,11 @@ const pc = useRef(null)
   const qualityRef = useRef(null)
   const connectTimeoutRef = useRef(null)
   const ringTimeoutRef = useRef(null)
+  const iceRestartTimerRef = useRef(null)
   const silentCtxRef = useRef(null)
   const connectedRef = useRef(false)
+  const hangupCalledRef = useRef(false)  // prevent double-hangup
+  const iceRestartAttempted = useRef(false)
   const localVid = useRef(null)
   const remoteVid = useRef(null)
   const remoteAudio = useRef(null)
@@ -359,6 +362,7 @@ const pc = useRef(null)
       clearInterval(qualityRef.current)
       clearTimeout(connectTimeoutRef.current)
       clearTimeout(ringTimeoutRef.current)
+      clearTimeout(iceRestartTimerRef.current)
       if (sessionCh.current) supabase.removeChannel(sessionCh.current)
     }
   }, [])
@@ -449,20 +453,57 @@ const pc = useRef(null)
       console.log('[CALL]','conn=' + conn.connectionState)
       if (conn.connectionState === 'connected') {
         clearTimeout(connectTimeoutRef.current)
+        clearTimeout(iceRestartTimerRef.current)
+        hangupCalledRef.current = false
+        iceRestartAttempted.current = false
         goActive()
       }
-      if (conn.connectionState === 'failed') hangup(true)
+      if (conn.connectionState === 'failed') {
+        if (hangupCalledRef.current) return
+        hangupCalledRef.current = true
+        hangup(true)
+      }
     }
     conn.oniceconnectionstatechange = () => {
       console.log('[CALL]','ice=' + conn.iceConnectionState)
       if (conn.iceConnectionState === 'disconnected') {
-        try { conn.restartIce() } catch (_) {}
+        // brief disconnection — wait 5s before acting
+        iceRestartTimerRef.current = setTimeout(() => {
+          if (conn.iceConnectionState === 'disconnected' || conn.iceConnectionState === 'failed') {
+            if (!iceRestartAttempted.current) {
+              iceRestartAttempted.current = true
+              try { conn.restartIce() } catch (_) {}
+            }
+          }
+        }, 5000)
       }
-      if (conn.iceConnectionState === 'failed') hangup(true)
+      if (conn.iceConnectionState === 'failed') {
+        if (!iceRestartAttempted.current) {
+          // first failure: attempt ICE restart, wait 8s before giving up
+          iceRestartAttempted.current = true
+          try { conn.restartIce() } catch (_) {}
+          iceRestartTimerRef.current = setTimeout(() => {
+            if (conn.iceConnectionState !== 'connected' && conn.connectionState !== 'connected') {
+              if (hangupCalledRef.current) return
+              hangupCalledRef.current = true
+              hangup(true)
+            }
+          }, 8000)
+        } else {
+          // already tried restart — give up
+          if (hangupCalledRef.current) return
+          hangupCalledRef.current = true
+          hangup(true)
+        }
+      }
     }
     connectTimeoutRef.current = setTimeout(() => {
-      if (pc.current && pc.current.connectionState !== 'connected') hangup(true)
-    }, 60000)
+      if (pc.current && pc.current.connectionState !== 'connected') {
+        if (hangupCalledRef.current) return
+        hangupCalledRef.current = true
+        hangup(true)
+      }
+    }, 90000)
     pc.current = conn
     return conn
   }
@@ -562,6 +603,7 @@ const pc = useRef(null)
     clearInterval(qualityRef.current)
     clearTimeout(connectTimeoutRef.current)
     clearTimeout(ringTimeoutRef.current)
+    clearTimeout(iceRestartTimerRef.current)
     silentCtxRef.current?.close(); silentCtxRef.current = null
     screenStream.current?.getTracks().forEach(t => t.stop())
     sounds.callEnd()
