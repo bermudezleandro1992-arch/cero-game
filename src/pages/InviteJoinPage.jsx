@@ -81,6 +81,14 @@ export default function InviteJoinPage({ token, onBack }) {
     load()
   }, [token, profile?.id])
 
+  // Auto-redirect if already a member (handles F5 on invite URL)
+  useEffect(() => {
+    if (!alreadyMember || !conv) return
+    localStorage.removeItem('mm_pending_invite')
+    setActiveConversation({ id: conv.id, name: conv.name, isGroup: true, isCommunity: conv.group_type === 'community' })
+    onBack?.()
+  }, [alreadyMember, conv])
+
   async function handleJoin() {
     if (!profile?.id || !conv) return
     setJoining(true)
