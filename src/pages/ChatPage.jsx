@@ -554,6 +554,7 @@ export default function ChatPage({ onBack }) {
   const [newTopicName, setNewTopicName] = useState('')
   const [newTopicEmoji, setNewTopicEmoji] = useState('💬')
   const [showChatMenu, setShowChatMenu] = useState(false)
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false)
   const [autoDeleteHours, setAutoDeleteHours] = useState(null)
   const [showAutoDeletePicker, setShowAutoDeletePicker] = useState(false)
   const [searchMode, setSearchMode] = useState(false)
@@ -969,6 +970,15 @@ export default function ChatPage({ onBack }) {
   const activeTopic = activeTopicId ? topics.find(t => t.id === activeTopicId) : null
   const isAnnouncementTopic = activeTopic?.topic_type === 'announcements'
 
+  // Channel permission: is the current user an admin/owner of this community?
+  const isCommunityAdmin = isGroup && (
+    activeConversation?.created_by === profile?.id ||
+    activeConversation?.members?.find(m => m?.id === profile?.id)?.role === 'owner' ||
+    activeConversation?.members?.find(m => m?.id === profile?.id)?.role === 'admin'
+  )
+  // Can the user send in the active channel?
+  const activeChannelLocked = activeTopic?.who_can_send === 'admins' && !isCommunityAdmin
+
   if (showGroupInfo && isGroup) return (
     <GroupInfoPage
       conversation={activeConversation}
@@ -979,6 +989,46 @@ export default function ChatPage({ onBack }) {
 
   return (
     <>
+      {/* Privacy Info Modal */}
+      {showPrivacyModal && (
+        <div onClick={() => setShowPrivacyModal(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: C.panel, borderRadius: 20, padding: '28px 24px 20px',
+            maxWidth: 360, width: '100%', textAlign: 'center',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ fontSize: 52, marginBottom: 16 }}>🔒</div>
+            <h3 style={{ margin: '0 0 8px', color: C.text, fontSize: 18, fontWeight: 700 }}>
+              Tus chats son privados
+            </h3>
+            <p style={{ margin: '0 0 20px', color: C.textDim, fontSize: 13, lineHeight: 1.6 }}>
+              Los mensajes y llamadas están cifrados de extremo a extremo.
+              Solo las personas en este chat pueden leerlos, escucharlos o compartirlos.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24, textAlign: 'left' }}>
+              {[
+                ['💬', 'Mensajes de texto y voz'],
+                ['📞', 'Llamadas y videollamadas'],
+                ['📷', 'Fotos, videos y archivos'],
+                ['⚡', 'Mensajes temporales'],
+              ].map(([icon, label]) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: C.panel2, borderRadius: 12 }}>
+                  <span style={{ fontSize: 20 }}>{icon}</span>
+                  <span style={{ color: C.text2, fontSize: 13 }}>{label}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowPrivacyModal(false)} style={{
+              width: '100%', padding: '12px', borderRadius: 12, border: 'none',
+              background: C.green, color: C.bg, fontWeight: 700, fontSize: 15, cursor: 'pointer',
+            }}>Entendido</button>
+          </div>
+        </div>
+      )}
+
       {/* Call overlay — renders on top of chat without leaving the page */}
       {call && (
         <CallPage
@@ -1450,16 +1500,6 @@ export default function ChatPage({ onBack }) {
 
             {/* Topic list */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button
-                onClick={() => { setActiveTopic(null) }}
-                style={{
-                  background: activeTopicId === null ? `${C.green}22` : C.panel2,
-                  border: `1px solid ${activeTopicId === null ? C.green : C.border}`,
-                  borderRadius: 20, color: activeTopicId === null ? C.green : C.text2,
-                  fontSize: 12, padding: '4px 12px', cursor: 'pointer', fontWeight: 600,
-                  transition: 'all .15s',
-                }}
-              >💬 General</button>
               {topics.map(t => (
                 <button key={t.id}
                   onClick={() => setActiveTopic(t.id)}
@@ -1468,10 +1508,14 @@ export default function ChatPage({ onBack }) {
                     border: `1px solid ${activeTopicId === t.id ? C.green : C.border}`,
                     borderRadius: 20, color: activeTopicId === t.id ? C.green : C.text2,
                     fontSize: 12, padding: '4px 12px', cursor: 'pointer', fontWeight: 600,
-                    transition: 'all .15s',
+                    transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 4,
                   }}
-                >{t.emoji} {t.name}</button>
+                >
+                  {t.emoji} {t.name}
+                  {t.who_can_send === 'admins' && <span style={{ fontSize: 10, opacity: 0.7 }}>🔒</span>}
+                </button>
               ))}
+              {/* Only show "+ Nuevo" for non-default extra channels if admin */}
             </div>
           </div>
         )}
@@ -1818,19 +1862,29 @@ export default function ChatPage({ onBack }) {
             </div>
           ))}
 
-          {!loadingMessages && messages.length === 0 && (
+          {!loadingMessages && filteredMessages.length === 0 && (
             <div style={{
               flex: 1, display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center',
-              gap: 10, color: C.textDim, paddingTop: 60, textAlign: 'center',
+              gap: 12, paddingTop: 60, textAlign: 'center', padding: '60px 24px 0',
             }}>
               <div style={{
-                width: 60, height: 60, borderRadius: '50%',
+                width: 64, height: 64, borderRadius: '50%',
                 background: `${C.green}0A`, border: `1.5px solid ${C.green}20`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26,
               }}>⚡</div>
-              <p style={{ margin: 0, fontSize: 14, color: C.text2 }}>{isGroup ? '¡Rompé el hielo!' : 'Comenzá la conversación'}</p>
-              <p style={{ margin: 0, fontSize: 11, color: C.textDim }}>Competí · Conectá · Ganá</p>
+              <p style={{ margin: 0, fontSize: 14, color: C.text2, fontWeight: 600 }}>
+                {isGroup ? '¡Rompé el hielo!' : 'Comenzá la conversación'}
+              </p>
+              <button onClick={() => setShowPrivacyModal(true)} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: '8px 14px', borderRadius: 12,
+                color: C.textDim, fontSize: 12, lineHeight: 1.5,
+                maxWidth: 280,
+              }}>
+                🔒 Los mensajes y llamadas están cifrados. Solo las personas en este chat pueden leerlos.
+                <span style={{ color: C.green, marginLeft: 4, fontWeight: 600 }}>Más info</span>
+              </button>
             </div>
           )}
           <div ref={bottomRef} />
@@ -2150,20 +2204,20 @@ export default function ChatPage({ onBack }) {
           @keyframes recSlideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
         `}</style>
 
-        {/* Announcements: only admins post, others see read-only bar */}
-        {isAnnouncementTopic && (
+        {/* Channel locked: only admins can post */}
+        {(isAnnouncementTopic || activeChannelLocked) && (
           <div style={{
             padding: '10px 16px', background: C.panel, borderTop: `1px solid ${C.border}`,
             display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
             paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
           }}>
-            <span style={{ fontSize: 18 }}>📢</span>
-            <span style={{ color: C.textDim, fontSize: 13 }}>Solo los administradores pueden publicar avisos</span>
+            <span style={{ fontSize: 18 }}>{isAnnouncementTopic ? '📢' : '🔒'}</span>
+            <span style={{ color: C.textDim, fontSize: 13 }}>Solo los administradores pueden escribir en este canal</span>
           </div>
         )}
 
         {/* ── INPUT BAR ── */}
-        {!isAnnouncementTopic && !recLocked && (
+        {!isAnnouncementTopic && !activeChannelLocked && !recLocked && (
           <form onSubmit={handleSend} style={{
             display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 12px 10px',
             background: C.panel, borderTop: `1px solid ${C.border}`, flexShrink: 0,
