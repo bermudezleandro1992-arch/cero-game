@@ -472,42 +472,6 @@ botRequest('/announce', ['message' => '🏆 Resultados publicados']);`,
           </div>
         </div>
 
-        {/* Migration SQL */}
-        <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px' }}>
-          <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: C.textDim }}>🗄 Migration 024 requerida en Supabase</p>
-          <CodeBlock code={`-- Corré esto en el SQL Editor de Supabase
--- (ya está en supabase/migrations/024_bot_api.sql)
-
-CREATE TABLE IF NOT EXISTS public.bot_tokens (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  owner_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  name text NOT NULL,
-  conversation_id uuid NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
-  token text UNIQUE NOT NULL,
-  active boolean DEFAULT true,
-  webhook_url text DEFAULT NULL,
-  last_used_at timestamptz DEFAULT NULL,
-  created_at timestamptz DEFAULT now()
-);
-ALTER TABLE public.bot_tokens ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "owner_all" ON public.bot_tokens
-  FOR ALL TO authenticated
-  USING (owner_id = auth.uid())
-  WITH CHECK (owner_id = auth.uid());
-
-CREATE TABLE IF NOT EXISTS public.bot_logs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  bot_id uuid NOT NULL REFERENCES public.bot_tokens(id) ON DELETE CASCADE,
-  conversation_id uuid REFERENCES public.conversations(id) ON DELETE SET NULL,
-  action text NOT NULL, payload jsonb DEFAULT '{}',
-  status text DEFAULT 'ok', error text DEFAULT NULL,
-  created_at timestamptz DEFAULT now()
-);
-ALTER TABLE public.bot_logs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "owner_see_logs" ON public.bot_logs FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.bot_tokens bt
-    WHERE bt.id = bot_logs.bot_id AND bt.owner_id = auth.uid()));`} />
-        </div>
 
       </div>
     </div>
