@@ -101,15 +101,21 @@ serve(async (req) => {
       return json({ error: `Tipo inválido. Válidos: text, image, file, announcement` }, 400)
     }
 
+    const msgPayload: Record<string, unknown> = {
+      conversation_id: convId,
+      sender_id: bot.owner_id,
+      content: message.trim(),
+      type: type === 'announcement' ? 'text' : type,
+    }
+    try {
+      // metadata puede no estar en el cache de esquema aún
+      const testCol = await supabase.from('messages').select('metadata').limit(0)
+      if (!testCol.error) msgPayload.metadata = { bot: true, bot_id: bot.id, bot_name: bot.name }
+    } catch { /* sin metadata */ }
+
     const { data: msg, error: msgErr } = await supabase
       .from('messages')
-      .insert({
-        conversation_id: convId,
-        sender_id: bot.owner_id,
-        content: message.trim(),
-        type: type === 'announcement' ? 'text' : type,
-        metadata: { bot: true, bot_id: bot.id, bot_name: bot.name },
-      })
+      .insert(msgPayload)
       .select('id, created_at')
       .single()
 
@@ -160,7 +166,6 @@ serve(async (req) => {
         sender_id: bot.owner_id,
         content: `📢 ${message.trim()}`,
         type: 'text',
-        metadata: { bot: true, announcement: true, bot_id: bot.id, bot_name: bot.name },
       })
       .select('id, created_at')
       .single()
