@@ -49,6 +49,16 @@ export default function BotApiPage({ onBack }) {
   const [loadingLogs, setLoadingLogs] = useState(null)
   const [editWebhook, setEditWebhook] = useState({}) // botId -> url string
   const [savingWebhook, setSavingWebhook] = useState(null)
+  const [expandedTab, setExpandedTab] = useState({}) // botId -> 'logs'|'templates'|'webhook'
+  const [templates, setTemplates] = useState({}) // botId -> []
+  const [loadingTpl, setLoadingTpl] = useState(null)
+  const [newTpl, setNewTpl] = useState({}) // botId -> {name,channel,category,message_template,include_link,include_prizes}
+  const [savingTpl, setSavingTpl] = useState(null)
+
+  const CHANNELS = ['general', 'avisos', 'anuncios']
+  const CATEGORIES = ['torneos', 'ligas', 'clanes', 'noticias', 'resultados', 'otro']
+  const CAT_EMOJI = { torneos:'🏆', ligas:'⚽', clanes:'🛡️', noticias:'📰', resultados:'📊', otro:'📢' }
+  const CHAN_EMOJI = { general:'💬', avisos:'📋', anuncios:'📢' }
 
   const groups = conversations.filter(c => c.isGroup || c.isCommunity)
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://TU_PROYECTO.supabase.co'
@@ -98,6 +108,50 @@ export default function BotApiPage({ onBack }) {
     await supabase.from('bot_tokens').update({ webhook_url: editWebhook[id] || null }).eq('id', id)
     setSavingWebhook(null)
     loadBots()
+  }
+
+  async function loadTemplates(botId) {
+    setLoadingTpl(botId)
+    const { data } = await supabase
+      .from('bot_templates')
+      .select('*')
+      .eq('bot_id', botId)
+      .order('created_at', { ascending: false })
+    setTemplates(prev => ({ ...prev, [botId]: data || [] }))
+    setLoadingTpl(null)
+  }
+
+  async function createTemplate(botId) {
+    const t = newTpl[botId]
+    if (!t?.name?.trim() || !t?.message_template?.trim()) return
+    setSavingTpl(botId)
+    await supabase.from('bot_templates').insert({
+      bot_id: botId,
+      name: t.name.trim(),
+      channel: t.channel || 'general',
+      category: t.category || 'torneos',
+      message_template: t.message_template.trim(),
+      include_link: !!t.include_link,
+      include_prizes: !!t.include_prizes,
+    })
+    setSavingTpl(null)
+    setNewTpl(prev => ({ ...prev, [botId]: {} }))
+    loadTemplates(botId)
+  }
+
+  async function deleteTemplate(botId, tplId) {
+    if (!confirm('¿Eliminar esta plantilla?')) return
+    await supabase.from('bot_templates').delete().eq('id', tplId)
+    loadTemplates(botId)
+  }
+
+  async function toggleTemplate(botId, tplId, active) {
+    await supabase.from('bot_templates').update({ active: !active }).eq('id', tplId)
+    loadTemplates(botId)
+  }
+
+  function setTplField(botId, field, value) {
+    setNewTpl(prev => ({ ...prev, [botId]: { ...(prev[botId] || {}), [field]: value } }))
   }
 
   async function loadLogs(botId) {
@@ -346,8 +400,13 @@ botRequest('/announce', ['message' => '🏆 Resultados publicados']);`,
                       {/* Expandir */}
                       <button
                         onClick={() => {
-                          setExpanded(isExpanded ? null : bot.id)
-                          if (!isExpanded && !logs[bot.id]) loadLogs(bot.id)
+                          const next = !isExpanded
+                          setExpanded(next ? bot.id : null)
+                          if (next) {
+                            const tab = expandedTab[bot.id] || 'templates'
+                            if (tab === 'logs' && !logs[bot.id]) loadLogs(bot.id)
+                            if (tab === 'templates' && !templates[bot.id]) loadTemplates(bot.id)
+                          }
                         }}
                         style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: C.textDim, fontSize: 11 }}
                       >{isExpanded ? '▲' : '▼'}</button>
@@ -382,64 +441,158 @@ botRequest('/announce', ['message' => '🏆 Resultados publicados']);`,
 
                   {/* Expanded section */}
                   {isExpanded && (
-                    <div style={{ borderTop: `1px solid ${C.border}`, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-                      {/* Webhook */}
-                      <div>
-                        <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Webhook URL (opcional)</p>
-                        <p style={{ margin: '0 0 8px', fontSize: 11, color: C.textDim }}>Tu servidor recibe un POST cada vez que el bot envía un mensaje.</p>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <input
-                            value={editWebhook[bot.id] ?? bot.webhook_url ?? ''}
-                            onChange={e => setEditWebhook(prev => ({ ...prev, [bot.id]: e.target.value }))}
-                            placeholder="https://tu-servidor.com/webhook"
-                            style={{ flex: 1, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, outline: 'none' }}
-                          />
-                          <button
-                            onClick={() => saveWebhook(bot.id)}
-                            disabled={savingWebhook === bot.id}
-                            style={{ background: C.green, border: 'none', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', color: C.bg, fontSize: 12, fontWeight: 700, flexShrink: 0 }}
-                          >{savingWebhook === bot.id ? '...' : 'Guardar'}</button>
-                        </div>
+                    <div style={{ borderTop: `1px solid ${C.border}` }}>
+                      {/* Tabs */}
+                      <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
+                        {[['templates','📋 Plantillas'],['logs','📊 Logs'],['webhook','🔗 Webhook']].map(([tab, label]) => {
+                          const active = (expandedTab[bot.id] || 'templates') === tab
+                          return (
+                            <button key={tab} onClick={() => {
+                              setExpandedTab(prev => ({ ...prev, [bot.id]: tab }))
+                              if (tab === 'logs' && !logs[bot.id]) loadLogs(bot.id)
+                              if (tab === 'templates' && !templates[bot.id]) loadTemplates(bot.id)
+                            }} style={{
+                              flex: 1, padding: '9px 4px', background: 'none', border: 'none', cursor: 'pointer',
+                              fontSize: 11, fontWeight: 600,
+                              color: active ? C.green : C.textDim,
+                              borderBottom: `2px solid ${active ? C.green : 'transparent'}`,
+                            }}>{label}</button>
+                          )
+                        })}
                       </div>
 
-                      {/* Logs */}
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Últimas acciones</p>
-                          <button onClick={() => loadLogs(bot.id)} style={{ background: 'none', border: 'none', color: C.green, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
-                            {loadingLogs === bot.id ? '...' : '↻ Actualizar'}
-                          </button>
-                        </div>
-                        {(logs[bot.id] || []).length === 0 ? (
-                          <p style={{ margin: 0, fontSize: 12, color: C.textDim, textAlign: 'center', padding: '16px 0' }}>Sin actividad aún</p>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {(logs[bot.id] || []).map((log, i) => (
-                              <div key={i} style={{
-                                display: 'flex', alignItems: 'flex-start', gap: 8,
-                                padding: '7px 10px', background: C.panel2, borderRadius: 8,
-                                borderLeft: `3px solid ${log.status === 'ok' ? C.green : '#ef4444'}`,
-                              }}>
-                                <span style={{ fontSize: 11, color: log.status === 'ok' ? C.green : '#ef4444', fontWeight: 700, flexShrink: 0, marginTop: 1 }}>
-                                  {log.status === 'ok' ? '✓' : '✗'}
-                                </span>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>{log.action}</div>
-                                  {log.payload?.message && (
-                                    <div style={{ fontSize: 10, color: C.textDim, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {log.payload.message}
-                                    </div>
-                                  )}
-                                  {log.error && <div style={{ fontSize: 10, color: '#ef4444', marginTop: 2 }}>{log.error}</div>}
+                      <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                      {/* ── TAB: PLANTILLAS ── */}
+                      {(expandedTab[bot.id] || 'templates') === 'templates' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          <p style={{ margin: 0, fontSize: 11, color: C.textDim, lineHeight: 1.5 }}>
+                            Creá plantillas con variables <code style={{ background: C.panel2, padding: '1px 5px', borderRadius: 4, fontSize: 10 }}>{'{{variable}}'}</code> para que tu plataforma solo mande los datos y el formato quede fijo.
+                          </p>
+
+                          {/* Lista de plantillas */}
+                          {loadingTpl === bot.id ? (
+                            <p style={{ margin: 0, color: C.textDim, fontSize: 12, textAlign: 'center' }}>Cargando...</p>
+                          ) : (templates[bot.id] || []).length === 0 ? (
+                            <p style={{ margin: 0, color: C.textDim, fontSize: 12, textAlign: 'center', padding: '8px 0' }}>Sin plantillas aún</p>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {(templates[bot.id] || []).map(tpl => (
+                                <div key={tpl.id} style={{ background: C.panel2, borderRadius: 10, padding: '10px 12px', border: `1px solid ${tpl.active ? C.green+'33' : C.border}` }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                    <span style={{ fontSize: 14 }}>{CAT_EMOJI[tpl.category]}</span>
+                                    <span style={{ flex: 1, color: C.text, fontWeight: 700, fontSize: 13 }}>{tpl.name}</span>
+                                    <span style={{ fontSize: 10, color: C.textDim, background: C.panel, borderRadius: 6, padding: '2px 7px' }}>{CHAN_EMOJI[tpl.channel]} {tpl.channel}</span>
+                                    <button onClick={() => toggleTemplate(bot.id, tpl.id, tpl.active)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>{tpl.active ? '🟢' : '⚫'}</button>
+                                    <button onClick={() => deleteTemplate(bot.id, tpl.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 13 }}>✕</button>
+                                  </div>
+                                  <div style={{ fontSize: 11, color: C.textDim, fontFamily: 'monospace', background: C.panel, borderRadius: 6, padding: '6px 8px', lineHeight: 1.5 }}>
+                                    {tpl.message_template}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 10, color: C.textDim, background: C.panel, borderRadius: 5, padding: '2px 7px' }}>{tpl.category}</span>
+                                    {tpl.include_link && <span style={{ fontSize: 10, color: '#3b82f6', background: '#3b82f618', borderRadius: 5, padding: '2px 7px' }}>🔗 link</span>}
+                                    {tpl.include_prizes && <span style={{ fontSize: 10, color: '#f59e0b', background: '#f59e0b18', borderRadius: 5, padding: '2px 7px' }}>🏅 premios</span>}
+                                    <span style={{ fontSize: 10, color: C.textDim, marginLeft: 'auto', fontFamily: 'monospace' }}>ID: {tpl.id.slice(0,8)}</span>
+                                  </div>
                                 </div>
-                                <span style={{ fontSize: 10, color: C.textDim, flexShrink: 0 }}>
-                                  {new Date(log.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Crear nueva plantilla */}
+                          <div style={{ background: C.panel2, borderRadius: 10, padding: '12px', border: `1px dashed ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>+ Nueva plantilla</p>
+                            <input
+                              value={newTpl[bot.id]?.name ?? ''}
+                              onChange={e => setTplField(bot.id, 'name', e.target.value)}
+                              placeholder="Nombre (ej: Nuevo Torneo)"
+                              style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, outline: 'none' }}
+                            />
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                              <select value={newTpl[bot.id]?.channel ?? 'general'} onChange={e => setTplField(bot.id, 'channel', e.target.value)}
+                                style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 12, outline: 'none' }}>
+                                {CHANNELS.map(c => <option key={c} value={c}>{CHAN_EMOJI[c]} {c}</option>)}
+                              </select>
+                              <select value={newTpl[bot.id]?.category ?? 'torneos'} onChange={e => setTplField(bot.id, 'category', e.target.value)}
+                                style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 12, outline: 'none' }}>
+                                {CATEGORIES.map(c => <option key={c} value={c}>{CAT_EMOJI[c]} {c}</option>)}
+                              </select>
+                            </div>
+                            <textarea
+                              value={newTpl[bot.id]?.message_template ?? ''}
+                              onChange={e => setTplField(bot.id, 'message_template', e.target.value)}
+                              placeholder={'Mensaje con variables:\n🏆 {{nombre_torneo}}\n📅 Fecha: {{fecha}}\n🎮 Plataforma: {{plataforma}}\n🔗 {{link}}'}
+                              rows={4}
+                              style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, outline: 'none', resize: 'none', fontFamily: 'monospace', lineHeight: 1.5 }}
+                            />
+                            <div style={{ display: 'flex', gap: 12 }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.textDim, cursor: 'pointer' }}>
+                                <input type="checkbox" checked={!!newTpl[bot.id]?.include_link} onChange={e => setTplField(bot.id, 'include_link', e.target.checked)} />
+                                🔗 Incluye link
+                              </label>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.textDim, cursor: 'pointer' }}>
+                                <input type="checkbox" checked={!!newTpl[bot.id]?.include_prizes} onChange={e => setTplField(bot.id, 'include_prizes', e.target.checked)} />
+                                🏅 Incluye premios
+                              </label>
+                            </div>
+                            <button
+                              onClick={() => createTemplate(bot.id)}
+                              disabled={savingTpl === bot.id || !newTpl[bot.id]?.name?.trim() || !newTpl[bot.id]?.message_template?.trim()}
+                              style={{ background: C.green, border: 'none', borderRadius: 8, padding: '9px', cursor: 'pointer', color: C.bg, fontSize: 13, fontWeight: 700, opacity: (!newTpl[bot.id]?.name?.trim() || !newTpl[bot.id]?.message_template?.trim()) ? 0.4 : 1 }}
+                            >{savingTpl === bot.id ? 'Guardando...' : 'Crear plantilla'}</button>
                           </div>
-                        )}
+                        </div>
+                      )}
+
+                      {/* ── TAB: LOGS ── */}
+                      {expandedTab[bot.id] === 'logs' && (
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Últimas acciones</p>
+                            <button onClick={() => loadLogs(bot.id)} style={{ background: 'none', border: 'none', color: C.green, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
+                              {loadingLogs === bot.id ? '...' : '↻ Actualizar'}
+                            </button>
+                          </div>
+                          {(logs[bot.id] || []).length === 0 ? (
+                            <p style={{ margin: 0, fontSize: 12, color: C.textDim, textAlign: 'center', padding: '16px 0' }}>Sin actividad aún</p>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {(logs[bot.id] || []).map((log, i) => (
+                                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 10px', background: C.panel2, borderRadius: 8, borderLeft: `3px solid ${log.status === 'ok' ? C.green : '#ef4444'}` }}>
+                                  <span style={{ fontSize: 11, color: log.status === 'ok' ? C.green : '#ef4444', fontWeight: 700, flexShrink: 0, marginTop: 1 }}>{log.status === 'ok' ? '✓' : '✗'}</span>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>{log.action}</div>
+                                    {log.payload?.message && <div style={{ fontSize: 10, color: C.textDim, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.payload.message}</div>}
+                                    {log.error && <div style={{ fontSize: 10, color: '#ef4444', marginTop: 2 }}>{log.error}</div>}
+                                  </div>
+                                  <span style={{ fontSize: 10, color: C.textDim, flexShrink: 0 }}>{new Date(log.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ── TAB: WEBHOOK ── */}
+                      {expandedTab[bot.id] === 'webhook' && (
+                        <div>
+                          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Webhook URL (opcional)</p>
+                          <p style={{ margin: '0 0 8px', fontSize: 11, color: C.textDim }}>Tu servidor recibe un POST cada vez que el bot envía un mensaje.</p>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <input
+                              value={editWebhook[bot.id] ?? bot.webhook_url ?? ''}
+                              onChange={e => setEditWebhook(prev => ({ ...prev, [bot.id]: e.target.value }))}
+                              placeholder="https://tu-servidor.com/webhook"
+                              style={{ flex: 1, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, outline: 'none' }}
+                            />
+                            <button onClick={() => saveWebhook(bot.id)} disabled={savingWebhook === bot.id}
+                              style={{ background: C.green, border: 'none', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', color: C.bg, fontSize: 12, fontWeight: 700, flexShrink: 0 }}
+                            >{savingWebhook === bot.id ? '...' : 'Guardar'}</button>
+                          </div>
+                        </div>
+                      )}
+
                       </div>
                     </div>
                   )}
