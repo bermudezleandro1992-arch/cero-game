@@ -73,8 +73,8 @@ export const SOUND_PACKS = {
     }
   },
 
-  msn: {
-    id: 'msn', label: 'MSN Classic', emoji: '🦋',
+  _msn_disabled: {
+    id: '_msn_disabled', label: 'MSN Classic', emoji: '🦋',
     desc: 'Sonidos nostálgicos del MSN Messenger',
     fns: {
       msgReceived() {
@@ -101,8 +101,8 @@ export const SOUND_PACKS = {
     }
   },
 
-  telegram: {
-    id: 'telegram', label: 'Telegram', emoji: '✈️',
+  _telegram_disabled: {
+    id: '_telegram_disabled', label: 'Telegram', emoji: '✈️',
     desc: 'Suave y minimalista',
     fns: {
       msgReceived() { tone(1100, 0.06, 0.14, 0, 'sine'); tone(1320, 0.07, 0.1, 0.06) },
