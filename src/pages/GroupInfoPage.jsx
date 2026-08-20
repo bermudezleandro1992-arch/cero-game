@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
+import CommunityBotSettingsPage from './CommunityBotSettingsPage'
 
 const AVATAR_COLORS = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100','#c62828']
 function avatarColor(id) {
@@ -140,6 +141,7 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
 
   // ── State ──
   const [tab, setTab] = useState('info')
+  const [showBotSettings, setShowBotSettings] = useState(false)
   const [memberMenu, setMemberMenu] = useState(null)
   const [memberSearch, setMemberSearch] = useState('')
   const [inviteSearch, setInviteSearch] = useState('')
@@ -664,6 +666,10 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   ]
 
   // ── RENDER ────────────────────────────────────────────────────────────────────
+  if (showBotSettings) {
+    return <CommunityBotSettingsPage conversation={conversation} onBack={() => setShowBotSettings(false)} />
+  }
+
   return (
     <div style={{
       height: '100%', display: 'flex', flexDirection: 'column',
@@ -903,6 +909,46 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                   }}>
                     {generatingLink ? '...' : '🔗 Generar enlace de invitación'}
                   </button>
+                )}
+              </div>
+            )}
+
+            {/* Bot Settings PRO */}
+            {isCommunity && isAdmin && (
+              <div style={{ padding: '8px 16px', borderBottom: `1px solid ${C.border}` }}>
+                {conversation?.plan === 'pro' ? (
+                  <button onClick={() => setShowBotSettings(true)} style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                    background: `linear-gradient(135deg, #f59e0b18, #f59e0b08)`,
+                    border: `1px solid #f59e0b44`, textAlign: 'left',
+                  }}>
+                    <span style={{ fontSize: 22 }}>🤖</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>Bot Settings</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b33', borderRadius: 20, padding: '1px 7px' }}>PRO</span>
+                      </div>
+                      <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>Plantillas y alertas automáticas</div>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                  </button>
+                ) : (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '12px 14px', borderRadius: 12,
+                    background: C.panel2, border: `1px solid ${C.border}`,
+                  }}>
+                    <span style={{ fontSize: 22 }}>🤖</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: C.textDim, fontWeight: 700, fontSize: 13 }}>Bot API & Plantillas</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b33', borderRadius: 20, padding: '1px 7px' }}>PRO</span>
+                      </div>
+                      <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>Solo disponible en comunidades PRO</div>
+                    </div>
+                    <span style={{ fontSize: 10, color: '#f59e0b', fontWeight: 700 }}>Actualizar</span>
+                  </div>
                 )}
               </div>
             )}

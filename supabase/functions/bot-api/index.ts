@@ -64,6 +64,21 @@ serve(async (req) => {
   if (botErr || !bot) return json({ error: 'Token inválido o no encontrado' }, 403)
   if (!bot.active) return json({ error: 'Bot pausado. Activalo desde la app.' }, 403)
 
+  // ── Check community plan ───────────────────────────────────
+  const { data: convPlan } = await supabase
+    .from('conversations')
+    .select('plan')
+    .eq('id', bot.conversation_id)
+    .single()
+
+  if (convPlan?.plan !== 'pro') {
+    return json({
+      error: 'Bot API requiere plan PRO. Actualizá la comunidad desde Mi Mensajero.',
+      upgrade_url: 'https://mimensajero.vercel.app',
+      plan: convPlan?.plan ?? 'free',
+    }, 403)
+  }
+
   // Update last_used_at
   supabase.from('bot_tokens').update({ last_used_at: new Date().toISOString() }).eq('id', bot.id).then(() => {})
 
