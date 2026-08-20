@@ -40,8 +40,10 @@ serve(async (req) => {
 
   // ── Extract token ──────────────────────────────────────────
   let botToken: string | null = null
-  const auth = req.headers.get('Authorization') || req.headers.get('x-bot-token')
-  if (auth?.startsWith('Bearer ')) botToken = auth.slice(7)
+  const xBotToken = req.headers.get('x-bot-token')
+  const auth = req.headers.get('Authorization')
+  if (xBotToken) botToken = xBotToken
+  else if (auth?.startsWith('Bearer ')) botToken = auth.slice(7)
   else if (auth) botToken = auth
 
   let body: Record<string, unknown> = {}
