@@ -92,13 +92,47 @@ serve(async (req) => {
     return json({ ok: true, logs: logs ?? [] })
   }
 
+  // ── GET /templates ─────────────────────────────────────────
+  if (path === '/templates' && req.method === 'GET') {
+    const { data: templates } = await supabase
+      .from('bot_templates')
+      .select('id, name, channel, category, message_template, include_link, include_prizes, active, created_at')
+      .eq('bot_id', bot.id)
+      .order('created_at', { ascending: false })
+    return json({ ok: true, templates: templates ?? [] })
+  }
+
   // ── POST /send ─────────────────────────────────────────────
   if ((path === '/send' || path === '/' || path === '') && req.method === 'POST') {
-    const message   = body.message as string
+    let message     = body.message as string
     const type      = (body.type as string) ?? 'text'
     const convId    = (body.conversation_id as string) ?? bot.conversation_id
+    const templateId = body.template_id as string | undefined
+    const variables  = (body.variables as Record<string, string>) ?? {}
 
-    if (!message?.trim()) return json({ error: '"message" es requerido' }, 400)
+    // ── Render template if template_id provided ────────────
+    if (templateId) {
+      const { data: tpl } = await supabase
+        .from('bot_templates')
+        .select('message_template, channel, category, include_link, include_prizes, active')
+        .eq('id', templateId)
+        .eq('bot_id', bot.id)
+        .single()
+      if (!tpl) return json({ error: 'Plantilla no encontrada' }, 404)
+      if (!tpl.active) return json({ error: 'Plantilla inactiva' }, 403)
+
+      // Replace {{variable}} placeholders
+      message = tpl.message_template.replace(/\{\{(\w+)\}\}/g, (_: string, key: string) => variables[key] ?? `{{${key}}}`)
+
+      // Prepend category emoji
+      const catEmoji: Record<string, string> = {
+        torneos: '🏆', ligas: '⚽', clanes: '🛡️', noticias: '📰', resultados: '📊', otro: '📢'
+      }
+      const chanLabel: Record<string, string> = { general: '', avisos: '📋 ', anuncios: '📢 ' }
+      message = `${chanLabel[tpl.channel] ?? ''}${catEmoji[tpl.category] ?? ''}  ${message}`
+    }
+
+    if (!message?.trim()) return json({ error: '"message" o "template_id" es requerido' }, 400)
     if (type && !['text','image','file','announcement'].includes(type)) {
       return json({ error: `Tipo inválido. Válidos: text, image, file, announcement` }, 400)
     }
@@ -110,7 +144,7 @@ serve(async (req) => {
         sender_id: bot.owner_id,
         content: message.trim(),
         type: type === 'announcement' ? 'text' : type,
-        metadata: { bot: true, bot_id: bot.id, bot_name: bot.name },
+        metadata: { bot: true, bot_id: bot.id, bot_name: bot.name, template_id: templateId ?? null },
       })
       .select('id, created_at')
       .single()
