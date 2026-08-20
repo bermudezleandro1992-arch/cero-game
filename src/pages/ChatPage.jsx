@@ -85,10 +85,16 @@ function senderColor(id) {
   return SENDER_COLORS[Math.abs(h) % SENDER_COLORS.length]
 }
 
+function localDateStr(ts) {
+  if (!ts) return ''
+  const d = new Date(normalizeTs(ts))
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
 function groupByDate(messages) {
   const groups = []; let cur = null
   for (const msg of messages) {
-    const date = msg.created_at?.slice(0, 10)
+    const date = localDateStr(msg.created_at)
     if (!cur || cur.date !== date) { cur = { date, msgs: [] }; groups.push(cur) }
     cur.msgs.push(msg)
   }
@@ -154,10 +160,15 @@ function Ticks({ read }) {
 
 // ── Date separator ────────────────────────────────────────────────────────────
 function DateSeparator({ dateStr }) {
-  const d = new Date(dateStr), now = new Date()
-  const y = new Date(now); y.setDate(y.getDate() - 1)
-  const label = d.toDateString() === now.toDateString() ? 'Hoy'
-    : d.toDateString() === y.toDateString() ? 'Ayer'
+  // dateStr is already a local YYYY-MM-DD string — parse as local to avoid UTC offset bug
+  const [y2, m2, d2] = dateStr.split('-').map(Number)
+  const d = new Date(y2, m2 - 1, d2)
+  const now = new Date()
+  const todayStr = localDateStr(now.toISOString())
+  const yest = new Date(now); yest.setDate(yest.getDate() - 1)
+  const yestStr = localDateStr(yest.toISOString())
+  const label = dateStr === todayStr ? 'Hoy'
+    : dateStr === yestStr ? 'Ayer'
     : d.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })
   return (
     <div style={{ display: 'flex', justifyContent: 'center', margin: '14px 0', alignItems: 'center', gap: 10 }}>
@@ -443,7 +454,7 @@ function ConfirmDialog({ open, title, message, onConfirm, onCancel, confirmLabel
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatPage({ onBack }) {
   const { profile } = useAuthStore()
-  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage, topics, activeTopicId, fetchTopics, createTopic, setActiveTopic } = useChatStore()
+  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage, topics, activeTopicId, fetchTopics, createTopic, setActiveTopic, fetchConversations } = useChatStore()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -483,17 +494,25 @@ export default function ChatPage({ onBack }) {
     setShowChatMenu(false)
     setConfirmDialog({
       title: 'Limpiar historial',
-      message: 'Se borrarán todos los mensajes solo para vos.',
+      message: 'Se borrarán todos los mensajes solo para vos. El chat seguirá en tu lista.',
       danger: true, confirmLabel: 'Limpiar',
       onConfirm: async () => {
         setConfirmDialog(null)
-        // Mark all visible messages as deleted-for-me locally
+        const now = new Date().toISOString()
+        // Mark cleared_at in DB so sidebar also clears preview
+        await supabase.from('conversation_members')
+          .update({ cleared_at: now })
+          .eq('conversation_id', activeConversation.id)
+          .eq('user_id', profile.id)
+        // Also clear locally
         const allIds = messages.map(m => m.id)
         setDeletedForMe(prev => {
           const next = new Set(prev); allIds.forEach(id => next.add(id))
           localStorage.setItem(deletedForMeKey, JSON.stringify([...next]))
           return next
         })
+        // Reload conversations so sidebar updates
+        fetchConversations(profile.id)
       },
     })
   }
@@ -1388,29 +1407,45 @@ export default function ChatPage({ onBack }) {
                     ))}
                   </div>
                 )}
-                <div
-                  onClick={() => { setShowChatMenu(false); setSelectMode(true); setSelectedMsgs(new Set()) }}
-                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', gap: 8, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
-                  onMouseEnter={e => e.currentTarget.style.background = C.panel2}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <span>☑️</span> Seleccionar mensajes
-                </div>
+                {[
+                  { icon: '☑️', label: 'Seleccionar mensajes', desc: 'Reenviá o borrá varios', onClick: () => { setShowChatMenu(false); setSelectMode(true); setSelectedMsgs(new Set()) } },
+                ].map(item => (
+                  <div key={item.label}
+                    onClick={item.onClick}
+                    style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
+                    onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{item.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{item.label}</div>
+                      <div style={{ fontSize: 11, color: C.textDim }}>{item.desc}</div>
+                    </div>
+                  </div>
+                ))}
                 <div
                   onClick={handleClearHistory}
-                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', gap: 8, alignItems: 'center' }}
+                  style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
                   onMouseEnter={e => e.currentTarget.style.background = C.panel2}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  <span>🧹</span> Limpiar historial
+                  <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🧹</span>
+                  <div>
+                    <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>Limpiar historial</div>
+                    <div style={{ fontSize: 11, color: C.textDim }}>Solo para vos · el chat queda en la lista</div>
+                  </div>
                 </div>
                 <div
                   onClick={handleDeleteChat}
-                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: '#ef4444', display: 'flex', gap: 8, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#ef444418'}
+                  style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'center', borderTop: `1px solid ${C.border}33` }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#ef444412'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  <span>🗑️</span> Borrar chat
+                  <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🗑️</span>
+                  <div>
+                    <div style={{ fontSize: 13, color: '#ef4444', fontWeight: 600 }}>Borrar chat</div>
+                    <div style={{ fontSize: 11, color: C.textDim }}>Eliminás el chat de tu lista</div>
+                  </div>
                 </div>
               </div>
             )}
