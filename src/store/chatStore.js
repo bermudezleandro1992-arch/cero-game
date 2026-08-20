@@ -564,6 +564,14 @@ export const useChatStore = create((set, get) => ({
       content: `${isCommunity ? 'Comunidad' : 'Grupo'} "${name}" creado`,
     })
 
+    // Auto-create default channels for communities
+    if (isCommunity) {
+      await supabase.from('topics').insert([
+        { conversation_id: conv.id, name: 'General', emoji: '💬', topic_type: 'chat', position: 0, is_default: true, who_can_send: 'everyone' },
+        { conversation_id: conv.id, name: 'Avisos', emoji: '📢', topic_type: 'announcements', position: 1, is_default: true, who_can_send: 'admins' },
+      ])
+    }
+
     return conv.id
   },
 }))
