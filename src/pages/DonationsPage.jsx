@@ -9,12 +9,6 @@ const AMOUNTS = [
   { value: 50, emoji: '💎', label: 'Héroe de la comunidad' },
 ]
 
-const DONORS = [
-  { name: 'Santiago R.', amount: 25, msg: '¡Excelente plataforma, sigan así!' },
-  { name: 'Valentina C.', amount: 10, msg: 'La uso todos los días para mi equipo de eFootball 🎮' },
-  { name: 'Mateo L.', amount: 50, msg: 'El mejor mensajero para comunidades gamer, gracias!' },
-  { name: 'Lucía F.', amount: 5,  msg: 'Un granito de arena para este gran proyecto' },
-]
 
 export default function DonationsPage({ onBack }) {
   const [selected, setSelected] = useState(5)
@@ -165,23 +159,6 @@ export default function DonationsPage({ onBack }) {
             {amount >= 1 ? `💚 Donar $${amount}` : 'Elegí un monto'}
           </button>
 
-          {/* Recent donors */}
-          <div>
-            <div style={{ color: C.textDim, fontSize: 11, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 12 }}>
-              Donaciones recientes
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {DONORS.map((d, i) => (
-                <div key={i} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <span style={{ color: C.text, fontWeight: 600, fontSize: 13 }}>{d.name}</span>
-                    <span style={{ color: C.green, fontWeight: 800, fontSize: 13 }}>💚 ${d.amount}</span>
-                  </div>
-                  <div style={{ color: C.textDim, fontSize: 12, lineHeight: 1.4 }}>{d.msg}</div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>
