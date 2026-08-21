@@ -11,12 +11,15 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('match-evidence', 'match-evidence', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Política: cualquier autenticado puede subir a su propia carpeta
-CREATE POLICY IF NOT EXISTS "match_evidence_insert"
+-- Políticas de storage (DROP primero porque IF NOT EXISTS no existe para policies)
+DROP POLICY IF EXISTS "match_evidence_insert" ON storage.objects;
+DROP POLICY IF EXISTS "match_evidence_select" ON storage.objects;
+
+CREATE POLICY "match_evidence_insert"
   ON storage.objects FOR INSERT TO authenticated
   WITH CHECK (bucket_id = 'match-evidence');
 
-CREATE POLICY IF NOT EXISTS "match_evidence_select"
+CREATE POLICY "match_evidence_select"
   ON storage.objects FOR SELECT TO public
   USING (bucket_id = 'match-evidence');
 
