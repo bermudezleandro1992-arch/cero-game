@@ -1318,7 +1318,7 @@ export default function TournamentsPage() {
 
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}>
 
         {/* ── MIS COMUNIDADES ── */}
         {tab === 'mis' && (
