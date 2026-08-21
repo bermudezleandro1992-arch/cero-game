@@ -11,6 +11,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
+import MatchResultFlow from './MatchResultFlow'
 
 // ── Paleta de colores por grupo ───────────────────────────────────────────────
 const GROUP_COLORS = [
@@ -319,119 +320,6 @@ function MatchCard({ match, currentUserId, isAdmin, onReport, onApprove }) {
   )
 }
 
-// ── InlineReportModal — modal simple de reporte ───────────────────────────────
-function ReportModal({ match, onClose, onSubmitted }) {
-  const [score1, setScore1] = useState('')
-  const [score2, setScore2] = useState('')
-  const [photo, setPhoto]   = useState(null)
-  const [uploading, setUploading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [err, setErr]       = useState(null)
-
-  const p1name = match.player1?.display_name || match.player1?.username || 'J1'
-  const p2name = match.player2?.display_name || match.player2?.username || 'J2'
-
-  async function handleSubmit() {
-    const s1 = parseInt(score1)
-    const s2 = parseInt(score2)
-    if (isNaN(s1) || isNaN(s2) || s1 < 0 || s2 < 0) {
-      setErr('Ingresá marcadores válidos (números ≥ 0)')
-      return
-    }
-    setSaving(true)
-    setErr(null)
-
-    let photoUrl = null
-    if (photo) {
-      setUploading(true)
-      const ext = photo.name.split('.').pop()
-      const path = `match-results/${match.id}-${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('chat-images').upload(path, photo, { upsert: true })
-      if (upErr) { setErr('Error subiendo foto: ' + upErr.message); setSaving(false); setUploading(false); return }
-      const { data: { publicUrl } } = supabase.storage.from('chat-images').getPublicUrl(path)
-      photoUrl = publicUrl
-      setUploading(false)
-    }
-
-    const { data, error } = await supabase.rpc('submit_match_result', {
-      p_match_id:  match.id,
-      p_score1:    s1,
-      p_score2:    s2,
-      p_photo_url: photoUrl,
-    })
-    setSaving(false)
-    if (error || data?.ok === false) { setErr(error?.message ?? data?.error ?? 'Error al guardar'); return }
-    onSubmitted?.()
-    onClose()
-  }
-
-  const inp = {
-    width: '100%', padding: '11px 12px', borderRadius: 10,
-    border: `1px solid ${C.border}`, background: C.panel,
-    color: C.text, fontSize: 20, fontWeight: 800, textAlign: 'center',
-    outline: 'none', appearance: 'textfield',
-  }
-
-  return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: C.panel, border: `1px solid ${C.border}`,
-        borderRadius: 20, padding: 24, width: '100%', maxWidth: 360,
-        boxShadow: '0 24px 60px rgba(0,0,0,0.6)',
-      }}>
-        <p style={{ margin: '0 0 18px', fontWeight: 800, fontSize: 16, color: C.text }}>
-          📋 Reportar resultado
-        </p>
-
-        {/* Marcador */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 10, alignItems: 'center', marginBottom: 16 }}>
-          <div>
-            <p style={{ margin: '0 0 6px', fontSize: 11, color: C.textDim, textAlign: 'center' }}>{p1name}</p>
-            <input type="number" min="0" value={score1} onChange={e => setScore1(e.target.value)} style={inp} placeholder="0" />
-          </div>
-          <span style={{ color: C.border, fontSize: 20, fontWeight: 300, paddingBottom: 20 }}>—</span>
-          <div>
-            <p style={{ margin: '0 0 6px', fontSize: 11, color: C.textDim, textAlign: 'center' }}>{p2name}</p>
-            <input type="number" min="0" value={score2} onChange={e => setScore2(e.target.value)} style={inp} placeholder="0" />
-          </div>
-        </div>
-
-        {/* Foto */}
-        <label style={{
-          display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px',
-          border: `1px dashed ${C.border}`, borderRadius: 12, cursor: 'pointer',
-          color: C.textDim, fontSize: 12, marginBottom: 16,
-        }}>
-          <span style={{ fontSize: 20 }}>📸</span>
-          <span>{photo ? `📎 ${photo.name}` : 'Adjuntar captura (opcional)'}</span>
-          <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setPhoto(e.target.files[0])} />
-        </label>
-
-        {err && <p style={{ color: '#ef4444', fontSize: 12, margin: '0 0 12px' }}>{err}</p>}
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{
-            flex: 1, padding: 11, borderRadius: 12,
-            border: `1px solid ${C.border}`, background: C.panel2,
-            color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer',
-          }}>Cancelar</button>
-          <button onClick={handleSubmit} disabled={saving} style={{
-            flex: 2, padding: 11, borderRadius: 12, border: 'none',
-            background: saving ? C.panel2 : C.green,
-            color: saving ? C.textDim : C.bg, fontWeight: 700, fontSize: 13, cursor: saving ? 'default' : 'pointer',
-          }}>
-            {uploading ? 'Subiendo foto…' : saving ? 'Guardando…' : 'Enviar resultado'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function GroupStage({ tournamentId, profile, isAdmin, onReportMatch }) {
   const [data, setData]         = useState(null)
@@ -522,12 +410,13 @@ export default function GroupStage({ tournamentId, profile, isAdmin, onReportMat
 
   return (
     <>
-      {/* Modal de reporte */}
       {reportMatch && (
-        <ReportModal
+        <MatchResultFlow
           match={reportMatch}
+          profile={profile}
+          isAdmin={isAdmin}
           onClose={() => setReportMatch(null)}
-          onSubmitted={load}
+          onUpdate={load}
         />
       )}
 
@@ -607,7 +496,7 @@ export default function GroupStage({ tournamentId, profile, isAdmin, onReportMat
                           match={m}
                           currentUserId={profile?.id}
                           isAdmin={isAdmin}
-                          onReport={onReportMatch ?? setReportMatch}
+                          onReport={setReportMatch}
                           onApprove={handleApprove}
                         />
                       ))}
