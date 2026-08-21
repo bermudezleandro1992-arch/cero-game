@@ -2,355 +2,315 @@
  * GroupStage — fase de grupos de un torneo.
  *
  * Props:
- *   tournamentId  uuid    — id del torneo (conversations.id)
- *   profile       object  — perfil del usuario autenticado (de useAuthStore)
- *   isAdmin       bool    — si puede aprobar resultados
- *   onReportResult fn(match) — callback para abrir modal de reporte
+ *   tournamentId  uuid     — id del torneo (conversations.id)
+ *   profile       object   — perfil del usuario actual (id, role)
+ *   isAdmin       boolean  — si puede aprobar resultados
+ *   onReportMatch fn(match) — callback para abrir modal de reporte externo (opcional)
  */
 
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 
+// ── Paleta de colores por grupo ───────────────────────────────────────────────
+const GROUP_COLORS = [
+  '#22c55e','#3b82f6','#f59e0b','#ef4444',
+  '#a78bfa','#06b6d4','#f97316','#ec4899',
+]
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const GROUP_COLORS = ['#22c55e','#3b82f6','#f59e0b','#ef4444','#a78bfa','#06b6d4','#f97316','#ec4899']
-
-const MATCH_STATUS_LABEL = {
-  pendiente:  'Pendiente',
-  en_juego:   'Por confirmar',
-  finalizado: 'Finalizado',
-  cancelado:  'Cancelado',
-}
-const MATCH_STATUS_COLOR = {
-  pendiente:  '#6b7280',
-  en_juego:   '#f59e0b',
-  finalizado: '#22c55e',
-  cancelado:  '#ef4444',
+const STATUS_BADGE = {
+  pendiente:  { label: 'Pendiente',  bg: '#1a1a1a', color: '#6b7280' },
+  en_juego:   { label: 'En juego',   bg: '#f59e0b18', color: '#f59e0b' },
+  finalizado: { label: 'Finalizado', bg: '#22c55e18', color: '#22c55e' },
+  cancelado:  { label: 'Cancelado',  bg: '#ef444418', color: '#ef4444' },
 }
 
-function avatar(name = '') {
-  return name.trim().slice(0, 2).toUpperCase() || '??'
+function avatar(p) {
+  return p?.avatar_url
+    ? <img src={p.avatar_url} alt="" style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', border: `1.5px solid ${C.border}` }} />
+    : <div style={{ width: 26, height: 26, borderRadius: '50%', background: C.panel2, border: `1.5px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: C.textDim }}>
+        {(p?.display_name || p?.username || '?')[0].toUpperCase()}
+      </div>
 }
 
-// ── Query ─────────────────────────────────────────────────────────────────────
+// ── Fetch de datos ────────────────────────────────────────────────────────────
 async function fetchGroupStage(tournamentId) {
-  // 1. Grupos
+  // 1. Grupos del torneo
   const { data: groups, error: gErr } = await supabase
     .from('tournament_groups')
     .select('id, name, color, position, classifies')
     .eq('tournament_id', tournamentId)
     .order('position', { ascending: true })
 
-  if (gErr) throw gErr
-  if (!groups?.length) return { groups: [], members: {}, matches: {} }
+  if (gErr || !groups?.length) return { groups: [], members: {}, matches: {} }
 
   const groupIds = groups.map(g => g.id)
 
-  // 2. Miembros con perfil
-  const { data: members, error: mErr } = await supabase
+  // 2. Miembros de los grupos con perfil de usuario
+  const { data: memberRows } = await supabase
     .from('tournament_group_members')
-    .select(`
-      id, group_id, user_id, seed,
-      users:user_id ( id, display_name, username, avatar_url )
-    `)
+    .select('group_id, user_id, seed')
     .in('group_id', groupIds)
-    .order('seed', { ascending: true, nullsFirst: false })
 
-  if (mErr) throw mErr
+  // Perfiles de los miembros
+  const userIds = [...new Set(memberRows?.map(m => m.user_id) ?? [])]
+  const { data: profiles } = userIds.length
+    ? await supabase.from('users').select('id, display_name, username, avatar_url').in('id', userIds)
+    : { data: [] }
 
-  // 3. Standings por grupo (filtramos del torneo general)
+  const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
+
+  // 3. Posiciones por grupo desde tournament_standings (si existen)
   const { data: standings } = await supabase
     .from('tournament_standings')
     .select('user_id, pj, pg, pe, pp, gf, gc, puntos, posicion')
     .eq('tournament_id', tournamentId)
 
-  // 4. Partidos de fase de grupos
-  const { data: matches, error: matchErr } = await supabase
+  const standingMap = Object.fromEntries((standings ?? []).map(s => [s.user_id, s]))
+
+  // 4. Partidos de fase de grupos (phase = 'groups' OR group_id IS NOT NULL)
+  const { data: matchRows } = await supabase
     .from('tournament_matches')
-    .select(`
-      id, group_id, round_number, match_number, phase,
-      player1_id, player2_id, score1, score2, winner_id,
-      status, loser_confirmed, dispute_deadline, played_at,
-      p1:player1_id ( id, display_name, username, avatar_url ),
-      p2:player2_id ( id, display_name, username, avatar_url )
-    `)
+    .select('id, group_id, round_number, match_number, jornada_number, player1_id, player2_id, score1, score2, winner_id, status, photo_url, loser_confirmed, dispute_deadline')
     .eq('tournament_id', tournamentId)
-    .eq('phase', 'groups')
-    .order('round_number', { ascending: true })
+    .or('phase.eq.groups,group_id.in.(' + groupIds.join(',') + ')')
+    .order('jornada_number', { ascending: true })
     .order('match_number', { ascending: true })
 
-  if (matchErr) throw matchErr
-
-  // Organizar por group_id
+  // Organizar por grupo
   const membersByGroup = {}
-  const standingMap    = {}
   const matchesByGroup = {}
 
-  standings?.forEach(s => { standingMap[s.user_id] = s })
-
-  members?.forEach(m => {
-    if (!membersByGroup[m.group_id]) membersByGroup[m.group_id] = []
-    membersByGroup[m.group_id].push({ ...m, standing: standingMap[m.user_id] ?? null })
+  groups.forEach(g => {
+    membersByGroup[g.id] = []
+    matchesByGroup[g.id] = []
   })
 
-  matches?.forEach(m => {
-    const gid = m.group_id ?? '__no_group'
-    if (!matchesByGroup[gid]) matchesByGroup[gid] = []
-    matchesByGroup[gid].push(m)
+  memberRows?.forEach(m => {
+    if (membersByGroup[m.group_id]) {
+      membersByGroup[m.group_id].push({ ...m, profile: profileMap[m.user_id] })
+    }
   })
 
-  return { groups, membersByGroup, matchesByGroup }
+  matchRows?.forEach(m => {
+    if (m.group_id && matchesByGroup[m.group_id]) {
+      matchesByGroup[m.group_id].push({
+        ...m,
+        player1: profileMap[m.player1_id],
+        player2: profileMap[m.player2_id],
+      })
+    }
+  })
+
+  // Ordenar standings por grupo
+  groups.forEach(g => {
+    membersByGroup[g.id].sort((a, b) => {
+      const sa = standingMap[a.user_id]
+      const sb = standingMap[b.user_id]
+      if (!sa && !sb) return 0
+      if (!sa) return 1
+      if (!sb) return -1
+      return (sa.posicion ?? 999) - (sb.posicion ?? 999)
+    })
+  })
+
+  return { groups, membersByGroup, matchesByGroup, standingMap, profileMap }
 }
 
-// ── Sub-componentes ───────────────────────────────────────────────────────────
-
-function Avatar({ user, size = 32 }) {
-  const [err, setErr] = useState(false)
-  if (user?.avatar_url && !err) {
-    return (
-      <img
-        src={user.avatar_url}
-        onError={() => setErr(true)}
-        alt=""
-        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-      />
-    )
-  }
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: `${C.green}22`, border: `1.5px solid ${C.green}44`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.38, fontWeight: 800, color: C.green,
-    }}>
-      {avatar(user?.display_name || user?.username)}
-    </div>
-  )
-}
-
-function StandingsTable({ members, color, classifies }) {
-  // Sort by puntos desc, diff desc, gf desc
-  const rows = [...members].sort((a, b) => {
-    const sa = a.standing, sb = b.standing
-    if (!sa && !sb) return 0
-    if (!sa) return 1
-    if (!sb) return -1
-    if (sb.puntos !== sa.puntos) return sb.puntos - sa.puntos
-    const da = sa.gf - sa.gc, db = sb.gf - sb.gc
-    if (db !== da) return db - da
-    return sb.gf - sa.gf
+// ── Tabla de posiciones ───────────────────────────────────────────────────────
+function StandingsTable({ members, standingMap, classifies, color }) {
+  const rows = members.map(m => ({
+    profile: m.profile,
+    user_id: m.user_id,
+    seed: m.seed,
+    ...(standingMap[m.user_id] ?? { pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, puntos: 0, posicion: null }),
+  })).sort((a, b) => {
+    if (a.posicion != null && b.posicion != null) return a.posicion - b.posicion
+    return (b.puntos ?? 0) - (a.puntos ?? 0)
   })
 
-  const COL = {
-    head: { fontSize: 10, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.6px', padding: '0 6px 8px', textAlign: 'center' },
-    cell: { fontSize: 13, color: C.text, padding: '10px 6px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' },
-  }
+  const colStyle = { padding: '8px 6px', textAlign: 'center', fontSize: 11, color: C.textDim }
+  const cellStyle = { padding: '8px 6px', textAlign: 'center', fontSize: 12, color: C.text, fontWeight: 600 }
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 340 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 380 }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-            <th style={{ ...COL.head, textAlign: 'left', padding: '0 6px 8px 0', minWidth: 160 }}>#  Jugador</th>
+            <th style={{ ...colStyle, textAlign: 'left', width: 28 }}>#</th>
+            <th style={{ ...colStyle, textAlign: 'left', minWidth: 120 }}>Jugador</th>
             {['PJ','PG','PE','PP','GF','GC','DIF','PTS'].map(h => (
-              <th key={h} style={COL.head}>{h}</th>
+              <th key={h} style={{ ...colStyle, fontWeight: 700, color: h === 'PTS' ? color : C.textDim }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((m, i) => {
-            const s    = m.standing
-            const user = m.users
-            const gf   = s?.gf ?? 0
-            const gc   = s?.gc ?? 0
-            const classifies_row = i < classifies
+          {rows.map((r, i) => {
+            const clasifica = i < classifies
+            const dif = (r.gf ?? 0) - (r.gc ?? 0)
             return (
-              <tr key={m.user_id} style={{
-                borderBottom: `1px solid ${C.border}`,
-                background: i === classifies - 1 && classifies < rows.length ? `${color}08` : 'none',
+              <tr key={r.user_id} style={{
+                borderBottom: `1px solid ${C.border}22`,
+                background: clasifica ? `${color}08` : 'transparent',
+                transition: 'background .15s',
               }}>
-                {/* Posición + jugador */}
-                <td style={{ padding: '10px 6px 10px 0' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{
-                      fontSize: 11, fontWeight: 800, minWidth: 20, textAlign: 'center',
-                      color: classifies_row ? color : C.textDim,
-                    }}>{i + 1}</span>
-                    {classifies_row && (
-                      <div style={{ width: 3, height: 24, borderRadius: 2, background: color, flexShrink: 0 }} />
+                <td style={{ ...cellStyle, textAlign: 'left', paddingLeft: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {clasifica && (
+                      <div style={{ width: 3, height: 20, borderRadius: 2, background: color, flexShrink: 0 }} />
                     )}
-                    <Avatar user={user} size={26} />
-                    <span style={{
-                      fontSize: 12, fontWeight: 600, color: C.text,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100,
-                    }}>
-                      {user?.display_name || user?.username || '—'}
+                    <span style={{ color: C.textDim, fontSize: 11, minWidth: 14 }}>{i + 1}</span>
+                  </div>
+                </td>
+                <td style={{ ...cellStyle, textAlign: 'left' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    {avatar(r.profile)}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>
+                      {r.profile?.display_name || r.profile?.username || '—'}
                     </span>
                   </div>
                 </td>
-                <td style={COL.cell}>{s?.pj ?? 0}</td>
-                <td style={COL.cell}>{s?.pg ?? 0}</td>
-                <td style={COL.cell}>{s?.pe ?? 0}</td>
-                <td style={COL.cell}>{s?.pp ?? 0}</td>
-                <td style={COL.cell}>{gf}</td>
-                <td style={COL.cell}>{gc}</td>
-                <td style={{ ...COL.cell, color: gf - gc > 0 ? '#22c55e' : gf - gc < 0 ? '#ef4444' : C.textDim, fontWeight: 700 }}>
-                  {gf - gc > 0 ? '+' : ''}{gf - gc}
+                <td style={cellStyle}>{r.pj}</td>
+                <td style={cellStyle}>{r.pg}</td>
+                <td style={cellStyle}>{r.pe}</td>
+                <td style={cellStyle}>{r.pp}</td>
+                <td style={cellStyle}>{r.gf}</td>
+                <td style={cellStyle}>{r.gc}</td>
+                <td style={{ ...cellStyle, color: dif > 0 ? '#22c55e' : dif < 0 ? '#ef4444' : C.text2 }}>
+                  {dif > 0 ? '+' : ''}{dif}
                 </td>
-                <td style={{ ...COL.cell, fontWeight: 800, color: classifies_row ? color : C.text }}>{s?.puntos ?? 0}</td>
+                <td style={{ ...cellStyle, fontWeight: 800, fontSize: 13, color }}>
+                  {r.puntos}
+                </td>
               </tr>
             )
           })}
         </tbody>
       </table>
-      {classifies < rows.length && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-          <div style={{ width: 10, height: 3, borderRadius: 2, background: color }} />
-          <span style={{ fontSize: 10, color: C.textDim }}>Top {classifies} clasifican a siguiente fase</span>
-        </div>
-      )}
     </div>
   )
 }
 
-function MatchCard({ match, myId, isAdmin, onReport, onApprove }) {
-  const p1   = match.p1
-  const p2   = match.p2
-  const done = match.status === 'finalizado'
-  const pending_approval = match.status === 'en_juego'
-  const isPlayer = myId && (match.player1_id === myId || match.player2_id === myId)
+// ── Tarjeta de partido ────────────────────────────────────────────────────────
+function MatchCard({ match, currentUserId, isAdmin, onReport, onApprove }) {
+  const badge    = STATUS_BADGE[match.status] ?? STATUS_BADGE.pendiente
+  const isPlayer = currentUserId === match.player1_id || currentUserId === match.player2_id
   const canReport = match.status === 'pendiente' && isPlayer
-  const canApprove = pending_approval && isAdmin
+  const canApprove = match.status === 'en_juego' && isAdmin
 
-  const scoreColor1 = done
-    ? match.winner_id === match.player1_id ? C.green : '#ef4444'
-    : C.text
-  const scoreColor2 = done
-    ? match.winner_id === match.player2_id ? C.green : '#ef4444'
-    : C.text
+  // ¿El resultado fue enviado y está esperando confirmación del perdedor?
+  const awaitingConfirm = match.status === 'en_juego' && match.loser_confirmed === null
 
   return (
     <div style={{
       background: C.panel2,
-      border: `1px solid ${pending_approval ? '#f59e0b44' : C.border}`,
+      border: `1px solid ${C.border}`,
       borderRadius: 14, padding: '12px 14px',
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
-      {/* Estado pill */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Status badge + jornada */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {match.jornada_number != null && (
+          <span style={{ fontSize: 10, color: C.textDim, fontWeight: 600 }}>J{match.jornada_number}</span>
+        )}
         <span style={{
           fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-          background: `${MATCH_STATUS_COLOR[match.status]}18`,
-          color: MATCH_STATUS_COLOR[match.status],
-          border: `1px solid ${MATCH_STATUS_COLOR[match.status]}33`,
+          background: badge.bg, color: badge.color,
         }}>
-          {MATCH_STATUS_LABEL[match.status]}
+          {badge.label}
         </span>
-        {match.played_at && (
-          <span style={{ fontSize: 10, color: C.textDim }}>
-            {new Date(match.played_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
-          </span>
-        )}
       </div>
 
-      {/* Marcador */}
+      {/* Jugadores + marcador */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {/* Jugador 1 */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-          <Avatar user={p1} size={30} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+          {avatar(match.player1)}
           <span style={{
-            fontSize: 12, fontWeight: 600, color: C.text,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontSize: 11, fontWeight: 600, color: C.text,
+            textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap', maxWidth: 80,
           }}>
-            {p1?.display_name || p1?.username || '—'}
+            {match.player1?.display_name || match.player1?.username || '?'}
           </span>
+          {match.winner_id === match.player1_id && (
+            <span style={{ fontSize: 9, color: '#22c55e', fontWeight: 800, letterSpacing: '0.5px' }}>GANÓ</span>
+          )}
         </div>
 
-        {/* Scores */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        {/* Marcador */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{
-            fontSize: 22, fontWeight: 900, color: scoreColor1,
-            minWidth: 28, textAlign: 'center', fontVariantNumeric: 'tabular-nums',
+            minWidth: 38, textAlign: 'center',
+            fontSize: match.score1 != null ? 26 : 18,
+            fontWeight: 900, color: match.winner_id === match.player1_id ? '#22c55e' : C.text,
+            fontVariantNumeric: 'tabular-nums',
           }}>
-            {match.score1 ?? (done ? '?' : '–')}
+            {match.score1 ?? '—'}
           </span>
-          <span style={{ fontSize: 14, color: C.border, fontWeight: 700 }}>:</span>
+          <span style={{ color: C.border, fontSize: 18, fontWeight: 300 }}>:</span>
           <span style={{
-            fontSize: 22, fontWeight: 900, color: scoreColor2,
-            minWidth: 28, textAlign: 'center', fontVariantNumeric: 'tabular-nums',
+            minWidth: 38, textAlign: 'center',
+            fontSize: match.score2 != null ? 26 : 18,
+            fontWeight: 900, color: match.winner_id === match.player2_id ? '#22c55e' : C.text,
+            fontVariantNumeric: 'tabular-nums',
           }}>
-            {match.score2 ?? (done ? '?' : '–')}
+            {match.score2 ?? '—'}
           </span>
         </div>
 
         {/* Jugador 2 */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 7, minWidth: 0 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+          {avatar(match.player2)}
           <span style={{
-            fontSize: 12, fontWeight: 600, color: C.text,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            textAlign: 'right',
+            fontSize: 11, fontWeight: 600, color: C.text,
+            textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap', maxWidth: 80,
           }}>
-            {p2?.display_name || p2?.username || '—'}
+            {match.player2?.display_name || match.player2?.username || '?'}
           </span>
-          <Avatar user={p2} size={30} />
+          {match.winner_id === match.player2_id && (
+            <span style={{ fontSize: 9, color: '#22c55e', fontWeight: 800, letterSpacing: '0.5px' }}>GANÓ</span>
+          )}
         </div>
       </div>
 
-      {/* Confirmación pendiente */}
-      {pending_approval && match.loser_confirmed === null && (
-        <div style={{
-          fontSize: 11, color: '#f59e0b', textAlign: 'center',
-          background: '#f59e0b10', border: '1px solid #f59e0b30',
-          borderRadius: 8, padding: '5px 10px',
+      {/* Foto de evidencia */}
+      {match.photo_url && (
+        <a href={match.photo_url} target="_blank" rel="noopener noreferrer" style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          fontSize: 11, color: C.green, textDecoration: 'none', fontWeight: 600,
         }}>
-          ⏳ Esperando confirmación del perdedor
-        </div>
-      )}
-      {match.loser_confirmed === false && (
-        <div style={{
-          fontSize: 11, color: '#ef4444', textAlign: 'center',
-          background: '#ef444410', border: '1px solid #ef444430',
-          borderRadius: 8, padding: '5px 10px',
-        }}>
-          ⚠️ Resultado disputado — en revisión
-        </div>
-      )}
-      {match.loser_confirmed === true && (
-        <div style={{
-          fontSize: 11, color: '#22c55e', textAlign: 'center',
-          background: '#22c55e10', border: '1px solid #22c55e30',
-          borderRadius: 8, padding: '5px 10px',
-        }}>
-          ✓ Confirmado por ambas partes
-        </div>
+          📸 Ver captura del resultado
+        </a>
       )}
 
-      {/* Botones */}
-      {(canReport || canApprove) && (
+      {/* Acciones */}
+      {(canReport || canApprove || awaitingConfirm) && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {canReport && (
-            <button
-              onClick={() => onReport?.(match)}
-              style={{
-                flex: 1, padding: '9px 0', borderRadius: 10, border: 'none',
-                background: C.green, color: C.bg,
-                fontSize: 12, fontWeight: 700, cursor: 'pointer',
-              }}
-            >
-              📸 Reportar resultado
+            <button onClick={() => onReport?.(match)} style={{
+              flex: 1, padding: '9px 0', borderRadius: 10, border: 'none',
+              background: C.green, color: C.bg, fontWeight: 700, fontSize: 12, cursor: 'pointer',
+            }}>
+              📋 Reportar resultado
+            </button>
+          )}
+          {awaitingConfirm && isPlayer && !isAdmin && (
+            <button onClick={() => onReport?.(match, 'confirm')} style={{
+              flex: 1, padding: '9px 0', borderRadius: 10, border: `1px solid ${C.green}`,
+              background: 'transparent', color: C.green, fontWeight: 700, fontSize: 12, cursor: 'pointer',
+            }}>
+              ✅ Confirmar / Disputar
             </button>
           )}
           {canApprove && (
-            <button
-              onClick={() => onApprove?.(match)}
-              style={{
-                flex: 1, padding: '9px 0', borderRadius: 10,
-                border: `1px solid #f59e0b44`,
-                background: '#f59e0b18', color: '#f59e0b',
-                fontSize: 12, fontWeight: 700, cursor: 'pointer',
-              }}
-            >
-              ✓ Aprobar
+            <button onClick={() => onApprove?.(match)} style={{
+              flex: 1, padding: '9px 0', borderRadius: 10, border: 'none',
+              background: '#f59e0b', color: '#000', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+            }}>
+              ⚡ Aprobar resultado
             </button>
           )}
         </div>
@@ -359,134 +319,144 @@ function MatchCard({ match, myId, isAdmin, onReport, onApprove }) {
   )
 }
 
-function GroupSection({ group, members, matches, color, myId, isAdmin, onReport, onApprove }) {
-  const [tab, setTab] = useState('tabla')
+// ── InlineReportModal — modal simple de reporte ───────────────────────────────
+function ReportModal({ match, onClose, onSubmitted }) {
+  const [score1, setScore1] = useState('')
+  const [score2, setScore2] = useState('')
+  const [photo, setPhoto]   = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr]       = useState(null)
 
-  const matchCount    = matches?.length ?? 0
-  const doneCount     = matches?.filter(m => m.status === 'finalizado').length ?? 0
-  const pendingCount  = matches?.filter(m => m.status === 'pendiente').length ?? 0
+  const p1name = match.player1?.display_name || match.player1?.username || 'J1'
+  const p2name = match.player2?.display_name || match.player2?.username || 'J2'
+
+  async function handleSubmit() {
+    const s1 = parseInt(score1)
+    const s2 = parseInt(score2)
+    if (isNaN(s1) || isNaN(s2) || s1 < 0 || s2 < 0) {
+      setErr('Ingresá marcadores válidos (números ≥ 0)')
+      return
+    }
+    setSaving(true)
+    setErr(null)
+
+    let photoUrl = null
+    if (photo) {
+      setUploading(true)
+      const ext = photo.name.split('.').pop()
+      const path = `match-results/${match.id}-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('chat-images').upload(path, photo, { upsert: true })
+      if (upErr) { setErr('Error subiendo foto: ' + upErr.message); setSaving(false); setUploading(false); return }
+      const { data: { publicUrl } } = supabase.storage.from('chat-images').getPublicUrl(path)
+      photoUrl = publicUrl
+      setUploading(false)
+    }
+
+    const { data, error } = await supabase.rpc('submit_match_result', {
+      p_match_id:  match.id,
+      p_score1:    s1,
+      p_score2:    s2,
+      p_photo_url: photoUrl,
+    })
+    setSaving(false)
+    if (error || data?.ok === false) { setErr(error?.message ?? data?.error ?? 'Error al guardar'); return }
+    onSubmitted?.()
+    onClose()
+  }
+
+  const inp = {
+    width: '100%', padding: '11px 12px', borderRadius: 10,
+    border: `1px solid ${C.border}`, background: C.panel,
+    color: C.text, fontSize: 20, fontWeight: 800, textAlign: 'center',
+    outline: 'none', appearance: 'textfield',
+  }
 
   return (
-    <div style={{
-      background: C.panel,
-      border: `1.5px solid ${color}33`,
-      borderRadius: 18, overflow: 'hidden',
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
-      {/* Header del grupo */}
-      <div style={{
-        padding: '14px 16px',
-        background: `${color}0d`,
-        borderBottom: `1px solid ${color}22`,
-        display: 'flex', alignItems: 'center', gap: 10,
+      <div onClick={e => e.stopPropagation()} style={{
+        background: C.panel, border: `1px solid ${C.border}`,
+        borderRadius: 20, padding: 24, width: '100%', maxWidth: 360,
+        boxShadow: '0 24px 60px rgba(0,0,0,0.6)',
       }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 10,
-          background: `${color}22`, border: `1.5px solid ${color}55`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 900, fontSize: 16, color,
-        }}>
-          {group.name}
-        </div>
-        <div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: C.text }}>Grupo {group.name}</p>
-          <p style={{ margin: 0, fontSize: 11, color: C.textDim }}>
-            {members?.length ?? 0} jugadores · {doneCount}/{matchCount} partidos
-          </p>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {pendingCount > 0 && (
-            <span style={{
-              fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20,
-              background: '#f59e0b18', color: '#f59e0b', border: '1px solid #f59e0b33',
-            }}>
-              {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-      </div>
+        <p style={{ margin: '0 0 18px', fontWeight: 800, fontSize: 16, color: C.text }}>
+          📋 Reportar resultado
+        </p>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
-        {[{ id: 'tabla', label: '📊 Tabla' }, { id: 'partidos', label: `⚽ Partidos (${matchCount})` }].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{
-            flex: 1, padding: '10px 8px', background: 'none',
-            border: 'none', borderBottom: `2.5px solid ${tab === t.id ? color : 'transparent'}`,
-            color: tab === t.id ? color : C.textDim,
-            fontSize: 12, fontWeight: tab === t.id ? 700 : 500,
-            cursor: 'pointer', transition: 'all .15s',
-          }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Contenido */}
-      <div style={{ padding: 16 }}>
-        {tab === 'tabla' ? (
-          members?.length
-            ? <StandingsTable members={members} color={color} classifies={group.classifies} />
-            : <p style={{ color: C.textDim, textAlign: 'center', margin: '24px 0', fontSize: 13 }}>
-                Sin jugadores en este grupo
-              </p>
-        ) : (
-          matches?.length
-            ? <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {matches.map(m => (
-                  <MatchCard
-                    key={m.id}
-                    match={m}
-                    myId={myId}
-                    isAdmin={isAdmin}
-                    onReport={onReport}
-                    onApprove={onApprove}
-                  />
-                ))}
-              </div>
-            : <p style={{ color: C.textDim, textAlign: 'center', margin: '24px 0', fontSize: 13 }}>
-                No hay partidos generados
-              </p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Skeleton ──────────────────────────────────────────────────────────────────
-function Skeleton() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16 }}>
-      {[1, 2].map(i => (
-        <div key={i} style={{ borderRadius: 18, overflow: 'hidden', border: `1px solid ${C.border}` }}>
-          <div className="skeleton" style={{ height: 64, background: C.panel2 }} />
-          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[1, 2, 3].map(j => (
-              <div key={j} className="skeleton" style={{ height: 40, borderRadius: 8, background: C.panel2 }} />
-            ))}
+        {/* Marcador */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 10, alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <p style={{ margin: '0 0 6px', fontSize: 11, color: C.textDim, textAlign: 'center' }}>{p1name}</p>
+            <input type="number" min="0" value={score1} onChange={e => setScore1(e.target.value)} style={inp} placeholder="0" />
+          </div>
+          <span style={{ color: C.border, fontSize: 20, fontWeight: 300, paddingBottom: 20 }}>—</span>
+          <div>
+            <p style={{ margin: '0 0 6px', fontSize: 11, color: C.textDim, textAlign: 'center' }}>{p2name}</p>
+            <input type="number" min="0" value={score2} onChange={e => setScore2(e.target.value)} style={inp} placeholder="0" />
           </div>
         </div>
-      ))}
+
+        {/* Foto */}
+        <label style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px',
+          border: `1px dashed ${C.border}`, borderRadius: 12, cursor: 'pointer',
+          color: C.textDim, fontSize: 12, marginBottom: 16,
+        }}>
+          <span style={{ fontSize: 20 }}>📸</span>
+          <span>{photo ? `📎 ${photo.name}` : 'Adjuntar captura (opcional)'}</span>
+          <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setPhoto(e.target.files[0])} />
+        </label>
+
+        {err && <p style={{ color: '#ef4444', fontSize: 12, margin: '0 0 12px' }}>{err}</p>}
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: 11, borderRadius: 12,
+            border: `1px solid ${C.border}`, background: C.panel2,
+            color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+          }}>Cancelar</button>
+          <button onClick={handleSubmit} disabled={saving} style={{
+            flex: 2, padding: 11, borderRadius: 12, border: 'none',
+            background: saving ? C.panel2 : C.green,
+            color: saving ? C.textDim : C.bg, fontWeight: 700, fontSize: 13, cursor: saving ? 'default' : 'pointer',
+          }}>
+            {uploading ? 'Subiendo foto…' : saving ? 'Guardando…' : 'Enviar resultado'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function GroupStage({ tournamentId, profile, isAdmin = false, onReportResult, onApproveResult }) {
-  const [data, setData]       = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState(null)
+export default function GroupStage({ tournamentId, profile, isAdmin, onReportMatch }) {
+  const [data, setData]         = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState(null)
+  const [activeGroup, setActiveGroup] = useState(null)  // id del grupo activo en tab
+  const [reportMatch, setReportMatch] = useState(null)  // match abierto en modal
 
-  const load = useCallback(() => {
-    if (!tournamentId) return
+  const load = useCallback(async () => {
     setLoading(true)
-    fetchGroupStage(tournamentId)
-      .then(setData)
-      .catch(e => setError(e?.message ?? 'Error al cargar fase de grupos'))
-      .finally(() => setLoading(false))
+    setError(null)
+    try {
+      const result = await fetchGroupStage(tournamentId)
+      setData(result)
+      if (result.groups?.length && !activeGroup) setActiveGroup(result.groups[0].id)
+    } catch (e) {
+      setError(e?.message ?? 'Error al cargar la fase de grupos')
+    } finally {
+      setLoading(false)
+    }
   }, [tournamentId])
 
   useEffect(() => { load() }, [load])
 
-  // Realtime — re-fetch cuando cambia un partido del torneo
+  // Subscripción realtime para actualizar marcadores en vivo
   useEffect(() => {
     if (!tournamentId) return
     const ch = supabase
@@ -494,96 +464,170 @@ export default function GroupStage({ tournamentId, profile, isAdmin = false, onR
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'tournament_matches',
         filter: `tournament_id=eq.${tournamentId}`,
-      }, load)
+      }, () => load())
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'tournament_standings',
         filter: `tournament_id=eq.${tournamentId}`,
-      }, load)
+      }, () => load())
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [tournamentId, load])
 
-  if (loading) return <Skeleton />
+  async function handleApprove(match) {
+    const { data: res } = await supabase.rpc('approve_match_result', { p_match_id: match.id })
+    if (res?.ok) load()
+    else alert(res?.error ?? 'Error al aprobar')
+  }
 
-  if (error) return (
-    <div style={{ padding: 32, textAlign: 'center' }}>
-      <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
-      <p style={{ color: '#ef4444', fontWeight: 700, margin: '0 0 16px' }}>{error}</p>
-      <button onClick={load} style={{
-        padding: '10px 24px', borderRadius: 10, border: 'none',
-        background: C.green, color: C.bg, fontWeight: 700, cursor: 'pointer',
-      }}>Reintentar</button>
+  if (loading) return (
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {[1,2,3].map(i => (
+        <div key={i} className="skeleton" style={{ height: 120, borderRadius: 14, background: C.panel2 }} />
+      ))}
     </div>
   )
 
-  const { groups, membersByGroup, matchesByGroup } = data ?? {}
+  if (error) return (
+    <div style={{ padding: 32, textAlign: 'center' }}>
+      <p style={{ color: '#ef4444', fontWeight: 700 }}>{error}</p>
+      <button onClick={load} style={{ padding: '8px 20px', borderRadius: 10, border: 'none', background: C.green, color: C.bg, fontWeight: 700, cursor: 'pointer' }}>
+        Reintentar
+      </button>
+    </div>
+  )
 
-  if (!groups?.length) return (
-    <div style={{ padding: 48, textAlign: 'center' }}>
+  if (!data?.groups?.length) return (
+    <div style={{ padding: 40, textAlign: 'center' }}>
       <div style={{ fontSize: 48, marginBottom: 12 }}>🎱</div>
-      <p style={{ color: C.text, fontWeight: 700, fontSize: 16, margin: '0 0 6px' }}>Sorteo pendiente</p>
-      <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>
-        Los grupos aparecerán aquí una vez que el organizador realice el sorteo.
+      <p style={{ color: C.textDim, fontSize: 14, margin: 0, fontWeight: 600 }}>Sorteo pendiente</p>
+      <p style={{ color: C.textDim, fontSize: 12, margin: '6px 0 0' }}>
+        Los grupos se mostrarán aquí una vez que el organizador realice el sorteo.
       </p>
     </div>
   )
 
+  const { groups, membersByGroup, matchesByGroup, standingMap } = data
+  const currentGroup = groups.find(g => g.id === activeGroup)
+  const groupColor   = (i) => GROUP_COLORS[i % GROUP_COLORS.length]
+
+  // Agrupar partidos por jornada
+  const matchesOfGroup = matchesByGroup[activeGroup] ?? []
+  const jornadaMap = {}
+  matchesOfGroup.forEach(m => {
+    const j = m.jornada_number ?? 1
+    if (!jornadaMap[j]) jornadaMap[j] = []
+    jornadaMap[j].push(m)
+  })
+  const jornadas = Object.entries(jornadaMap).sort(([a], [b]) => Number(a) - Number(b))
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16 }}>
+    <>
+      {/* Modal de reporte */}
+      {reportMatch && (
+        <ReportModal
+          match={reportMatch}
+          onClose={() => setReportMatch(null)}
+          onSubmitted={load}
+        />
+      )}
 
-      {/* Resumen global */}
-      <div style={{
-        background: C.panel, border: `1px solid ${C.border}`,
-        borderRadius: 14, padding: '12px 16px',
-        display: 'flex', gap: 20, flexWrap: 'wrap',
-      }}>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 16 }}>🏟️</span>
-          <span style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>{groups.length} grupos</span>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+
+        {/* Tabs de grupos */}
+        <div style={{
+          display: 'flex', overflowX: 'auto', gap: 6,
+          padding: '12px 14px 0', flexShrink: 0,
+          borderBottom: `1px solid ${C.border}`,
+          scrollbarWidth: 'none',
+        }}>
+          {groups.map((g, i) => {
+            const color   = g.color ?? groupColor(i)
+            const active  = g.id === activeGroup
+            return (
+              <button key={g.id} onClick={() => setActiveGroup(g.id)} style={{
+                flexShrink: 0, padding: '7px 16px', borderRadius: '10px 10px 0 0',
+                border: `1.5px solid ${active ? color : C.border}`,
+                borderBottom: active ? 'none' : `1.5px solid ${C.border}`,
+                background: active ? `${color}14` : 'transparent',
+                color: active ? color : C.textDim,
+                fontWeight: active ? 800 : 500, fontSize: 13, cursor: 'pointer',
+                marginBottom: active ? -1 : 0,
+                transition: 'all .15s',
+              }}>
+                Grupo {g.name}
+              </button>
+            )
+          })}
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 16 }}>👥</span>
-          <span style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>
-            {Object.values(membersByGroup).reduce((s, arr) => s + arr.length, 0)} jugadores
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 16 }}>⚽</span>
-          <span style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>
-            {Object.values(matchesByGroup).reduce((s, arr) => s + arr.length, 0)} partidos
-          </span>
-        </div>
-        <div style={{ marginLeft: 'auto', fontSize: 11, color: C.textDim, alignSelf: 'center' }}>
-          Actualización en tiempo real
-          <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: C.green, marginLeft: 5, verticalAlign: 'middle', boxShadow: `0 0 6px ${C.green}` }} />
+
+        {/* Contenido del grupo activo */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {currentGroup && (() => {
+            const gIdx  = groups.indexOf(currentGroup)
+            const color = currentGroup.color ?? groupColor(gIdx)
+            const members = membersByGroup[currentGroup.id] ?? []
+
+            return (
+              <>
+                {/* Encabezado del grupo */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 14, height: 14, borderRadius: '50%', background: color }} />
+                  <span style={{ fontWeight: 800, fontSize: 16, color: C.text }}>Grupo {currentGroup.name}</span>
+                  <span style={{ fontSize: 11, color: C.textDim, marginLeft: 'auto' }}>
+                    Top {currentGroup.classifies} clasifican
+                  </span>
+                </div>
+
+                {/* Tabla de posiciones */}
+                <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}` }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                      Posiciones
+                    </span>
+                  </div>
+                  <StandingsTable
+                    members={members}
+                    standingMap={standingMap}
+                    classifies={currentGroup.classifies}
+                    color={color}
+                  />
+                </div>
+
+                {/* Partidos por jornada */}
+                {jornadas.length > 0 ? jornadas.map(([jornada, matches]) => (
+                  <div key={jornada}>
+                    <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                      Jornada {jornada}
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+                      {matches.map(m => (
+                        <MatchCard
+                          key={m.id}
+                          match={m}
+                          currentUserId={profile?.id}
+                          isAdmin={isAdmin}
+                          onReport={onReportMatch ?? setReportMatch}
+                          onApprove={handleApprove}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )) : (
+                  <div style={{
+                    background: C.panel2, border: `1px dashed ${C.border}`,
+                    borderRadius: 14, padding: '24px 16px', textAlign: 'center',
+                  }}>
+                    <p style={{ margin: 0, color: C.textDim, fontSize: 13 }}>
+                      No hay partidos registrados para este grupo todavía.
+                    </p>
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
       </div>
-
-      {/* Grid responsive de grupos */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 480px), 1fr))',
-        gap: 16,
-        alignItems: 'start',
-      }}>
-        {groups.map((g, i) => {
-          const color = g.color ?? GROUP_COLORS[i % GROUP_COLORS.length]
-          return (
-            <GroupSection
-              key={g.id}
-              group={g}
-              color={color}
-              members={membersByGroup[g.id] ?? []}
-              matches={matchesByGroup[g.id] ?? []}
-              myId={profile?.id}
-              isAdmin={isAdmin}
-              onReport={onReportResult}
-              onApprove={onApproveResult}
-            />
-          )
-        })}
-      </div>
-
-    </div>
+    </>
   )
 }
