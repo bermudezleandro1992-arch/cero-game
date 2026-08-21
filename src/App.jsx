@@ -393,7 +393,7 @@ export default function App() {
           paddingBottom: 'env(safe-area-inset-bottom)',
         }} className="slfa-bottom-nav">
           {NAV.filter(({ id }) => {
-            if (!['chats','explorar','torneos','ajustes'].includes(id)) return false
+            if (!['inicio','chats','torneos','ranking','perfil'].includes(id)) return false
             if (id === 'torneos') {
               const role = profile?.role || 'member'
               return ['ceo','admin','moderador'].includes(role)
