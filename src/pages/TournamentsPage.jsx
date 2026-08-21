@@ -1214,21 +1214,8 @@ function TournamentsList({ profile }) {
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-const TABS = [
-  { id: 'mis',          icon: '🌐', label: 'Mis Comunidades' },
-  { id: 'herramientas', icon: '🛠️', label: 'Herramientas'   },
-]
-
-const TOOL_COMPONENTS = {
-  sorteo:        SorteoPage,
-  votaciones:    VotacionesPage,
-  calendario:    CalendarioPage,
-}
-
 export default function TournamentsPage() {
   const { profile } = useAuthStore()
-  const [tab, setTab] = useState('mis')
-  const [activeTool, setActiveTool] = useState(null)
   const { isCommunity } = usePlan(profile)
   const [managedCommunities, setManagedCommunities] = useState([])
   const [loadingComm, setLoadingComm] = useState(false)
@@ -1236,7 +1223,7 @@ export default function TournamentsPage() {
 
   // Load communities where user is owner or admin
   useEffect(() => {
-    if (!profile?.id || tab !== 'mis') return
+    if (!profile?.id) return
     setLoadingComm(true)
     ;(async () => {
       // Communities created by user
@@ -1274,143 +1261,78 @@ export default function TournamentsPage() {
     return <CommunityTournamentsPanel community={selectedCommunity} onClose={() => setSelectedCommunity(null)} canManage={true} />
   }
 
-  if (activeTool && TOOL_COMPONENTS[activeTool]) {
-    const ToolPage = TOOL_COMPONENTS[activeTool]
-    return <ToolPage onBack={() => setActiveTool(null)} />
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg }}>
-      <style>{`
-        .comm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-      `}</style>
-
       {/* Header */}
-      <div style={{ padding: '16px 16px 0', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <span style={{ fontSize: 24 }}>🏆</span>
-          <div>
-            <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 18 }}>Comunidad PRO</p>
-            <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>Torneos · Ligas · eFootball · FC 26 · FC 27</p>
-          </div>
-          {isCommunity && (
-            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: `${C.green}14`, color: C.green, border: `1px solid ${C.green}44` }}>
-              PRO
-            </span>
-          )}
+      <div style={{ padding: '16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 28 }}>🏆</span>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 17 }}>Mis Torneos</p>
+          <p style={{ margin: 0, color: C.textDim, fontSize: 11, marginTop: 1 }}>Seleccioná una comunidad para gestionar</p>
         </div>
-
-        {/* Tab bar */}
-        <div style={{ display: 'flex', gap: 0, overflowX: 'auto' }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              flex: 1, minWidth: 70, padding: '10px 4px', background: 'none', border: 'none',
-              borderBottom: `2.5px solid ${tab === t.id ? C.green : 'transparent'}`,
-              color: tab === t.id ? C.green : C.textDim,
-              fontSize: 12, fontWeight: tab === t.id ? 700 : 500,
-              cursor: 'pointer', transition: 'all .15s', whiteSpace: 'nowrap',
-            }}>
-              {t.icon} {t.label}
-            </button>
-          ))}
-        </div>
+        {isCommunity && (
+          <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: `${C.green}14`, color: C.green, border: `1px solid ${C.green}44` }}>
+            PRO
+          </span>
+        )}
       </div>
 
-
-      {/* Content */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}>
-
-        {/* ── MIS COMUNIDADES ── */}
-        {tab === 'mis' && (
-          <div>
-            <p style={{ margin: '0 0 14px', fontSize: 13, color: C.textDim, lineHeight: 1.5 }}>
-              Seleccioná una comunidad para gestionar sus torneos y ligas.
+      {/* Community list */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        {loadingComm ? (
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+            <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+          </div>
+        ) : managedCommunities.length === 0 ? (
+          <div style={{ textAlign: 'center', marginTop: 60 }}>
+            <div style={{ fontSize: 52, marginBottom: 14 }}>🌐</div>
+            <p style={{ color: C.text, fontSize: 15, fontWeight: 700, margin: '0 0 6px' }}>Sin comunidades</p>
+            <p style={{ color: C.textDim, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+              Creá una comunidad desde Chats<br/>o pedile al dueño que te asigne como admin.
             </p>
-            {loadingComm ? (
-              <p style={{ color: C.textDim, textAlign: 'center', marginTop: 40 }}>Cargando…</p>
-            ) : managedCommunities.length === 0 ? (
-              <div style={{ textAlign: 'center', marginTop: 60 }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>🌐</div>
-                <p style={{ color: C.textDim, fontSize: 14, margin: 0 }}>No administrás ninguna comunidad.</p>
-                <p style={{ color: C.textDim, fontSize: 12, margin: '4px 0 0' }}>Creá una desde la sección Chats o pedile al dueño que te asigne como admin.</p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {managedCommunities.map(comm => (
-                  <button key={comm.id} onClick={() => setSelectedCommunity(comm)} style={{
-                    display: 'flex', alignItems: 'center', gap: 14,
-                    background: C.panel, border: `1px solid ${C.border}`,
-                    borderRadius: 14, padding: '14px 16px', cursor: 'pointer',
-                    textAlign: 'left', width: '100%',
-                    transition: 'border-color .15s',
-                  }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = C.green}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
-                  >
-                    <div style={{
-                      width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
-                      background: `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})`,
-                      border: `2px solid ${C.green}44`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 18, fontWeight: 800, color: C.text, overflow: 'hidden',
-                    }}>
-                      {comm.avatar_url
-                        ? <img src={comm.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : comm.name?.slice(0, 2).toUpperCase()
-                      }
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {comm.name}
-                      </p>
-                      {comm.tags?.length > 0 && (
-                        <p style={{ margin: '3px 0 0', fontSize: 11, color: C.textDim }}>
-                          {comm.tags.join(' · ')}
-                        </p>
-                      )}
-                      {comm.description && (
-                        <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {comm.description}
-                        </p>
-                      )}
-                    </div>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
-        )}
-
-        {/* ── HERRAMIENTAS ── */}
-        {tab === 'herramientas' && (
-          <div>
-            <SectionHeader icon="🎲" title="Herramientas" desc="Disponibles para tu comunidad" />
-            <div className="comm-grid" style={{ marginBottom: 20 }}>
-              <FeatureCard icon="🎲" title="Sorteo en Vivo" desc="Sorteá participantes o premios en tiempo real" color="#f59e0b" onClick={() => setActiveTool('sorteo')} />
-              <FeatureCard icon="🗳️" title="Votaciones" desc="Creá encuestas para tu comunidad" color="#a855f7" onClick={() => setActiveTool('votaciones')} />
-              <FeatureCard icon="📅" title="Calendario de Eventos" desc="Programá fechas y partidos con recordatorios automáticos" color="#3b82f6" onClick={() => setActiveTool('calendario')} />
-            </div>
-
-            <button
-              onClick={() => {
-                // Navegar al chat de soporte de Mi Mensajero
-                window.dispatchEvent(new CustomEvent('open-support-chat'))
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {managedCommunities.map(comm => (
+              <button key={comm.id} onClick={() => setSelectedCommunity(comm)} style={{
+                display: 'flex', alignItems: 'center', gap: 14,
+                background: C.panel, border: `1px solid ${C.border}`,
+                borderRadius: 14, padding: '14px 16px', cursor: 'pointer',
+                textAlign: 'left', width: '100%', transition: 'border-color .15s',
               }}
-              style={{
-                marginTop: 8, width: '100%', background: `${C.green}10`,
-                border: `1px solid ${C.green}33`, borderRadius: 16, padding: '16px 18px',
-                cursor: 'pointer', textAlign: 'left',
-              }}
-            >
-              <p style={{ margin: '0 0 4px', color: C.green, fontWeight: 700, fontSize: 14 }}>💬 ¿Necesitás ayuda o tenés ideas?</p>
-              <p style={{ margin: 0, color: C.textDim, fontSize: 12 }}>Escribinos al soporte técnico de Mi Mensajero.</p>
-            </button>
+                onMouseEnter={e => e.currentTarget.style.borderColor = C.green}
+                onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+              >
+                <div style={{
+                  width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
+                  background: `${C.green}20`, border: `2px solid ${C.green}44`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 18, fontWeight: 800, color: C.text, overflow: 'hidden',
+                }}>
+                  {comm.avatar_url
+                    ? <img src={comm.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : comm.name?.slice(0, 2).toUpperCase()
+                  }
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {comm.name}
+                  </p>
+                  {comm.tags?.length > 0 && (
+                    <p style={{ margin: '3px 0 0', fontSize: 11, color: C.textDim }}>
+                      {comm.tags.join(' · ')}
+                    </p>
+                  )}
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
+              </button>
+            ))}
           </div>
         )}
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
 }
