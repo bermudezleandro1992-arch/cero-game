@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { C } from '../theme'
 import TablaPosicionesPage from './tools/TablaPosicionesPage'
+import CEOPanel from '../components/CEOPanel'
 
 const STATUS_CFG = {
   inscripcion: { label: 'Inscripción', color: '#22c55e', bg: '#22c55e18' },
@@ -1346,6 +1347,7 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
 
   const canCreateTournament = canManage || !!userPerms?.can_create_tournaments
   const isStaff = canManage || !!userPerms?.can_manage_tournaments
+  const [showCEOPanel, setShowCEOPanel] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -1373,6 +1375,13 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
   }
 
   const filtered = filter === 'all' ? items : items.filter(i => i.group_type === filter)
+
+  if (showCEOPanel) return (
+    <CEOPanel
+      community={{ ...community, myRole: isStaff ? 'admin' : 'member' }}
+      onBack={() => setShowCEOPanel(false)}
+    />
+  )
 
   if (detailItem) return (
     <TournamentDetail
@@ -1404,6 +1413,14 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
           <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.text }}>🏆 Torneos & Ligas</p>
           <p style={{ margin: 0, fontSize: 11, color: C.textDim }}>{community?.name}</p>
         </div>
+        {isStaff && (
+          <button onClick={() => setShowCEOPanel(true)} style={{
+            background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, padding: '7px 10px',
+            color: C.textDim, fontWeight: 700, fontSize: 16, cursor: 'pointer',
+          }} title="Panel de Organizador">
+            ⚙️
+          </button>
+        )}
         {canCreateTournament && (
           <button onClick={() => setShowCreate(true)} style={{
             background: C.green, border: 'none', borderRadius: 10, padding: '7px 14px',
