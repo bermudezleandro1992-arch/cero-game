@@ -17,6 +17,9 @@ import DiscoverPage from './pages/DiscoverPage'
 import AnnouncementsPage from './pages/AnnouncementsPage'
 import AdminPage from './pages/AdminPage'
 import InviteJoinPage from './pages/InviteJoinPage'
+import HomePage from './pages/HomePage'
+import RankingPage from './pages/RankingPage'
+import PerfilPage from './pages/PerfilPage'
 import ProfileSheet from './components/ProfileSheet'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
@@ -27,6 +30,14 @@ import { C } from './theme'
 
 // ── Nav icons ─────────────────────────────────────────────────────────────────
 const NAV = [
+  {
+    id: 'inicio', label: 'Inicio',
+    icon: (a) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+    ),
+  },
   {
     id: 'chats', label: 'Chats',
     icon: (a) => (
@@ -77,6 +88,22 @@ const NAV = [
     icon: (a) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'ranking', label: 'Ranking',
+    icon: (a) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'perfil', label: 'Perfil',
+    icon: (a) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
       </svg>
     ),
   },
@@ -328,6 +355,12 @@ export default function App() {
         <div className={`slfa-left${showChat ? ' slfa-left--hidden' : ''}`}>
           {showProfile
             ? <ProfileSheet onClose={() => setShowProfile(false)} />
+            : tab === 'inicio'
+            ? <HomePage onGoTorneos={() => setTab('torneos')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} />
+            : tab === 'ranking'
+            ? <RankingPage />
+            : tab === 'perfil'
+            ? <PerfilPage onClose={() => setTab('chats')} />
             : tab === 'contactos'
             ? <ContactsListPage />
             : tab === 'grupos'
