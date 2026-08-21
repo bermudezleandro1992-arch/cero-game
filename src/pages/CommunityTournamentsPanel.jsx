@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { C } from '../theme'
@@ -1444,16 +1445,35 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
         ))}
       </div>
 
-      {/* Create form */}
-      {canCreateTournament && showCreate && (
-        <div style={{ borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <CreateForm
-            communityId={community.id}
-            communityTags={communityTags}
-            onCreated={() => { setShowCreate(false); load() }}
-            onCancel={() => setShowCreate(false)}
-          />
-        </div>
+      {/* Create form — full-screen overlay */}
+      {canCreateTournament && showCreate && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 300,
+          background: C.bg, display: 'flex', flexDirection: 'column',
+        }}>
+          {/* Overlay header */}
+          <div style={{
+            background: C.panel, borderBottom: `1px solid ${C.border}`,
+            padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+          }}>
+            <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4, display: 'flex' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7"/>
+              </svg>
+            </button>
+            <span style={{ color: C.text, fontWeight: 700, fontSize: 16 }}>Nuevo Torneo / Liga</span>
+          </div>
+          {/* Scrollable form */}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <CreateForm
+              communityId={community.id}
+              communityTags={communityTags}
+              onCreated={() => { setShowCreate(false); load() }}
+              onCancel={() => setShowCreate(false)}
+            />
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* List */}
