@@ -264,7 +264,7 @@ const TABS = [
   { id: 'bracket',  label: 'Bracket',  icon: '🏆' },
 ]
 
-function TabBar({ active, onChange, hasGroups, hasBracket }) {
+function TabBar({ active, onChange, hasGroups, hasBracket, isLiga }) {
   return (
     <div style={{
       display: 'flex', background: C.panel,
@@ -273,8 +273,9 @@ function TabBar({ active, onChange, hasGroups, hasBracket }) {
     }}>
       {TABS.map(tab => {
         // Ocultar tabs sin contenido relevante
-        if (tab.id === 'groups'  && !hasGroups)  return null
-        if (tab.id === 'bracket' && !hasBracket) return null
+        if (tab.id === 'draw'    && isLiga)       return null
+        if (tab.id === 'groups'  && !hasGroups)   return null
+        if (tab.id === 'bracket' && !hasBracket)  return null
         const isActive = tab.id === active
         return (
           <button key={tab.id} onClick={() => onChange(tab.id)} style={{
@@ -467,6 +468,7 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
         onChange={setActiveTab}
         hasGroups={hasGroups}
         hasBracket={hasBracket}
+        isLiga={data.group_type === 'liga'}
       />
 
       {/* Contenido por tab */}
