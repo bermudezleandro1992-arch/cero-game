@@ -355,6 +355,13 @@ export default function App() {
     return () => { listener.then(h => h.remove()) }
   }, [activeConversation, showProfile, tab])
 
+  // Open VipPage (ProfileSheet) from anywhere via custom event
+  useEffect(() => {
+    const handler = () => setShowProfile(true)
+    window.addEventListener('open-vip-page', handler)
+    return () => window.removeEventListener('open-vip-page', handler)
+  }, [])
+
   if (loading) return <Splash />
   if (!user) return <LoginPage />
   if (!profile) return <Splash />
