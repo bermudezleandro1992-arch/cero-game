@@ -21,22 +21,19 @@ const CATEGORIES = [
 ]
 
 const DEFAULT_CHANNELS = [
-  { name: 'general',   description: 'Canal principal',       who_can_send: 'everyone' },
-  { name: 'anuncios',  description: 'Solo anuncios oficiales', who_can_send: 'admins'   },
-  { name: 'torneos',   description: 'Torneos y ligas',       who_can_send: 'everyone' },
-  { name: 'resultados',description: 'Resultados de partidos', who_can_send: 'everyone' },
-  { name: 'sorteos',   description: 'Sorteos en vivo',       who_can_send: 'admins'   },
+  { name: 'General', description: 'Canal principal de la comunidad', who_can_send: 'everyone' },
+  { name: 'Avisos',  description: 'Solo admins y organizadores pueden publicar', who_can_send: 'admins' },
 ]
 
 const GAMES = [
-  { id: 'efootball', label: 'eFootball', icon: '⚽' },
-  { id: 'fc26',      label: 'FC 26',     icon: '⚽' },
-  { id: 'fc27',      label: 'FC 27',     icon: '⚽' },
-  { id: 'valorant',  label: 'Valorant',  icon: '🎯' },
-  { id: 'cs2',       label: 'CS2',       icon: '🎯' },
-  { id: 'warzone',   label: 'Warzone',   icon: '🔫' },
-  { id: 'freef',     label: 'Free Fire', icon: '🔥' },
-  { id: 'clashroyale',label: 'Clash Royale', icon: '👑' },
+  { id: 'efootball',   label: 'eFootball',    icon: '⚽', available: true  },
+  { id: 'fc26',        label: 'FC 26',         icon: '⚽', available: true  },
+  { id: 'fc27',        label: 'FC 27',         icon: '⚽', available: true  },
+  { id: 'valorant',    label: 'Valorant',      icon: '🎯', available: false },
+  { id: 'cs2',         label: 'CS2',           icon: '🎯', available: false },
+  { id: 'warzone',     label: 'Warzone',       icon: '🔫', available: false },
+  { id: 'freef',       label: 'Free Fire',     icon: '🔥', available: false },
+  { id: 'clashroyale', label: 'Clash Royale',  icon: '👑', available: false },
 ]
 
 function planLabel(role) {
@@ -75,7 +72,6 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
   const [torneosEnabled, setTorneosEnabled]   = useState(true)
   const [ligasEnabled,   setLigasEnabled]     = useState(true)
   const [clanesEnabled,  setClanesEnabled]    = useState(false)
-  const [defaultMaxPl,   setDefaultMaxPl]     = useState(8)
   const [isPublic, setIsPublic] = useState(true)
   const [creating, setCreating] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -119,7 +115,6 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
         torneos_enabled:  torneosEnabled,
         ligas_enabled:    ligasEnabled,
         clanes_enabled:   clanesEnabled,
-        max_participants: defaultMaxPl,
         category,
         rules:            rules.trim() || null,
         join_mode:        joinMode,
@@ -472,6 +467,20 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {GAMES.map(g => {
                   const sel = selectedGames.includes(g.id)
+                  if (!g.available) return (
+                    <div key={g.id} title="Próximamente" style={{
+                      padding: '7px 14px', borderRadius: 20,
+                      border: `1.5px solid ${C.border}`,
+                      background: C.panel2,
+                      color: C.textDim,
+                      fontSize: 13, fontWeight: 500,
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      opacity: 0.5, cursor: 'not-allowed',
+                    }}>
+                      <span>{g.icon}</span> {g.label}
+                      <span style={{ fontSize: 9, color: C.textDim, fontWeight: 700, background: C.panel, borderRadius: 6, padding: '1px 5px' }}>Próx.</span>
+                    </div>
+                  )
                   return (
                     <button key={g.id} onClick={() => toggleGame(g.id)} style={{
                       padding: '7px 14px', borderRadius: 20,
@@ -538,53 +547,6 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             </div>
           )}
 
-          {/* Max participants per tournament — communities only */}
-          {isCommunity && (torneosEnabled || ligasEnabled || clanesEnabled) && (() => {
-            const ALL_SIZES = [2, 4, 8, 12, 16, 32, 64, 128]
-            const maxAllowed = limits.maxParticipants
-            const available = ALL_SIZES.filter(n => n <= maxAllowed)
-            const locked    = ALL_SIZES.filter(n => n > maxAllowed)
-            return (
-              <div style={{ width: '100%' }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
-                  👥 Jugadores por torneo / liga
-                </label>
-                <p style={{ margin: '0 0 10px', fontSize: 11, color: C.textDim }}>
-                  {(() => {
-                    const role = profile?.role || 'member'
-                    if (['ceo','admin','comunidad'].includes(role)) return <><strong style={{ color: C.green }}>Sin límite</strong> — {planLabel(role)}</>
-                    if (role === 'vip')         return <>Plan <strong style={{ color: '#f59e0b' }}>VIP</strong>: hasta <strong style={{ color: C.text }}>128</strong> jugadores por torneo</>
-                    if (role === 'moderador')   return <>Plan <strong style={{ color: '#06b6d4' }}>Moderador</strong>: hasta <strong style={{ color: C.text }}>64</strong> jugadores por torneo</>
-                    if (role === 'organizador') return <>Plan <strong style={{ color: '#10b981' }}>Organizador</strong>: hasta <strong style={{ color: C.text }}>32</strong> jugadores por torneo</>
-                    return <>Plan <strong style={{ color: '#f59e0b' }}>Gratis</strong>: máximo <strong style={{ color: C.text }}>8</strong> jugadores — <span style={{ color: '#f59e0b' }}>upgradeá para más</span></>
-                  })()}
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {available.map(n => (
-                    <button key={n} onClick={() => setDefaultMaxPl(n)} style={{
-                      width: 52, height: 44, borderRadius: 10, border: `1.5px solid`,
-                      borderColor: defaultMaxPl === n ? C.green : C.border,
-                      background: defaultMaxPl === n ? `${C.green}18` : C.panel,
-                      color: defaultMaxPl === n ? C.green : C.text,
-                      fontWeight: defaultMaxPl === n ? 800 : 500, fontSize: 14,
-                      cursor: 'pointer', transition: 'all .15s',
-                    }}>{n}</button>
-                  ))}
-                  {locked.map(n => (
-                    <div key={n} title={`Requiere plan superior`} style={{
-                      width: 52, height: 44, borderRadius: 10, border: `1.5px solid ${C.border}`,
-                      background: C.panel2, color: C.textDim, fontSize: 14,
-                      display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      justifyContent: 'center', gap: 0, opacity: 0.5,
-                    }}>
-                      <span style={{ fontSize: 12 }}>{n}</span>
-                      <span style={{ fontSize: 9 }}>🔒</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })()}
 
           {/* Torneos inside community — info box */}
           {isCommunity && (
