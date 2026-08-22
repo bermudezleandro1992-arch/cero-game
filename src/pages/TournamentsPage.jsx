@@ -1255,7 +1255,7 @@ export default function TournamentsPage() {
       setManagedCommunities(owned || [])
       setLoadingComm(false)
     })()
-  }, [profile?.id, tab])
+  }, [profile?.id])
 
   if (selectedCommunity) {
     return <CommunityTournamentsPanel community={selectedCommunity} onClose={() => setSelectedCommunity(null)} canManage={true} />
