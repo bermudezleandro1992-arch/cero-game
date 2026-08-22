@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { C } from '../theme'
 import BannerAd from '../components/BannerAd'
+import TournamentDashboard from '../components/TournamentDashboard'
 
 const AVATAR_COLORS = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100','#c62828']
 function avatarColor(id) {
@@ -72,6 +73,7 @@ export default function DiscoverPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [joined, setJoined] = useState(new Set())
   const [joining, setJoining] = useState(null)
+  const [viewingTournament, setViewingTournament] = useState(null)
 
   // ── load items según tab activo ───────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -172,11 +174,18 @@ export default function DiscoverPage() {
       }
       setJoined(prev => new Set([...prev, group.id]))
       fetchConversations(profile.id)
+      if (group.group_type === 'tournament' || group.group_type === 'liga') {
+        setViewingTournament(group)
+      }
     } catch {}
     setJoining(null)
   }
 
   function openGroup(group) {
+    if (group.group_type === 'tournament' || group.group_type === 'liga') {
+      setViewingTournament(group)
+      return
+    }
     setActiveConversation({
       ...group,
       isGroup: true,
@@ -386,6 +395,35 @@ export default function DiscoverPage() {
 
   // ── Filtros de torneos ────────────────────────────────────────────────────────
   const showTournamentFilters = tab === 'tournament'
+
+  if (viewingTournament) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '14px 16px', background: C.panel,
+          borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+        }}>
+          <button onClick={() => setViewingTournament(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: 4 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+          </button>
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {viewingTournament.name}
+          </span>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <TournamentDashboard
+            tournamentId={viewingTournament.id}
+            profile={profile}
+            isAdmin={viewingTournament.created_by === profile?.id}
+            onBack={() => setViewingTournament(null)}
+          />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
