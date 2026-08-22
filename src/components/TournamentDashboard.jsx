@@ -50,7 +50,7 @@ async function fetchDashboard(tournamentId) {
   const { data: conv, error } = await supabase
     .from('conversations')
     .select(`
-      id, name, status, format, game, max_participants,
+      id, name, tournament_status, format, game, max_participants,
       tournament_format, tournament_mode,
       liga_tipo, liga_fase, temporada, division,
       registration_deadline, start_date, description, banner_url, group_type
@@ -59,6 +59,7 @@ async function fetchDashboard(tournamentId) {
     .single()
 
   if (error || !conv) throw error ?? new Error('Torneo no encontrado')
+  conv.status = conv.tournament_status
 
   const { count: participantCount } = await supabase
     .from('conversation_members')

@@ -12,6 +12,22 @@ function avatarColor(id) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
+const CATEGORIES = [
+  { id: 'efootball', label: 'eFootball', icon: '⚽' },
+  { id: 'fc',        label: 'FC / FIFA',  icon: '🎮' },
+  { id: 'gaming',    label: 'Gaming',     icon: '🎯' },
+  { id: 'deportes',  label: 'Deportes',   icon: '🏅' },
+  { id: 'general',   label: 'General',    icon: '💬' },
+]
+
+const DEFAULT_CHANNELS = [
+  { name: 'general',   description: 'Canal principal',       who_can_send: 'everyone' },
+  { name: 'anuncios',  description: 'Solo anuncios oficiales', who_can_send: 'admins'   },
+  { name: 'torneos',   description: 'Torneos y ligas',       who_can_send: 'everyone' },
+  { name: 'resultados',description: 'Resultados de partidos', who_can_send: 'everyone' },
+  { name: 'sorteos',   description: 'Sorteos en vivo',       who_can_send: 'admins'   },
+]
+
 const GAMES = [
   { id: 'efootball', label: 'eFootball', icon: '⚽' },
   { id: 'fc26',      label: 'FC 26',     icon: '⚽' },
@@ -46,12 +62,21 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
   const [groupName, setGroupName] = useState('')
   const [groupType, setGroupType] = useState(initialType || 'group')
   const [description, setDescription] = useState('')
-  const [isPublic, setIsPublic] = useState(true)
+  const [joinMode, setJoinMode] = useState('public')
+  const [category, setCategory] = useState('general')
+  const [rules, setRules] = useState('')
+  const [permissions, setPermissions] = useState({
+    who_can_send: 'everyone',
+    who_can_create_tournaments: 'admins',
+    who_can_invite: 'admins',
+    who_can_kick: 'admins',
+  })
   const [selectedGames, setSelectedGames] = useState([])
   const [torneosEnabled, setTorneosEnabled]   = useState(true)
   const [ligasEnabled,   setLigasEnabled]     = useState(true)
   const [clanesEnabled,  setClanesEnabled]    = useState(false)
   const [defaultMaxPl,   setDefaultMaxPl]     = useState(8)
+  const [isPublic, setIsPublic] = useState(true)
   const [creating, setCreating] = useState(false)
   const [searching, setSearching] = useState(false)
 
@@ -86,9 +111,8 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
       profile.id,
       groupType,
       description.trim(),
-      isPublic
+      joinMode === 'public'
     )
-    // Guardar configuración de torneos para comunidades
     if (convId && groupType === 'community') {
       await supabase.from('conversations').update({
         tags:             selectedGames,
@@ -96,7 +120,30 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
         ligas_enabled:    ligasEnabled,
         clanes_enabled:   clanesEnabled,
         max_participants: defaultMaxPl,
+        category,
+        rules:            rules.trim() || null,
+        join_mode:        joinMode,
+        permissions,
       }).eq('id', convId)
+
+      // Crear canales por defecto
+      for (const ch of DEFAULT_CHANNELS) {
+        const { data: channel } = await supabase.from('conversations').insert({
+          name:        ch.name,
+          type:        'channel',
+          community_id: convId,
+          created_by:  profile.id,
+          description: ch.description,
+          permissions: { ...permissions, who_can_send: ch.who_can_send },
+        }).select('id').single()
+        if (channel) {
+          await supabase.from('conversation_members').insert({
+            conversation_id: channel.id,
+            user_id: profile.id,
+            role: 'owner',
+          })
+        }
+      }
     }
     setCreating(false)
     onCreated(convId, groupName.trim(), selected)
@@ -552,29 +599,119 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             </div>
           )}
 
-          {/* Visibility toggle (communities only) */}
+          {/* Category — communities only */}
           {isCommunity && (
             <div style={{ width: '100%' }}>
               <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
-                Visibilidad
+                Categoría
               </label>
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {CATEGORIES.map(cat => {
+                  const sel = category === cat.id
+                  return (
+                    <button key={cat.id} onClick={() => setCategory(cat.id)} style={{
+                      padding: '7px 14px', borderRadius: 20,
+                      border: `1.5px solid ${sel ? C.green : C.border}`,
+                      background: sel ? `${C.green}18` : C.panel,
+                      color: sel ? C.green : C.text2,
+                      fontSize: 13, fontWeight: sel ? 700 : 500,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                      transition: 'all .15s',
+                    }}>
+                      {cat.icon} {cat.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Rules — communities only */}
+          {isCommunity && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                Reglas de la comunidad (opcional)
+              </label>
+              <textarea
+                placeholder={'Ej: Respeto entre miembros. No spam. Resultados en 24hs...'}
+                value={rules}
+                onChange={e => setRules(e.target.value)}
+                maxLength={500}
+                rows={3}
+                style={{
+                  width: '100%', background: C.panel, border: `1px solid ${C.border}`,
+                  borderRadius: 10, color: C.text, fontSize: 14, padding: '10px 12px',
+                  outline: 'none', resize: 'none', boxSizing: 'border-box', lineHeight: 1.5,
+                }}
+              />
+              <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{rules.length}/500</p>
+            </div>
+          )}
+
+          {/* Privacy / join_mode — communities only */}
+          {isCommunity && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                Privacidad
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
                 {[
-                  { value: true,  icon: '🌐', label: 'Pública', desc: 'Aparece en Explorar' },
-                  { value: false, icon: '🔒', label: 'Privada', desc: 'Solo por invitación' },
+                  { value: 'public',      icon: '🌐', label: 'Pública',    desc: 'Cualquiera puede unirse' },
+                  { value: 'approval',    icon: '✋', label: 'Aprobación', desc: 'Admin aprueba solicitudes' },
+                  { value: 'invite_only', icon: '🔒', label: 'Invitación', desc: 'Solo con link privado' },
                 ].map(opt => (
-                  <button key={String(opt.value)} onClick={() => setIsPublic(opt.value)} style={{
-                    flex: 1, padding: '12px 10px', borderRadius: 12, border: `2px solid`,
-                    borderColor: isPublic === opt.value ? C.green : C.border,
-                    background: isPublic === opt.value ? `${C.green}0D` : C.panel,
+                  <button key={opt.value} onClick={() => setJoinMode(opt.value)} style={{
+                    flex: 1, padding: '10px 6px', borderRadius: 12, border: `2px solid`,
+                    borderColor: joinMode === opt.value ? C.green : C.border,
+                    background: joinMode === opt.value ? `${C.green}0D` : C.panel,
                     cursor: 'pointer', textAlign: 'center', transition: 'all .15s',
                   }}>
-                    <div style={{ fontSize: 20, marginBottom: 4 }}>{opt.icon}</div>
-                    <p style={{ margin: '0 0 2px', color: isPublic === opt.value ? C.green : C.text, fontWeight: 700, fontSize: 13 }}>{opt.label}</p>
-                    <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>{opt.desc}</p>
+                    <div style={{ fontSize: 18, marginBottom: 4 }}>{opt.icon}</div>
+                    <p style={{ margin: '0 0 2px', color: joinMode === opt.value ? C.green : C.text, fontWeight: 700, fontSize: 12 }}>{opt.label}</p>
+                    <p style={{ margin: 0, color: C.textDim, fontSize: 10 }}>{opt.desc}</p>
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Permissions — communities only */}
+          {isCommunity && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                Permisos
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { key: 'who_can_send',               label: '💬 Quién puede enviar mensajes' },
+                  { key: 'who_can_create_tournaments',  label: '🏆 Quién puede crear torneos' },
+                  { key: 'who_can_invite',              label: '📨 Quién puede invitar miembros' },
+                  { key: 'who_can_kick',                label: '🚫 Quién puede expulsar' },
+                ].map(({ key, label }) => (
+                  <div key={key} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px',
+                  }}>
+                    <span style={{ fontSize: 13, color: C.text }}>{label}</span>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {['everyone', 'admins'].map(val => (
+                        <button key={val} onClick={() => setPermissions(p => ({ ...p, [key]: val }))} style={{
+                          padding: '4px 10px', borderRadius: 8, border: `1.5px solid`,
+                          borderColor: permissions[key] === val ? C.green : C.border,
+                          background: permissions[key] === val ? `${C.green}18` : C.panel2,
+                          color: permissions[key] === val ? C.green : C.textDim,
+                          fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all .15s',
+                        }}>
+                          {val === 'everyone' ? 'Todos' : 'Admins'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ margin: '8px 0 0', fontSize: 11, color: C.textDim }}>
+                🏷️ Canales por defecto que se crearán: #general, #anuncios, #torneos, #resultados, #sorteos
+              </p>
             </div>
           )}
 
