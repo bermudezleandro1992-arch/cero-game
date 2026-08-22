@@ -6,9 +6,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
-import GroupStage  from './GroupStage'
-import LiveDraw    from './LiveDraw'
-import BracketView from './BracketView'
+import GroupStage      from './GroupStage'
+import LiveDraw        from './LiveDraw'
+import BracketView     from './BracketView'
+import FixtureTab      from './FixtureTab'
+import LigaTab         from './LigaTab'
+import TournamentChat  from './TournamentChat'
 
 // ── Fases del stepper ─────────────────────────────────────────────────────────
 const PHASES = [
@@ -262,9 +265,12 @@ const TABS = [
   { id: 'draw',     label: 'Sorteo',   icon: '🎱' },
   { id: 'groups',   label: 'Grupos',   icon: '📋' },
   { id: 'bracket',  label: 'Bracket',  icon: '🏆' },
+  { id: 'fixture',  label: 'Fixture',  icon: '⚽' },
+  { id: 'liga',     label: 'Liga',     icon: '🏅' },
+  { id: 'chat',     label: 'Chat',     icon: '💬' },
 ]
 
-function TabBar({ active, onChange, hasGroups, hasBracket, isLiga }) {
+function TabBar({ active, onChange, hasGroups, hasBracket, isLiga, hasMatches }) {
   return (
     <div style={{
       display: 'flex', background: C.panel,
@@ -272,10 +278,11 @@ function TabBar({ active, onChange, hasGroups, hasBracket, isLiga }) {
       overflowX: 'auto', flexShrink: 0,
     }}>
       {TABS.map(tab => {
-        // Ocultar tabs sin contenido relevante
-        if (tab.id === 'draw'    && isLiga)       return null
-        if (tab.id === 'groups'  && !hasGroups)   return null
-        if (tab.id === 'bracket' && !hasBracket)  return null
+        if (tab.id === 'draw'    && isLiga)                return null
+        if (tab.id === 'groups'  && !hasGroups)            return null
+        if (tab.id === 'bracket' && !hasBracket)           return null
+        if (tab.id === 'fixture' && !hasMatches)           return null
+        if (tab.id === 'liga'    && !isLiga)               return null
         const isActive = tab.id === active
         return (
           <button key={tab.id} onClick={() => onChange(tab.id)} style={{
@@ -424,6 +431,7 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
 
   const hasGroups  = (data.groups?.length ?? 0) > 0
   const hasBracket = data.status === 'en_curso' || data.status === 'finalizado'
+  const hasMatches = data.matches?.total > 0
   const statusColor = STATUS_COLOR[data.status] ?? C.textDim
 
   return (
@@ -468,6 +476,7 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
         onChange={setActiveTab}
         hasGroups={hasGroups}
         hasBracket={hasBracket}
+        hasMatches={hasMatches}
         isLiga={data.group_type === 'liga'}
       />
 
@@ -505,6 +514,30 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
             tournamentId={tournamentId}
             profile={profile}
             isAdmin={isAdmin}
+          />
+        )}
+
+        {activeTab === 'fixture' && (
+          <FixtureTab
+            tournamentId={tournamentId}
+            profile={profile}
+            isAdmin={isAdmin}
+          />
+        )}
+
+        {activeTab === 'liga' && (
+          <LigaTab
+            tournamentId={tournamentId}
+            profile={profile}
+            ascensos={data.liga_fase === 'ascenso' ? 2 : 0}
+            descensos={data.liga_fase === 'ascenso' ? 1 : 0}
+          />
+        )}
+
+        {activeTab === 'chat' && (
+          <TournamentChat
+            tournamentId={tournamentId}
+            profile={profile}
           />
         )}
 
