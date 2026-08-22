@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { C } from '../theme'
 import TournamentDashboard from '../components/TournamentDashboard'
+import { useSubscription } from '../hooks/useSubscription'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -160,19 +161,61 @@ function TorneoCard({ torneo, myId, onVer, onDelete }) {
   )
 }
 
+// ── Plan badge ────────────────────────────────────────────────────────────────
+const PLAN_CFG = {
+  free: { label: 'FREE',  color: '#6b7280', bg: '#6b728020' },
+  vip:  { label: 'VIP ⭐', color: '#f59e0b', bg: '#f59e0b20' },
+  pro:  { label: 'PRO 💎', color: '#8b5cf6', bg: '#8b5cf620' },
+}
+
+function PlanBadge({ plan }) {
+  const cfg = PLAN_CFG[plan] || PLAN_CFG.free
+  return (
+    <span style={{
+      background: cfg.bg, color: cfg.color,
+      borderRadius: 6, padding: '2px 8px',
+      fontSize: 10, fontWeight: 800, letterSpacing: 0.5,
+    }}>{cfg.label}</span>
+  )
+}
+
+// ── Upgrade notice ────────────────────────────────────────────────────────────
+function UpgradeNotice({ reason, onViewPlans }) {
+  return (
+    <div style={{
+      background: '#ef444412', border: '1px solid #ef444430',
+      borderRadius: 12, padding: '14px 16px',
+      display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      <div style={{ color: '#ef4444', fontWeight: 700, fontSize: 13 }}>⚠️ {reason}</div>
+      <button onClick={onViewPlans} style={{
+        padding: '8px 14px', background: '#f59e0b', color: '#000',
+        border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: 'pointer', alignSelf: 'flex-start',
+      }}>Ver planes →</button>
+    </div>
+  )
+}
+
 // ── Create modal ──────────────────────────────────────────────────────────────
-function CreateModal({ onClose, onCreated }) {
+function CreateModal({ onClose, onCreated, onViewPlans = () => window.dispatchEvent(new CustomEvent('open-vip-page')) }) {
   const { profile } = useAuthStore()
+  const sub = useSubscription(profile?.id)
   const [name,       setName]       = useState('')
   const [type,       setType]       = useState('tournament')
   const [format,     setFormat]     = useState('eliminatorias')
-  const [maxPl,      setMaxPl]      = useState(8)
+  const [maxPl,      setMaxPl]      = useState(Math.min(8, sub.limits.jugadores))
   const [communityId, setCommunityId] = useState('')
   const [isPublic,   setIsPublic]   = useState(true)
   const [game,       setGame]       = useState('')
   const [communities, setCommunities] = useState([])
   const [busy,       setBusy]       = useState(false)
   const [err,        setErr]        = useState('')
+  const [upgradeReason, setUpgradeReason] = useState(null)
+
+  // Sync maxPl with plan limits when plan loads
+  useEffect(() => {
+    setMaxPl(prev => Math.min(prev, sub.limits.jugadores))
+  }, [sub.limits.jugadores])
 
   useEffect(() => {
     supabase
@@ -182,9 +225,13 @@ function CreateModal({ onClose, onCreated }) {
       .then(({ data }) => setCommunities(data || []))
   }, [])
 
+  const availableSizes = SIZES.filter(n => n <= sub.limits.jugadores)
+
   async function handleCreate() {
     if (!name.trim()) { setErr('Escribí un nombre.'); return }
-    setBusy(true); setErr('')
+    const check = sub.canCreateTournament(maxPl)
+    if (!check.allowed) { setUpgradeReason(check.reason); return }
+    setBusy(true); setErr(''); setUpgradeReason(null)
     try {
       const { data: conv, error: convErr } = await supabase
         .from('conversations')
@@ -210,6 +257,7 @@ function CreateModal({ onClose, onCreated }) {
         role: 'owner',
       })
 
+      sub.refresh()
       onCreated(conv.id)
     } catch (e) {
       setErr(e.message || 'Error al crear')
@@ -223,6 +271,8 @@ function CreateModal({ onClose, onCreated }) {
     width: '100%', boxSizing: 'border-box', outline: 'none',
   }
   const lbl = { display: 'block', color: C.textDim, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 6 }
+
+  const { limits, torneos_hoy, torneos_activos, plan } = sub
 
   return createPortal(
     <div style={{
@@ -243,11 +293,36 @@ function CreateModal({ onClose, onCreated }) {
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
-          <span style={{ color: C.text, fontWeight: 700, fontSize: 16 }}>Crear torneo / liga</span>
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 16, flex: 1 }}>Crear torneo / liga</span>
+          <PlanBadge plan={plan} />
         </div>
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Plan info banner */}
+          <div style={{
+            background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12,
+            padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            <div>
+              <div style={{ color: C.text, fontWeight: 700, fontSize: 12, marginBottom: 2 }}>📊 Tu plan: <PlanBadge plan={plan} /></div>
+              <div style={{ color: C.textDim, fontSize: 11, marginTop: 4 }}>
+                Torneos hoy: <strong style={{ color: torneos_hoy >= limits.torneos_dia ? '#ef4444' : C.text }}>{torneos_hoy}/{limits.torneos_dia}</strong>
+                {' · '}Activos: <strong style={{ color: torneos_activos >= limits.torneos_activos ? '#ef4444' : C.text }}>{torneos_activos}/{limits.torneos_activos}</strong>
+                {' · '}Máx. jugadores: <strong style={{ color: C.text }}>{limits.jugadores >= 9999 ? '∞' : limits.jugadores}</strong>
+              </div>
+            </div>
+            {plan !== 'pro' && (
+              <button onClick={onViewPlans} style={{
+                padding: '6px 12px', background: 'transparent',
+                color: '#f59e0b', border: '1px solid #f59e0b50',
+                borderRadius: 8, fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>Ver planes →</button>
+            )}
+          </div>
+
+          {upgradeReason && <UpgradeNotice reason={upgradeReason} onViewPlans={onViewPlans} />}
 
           {/* Tipo */}
           <div style={{ display: 'flex', gap: 6, background: C.panel, borderRadius: 12, padding: 4 }}>
@@ -278,16 +353,29 @@ function CreateModal({ onClose, onCreated }) {
           <div>
             <label style={lbl}>Máximo de participantes</label>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {SIZES.map(n => (
-                <button key={n} onClick={() => setMaxPl(n)} style={{
-                  padding: '7px 14px', borderRadius: 20,
-                  border: `1px solid ${maxPl === n ? C.green : C.border}`,
-                  background: maxPl === n ? `${C.green}18` : C.panel,
-                  color: maxPl === n ? C.green : C.textDim,
-                  fontWeight: maxPl === n ? 700 : 500, fontSize: 13, cursor: 'pointer',
-                }}>{n}</button>
-              ))}
+              {SIZES.map(n => {
+                const locked = n > limits.jugadores
+                return (
+                  <button key={n} onClick={() => !locked && setMaxPl(n)} style={{
+                    padding: '7px 14px', borderRadius: 20,
+                    border: `1px solid ${maxPl === n ? C.green : locked ? C.border : C.border}`,
+                    background: maxPl === n ? `${C.green}18` : locked ? `${C.border}30` : C.panel,
+                    color: maxPl === n ? C.green : locked ? C.textDim : C.textDim,
+                    fontWeight: maxPl === n ? 700 : 500, fontSize: 13,
+                    cursor: locked ? 'not-allowed' : 'pointer',
+                    opacity: locked ? 0.45 : 1,
+                    position: 'relative',
+                  }}>
+                    {n}{locked && <span style={{ marginLeft: 4, fontSize: 9 }}>🔒</span>}
+                  </button>
+                )
+              })}
             </div>
+            {availableSizes.length < SIZES.length && (
+              <div style={{ color: C.textDim, fontSize: 11, marginTop: 6 }}>
+                🔒 Opciones bloqueadas. <button onClick={onViewPlans} style={{ background: 'none', border: 'none', color: '#f59e0b', fontWeight: 700, fontSize: 11, cursor: 'pointer', padding: 0 }}>Mejorá tu plan →</button>
+              </div>
+            )}
           </div>
 
           {/* Comunidad */}
@@ -304,8 +392,8 @@ function CreateModal({ onClose, onCreated }) {
           {/* Público */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: C.panel, borderRadius: 10, border: `1px solid ${C.border}` }}>
             <div>
-              <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>¿Torneo público?</div>
-              <div style={{ color: C.textDim, fontSize: 11 }}>Cualquiera puede encontrarlo y unirse</div>
+              <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>¿{type === 'liga' ? 'Liga' : 'Torneo'} público?</div>
+              <div style={{ color: C.textDim, fontSize: 11 }}>Cualquiera puede encontrarlo y unirse desde Explorar</div>
             </div>
             <button onClick={() => setIsPublic(p => !p)} style={{
               width: 46, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
@@ -325,13 +413,13 @@ function CreateModal({ onClose, onCreated }) {
 
         {/* Footer */}
         <div style={{ padding: '14px 20px', borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <button onClick={handleCreate} disabled={busy} style={{
+          <button onClick={handleCreate} disabled={busy || sub.loading} style={{
             width: '100%', padding: '13px', background: busy ? C.border : C.green,
             color: busy ? C.textDim : '#000', border: 'none', borderRadius: 10,
             fontWeight: 800, fontSize: 15, cursor: busy ? 'default' : 'pointer',
             transition: 'background .2s',
           }}>
-            {busy ? 'Creando...' : '⚡ Crear torneo'}
+            {busy ? 'Creando...' : `⚡ Crear ${type === 'liga' ? 'liga' : 'torneo'}`}
           </button>
         </div>
       </div>
@@ -376,7 +464,7 @@ function ConfirmDelete({ torneo, onConfirm, onCancel }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function TorneosPage() {
+export default function TorneosPage({ onNavigate }) {
   const { profile } = useAuthStore()
   const [torneos,     setTorneos]     = useState([])
   const [loading,     setLoading]     = useState(true)
@@ -584,15 +672,14 @@ export default function TorneosPage() {
       {showCreate && (
         <CreateModal
           onClose={() => setShowCreate(false)}
+          onViewPlans={() => { setShowCreate(false); onNavigate?.('vip') }}
           onCreated={(id) => {
             setShowCreate(false)
             load()
-            // Auto-open the new tournament
             setViewing({ id, name: '...', tournament_status: 'inscripcion', created_by: profile?.id })
           }}
         />
       )}
-
       {deleting && (
         <ConfirmDelete
           torneo={deleting}
