@@ -119,28 +119,35 @@ function DashboardTab({ communityId, onViewTorneo, onGoTab }) {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const [{ data: torneos }, { data: disputes }, { data: members }] = await Promise.all([
+      const [{ data: torneos }, { data: members }] = await Promise.all([
         supabase.from('conversations')
-          .select('id, name, status, created_at')
+          .select('id, name, tournament_status, created_at')
           .eq('community_id', communityId)
           .in('group_type', ['tournament', 'liga'])
           .order('created_at', { ascending: false }),
-        supabase.from('tournament_disputes')
-          .select('id, status, tournament_id')
-          .eq('status', 'abierta')
-          .in('tournament_id', (torneos || []).map(t => t.id)),
         supabase.from('conversation_members')
           .select('user_id', { count: 'exact', head: true })
           .eq('conversation_id', communityId),
       ])
 
       const all = torneos || []
+      const ids = all.map(t => t.id)
+
+      let disputes = []
+      if (ids.length) {
+        const { data } = await supabase.from('tournament_disputes')
+          .select('id, status, tournament_id')
+          .eq('status', 'abierta')
+          .in('tournament_id', ids)
+        disputes = data || []
+      }
+
       setStats({
         total: all.length,
-        activos: all.filter(t => t.status === 'en_curso').length,
-        inscripcion: all.filter(t => t.status === 'inscripcion').length,
-        finalizados: all.filter(t => t.status === 'finalizado').length,
-        disputas: (disputes || []).length,
+        activos: all.filter(t => t.tournament_status === 'en_curso').length,
+        inscripcion: all.filter(t => t.tournament_status === 'inscripcion').length,
+        finalizados: all.filter(t => t.tournament_status === 'finalizado').length,
+        disputas: disputes.length,
         miembros: members || 0,
       })
       setRecentTournaments(all.slice(0, 5))
@@ -198,7 +205,7 @@ function DashboardTab({ communityId, onViewTorneo, onGoTab }) {
                   {new Date(t.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </div>
               </div>
-              <StatusBadge status={t.status} />
+              <StatusBadge status={t.tournament_status} />
             </div>
           ))
         }
@@ -219,7 +226,7 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast }) {
     setLoading(true)
     const { data } = await supabase
       .from('conversations')
-      .select('id, name, status, created_at, max_members, game, tournament_format')
+      .select('id, name, tournament_status, created_at, max_members, game, tournament_format')
       .eq('community_id', communityId)
       .in('group_type', ['tournament', 'liga'])
       .order('created_at', { ascending: false })
@@ -259,7 +266,7 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast }) {
                   <span>{new Date(t.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short' })}</span>
                 </div>
               </div>
-              <StatusBadge status={t.status} />
+              <StatusBadge status={t.tournament_status} />
             </div>
             <div style={{ display: 'flex', borderTop: `1px solid ${C.border}` }}>
               <button onClick={() => onViewTorneo(t)} style={{
@@ -640,7 +647,7 @@ function EstadisticasTab({ communityId }) {
       // Tournaments in community
       const { data: torneos } = await supabase
         .from('conversations')
-        .select('id, name, status, created_at')
+        .select('id, name, tournament_status, created_at')
         .eq('community_id', communityId)
         .in('group_type', ['tournament', 'liga'])
 
