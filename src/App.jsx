@@ -21,6 +21,7 @@ import HomePage from './pages/HomePage'
 import RankingPage from './pages/RankingPage'
 import PerfilPage from './pages/PerfilPage'
 import ProfileSheet from './components/ProfileSheet'
+import CEOPanel from './components/CEOPanel'
 import UpdateBanner from './components/UpdateBanner'
 import { usePresence } from './hooks/usePresence'
 import { initPushNotifications, initWebPush, listenNotificationClicks } from './lib/pushNotifications'
@@ -118,12 +119,88 @@ const NAV = [
   },
 ]
 
+// ── CEO Panel Picker — selects a community then opens CEOPanel ─────────────────
+function CEOPanelPicker({ onBack }) {
+  const { profile } = useAuthStore()
+  const [communities, setCommunities] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState(null)
+
+  useEffect(() => {
+    async function load() {
+      const { data: owned } = await supabase
+        .from('conversations')
+        .select('id, name, description, avatar_url')
+        .eq('group_type', 'community')
+        .eq('created_by', profile.id)
+      const { data: roles } = await supabase
+        .from('group_roles')
+        .select('conversation_id')
+        .eq('user_id', profile.id)
+        .in('role', ['owner', 'admin'])
+      const extraIds = (roles || []).map(r => r.conversation_id).filter(id => !(owned || []).find(o => o.id === id))
+      let extra = []
+      if (extraIds.length) {
+        const { data } = await supabase.from('conversations').select('id, name, description, avatar_url').in('id', extraIds)
+        extra = data || []
+      }
+      setCommunities([...(owned || []), ...extra])
+      setLoading(false)
+    }
+    load()
+  }, [profile?.id])
+
+  if (selected) return <CEOPanel community={{ ...selected, myRole: 'admin' }} onBack={() => setSelected(null)} />
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
+      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4, display: 'flex' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <div>
+          <div style={{ color: C.text, fontWeight: 700, fontSize: 16 }}>⭐ Panel CEO</div>
+          <div style={{ color: C.textDim, fontSize: 11 }}>Seleccioná una comunidad</div>
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+            <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+          </div>
+        ) : communities.length === 0 ? (
+          <div style={{ textAlign: 'center', paddingTop: 60, color: C.textDim }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🌐</div>
+            <div>No tenés comunidades administradas</div>
+          </div>
+        ) : communities.map(c => (
+          <button key={c.id} onClick={() => setSelected(c)} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+            padding: '14px 16px', background: C.panel, border: `1px solid ${C.border}`,
+            borderRadius: 12, marginBottom: 10, cursor: 'pointer', textAlign: 'left',
+          }}>
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.border, flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+              {c.avatar_url ? <img src={c.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : '🌐'}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{c.name}</div>
+              {c.description && <div style={{ color: C.textDim, fontSize: 12, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.description}</div>}
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const { user, profile, loading, setUser, setLoading, fetchProfile } = useAuthStore()
   const { incomingCall, setIncomingCall, clearCall, inCall, setInCall } = useCallStore()
   const { conversations, activeConversation, setActiveConversation, fetchConversations, subscribeToConversations } = useChatStore()
   const [tab, setTab] = useState('chats')
   const [showProfile, setShowProfile] = useState(false)
+  const [showMoreDrawer, setShowMoreDrawer] = useState(false)
   const [inviteToken, setInviteToken] = useState(() => {
     const m = window.location.pathname.match(/^\/join\/([^/]+)/)
     if (m) { localStorage.setItem('mm_pending_invite', m[1]); return m[1] }
@@ -325,7 +402,10 @@ export default function App() {
 
         {/* DESKTOP sidebar nav */}
         <nav className="slfa-side-nav">
-          {NAV.filter(({ id }) => id !== 'admin' || ['ceo','admin'].includes(profile?.role)).map(({ id, label, icon }) => {
+          {NAV.filter(({ id }) => {
+            if (id === 'admin') return ['ceo','admin'].includes(profile?.role)
+            return true
+          }).map(({ id, label, icon }) => {
             const active = (id === 'ajustes' ? showProfile : !showProfile && tab === id)
             return (
               <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : (setShowProfile(false), setTab(id))} style={{
@@ -349,6 +429,22 @@ export default function App() {
               </button>
             )
           })}
+          {/* CEO Panel — sidebar only, ceo/admin */}
+          {['ceo','admin'].includes(profile?.role) && (
+            <button onClick={() => { setShowProfile(false); setTab('panel-ceo') }} style={{
+              width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', gap: 4, border: 'none', marginTop: 'auto',
+              background: tab === 'panel-ceo' ? `${C.green}12` : 'none',
+              cursor: 'pointer', padding: '14px 0',
+              borderLeft: `3px solid ${tab === 'panel-ceo' ? C.green : 'transparent'}`,
+              transition: 'background .15s',
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={tab === 'panel-ceo' ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+              <span style={{ fontSize: 10, fontWeight: tab === 'panel-ceo' ? 700 : 400, color: tab === 'panel-ceo' ? C.green : C.textDim }}>CEO</span>
+            </button>
+          )}
         </nav>
 
         {/* LEFT — list or profile */}
@@ -356,7 +452,7 @@ export default function App() {
           {showProfile
             ? <ProfileSheet onClose={() => setShowProfile(false)} />
             : tab === 'inicio'
-            ? <HomePage onGoTorneos={() => setTab('torneos')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} />
+            ? <HomePage onGoTorneos={() => setTab('torneos')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} />
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'
@@ -373,6 +469,10 @@ export default function App() {
             ? <AnnouncementsPage />
             : tab === 'admin'
             ? <AdminPage onBack={() => setTab('chats')} />
+            : tab === 'panel-ceo' && ['ceo','admin'].includes(profile?.role)
+            ? <CEOPanelPicker onBack={() => setTab('chats')} />
+            : tab === 'panel-ceo'
+            ? (setTab('inicio'), null)
             : <ChatListPage onProfileClick={() => setShowProfile(true)} />
           }
         </div>
@@ -385,6 +485,60 @@ export default function App() {
         </div>
       </div>
 
+      {/* "Más" drawer — mobile */}
+      {showMoreDrawer && (
+        <div
+          onClick={() => setShowMoreDrawer(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 500,
+            background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'absolute', bottom: 60, left: 0, right: 0,
+              background: C.panel, borderTop: `1px solid ${C.border}`,
+              borderRadius: '20px 20px 0 0',
+              padding: '12px 0 8px',
+              boxShadow: '0 -8px 40px rgba(0,0,0,0.5)',
+              animation: 'drawerUp .22s cubic-bezier(.4,0,.2,1)',
+            }}
+          >
+            {/* Handle */}
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: C.border, margin: '0 auto 16px' }} />
+
+            {[
+              { id: 'contactos',  icon: '👥', label: 'Contactos' },
+              { id: 'explorar',   icon: '🔭', label: 'Explorar' },
+              { id: 'anuncios',   icon: '📢', label: 'Anuncios' },
+              ...(['ceo','admin'].includes(profile?.role) ? [
+                { id: 'panel-ceo', icon: '⭐', label: 'Panel CEO' },
+                { id: 'admin',     icon: '🛡️', label: 'Admin' },
+              ] : []),
+              { id: 'ajustes',    icon: '⚙️', label: 'Ajustes' },
+            ].map(({ id, icon, label }) => (
+              <button key={id} onClick={() => {
+                setShowMoreDrawer(false)
+                if (id === 'ajustes') { setShowProfile(true) }
+                else { setShowProfile(false); setTab(id) }
+              }} style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 16,
+                padding: '14px 24px', border: 'none', background: 'none',
+                cursor: 'pointer', textAlign: 'left',
+                borderLeft: `3px solid ${(tab === id && !showProfile) || (id === 'ajustes' && showProfile) ? C.green : 'transparent'}`,
+              }}>
+                <span style={{ fontSize: 22, width: 28, textAlign: 'center' }}>{icon}</span>
+                <span style={{
+                  color: (tab === id && !showProfile) || (id === 'ajustes' && showProfile) ? C.green : C.text,
+                  fontWeight: 600, fontSize: 15,
+                }}>{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Bottom nav — mobile only, hidden when chat open */}
       {!showChat && (
         <nav style={{
@@ -392,17 +546,19 @@ export default function App() {
           borderTop: `1px solid ${C.border}`, flexShrink: 0,
           paddingBottom: 'env(safe-area-inset-bottom)',
         }} className="slfa-bottom-nav">
-          {NAV.filter(({ id }) => {
-            if (!['inicio','chats','torneos','ranking','perfil'].includes(id)) return false
-            if (id === 'torneos') {
-              const role = profile?.role || 'member'
-              return ['ceo','admin','moderador'].includes(role)
-            }
-            return true
-          }).map(({ id, label, icon }) => {
-            const active = (id === 'ajustes' ? showProfile : !showProfile && tab === id)
+          {/* 5 fixed tabs */}
+          {[
+            { id: 'inicio',  label: 'Inicio' },
+            { id: 'chats',   label: 'Chats' },
+            { id: 'torneos', label: 'Torneos' },
+            { id: 'ranking', label: 'Ranking' },
+            { id: 'perfil',  label: 'Perfil' },
+          ].map(({ id, label }) => {
+            const navItem = NAV.find(n => n.id === id)
+            if (!navItem) return null
+            const active = !showProfile && tab === id && !showMoreDrawer
             return (
-              <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : (setShowProfile(false), setTab(id))} style={{
+              <button key={id} onClick={() => { setShowProfile(false); setShowMoreDrawer(false); setTab(id) }} style={{
                 flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
                 justifyContent: 'center', gap: 4, border: 'none', background: 'none',
                 cursor: 'pointer', position: 'relative', transition: 'opacity .15s',
@@ -416,7 +572,7 @@ export default function App() {
                     boxShadow: `0 0 8px ${C.green}66`,
                   }}>{totalUnread > 99 ? '99+' : totalUnread}</span>
                 )}
-                {icon(active)}
+                {navItem.icon(active)}
                 <span style={{ fontSize: 10, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim, letterSpacing: '.3px' }}>
                   {label}
                 </span>
@@ -426,6 +582,22 @@ export default function App() {
               </button>
             )
           })}
+          {/* Más button */}
+          <button onClick={() => setShowMoreDrawer(d => !d)} style={{
+            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', gap: 4, border: 'none', background: 'none',
+            cursor: 'pointer', position: 'relative',
+          }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={showMoreDrawer ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="5" r="1" fill={showMoreDrawer ? C.green : C.textDim}/>
+              <circle cx="12" cy="12" r="1" fill={showMoreDrawer ? C.green : C.textDim}/>
+              <circle cx="12" cy="19" r="1" fill={showMoreDrawer ? C.green : C.textDim}/>
+            </svg>
+            <span style={{ fontSize: 10, fontWeight: showMoreDrawer ? 700 : 400, color: showMoreDrawer ? C.green : C.textDim }}>Más</span>
+            {showMoreDrawer && (
+              <div style={{ position: 'absolute', top: 0, left: '15%', right: '15%', height: 2, background: C.green, borderRadius: '0 0 2px 2px' }} />
+            )}
+          </button>
         </nav>
       )}
 
@@ -477,6 +649,7 @@ export default function App() {
 
         /* Animations */
         @keyframes msgIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+        @keyframes drawerUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .msg-in { animation: msgIn .18s ease-out both; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
