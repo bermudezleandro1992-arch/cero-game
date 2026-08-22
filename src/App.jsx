@@ -452,7 +452,7 @@ export default function App() {
           {showProfile
             ? <ProfileSheet onClose={() => setShowProfile(false)} />
             : tab === 'inicio'
-            ? <HomePage onGoTorneos={() => setTab('torneos')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} />
+            ? <HomePage onGoTorneos={() => setTab('torneos')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} />
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'
