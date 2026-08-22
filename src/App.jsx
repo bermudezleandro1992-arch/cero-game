@@ -23,6 +23,7 @@ import PerfilPage from './pages/PerfilPage'
 import ProfileSheet from './components/ProfileSheet'
 import CEOPanel from './components/CEOPanel'
 import UpdateBanner from './components/UpdateBanner'
+import CommunityDashboard from './components/CommunityDashboard'
 import { usePresence } from './hooks/usePresence'
 import { initPushNotifications, initWebPush, listenNotificationClicks } from './lib/pushNotifications'
 import { acquireWakeLock, releaseWakeLock } from './lib/appStartup'
@@ -485,10 +486,12 @@ export default function App() {
           }
         </div>
 
-        {/* RIGHT — chat */}
+        {/* RIGHT — chat or community dashboard */}
         <div className={`slfa-right${showChat ? ' slfa-right--visible' : ''}`}>
           {activeConversation
-            ? <ChatPage onBack={goBack} />
+            ? activeConversation.isCommunity && activeConversation.group_type === 'community'
+              ? <CommunityDashboard community={activeConversation} onBack={goBack} />
+              : <ChatPage onBack={goBack} />
             : <EmptyState />}
         </div>
       </div>
