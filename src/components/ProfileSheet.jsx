@@ -52,12 +52,12 @@ function VerifiedBadge() {
   )
 }
 
-export default function ProfileSheet({ onClose, forceSetup = false }) {
+export default function ProfileSheet({ onClose, forceSetup = false, initialShowVip = false }) {
   const { profile, updateProfile } = useAuthStore()
   const { themeId, setTheme, themes } = useTheme()
   const [showLegal, setShowLegal] = useState(false)
   const [showBotApi, setShowBotApi] = useState(false)
-  const [showVip, setShowVip] = useState(false)
+  const [showVip, setShowVip] = useState(initialShowVip)
   const [showDonations, setShowDonations] = useState(false)
   const [showSub, setShowSub] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)

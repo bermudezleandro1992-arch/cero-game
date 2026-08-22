@@ -355,9 +355,10 @@ export default function App() {
     return () => { listener.then(h => h.remove()) }
   }, [activeConversation, showProfile, tab])
 
-  // Open VipPage (ProfileSheet) from anywhere via custom event
+  // Open VipPage directly from anywhere via custom event
+  const [openVipDirect, setOpenVipDirect] = useState(false)
   useEffect(() => {
-    const handler = () => setShowProfile(true)
+    const handler = () => { setShowProfile(true); setOpenVipDirect(true) }
     window.addEventListener('open-vip-page', handler)
     return () => window.removeEventListener('open-vip-page', handler)
   }, [])
@@ -457,7 +458,7 @@ export default function App() {
         {/* LEFT — list or profile */}
         <div className={`slfa-left${showChat ? ' slfa-left--hidden' : ''}`}>
           {showProfile
-            ? <ProfileSheet onClose={() => setShowProfile(false)} />
+            ? <ProfileSheet onClose={() => { setShowProfile(false); setOpenVipDirect(false) }} initialShowVip={openVipDirect} />
             : tab === 'inicio'
             ? <HomePage onGoTorneos={() => setTab('torneos')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} />
             : tab === 'ranking'
