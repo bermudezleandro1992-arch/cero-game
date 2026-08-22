@@ -5,7 +5,7 @@
 -- ── 1. subscriptions ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.subscriptions (
   id                         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id                    UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id                    UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   plan                       TEXT NOT NULL CHECK (plan IN ('free', 'vip', 'pro')),
   status                     TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'canceled', 'expired', 'trial')),
   start_date                 TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -60,7 +60,7 @@ ON CONFLICT (plan) DO UPDATE SET
 -- ── 3. payment_history ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.payment_history (
   id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id                 UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id                 UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   amount                  DECIMAL(10,2) NOT NULL,
   currency                TEXT DEFAULT 'USD',
   plan                    TEXT NOT NULL,
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS public.community_invites (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   community_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
   token        TEXT UNIQUE NOT NULL DEFAULT substr(md5(random()::text), 1, 12),
-  created_by   UUID NOT NULL REFERENCES public.profiles(id),
+  created_by   UUID NOT NULL REFERENCES public.users(id),
   uses         INTEGER DEFAULT 0,
   max_uses     INTEGER DEFAULT 100,
   expires_at   TIMESTAMPTZ,
@@ -154,7 +154,7 @@ BEGIN
     WHERE conversation_id = p_community_id AND user_id = v_uid
       AND role IN ('owner', 'admin', 'ceo')
     UNION ALL
-    SELECT 1 FROM public.profiles WHERE id = v_uid AND role IN ('ceo', 'admin')
+    SELECT 1 FROM public.users WHERE id = v_uid AND role IN ('ceo', 'admin')
   ) THEN
     RETURN jsonb_build_object('ok', false, 'error', 'no_permission');
   END IF;
