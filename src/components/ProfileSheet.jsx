@@ -7,7 +7,9 @@ import LegalPage from '../pages/LegalPage'
 import BotApiPage from '../pages/BotApiPage'
 import VipPage from '../pages/VipPage'
 import DonationsPage from '../pages/DonationsPage'
+import SubscriptionPanel from '../pages/SubscriptionPanel'
 import { useTheme } from '../lib/ThemeContext'
+import { useSubscription } from '../hooks/useSubscription'
 
 // ── Role config ───────────────────────────────────────────────────────────────
 const ROLES = {
@@ -19,9 +21,10 @@ const ROLES = {
 }
 
 const PLANS = {
-  community: { label: 'Plan Comunidad',  color: '#3b82f6', bg: '#3b82f614', icon: '🌐' },
-  vip:       { label: 'Plan VIP',        color: '#f59e0b', bg: '#f59e0b14', icon: '⭐' },
-  free:      { label: 'Plan Gratuito',   color: '#64748b', bg: '#64748b14', icon: '🆓' },
+  community: { label: 'Comunidad PRO', color: '#8b5cf6', bg: '#8b5cf614', icon: '💎' },
+  pro:       { label: 'PRO',           color: '#8b5cf6', bg: '#8b5cf614', icon: '💎' },
+  vip:       { label: 'VIP',           color: '#f59e0b', bg: '#f59e0b14', icon: '⭐' },
+  free:      { label: 'Gratuito',      color: '#64748b', bg: '#64748b14', icon: '🆓' },
 }
 
 function RoleBadge({ role }) {
@@ -56,6 +59,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const [showBotApi, setShowBotApi] = useState(false)
   const [showVip, setShowVip] = useState(false)
   const [showDonations, setShowDonations] = useState(false)
+  const [showSub, setShowSub] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -77,10 +81,10 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const avatarInputRef = useRef(null)
 
-  // Plan & role (community plan free for everyone during beta)
   const userRole = profile?.role || 'member'
-  const userPlan = profile?.plan || 'community' // free community plan for all
   const isVerified = profile?.is_verified || false
+  const { plan: subPlan } = useSubscription(profile?.id)
+  const userPlan = subPlan || profile?.plan || 'free'
   const planCfg = PLANS[userPlan] || PLANS.free
 
   async function handleAvatarChange(e) {
@@ -139,6 +143,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   if (showBotApi) return <BotApiPage onBack={() => setShowBotApi(false)} />
   if (showVip) return <VipPage onBack={() => setShowVip(false)} />
   if (showDonations) return <DonationsPage onBack={() => setShowDonations(false)} />
+  if (showSub) return <SubscriptionPanel onBack={() => setShowSub(false)} onUpgrade={() => { setShowSub(false); setShowVip(true) }} />
 
   const inp = {
     width: '100%', background: C.panel2,
@@ -429,7 +434,8 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
 
             {/* Acciones */}
             {[
-              { icon: '⭐', label: 'Plan VIP', desc: 'Comunidades ilimitadas, bots y más', color: '#f59e0b', action: () => setShowVip(true) },
+              { icon: planCfg.icon, label: `Mi Suscripción · ${planCfg.label}`, desc: userPlan === 'free' ? 'Mejorar a VIP o PRO' : 'Ver plan, historial de pagos y más', color: planCfg.color, action: () => setShowSub(true) },
+              { icon: '⭐', label: 'Planes VIP y PRO', desc: 'Comunidades ilimitadas, bots y más', color: '#f59e0b', action: () => setShowVip(true) },
               { icon: '💚', label: 'Apoyá el proyecto', desc: 'Donaciones para mantener todo gratis', color: C.green, action: () => setShowDonations(true) },
               { icon: '🤖', label: 'API de Bots', desc: 'Conectá plataformas externas y bots', color: C.textDim, action: () => setShowBotApi(true) },
               { icon: '⚖️', label: 'Legal y Privacidad', desc: 'Términos, privacidad y reglamento', color: C.textDim, action: () => setShowLegal(true) },
