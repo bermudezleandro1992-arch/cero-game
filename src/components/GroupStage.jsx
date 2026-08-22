@@ -12,6 +12,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import MatchResultFlow from './MatchResultFlow'
+import { useSubscription } from '../hooks/useSubscription'
 
 // ── Paleta de colores por grupo ───────────────────────────────────────────────
 const GROUP_COLORS = [
@@ -325,8 +326,10 @@ export default function GroupStage({ tournamentId, profile, isAdmin, onReportMat
   const [data, setData]         = useState(null)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
-  const [activeGroup, setActiveGroup] = useState(null)  // id del grupo activo en tab
-  const [reportMatch, setReportMatch] = useState(null)  // match abierto en modal
+  const [activeGroup, setActiveGroup] = useState(null)
+  const [reportMatch, setReportMatch] = useState(null)
+  const { isVip, isPro } = useSubscription(profile?.id)
+  const hasAdvancedStats = isVip || isPro || isAdmin
 
   const load = useCallback(async () => {
     setLoading(true)

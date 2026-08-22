@@ -28,6 +28,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useSubscription } from '../hooks/useSubscription'
 import { C } from '../theme'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -302,6 +303,19 @@ export default function LiveDraw({
   classifies  = 2,
   onDrawComplete,
 }) {
+  const { isPro } = useSubscription(profile?.id)
+  const canUseDraw = isPro || isAdmin
+
+  if (!canUseDraw) return (
+    <div style={{ textAlign: 'center', padding: '40px 24px' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+      <p style={{ fontWeight: 700, fontSize: 16, color: '#8b5cf6', marginBottom: 6 }}>Sorteo en vivo — Plan PRO</p>
+      <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>
+        El sorteo en vivo animado está disponible para usuarios con plan PRO o administradores de la plataforma.
+      </p>
+    </div>
+  )
+
   const [phase, setPhase]       = useState('idle')   // idle | starting | spinning | drawing | done | replay
   const [groups, setGroups]     = useState([])
   const [events, setEvents]     = useState([])
