@@ -1355,7 +1355,7 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
     const { data } = await supabase
       .from('conversations')
       .select('id, name, description, group_type, tournament_status, tournament_format, tournament_mode, game, max_participants, created_by, avatar_url, banner_url, members:conversation_members(user_id)')
-      .eq('community_id', community.id)
+      .or(`community_id.eq.${community.id},and(created_by.eq.${profile?.id},community_id.is.null)`)
       .in('group_type', ['tournament', 'liga'])
       .order('created_at', { ascending: false })
     setItems(data || [])
