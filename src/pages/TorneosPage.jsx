@@ -477,38 +477,39 @@ export default function TorneosPage({ onNavigate }) {
     if (!profile?.id) return
     setLoading(true)
 
-    // Get all tournament/liga IDs the user is a member of
+    // Query 1: tournaments the user created
+    const { data: createdRows } = await supabase
+      .from('conversations')
+      .select('id, name, group_type, tournament_status, tournament_format, max_participants, game, platform, created_by, created_at, community_id')
+      .in('group_type', ['tournament', 'liga'])
+      .eq('created_by', profile.id)
+      .order('created_at', { ascending: false })
+
+    // Query 2: tournament IDs the user is a member of (but didn't create)
     const { data: memberRows } = await supabase
       .from('conversation_members')
       .select('conversation_id')
       .eq('user_id', profile.id)
 
-    const memberIds = (memberRows || []).map(r => r.conversation_id)
+    const memberTournamentIds = (memberRows || []).map(r => r.conversation_id)
+    const createdIds = new Set((createdRows || []).map(r => r.id))
+    const joinedIds = memberTournamentIds.filter(id => !createdIds.has(id))
 
-    // Query tournaments: member of OR created by
-    let ids = [...new Set([...memberIds])]
+    let joinedRows = []
+    if (joinedIds.length) {
+      const { data } = await supabase
+        .from('conversations')
+        .select('id, name, group_type, tournament_status, tournament_format, max_participants, game, platform, created_by, created_at, community_id')
+        .in('group_type', ['tournament', 'liga'])
+        .in('id', joinedIds.slice(0, 200))
+        .order('created_at', { ascending: false })
+      joinedRows = data || []
+    }
 
-    // Also grab ones created_by user (in case not in conversation_members)
-    const { data: created } = await supabase
-      .from('conversations')
-      .select('id')
-      .in('group_type', ['tournament', 'liga'])
-      .eq('created_by', profile.id)
+    const allRows = [...(createdRows || []), ...joinedRows]
+    if (!allRows.length) { setTorneos([]); setLoading(false); return }
 
-    const createdIds = (created || []).map(r => r.id)
-    ids = [...new Set([...ids, ...createdIds])]
-
-    if (!ids.length) { setTorneos([]); setLoading(false); return }
-
-    // Fetch tournament details
-    const { data: torneoRows } = await supabase
-      .from('conversations')
-      .select('id, name, group_type, tournament_status, tournament_format, max_participants, game, platform, created_by, created_at, community_id')
-      .in('group_type', ['tournament', 'liga'])
-      .in('id', ids)
-      .order('created_at', { ascending: false })
-
-    if (!torneoRows?.length) { setTorneos([]); setLoading(false); return }
+    const torneoRows = allRows
 
     // Count participants per tournament
     const torneoIds = torneoRows.map(t => t.id)
