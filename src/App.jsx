@@ -13,6 +13,7 @@ import LlamadasPage from './pages/LlamadasPage'
 import ContactsListPage from './pages/ContactsListPage'
 import NotificationsPage from './pages/NotificationsPage'
 import TournamentsPage from './pages/TournamentsPage'
+import TorneosPage from './pages/TorneosPage'
 import DiscoverPage from './pages/DiscoverPage'
 import AnnouncementsPage from './pages/AnnouncementsPage'
 import AdminPage from './pages/AdminPage'
@@ -464,7 +465,7 @@ export default function App() {
             : tab === 'explorar'
             ? <DiscoverPage />
             : tab === 'torneos'
-            ? <TournamentsPage />
+            ? <TorneosPage />
             : tab === 'anuncios'
             ? <AnnouncementsPage />
             : tab === 'admin'
