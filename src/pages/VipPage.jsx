@@ -12,22 +12,23 @@ const PLANS = [
     emoji: '🆓',
     color: '#6b7280',
     features: [
-      '✅ Mensajes ilimitados',
-      '✅ Chats 1 a 1',
+      '✅ Mensajes 1 a 1 ilimitados',
       '✅ Grupos hasta 50 personas',
       '✅ Archivos hasta 10 MB',
-      '✅ Llamadas de audio y video',
-      '✅ Historias',
-      '❌ Sin comunidades avanzadas',
+      '✅ Llamadas de audio y video (como WhatsApp)',
+      '✅ Historias y estados',
+      '✅ 1 comunidad básica (hasta 50 miembros)',
+      '✅ 1 torneo o liga activo a la vez',
+      '❌ Sin estadísticas avanzadas',
       '❌ Sin bots personalizados',
-      '❌ Sin estadísticas',
+      '❌ Sin panel CEO / admin Pro',
     ],
   },
   {
     id: 'vip',
     name: 'VIP',
-    price: '$4.99',
-    priceUSD: 4.99,
+    price: '$5',
+    priceUSD: 5,
     period: 'por mes',
     emoji: '⭐',
     color: '#f59e0b',
@@ -35,38 +36,44 @@ const PLANS = [
     features: [
       '✅ Todo lo del plan Gratis',
       '✅ Grupos hasta 1.000 personas',
-      '✅ Comunidades ilimitadas',
+      '✅ Hasta 3 comunidades (200 miembros c/u)',
       '✅ Archivos hasta 2 GB',
-      '✅ Bots personalizados',
-      '✅ Estadísticas de comunidades',
-      '✅ Badge VIP ⭐ visible en tu perfil',
-      '✅ Mensajes temporales avanzados',
-      '✅ Canales de difusión',
-      '✅ Soporte prioritario',
+      '✅ Canales de difusión (como Telegram)',
+      '✅ Estadísticas de tus comunidades',
+      '✅ Badge VIP ⭐ en tu perfil',
+      '✅ Ranking global 🏅',
+      '✅ Hasta 3 torneos/ligas simultáneos',
+      '✅ Soporte prioritario 24/7',
     ],
-    annual: { id: 'vip_anual', price: '$39.99', save: '33%' },
+    annual: { id: 'vip_anual', price: '$40', save: '33%' },
   },
   {
     id: 'comunidad',
-    name: 'Comunidad Pro',
-    price: '$9.99',
-    priceUSD: 9.99,
+    name: 'Comunidad PRO',
+    price: '$10',
+    priceUSD: 10,
     period: 'por mes',
     emoji: '🏆',
     color: '#8b5cf6',
+    tiers: [
+      { label: 'Starter', price: '$10', priceUSD: 10, desc: 'Hasta 500 miembros', id: 'com_starter' },
+      { label: 'Growth',  price: '$15', priceUSD: 15, desc: 'Hasta 2.000 miembros', id: 'com_growth' },
+      { label: 'Elite',   price: '$20', priceUSD: 20, desc: 'Miembros ilimitados', id: 'com_elite' },
+    ],
     features: [
       '✅ Todo lo del plan VIP',
-      '✅ Grupos hasta 10.000 personas',
-      '✅ API completa para bots',
-      '✅ Panel de administración Pro',
-      '✅ Roles y permisos avanzados',
-      '✅ Torneos y eventos integrados',
+      '✅ Comunidades sin límite de miembros (según tier)',
+      '✅ Panel CEO completo 🎛️',
+      '✅ Roles y permisos avanzados (CEO, Admin, Org, Mod)',
+      '✅ Torneos y ligas ilimitados',
+      '✅ Sorteos en vivo 🎰',
+      '✅ API completa para bots de torneos',
+      '✅ Compartir pantalla grupal (como Discord)',
       '✅ Estadísticas en tiempo real',
-      '✅ Sin publicidad nunca',
-      '✅ Badge especial 🏆',
+      '✅ Badge especial 🏆 y sin publicidad',
       '✅ Acceso anticipado a novedades',
     ],
-    annual: { id: 'com_anual', price: '$79.99', save: '33%' },
+    annual: { id: 'com_anual', price: '$80', save: '33%' },
   },
 ]
 
@@ -221,6 +228,7 @@ function Section({ label, children }) {
 export default function VipPage({ onBack }) {
   const { profile } = useAuthStore()
   const [selected, setSelected] = useState('vip')
+  const [comunidadTier, setComunidadTier] = useState(0) // index into PLANS[2].tiers
   const [annual, setAnnual] = useState(false)
   const [step, setStep] = useState('plans')   // 'plans' | 'payment' | 'manual' | 'success'
   const [payMethod, setPayMethod] = useState(null)
@@ -264,10 +272,14 @@ export default function VipPage({ onBack }) {
   }
 
   const plan = PLANS.find(p => p.id === selected)
-  const planIdToSend = annual && plan?.annual ? plan.annual.id : selected
-  const planUSD = annual && plan?.annual
-    ? parseFloat(plan.annual.price.replace('$', ''))
-    : (plan?.priceUSD || 0)
+  const activeTier = plan?.tiers ? plan.tiers[comunidadTier] : null
+  const activePriceUSD = activeTier ? activeTier.priceUSD : (plan?.priceUSD || 0)
+  const planIdToSend = annual && plan?.annual
+    ? (activeTier ? activeTier.id + '_anual' : plan.annual.id)
+    : (activeTier ? activeTier.id : selected)
+  const planUSD = annual
+    ? parseFloat((activePriceUSD * 12 * 0.67).toFixed(2))
+    : activePriceUSD
 
   async function handleMercadoPago() {
     setLoading(true)
@@ -746,7 +758,12 @@ export default function VipPage({ onBack }) {
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {PLANS.map(p => {
             const isSelected = selected === p.id
-            const displayPrice = annual && p.annual ? p.annual.price : p.price
+            const tier = p.tiers ? p.tiers[comunidadTier] : null
+            const basePrice = tier ? tier.price : p.price
+            const basePriceUSD = tier ? tier.priceUSD : (p.priceUSD || 0)
+            const displayPrice = annual && p.annual
+              ? `$${Math.round(basePriceUSD * 12 * 0.67)}`
+              : basePrice
             return (
               <button
                 key={p.id}
@@ -775,10 +792,28 @@ export default function VipPage({ onBack }) {
                     <div style={{ color: p.color, fontWeight: 800, fontSize: 16 }}>{p.name}</div>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                       <span style={{ color: C.text, fontWeight: 900, fontSize: 20 }}>{displayPrice}</span>
-                      <span style={{ color: C.textDim, fontSize: 11 }}>{annual && p.annual ? 'por año' : p.period}</span>
+                      <span style={{ color: C.textDim, fontSize: 11 }}>{annual && p.annual ? 'por año' : (p.period || 'por mes')}</span>
                     </div>
                   </div>
                 </div>
+
+                {/* Tier selector for Comunidad PRO */}
+                {p.tiers && isSelected && (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }} onClick={e => e.stopPropagation()}>
+                    {p.tiers.map((t, i) => (
+                      <button key={t.id} onClick={e => { e.stopPropagation(); setComunidadTier(i) }} style={{
+                        flex: 1, padding: '8px 4px', borderRadius: 10, border: `1.5px solid ${comunidadTier === i ? p.color : C.border}`,
+                        background: comunidadTier === i ? `${p.color}20` : C.panel2, cursor: 'pointer',
+                        color: comunidadTier === i ? p.color : C.textDim, fontSize: 11, fontWeight: 700, textAlign: 'center',
+                      }}>
+                        <div>{t.label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 900, color: comunidadTier === i ? p.color : C.text }}>{t.price}/mes</div>
+                        <div style={{ fontSize: 10, fontWeight: 400, color: C.textDim, marginTop: 1 }}>{t.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {p.features.map(f => (
                     <div key={f} style={{ color: f.startsWith('❌') ? C.textDim : C.text2, fontSize: 12.5, lineHeight: 1.4 }}>{f}</div>

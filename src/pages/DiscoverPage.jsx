@@ -156,13 +156,19 @@ export default function DiscoverPage() {
     try {
       const isCommunity = group.group_type === 'community'
       if (isCommunity) {
-        // Usar RPC para validar límites de capacidad
         const { data, error } = await supabase.rpc('join_community', { p_conversation_id: group.id })
-        if (error || !data?.ok) {
-          const msg = data?.error === 'capacity_reached'
-            ? `Esta comunidad llegó al límite de ${data.max} miembros.`
-            : 'No se pudo unir a la comunidad.'
-          alert(msg)
+        if (error) {
+          // RPC no disponible → insert directo
+          await supabase.from('conversation_members').upsert(
+            { conversation_id: group.id, user_id: profile.id },
+            { onConflict: 'conversation_id,user_id' }
+          )
+        } else if (!data?.ok) {
+          if (data?.error === 'capacity_reached') {
+            alert(`Esta comunidad llegó al límite de ${data.max} miembros.`)
+          } else if (data?.error !== 'already_member') {
+            alert('No se pudo unir a la comunidad.')
+          }
           setJoining(null)
           return
         }
