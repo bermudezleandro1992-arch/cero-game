@@ -36,10 +36,12 @@ const GAME_CATALOG = {
 }
 
 const TOURNAMENT_STATUS = {
-  open:       { label: 'Inscripciones abiertas', color: '#22c55e', bg: '#22c55e18' },
-  in_progress:{ label: 'En curso',               color: '#f59e0b', bg: '#f59e0b18' },
-  finished:   { label: 'Finalizado',             color: '#6b7280', bg: '#6b728018' },
-  upcoming:   { label: 'Próximamente',           color: '#3b82f6', bg: '#3b82f618' },
+  inscripcion: { label: 'Inscripciones abiertas', color: '#22c55e', bg: '#22c55e18' },
+  en_curso:    { label: 'En curso',               color: '#f59e0b', bg: '#f59e0b18' },
+  finalizado:  { label: 'Finalizado',             color: '#6b7280', bg: '#6b728018' },
+  cancelado:   { label: 'Cancelado',              color: '#ef4444', bg: '#ef444418' },
+  draw:        { label: 'Sorteo',                 color: '#8b5cf6', bg: '#8b5cf618' },
+  proximamente:{ label: 'Próximamente',           color: '#3b82f6', bg: '#3b82f618' },
 }
 
 const TABS = [
@@ -82,19 +84,28 @@ export default function DiscoverPage() {
     if (tab === 'tournament') {
       let q = supabase
         .from('conversations')
-        .select('id, name, description, avatar_url, group_type, member_count, tags, is_group, created_at, status, game, max_participants, created_by')
-        .eq('is_group', true)
+        .select('id, name, description, avatar_url, group_type, tournament_status, game, max_participants, created_by, created_at, banner_url')
         .eq('is_public', true)
-        .eq('group_type', 'tournament')
+        .in('group_type', ['tournament', 'liga'])
         .order('created_at', { ascending: false })
         .limit(60)
 
       if (search.trim()) q = q.ilike('name', `%${search.trim()}%`)
-      if (gameFilter)    q = q.eq('game', gameFilter)
-      if (statusFilter)  q = q.eq('status', statusFilter)
+      if (gameFilter)    q = q.ilike('game', `%${gameFilter}%`)
+      if (statusFilter)  q = q.eq('tournament_status', statusFilter)
 
-      const { data } = await q
-      setItems(data || [])
+      const { data: tRows } = await q
+      // Enrich with participant counts
+      const tIds = (tRows || []).map(t => t.id)
+      let countMap = {}
+      if (tIds.length) {
+        const { data: mRows } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .in('conversation_id', tIds)
+        ;(mRows || []).forEach(r => { countMap[r.conversation_id] = (countMap[r.conversation_id] || 0) + 1 })
+      }
+      setItems((tRows || []).map(t => ({ ...t, participant_count: countMap[t.id] || 0 })))
     } else if (tab === 'event') {
       let q = supabase
         .from('events')
@@ -112,17 +123,25 @@ export default function DiscoverPage() {
     } else {
       let q = supabase
         .from('conversations')
-        .select('id, name, description, avatar_url, group_type, member_count, tags, is_group, created_at, game, created_by, is_public, is_locked, who_can_send, who_can_add, who_can_edit_info, require_approval, announcement_only, torneos_enabled, ligas_enabled, clanes_enabled, invite_link, pinned_message')
-        .eq('is_group', true)
+        .select('id, name, description, avatar_url, group_type, tags, created_at, game, created_by, is_public')
         .eq('is_public', true)
         .eq('group_type', tab)
-        .order('member_count', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(60)
 
       if (search.trim()) q = q.ilike('name', `%${search.trim()}%`)
 
-      const { data } = await q
-      setItems(data || [])
+      const { data: convRows } = await q
+      const convIds = (convRows || []).map(c => c.id)
+      let convCountMap = {}
+      if (convIds.length) {
+        const { data: mRows } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .in('conversation_id', convIds)
+        ;(mRows || []).forEach(r => { convCountMap[r.conversation_id] = (convCountMap[r.conversation_id] || 0) + 1 })
+      }
+      setItems((convRows || []).map(c => ({ ...c, participant_count: convCountMap[c.id] || 0 })))
     }
 
     setLoading(false)
@@ -252,10 +271,11 @@ export default function DiscoverPage() {
     }
 
     if (tab === 'tournament') {
-      const gameInfo = Object.values(GAME_CATALOG).find(g => g.label === item.game)
-      const status = TOURNAMENT_STATUS[item.status] || TOURNAMENT_STATUS.open
-      const members = item.member_count || 0
+      const gameInfo = Object.values(GAME_CATALOG).find(g => g.label === item.game) || (item.game ? { icon: '🎮', label: item.game } : null)
+      const status = TOURNAMENT_STATUS[item.tournament_status] || TOURNAMENT_STATUS.inscripcion
+      const members = item.participant_count || 0
       const maxP = item.max_participants || '?'
+      const isLiga = item.group_type === 'liga'
 
       return (
         <div key={item.id} style={{
@@ -281,8 +301,9 @@ export default function DiscoverPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px' }}>
             <Avatar name={item.name} url={item.avatar_url} size={48} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: C.text, fontWeight: 800, fontSize: 14, marginBottom: 2 }}>
-                {item.name}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: C.text, fontWeight: 800, fontSize: 14 }}>{item.name}</span>
+                {isLiga && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: '#10b98118', color: '#10b981' }}>LIGA</span>}
               </div>
               {item.description && (
                 <p style={{ margin: '0 0 4px', color: C.textDim, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -322,7 +343,7 @@ export default function DiscoverPage() {
     // Comunidad / Grupo
     const typeLabel = tab === 'community' ? 'Comunidad' : 'Grupo'
     const typeColor = tab === 'community' ? '#8b5cf6' : C.green
-    const members = item.member_count || 0
+    const members = item.participant_count || 0
 
     // Parse tags for game display
     const rawTags = Array.isArray(item.tags) ? item.tags : (typeof item.tags === 'string' ? (item.tags.startsWith('[') ? JSON.parse(item.tags) : item.tags.split(',').map(t => t.trim())) : [])
@@ -494,10 +515,10 @@ export default function DiscoverPage() {
               }}
             >
               <option value="">Estado: Todos</option>
-              <option value="open">Inscripciones abiertas</option>
-              <option value="in_progress">En curso</option>
-              <option value="upcoming">Próximamente</option>
-              <option value="finished">Finalizados</option>
+                      <option value="inscripcion">Inscripciones abiertas</option>
+              <option value="en_curso">En curso</option>
+              <option value="draw">Sorteo</option>
+              <option value="finalizado">Finalizados</option>
             </select>
             <select
               value={gameFilter}

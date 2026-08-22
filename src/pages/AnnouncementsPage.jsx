@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { C } from '../theme'
 import { canPublishAnnouncements } from '../lib/roles'
+import TournamentDashboard from '../components/TournamentDashboard'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(ts) {
@@ -62,6 +63,8 @@ function NewAnnouncementForm({ onClose, onCreate }) {
   const [saving, setSaving]     = useState(false)
   const [myCommunities, setMyCommunities] = useState([])
   const [selectedCommunity, setSelectedCommunity] = useState('')
+  const [myTournaments, setMyTournaments] = useState([])
+  const [selectedTournament, setSelectedTournament] = useState('')
   const fileRef = useRef()
 
   useEffect(() => {
@@ -76,6 +79,16 @@ function NewAnnouncementForm({ onClose, onCreate }) {
         setMyCommunities(convs)
         if (convs.length === 1) setSelectedCommunity(convs[0].id)
       })
+    // Load user's tournaments for linking
+    supabase
+      .from('conversations')
+      .select('id, name, group_type, tournament_status')
+      .in('group_type', ['tournament', 'liga'])
+      .eq('created_by', profile.id)
+      .in('tournament_status', ['inscripcion', 'draw', 'en_curso'])
+      .order('created_at', { ascending: false })
+      .limit(20)
+      .then(({ data }) => setMyTournaments(data || []))
   }, [profile?.id])
 
   function pickImage(e) {
@@ -106,6 +119,7 @@ function NewAnnouncementForm({ onClose, onCreate }) {
         link_url: linkUrl.trim() || null,
         link_label: linkUrl.trim() ? (linkLabel.trim() || 'Ver más') : null,
         conversation_id: selectedCommunity || null,
+        tournament_id: selectedTournament || null,
       }).select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url), community:conversations!announcements_conversation_id_fkey(id, name, group_type)').single()
       if (error) throw new Error(error.message)
       onCreate(data)
@@ -221,6 +235,20 @@ function NewAnnouncementForm({ onClose, onCreate }) {
             </div>
           </div>
 
+          {/* Link torneo */}
+          {(category === 'torneo' || category === 'liga') && myTournaments.length > 0 && (
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Vincular torneo/liga (opcional)</label>
+              <select value={selectedTournament} onChange={e => setSelectedTournament(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                <option value="">Sin vincular</option>
+                {myTournaments.map(t => (
+                  <option key={t.id} value={t.id}>{t.group_type === 'liga' ? '⚽' : '🏆'} {t.name}</option>
+                ))}
+              </select>
+              {selectedTournament && <p style={{ margin: '4px 0 0', fontSize: 11, color: C.green }}>✓ Se mostrará botón "Ver torneo →" en el anuncio</p>}
+            </div>
+          )}
+
           {/* Link */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Link externo (opcional)</label>
@@ -248,11 +276,12 @@ function NewAnnouncementForm({ onClose, onCreate }) {
 }
 
 // ── Single announcement card ──────────────────────────────────────────────────
-function AnnouncementCard({ ann, myId, onLike, onDelete }) {
+function AnnouncementCard({ ann, myId, onLike, onDelete, onViewTournament }) {
   const cfg = CATEGORY_CFG[ann.category] || CATEGORY_CFG.general
   const liked = ann.liked_by_me
   const likeCount = ann.like_count || 0
   const isAuthor = ann.author_id === myId
+  const hasTournament = ann.tournament_id || (ann.category === 'torneo' && ann.community?.id)
 
   return (
     <div style={{
@@ -315,22 +344,39 @@ function AnnouncementCard({ ann, myId, onLike, onDelete }) {
           <p style={{ margin: '0 0 12px', color: C.text2, fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{ann.body}</p>
         )}
 
-        {/* Link button */}
-        {ann.link_url && (
-          <a
-            href={ann.link_url} target="_blank" rel="noopener noreferrer"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '9px 18px', borderRadius: 10,
-              background: C.green, color: C.bg,
-              fontSize: 13, fontWeight: 700, textDecoration: 'none',
-              marginBottom: 12,
-              boxShadow: `0 2px 10px ${C.green}44`,
-            }}
-          >
-            🔗 {ann.link_label || 'Ver más'}
-          </a>
-        )}
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: ann.link_url || ann.tournament_id ? 12 : 0 }}>
+          {ann.tournament_id && (
+            <button
+              onClick={() => onViewTournament && onViewTournament(ann.tournament_id)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '9px 18px', borderRadius: 10,
+                background: C.green, color: C.bg, border: 'none', cursor: 'pointer',
+                fontSize: 13, fontWeight: 700,
+                boxShadow: `0 2px 10px ${C.green}44`,
+              }}
+            >
+              {ann.category === 'liga' ? '⚽ Ver liga →' : '🏆 Ver torneo →'}
+            </button>
+          )}
+          {ann.link_url && (
+            <a
+              href={ann.link_url} target="_blank" rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '9px 18px', borderRadius: 10,
+                background: ann.tournament_id ? C.panel2 : C.green,
+                color: ann.tournament_id ? C.text2 : C.bg,
+                fontSize: 13, fontWeight: 700, textDecoration: 'none',
+                border: ann.tournament_id ? `1px solid ${C.border}` : 'none',
+                boxShadow: !ann.tournament_id ? `0 2px 10px ${C.green}44` : 'none',
+              }}
+            >
+              🔗 {ann.link_label || 'Ver más'}
+            </a>
+          )}
+        </div>
 
         {/* Footer: author + community + time + actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
@@ -392,12 +438,13 @@ export default function AnnouncementsPage() {
   const [likedSet, setLikedSet] = useState(new Set())
   const [likeCounts, setLikeCounts] = useState({})
   const [canPublish, setCanPublish] = useState(false)
+  const [viewingTournamentId, setViewingTournamentId] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     let q = supabase
       .from('announcements')
-      .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url), community:conversations!announcements_conversation_id_fkey(id, name, group_type)')
+      .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url), community:conversations!announcements_conversation_id_fkey(id, name, group_type), tournament:conversations!announcements_tournament_id_fkey(id, name, tournament_status, group_type)')
       .eq('is_active', true)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
@@ -496,6 +543,24 @@ export default function AnnouncementsPage() {
     setShowForm(false)
   }
 
+  if (viewingTournamentId) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <button onClick={() => setViewingTournamentId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: 4 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+          </button>
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>Torneo</span>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <TournamentDashboard tournamentId={viewingTournamentId} profile={profile} isAdmin={false} onBack={() => setViewingTournamentId(null)} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
 
@@ -584,6 +649,7 @@ export default function AnnouncementsPage() {
                 myId={profile?.id}
                 onLike={handleLike}
                 onDelete={handleDelete}
+                onViewTournament={setViewingTournamentId}
               />
             ))}
           </div>
