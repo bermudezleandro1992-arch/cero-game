@@ -683,7 +683,21 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
                         borderRadius: 4, padding: '1px 5px', letterSpacing: '0.5px', textTransform: 'uppercase',
                       }}>Comunidad</span>
                     )}
-                    {isGroup && !isCommunity && (
+                    {isGroup && !isCommunity && conv.group_type === 'tournament' && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, color: '#f59e0b', flexShrink: 0,
+                        background: '#f59e0b18', border: '1px solid #f59e0b40',
+                        borderRadius: 4, padding: '1px 5px', letterSpacing: '0.5px', textTransform: 'uppercase',
+                      }}>Torneo</span>
+                    )}
+                    {isGroup && !isCommunity && conv.group_type === 'liga' && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, color: '#38bdf8', flexShrink: 0,
+                        background: '#38bdf818', border: '1px solid #38bdf840',
+                        borderRadius: 4, padding: '1px 5px', letterSpacing: '0.5px', textTransform: 'uppercase',
+                      }}>Liga</span>
+                    )}
+                    {isGroup && !isCommunity && !conv.group_type && (
                       <span style={{
                         fontSize: 9, fontWeight: 700, color: C.green, flexShrink: 0,
                         background: `${C.green}15`, border: `1px solid ${C.green}30`,
@@ -822,7 +836,6 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
       <div style={{ position: 'absolute', bottom: 20, right: 16, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, zIndex: 30 }}>
         {showFab && (
           <>
-            <FabItem label="Nueva comunidad" icon="🌐" onClick={() => { setShowFab(false); setNewGroupType('community'); setShowNewGroup(true) }} />
             <FabItem label="Nuevo grupo" icon="👥" onClick={() => { setShowFab(false); setNewGroupType('group'); setShowNewGroup(true) }} />
             <FabItem label="Agregar contacto" icon="➕" onClick={() => { setShowFab(false); setShowAddContact(true); setAddContactQuery(''); setAddContactResults([]) }} />
             <FabItem label="Nuevo chat" icon="💬" onClick={() => { setShowFab(false); document.querySelector('input[placeholder*="Buscar"]')?.focus() }} />
