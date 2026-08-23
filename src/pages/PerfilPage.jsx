@@ -140,6 +140,35 @@ function PreferenciasTab({ profile }) {
           </label>
         </div>
       </section>
+
+      {/* Notificaciones */}
+      <section>
+        <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 12 }}>🔔 Notificaciones</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {[
+            ['notif_messages',    '💬 Nuevos mensajes'],
+            ['notif_calls',       '📞 Llamadas entrantes'],
+            ['notif_torneos',     '🏆 Torneos en mis comunidades'],
+            ['notif_resultados',  '⚽ Resultados de partidos'],
+            ['notif_anuncios',    '📢 Anuncios de CEO/Organizador'],
+            ['notif_solicitudes', '🔔 Solicitudes de unión (admins)'],
+            ['notif_partidos',    '⏰ Recordatorio de próximo partido'],
+          ].map(([key, label]) => (
+            <label key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, cursor: 'pointer' }}>
+              <span style={{ color: C.text, fontSize: 13, fontWeight: 500 }}>{label}</span>
+              <div onClick={() => saveSound(key, sounds[key] === false ? true : false)} style={{
+                width: 42, height: 24, borderRadius: 12, position: 'relative', cursor: 'pointer', flexShrink: 0,
+                background: sounds[key] === false ? C.border : C.green, transition: 'background .2s',
+              }}>
+                <div style={{
+                  position: 'absolute', top: 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left .2s',
+                  left: sounds[key] === false ? 2 : 18,
+                }} />
+              </div>
+            </label>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
