@@ -5,6 +5,7 @@ import { C } from '../theme'
 import { THEMES } from '../lib/theme'
 import { useTheme } from '../lib/ThemeContext'
 import { saveSoundSettings } from '../lib/sounds'
+import LegalPage from './LegalPage'
 
 function Spinner() {
   return (
@@ -257,59 +258,75 @@ function ReferidosTab({ profile }) {
 }
 
 // ── Cuenta Tab ────────────────────────────────────────────────────────────────
+const PLAN_LIMITS = {
+  free:      { label: 'Gratis',        color: '#64748b', icon: '🆓', desc: 'Gratuito · Sin vencimiento', limits: [['🌐 Comunidades', '1'], ['👥 Miembros por comunidad', '50'], ['🏆 Torneos simultáneos', '1'], ['⚽ Jugadores por torneo', '8']] },
+  vip:       { label: 'VIP',           color: '#f59e0b', icon: '⭐', desc: 'Premium · Acceso completo',   limits: [['🌐 Comunidades', '3'], ['👥 Miembros por comunidad', '200'], ['🏆 Torneos simultáneos', '3'], ['⚽ Jugadores por torneo', '64']] },
+  comunidad: { label: 'Comunidad PRO', color: '#8b5cf6', icon: '🏆', desc: 'Profesional · Sin límites',  limits: [['🌐 Comunidades', 'Ilimitadas'], ['👥 Miembros', 'Según tier'], ['🏆 Torneos', 'Ilimitados'], ['⚽ Jugadores', '512+']] },
+  ceo:       { label: 'CEO',           color: '#00e676', icon: '👑', desc: 'Administrador · Acceso total', limits: [['🌐 Comunidades', 'Ilimitadas'], ['👥 Miembros', 'Ilimitados'], ['🏆 Torneos', 'Ilimitados'], ['⚽ Jugadores', 'Ilimitados']] },
+}
+
 function CuentaTab({ profile, onGoVip }) {
-  const plan = PLAN_CFG[profile?.role] || PLAN_CFG.free
-  const isPro = profile?.role === 'comunidad' || profile?.role === 'ceo'
+  const role = profile?.role || 'free'
+  const plan = PLAN_CFG[role] || PLAN_CFG.free
+  const limits = PLAN_LIMITS[role] || PLAN_LIMITS.free
+  const isPro = role === 'comunidad' || role === 'ceo'
+  const isVip = role === 'vip'
 
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Plan actual */}
-      <div style={{ background: C.panel, border: `2px solid ${plan.color}40`, borderRadius: 14, padding: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <span style={{ fontSize: 28 }}>{plan.icon}</span>
+
+      {/* Mi Suscripción */}
+      <div style={{ background: C.panel, border: `2px solid ${plan.color}40`, borderRadius: 16, overflow: 'hidden' }}>
+        <div style={{ background: `${plan.color}18`, padding: '18px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 14, background: `${plan.color}22`, border: `2px solid ${plan.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>{plan.icon}</div>
           <div>
-            <div style={{ color: plan.color, fontWeight: 900, fontSize: 18 }}>Plan {plan.label}</div>
-            <div style={{ color: C.textDim, fontSize: 11 }}>
-              {profile?.role === 'free' && 'Acceso básico — 1 torneo/día, hasta 8 jugadores'}
-              {profile?.role === 'vip' && 'Acceso completo — torneos ilimitados, estadísticas avanzadas'}
-              {(profile?.role === 'comunidad' || profile?.role === 'ceo') && 'Creación ilimitada — torneos, ligas, comunidades, API de bots'}
-            </div>
+            <div style={{ color: plan.color, fontWeight: 900, fontSize: 20 }}>{limits.label}</div>
+            <div style={{ color: C.textDim, fontSize: 11, marginTop: 2 }}>{limits.desc}</div>
           </div>
         </div>
+
         {profile?.subscription_expires_at && (
-          <div style={{ color: C.textDim, fontSize: 11, marginBottom: 10 }}>
-            Vence: {new Date(profile.subscription_expires_at).toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' })}
+          <div style={{ padding: '8px 16px', background: C.panel2, fontSize: 11, color: C.textDim, borderBottom: `1px solid ${C.border}` }}>
+            📅 Vence: {new Date(profile.subscription_expires_at).toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' })}
           </div>
         )}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {profile?.role === 'free' && (
-            <button onClick={() => onGoVip?.('vip')} style={{ padding: '8px 16px', background: '#f59e0b', border: 'none', borderRadius: 8, color: '#000', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
-              ⭐ Mejorar a VIP — $5/mes
-            </button>
-          )}
-          {(profile?.role === 'free' || profile?.role === 'vip') && (
-            <button onClick={() => onGoVip?.('pro')} style={{ padding: '8px 16px', background: '#8b5cf6', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
-              💎 Comunidad PRO — $15/mes
-            </button>
-          )}
+
+        <div style={{ padding: 14 }}>
+          <div style={{ color: C.textDim, fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>Límites incluidos</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {limits.limits.map(([label, val]) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ color: C.text, fontSize: 13 }}>{label}</span>
+                <span style={{ color: plan.color, fontWeight: 800, fontSize: 13 }}>{val}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* API de Bots (solo PRO) */}
+      {/* Upgrade */}
+      {(role === 'free' || role === 'vip') && (
+        <button onClick={() => onGoVip?.()}
+          style={{ padding: '14px', background: 'linear-gradient(135deg, #f59e0b, #8b5cf6)', border: 'none', borderRadius: 12, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', letterSpacing: 0.3 }}>
+          ⭐ Mejorar a VIP o PRO →
+        </button>
+      )}
+
+      {/* API de Bots (solo PRO/CEO) */}
       {isPro && (
         <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
           <div style={{ color: C.text, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>🤖 API de Bots</div>
-          <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: C.green, wordBreak: 'break-all', marginBottom: 10 }}>
+          <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: C.green, wordBreak: 'break-all', marginBottom: 8, userSelect: 'all' }}>
             {profile?.api_token || 'nxt_' + profile?.id?.replace(/-/g,'').slice(0,24)}
           </div>
-          <div style={{ color: C.textDim, fontSize: 11 }}>Usá este token para integrar bots con la API de NexoTribu</div>
+          <div style={{ color: C.textDim, fontSize: 11 }}>Tocá el token para copiarlo. Usalo para integrar bots con la API de Mi Mensajero.</div>
         </div>
       )}
 
-      {/* Soporte / donaciones */}
+      {/* Soporte */}
       <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
         <div style={{ color: C.text, fontWeight: 800, fontSize: 14, marginBottom: 6 }}>❤️ Apoyá el proyecto</div>
-        <div style={{ color: C.textDim, fontSize: 12, marginBottom: 12 }}>Tu apoyo nos ayuda a mantener NexoTribu gratuito y en constante mejora.</div>
+        <div style={{ color: C.textDim, fontSize: 12, marginBottom: 12 }}>Tu apoyo nos ayuda a mantener Mi Mensajero gratuito y en constante mejora.</div>
         <button style={{ padding: '9px 18px', background: `${C.green}20`, border: `1px solid ${C.green}40`, borderRadius: 8, color: C.green, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
           💚 Hacer una donación
         </button>
@@ -320,47 +337,29 @@ function CuentaTab({ profile, onGoVip }) {
 
 // ── Legal Tab ─────────────────────────────────────────────────────────────────
 function LegalTab() {
-  const links = [
-    { label: 'Términos y Condiciones', icon: '📄' },
-    { label: 'Política de Privacidad', icon: '🔒' },
-    { label: 'Política de Cookies', icon: '🍪' },
-    { label: 'Reglamento de Torneos', icon: '🏆' },
-  ]
-  return (
-    <div style={{ padding: 16 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {links.map(l => (
-          <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, cursor: 'pointer' }}>
-            <span style={{ fontSize: 18 }}>{l.icon}</span>
-            <span style={{ color: C.text, fontSize: 14, fontWeight: 600, flex: 1 }}>{l.label}</span>
-            <span style={{ color: C.textDim }}>›</span>
-          </div>
-        ))}
-      </div>
-      <div style={{ color: C.textDim, fontSize: 11, textAlign: 'center', marginTop: 20 }}>
-        NexoTribu v1.0 · Última actualización: {new Date().toLocaleDateString('es', { month: 'long', year: 'numeric' })}
-      </div>
-    </div>
-  )
+  return <LegalPage />
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function PerfilPage({ onClose }) {
+export default function PerfilPage({ onClose, onGoVip }) {
   const { profile, fetchProfile } = useAuthStore()
   const [tab, setTab] = useState('perfil')
   const [stats, setStats] = useState(null)
   const [history, setHistory] = useState([])
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({ display_name: '', bio: '' })
+  const [form, setForm] = useState({ display_name: '', username: '', bio: '' })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [toast, setToast] = useState(null)
   const [loadingHistory, setLoadingHistory] = useState(true)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const fileRef = useRef()
 
   useEffect(() => {
     if (!profile) return
-    setForm({ display_name: profile.display_name || '', bio: profile.bio || '' })
+    setForm({ display_name: profile.display_name || '', username: profile.username || '', bio: profile.bio || '' })
     loadStats()
   }, [profile])
 
@@ -405,14 +404,27 @@ export default function PerfilPage({ onClose }) {
 
   async function saveProfile() {
     setSaving(true)
-    const { error } = await supabase.from('users')
-      .update({ display_name: form.display_name.trim(), bio: form.bio.trim() })
-      .eq('id', profile.id)
+    const updates = { display_name: form.display_name.trim(), bio: form.bio.trim() }
+    if (form.username.trim()) updates.username = form.username.trim().replace(/^@/, '').toLowerCase()
+    const { error } = await supabase.from('users').update(updates).eq('id', profile.id)
     setSaving(false)
     if (error) { setToast('Error: ' + error.message); return }
     await fetchProfile(profile.id)
     setEditing(false)
     setToast('Perfil actualizado ✓')
+  }
+
+  async function deleteAccount() {
+    if (deleteConfirm.toLowerCase() !== 'eliminar') return
+    setDeleting(true)
+    await supabase.from('users').update({ deleted_at: new Date().toISOString(), display_name: 'Usuario eliminado', avatar_url: null }).eq('id', profile.id)
+    await supabase.auth.signOut()
+    setDeleting(false)
+  }
+
+  async function suspendAccount() {
+    await supabase.from('users').update({ suspended: true }).eq('id', profile.id)
+    await supabase.auth.signOut()
   }
 
   async function uploadAvatar(file) {
@@ -482,7 +494,7 @@ export default function PerfilPage({ onClose }) {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-      {tab === 'cuenta' && <CuentaTab profile={profile} />}
+      {tab === 'cuenta' && <CuentaTab profile={profile} onGoVip={onGoVip} />}
       {tab === 'preferencias' && <PreferenciasTab profile={profile} />}
       {tab === 'referidos' && <ReferidosTab profile={profile} />}
       {tab === 'legal' && <LegalTab />}
@@ -490,60 +502,58 @@ export default function PerfilPage({ onClose }) {
       <div style={{ padding: 16, maxWidth: 640, margin: '0 auto' }}>
 
         {/* Avatar + Name section */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>
-          <div style={{ position: 'relative', flexShrink: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          {/* Foto — siempre tappable */}
+          <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => fileRef.current?.click()}>
             <div style={{
-              width: 80, height: 80, borderRadius: '50%', background: C.border, overflow: 'hidden',
-              border: `3px solid ${C.green}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36,
+              width: 90, height: 90, borderRadius: '50%', background: C.border, overflow: 'hidden',
+              border: `3px solid ${C.green}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40,
             }}>
               {profile.avatar_url
                 ? <img src={profile.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
                 : '👤'
               }
+              {uploading && (
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>
+                  <div style={{ width: 22, height: 22, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+                </div>
+              )}
             </div>
-            {editing && (
-              <>
-                <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{
-                  position: 'absolute', bottom: 0, right: 0,
-                  width: 26, height: 26, borderRadius: '50%', background: C.green, color: C.bg,
-                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
-                  opacity: uploading ? 0.5 : 1,
-                }}>
-                  {uploading ? '…' : '📷'}
-                </button>
-                <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => uploadAvatar(e.target.files[0])} />
-              </>
-            )}
+            <div style={{
+              position: 'absolute', bottom: 2, right: 2,
+              width: 28, height: 28, borderRadius: '50%', background: C.green, color: C.bg,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
+              border: `2px solid ${C.bg}`, pointerEvents: 'none',
+            }}>📷</div>
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => uploadAvatar(e.target.files[0])} />
           </div>
 
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {editing ? (
+          {/* Nombre y badge */}
+          {editing ? (
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <input value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))}
-                placeholder="Tu nombre"
-                style={{ width: '100%', padding: '8px 12px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 16, fontWeight: 700, marginBottom: 8, boxSizing: 'border-box' }} />
-            ) : (
-              <div style={{ color: C.text, fontSize: 20, fontWeight: 800, marginBottom: 4 }}>
-                {profile.display_name || 'Sin nombre'}
-              </div>
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ color: C.textDim, fontSize: 12 }}>{profile.email || ''}</span>
-              <span style={{
-                background: `${plan.color}20`, color: plan.color, border: `1px solid ${plan.color}40`,
-                borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700,
-              }}>
-                {plan.icon} {plan.label}
-              </span>
-            </div>
-            {editing ? (
+                placeholder="Nombre visible"
+                style={{ width: '100%', padding: '10px 12px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 15, fontWeight: 700, boxSizing: 'border-box' }} />
+              <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value.replace(/^@/, '') }))}
+                placeholder="@usuario"
+                style={{ width: '100%', padding: '10px 12px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, color: C.textDim, fontSize: 14, boxSizing: 'border-box' }} />
               <textarea value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
-                placeholder="Tu bio (opcional)"
+                placeholder="Bio (opcional)"
                 rows={2}
-                style={{ width: '100%', padding: '8px 12px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, resize: 'vertical', marginTop: 8, boxSizing: 'border-box' }} />
-            ) : profile.bio ? (
-              <div style={{ color: C.textDim, fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{profile.bio}</div>
-            ) : null}
-          </div>
+                style={{ width: '100%', padding: '10px 12px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ color: C.text, fontSize: 20, fontWeight: 900 }}>{profile.display_name || 'Sin nombre'}</div>
+              {profile.username && <div style={{ color: C.textDim, fontSize: 13, marginTop: 2 }}>@{profile.username}</div>}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                <span style={{ background: `${plan.color}20`, color: plan.color, border: `1px solid ${plan.color}40`, borderRadius: 20, padding: '3px 12px', fontSize: 11, fontWeight: 700 }}>
+                  {plan.icon} {plan.label}
+                </span>
+              </div>
+              {profile.bio && <div style={{ color: C.textDim, fontSize: 12, marginTop: 8, lineHeight: 1.6, maxWidth: 320 }}>{profile.bio}</div>}
+            </div>
+          )}
         </div>
 
         {editing && (
@@ -615,12 +625,67 @@ export default function PerfilPage({ onClose }) {
             )
           })}
         </div>
-      </div>
 
+        {/* Zona de peligro */}
+        <div style={{ marginTop: 24, border: `1px solid #ef444430`, borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{ background: '#ef444410', padding: '10px 16px', color: '#ef4444', fontWeight: 800, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' }}>⚠️ Zona de peligro</div>
+          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button onClick={() => setShowDeleteModal('suspend')} style={{ padding: '11px 14px', background: 'none', border: `1px solid #f59e0b40`, borderRadius: 10, color: '#f59e0b', fontWeight: 700, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
+              ⏸ Suspender mi cuenta temporalmente
+            </button>
+            <button onClick={() => setShowDeleteModal('delete')} style={{ padding: '11px 14px', background: 'none', border: `1px solid #ef444440`, borderRadius: 10, color: '#ef4444', fontWeight: 700, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
+              🗑️ Eliminar mi cuenta permanentemente
+            </button>
+          </div>
+        </div>
+
+      </div>
       )}
       </div>
 
       {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
+
+      {/* Modal eliminar/suspender */}
+      {showDeleteModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 18, padding: 24, width: '100%', maxWidth: 380 }}>
+            {showDeleteModal === 'suspend' ? (
+              <>
+                <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>⏸</div>
+                <div style={{ color: C.text, fontWeight: 800, fontSize: 17, textAlign: 'center', marginBottom: 8 }}>Suspender cuenta</div>
+                <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 1.6 }}>
+                  Tu cuenta quedará inactiva. Podrás reactivarla contactando al soporte. Tus datos y comunidades se conservan.
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setShowDeleteModal(false)} style={{ flex: 1, padding: '11px', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                  <button onClick={suspendAccount} style={{ flex: 1, padding: '11px', background: '#f59e0b', border: 'none', borderRadius: 10, color: '#000', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Suspender</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>🗑️</div>
+                <div style={{ color: '#ef4444', fontWeight: 800, fontSize: 17, textAlign: 'center', marginBottom: 8 }}>Eliminar cuenta</div>
+                <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', marginBottom: 16, lineHeight: 1.6 }}>
+                  Esta acción es <strong style={{ color: '#ef4444' }}>permanente e irreversible</strong>. Todos tus datos, comunidades y torneos serán eliminados.
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ color: C.textDim, fontSize: 12, marginBottom: 6 }}>Escribí <strong style={{ color: C.text }}>eliminar</strong> para confirmar:</div>
+                  <input value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)}
+                    placeholder="eliminar"
+                    style={{ width: '100%', padding: '10px 12px', background: C.bg, border: `1px solid #ef444440`, borderRadius: 10, color: C.text, fontSize: 14, boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => { setShowDeleteModal(false); setDeleteConfirm('') }} style={{ flex: 1, padding: '11px', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                  <button onClick={deleteAccount} disabled={deleteConfirm.toLowerCase() !== 'eliminar' || deleting}
+                    style={{ flex: 1, padding: '11px', background: deleteConfirm.toLowerCase() === 'eliminar' ? '#ef4444' : C.border, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 13, cursor: deleteConfirm.toLowerCase() === 'eliminar' ? 'pointer' : 'not-allowed', opacity: deleting ? 0.6 : 1 }}>
+                    {deleting ? 'Eliminando...' : 'Eliminar'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
