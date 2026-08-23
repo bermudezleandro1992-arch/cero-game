@@ -1,4 +1,4 @@
-const VERSION = '1.8.0'
+const VERSION = '1.9.0'
 const CACHE = `mimensajero-${VERSION}`
 const SHELL = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon.svg']
 
