@@ -74,6 +74,7 @@ export default function DiscoverPage() {
   const [gameFilter, setGameFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [joined, setJoined] = useState(new Set())
+  const [pending, setPending] = useState(new Set())
   const [joining, setJoining] = useState(null)
   const [viewingTournament, setViewingTournament] = useState(null)
 
@@ -123,7 +124,7 @@ export default function DiscoverPage() {
     } else {
       let q = supabase
         .from('conversations')
-        .select('id, name, description, avatar_url, group_type, tags, created_at, game, created_by, is_public')
+        .select('id, name, description, avatar_url, group_type, tags, created_at, game, created_by, is_public, requires_approval')
         .eq('is_public', true)
         .eq('group_type', tab)
         .order('created_at', { ascending: false })
@@ -175,32 +176,39 @@ export default function DiscoverPage() {
     try {
       const isCommunity = group.group_type === 'community'
       if (isCommunity) {
-        const { data, error } = await supabase.rpc('join_community', { p_conversation_id: group.id })
+        const { data, error } = await supabase.rpc('request_join_community', {
+          p_community_id: group.id,
+          p_message: null,
+        })
         if (error) {
-          // RPC no disponible → insert directo
+          // RPC fallback → direct insert (communities without requires_approval)
           await supabase.from('conversation_members').upsert(
             { conversation_id: group.id, user_id: profile.id },
             { onConflict: 'conversation_id,user_id' }
           )
-        } else if (!data?.ok) {
-          if (data?.error === 'capacity_reached') {
-            alert(`Esta comunidad llegó al límite de ${data.max} miembros.`)
-          } else if (data?.error !== 'already_member') {
-            alert('No se pudo unir a la comunidad.')
+          setJoined(prev => new Set([...prev, group.id]))
+        } else if (data?.success) {
+          if (data.joined) {
+            setJoined(prev => new Set([...prev, group.id]))
+            fetchConversations(profile.id)
+          } else if (data.pending) {
+            setPending(prev => new Set([...prev, group.id]))
           }
-          setJoining(null)
-          return
+        } else if (data?.error === 'Ya sos miembro') {
+          setJoined(prev => new Set([...prev, group.id]))
+        } else {
+          alert(data?.error || 'No se pudo unir a la comunidad.')
         }
       } else {
         await supabase.from('conversation_members').upsert(
           { conversation_id: group.id, user_id: profile.id },
           { onConflict: 'conversation_id,user_id' }
         )
-      }
-      setJoined(prev => new Set([...prev, group.id]))
-      fetchConversations(profile.id)
-      if (group.group_type === 'tournament' || group.group_type === 'liga') {
-        setViewingTournament(group)
+        setJoined(prev => new Set([...prev, group.id]))
+        fetchConversations(profile.id)
+        if (group.group_type === 'tournament' || group.group_type === 'liga') {
+          setViewingTournament(group)
+        }
       }
     } catch {}
     setJoining(null)
@@ -341,6 +349,8 @@ export default function DiscoverPage() {
     }
 
     // Comunidad / Grupo
+    const isPending = pending.has(item.id)
+    const isPrivate = item.requires_approval === true
     const typeLabel = tab === 'community' ? 'Comunidad' : 'Grupo'
     const typeColor = tab === 'community' ? '#8b5cf6' : C.green
     const members = item.participant_count || 0
@@ -372,7 +382,7 @@ export default function DiscoverPage() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ color: C.text, fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
-              {item.name}
+              {isPrivate && <span style={{ marginRight: 4 }}>🔒</span>}{item.name}
             </span>
             <span style={{
               fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20,
@@ -406,6 +416,11 @@ export default function DiscoverPage() {
             padding: '7px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
             background: `${C.green}20`, color: C.green, fontSize: 12, fontWeight: 700, flexShrink: 0,
           }}>Abrir</button>
+        ) : isPending ? (
+          <button disabled style={{
+            padding: '7px 14px', borderRadius: 10, border: `1px solid #f59e0b40`, cursor: 'default',
+            background: '#f59e0b15', color: '#f59e0b', fontSize: 11, fontWeight: 700, flexShrink: 0,
+          }}>⏳ Pendiente</button>
         ) : (
           <button onClick={() => joinGroup(item)} disabled={!!isLoading} style={{
             padding: '7px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
@@ -413,7 +428,7 @@ export default function DiscoverPage() {
             opacity: isLoading ? 0.6 : 1,
             boxShadow: `0 2px 8px ${C.green}33`,
           }}>
-            {isLoading ? '...' : 'Unirse'}
+            {isLoading ? '...' : isPrivate ? 'Solicitar' : 'Unirse'}
           </button>
         )}
       </div>

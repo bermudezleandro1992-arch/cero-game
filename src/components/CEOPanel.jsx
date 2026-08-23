@@ -460,11 +460,115 @@ function DisputasTab({ communityId, profile, toast }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Solicitudes Tab (join requests for private communities)
+// ══════════════════════════════════════════════════════════════════════════════
+function SolicitudesTab({ communityId, toast }) {
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [acting, setActing] = useState(null)
+  const [filter, setFilter] = useState('pending')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('community_requests')
+      .select('id, status, message, created_at, user_id, users(id, display_name, avatar_url)')
+      .eq('community_id', communityId)
+      .order('created_at', { ascending: false })
+    setRequests(data || [])
+    setLoading(false)
+  }, [communityId])
+
+  useEffect(() => { load() }, [load])
+
+  async function resolve(requestId, action) {
+    setActing(requestId)
+    const { data, error } = await supabase.rpc('resolve_community_request', {
+      p_request_id: requestId,
+      p_action: action,
+    })
+    setActing(null)
+    if (error || !data?.success) {
+      toast('Error: ' + (error?.message || data?.error || 'desconocido'), 'error')
+    } else {
+      toast(action === 'approve' ? 'Solicitud aprobada ✓' : 'Solicitud rechazada', 'ok')
+      load()
+    }
+  }
+
+  const filtered = requests.filter(r => filter === 'all' || r.status === filter)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 6 }}>
+        {['pending', 'approved', 'rejected', 'all'].map(s => (
+          <button key={s} onClick={() => setFilter(s)} style={{
+            padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600,
+            background: filter === s ? C.green : C.panel,
+            color: filter === s ? C.bg : C.textDim,
+          }}>
+            {s === 'pending' ? 'Pendientes' : s === 'approved' ? 'Aprobadas' : s === 'rejected' ? 'Rechazadas' : 'Todas'}
+          </button>
+        ))}
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px' }}>
+        {loading ? <Spinner /> : filtered.length === 0
+          ? <EmptyState icon="🔔" text="No hay solicitudes" />
+          : filtered.map(req => {
+            const u = req.users
+            return (
+              <div key={req.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0',
+                borderBottom: `1px solid ${C.border}`,
+              }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, overflow: 'hidden' }}>
+                  {u?.avatar_url ? <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: C.text, fontSize: 14, fontWeight: 600 }}>{u?.display_name || 'Usuario'}</div>
+                  {req.message && <div style={{ color: C.textDim, fontSize: 11, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.message}</div>}
+                  <div style={{ color: C.textDim, fontSize: 10, marginTop: 2 }}>
+                    {new Date(req.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {' · '}
+                    <span style={{ color: req.status === 'pending' ? '#f59e0b' : req.status === 'approved' ? C.green : '#ef4444', fontWeight: 700 }}>
+                      {req.status === 'pending' ? 'Pendiente' : req.status === 'approved' ? 'Aprobada' : 'Rechazada'}
+                    </span>
+                  </div>
+                </div>
+                {req.status === 'pending' && (
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button
+                      disabled={acting === req.id}
+                      onClick={() => resolve(req.id, 'approve')}
+                      style={{ padding: '5px 10px', background: C.green, border: 'none', borderRadius: 6, color: C.bg, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      ✓
+                    </button>
+                    <button
+                      disabled={acting === req.id}
+                      onClick={() => resolve(req.id, 'reject')}
+                      style={{ padding: '5px 10px', background: 'none', border: `1px solid #ef444440`, borderRadius: 6, color: '#ef4444', fontSize: 11, cursor: 'pointer' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })
+        }
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Miembros Tab
 // ══════════════════════════════════════════════════════════════════════════════
 const ROLES_COMMUNITY = [
   { id: 'member',      label: 'Miembro' },
   { id: 'moderador',   label: 'Moderador' },
+  { id: 'organizador', label: 'Organizador' },
   { id: 'admin',       label: 'Admin' },
   { id: 'owner',       label: 'Dueño' },
 ]
@@ -482,7 +586,7 @@ function MiembrosTab({ communityId, profile, toast }) {
     setLoading(true)
     const { data } = await supabase
       .from('conversation_members')
-      .select('user_id, role, joined_at, profiles(id, display_name, avatar_url)')
+      .select('user_id, role, joined_at, users(id, display_name, avatar_url)')
       .eq('conversation_id', communityId)
       .order('joined_at', { ascending: false })
     setMembers(data || [])
@@ -534,7 +638,7 @@ function MiembrosTab({ communityId, profile, toast }) {
   }
 
   const filtered = members.filter(m => {
-    const p = m.profiles
+    const p = m.users
     if (roleFilter !== 'all' && m.role !== roleFilter) return false
     if (search && !p?.display_name?.toLowerCase().includes(search.toLowerCase())) return false
     return true
@@ -587,7 +691,7 @@ function MiembrosTab({ communityId, profile, toast }) {
         {loading ? <Spinner /> : filtered.length === 0
           ? <EmptyState icon="👥" text="No hay miembros" />
           : filtered.map(m => {
-            const p = m.profiles
+            const p = m.users
             const isMe = p?.id === profile?.id
             return (
               <div key={m.user_id} style={{
@@ -932,6 +1036,7 @@ export default function CEOPanel({ community, onBack }) {
     { id: 'dashboard',   icon: '📊', label: 'Dashboard' },
     { id: 'torneos',     icon: '🏆', label: 'Torneos' },
     { id: 'disputas',    icon: '⚖️', label: 'Disputas', badge: openDisputesCount },
+    { id: 'solicitudes', icon: '🔔', label: 'Solicitudes' },
     { id: 'miembros',    icon: '👥', label: 'Miembros' },
     { id: 'estadisticas',icon: '📈', label: 'Stats' },
     { id: 'config',      icon: '⚙️', label: 'Config' },
@@ -976,6 +1081,12 @@ export default function CEOPanel({ community, onBack }) {
           <DisputasTab
             communityId={communityId}
             profile={profile}
+            toast={showToast}
+          />
+        )}
+        {tab === 'solicitudes' && (
+          <SolicitudesTab
+            communityId={communityId}
             toast={showToast}
           />
         )}
