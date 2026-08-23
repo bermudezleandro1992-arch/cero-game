@@ -65,3 +65,62 @@ export function vibrateIfEnabled() {
     navigator.vibrate([200, 100, 200])
   }
 }
+
+// ── Legacy API (used by ProfileSheet / CallPage) ──────────────────────────────
+export const SOUND_PACKS = {
+  default: { id: 'default', label: 'Clásico',   emoji: '🔔', desc: 'Sonidos originales' },
+  soft:    { id: 'soft',    label: 'Suave',      emoji: '🎵', desc: 'Tonos suaves' },
+  retro:   { id: 'retro',   label: 'Retro',      emoji: '👾', desc: 'Estilo gaming retro' },
+}
+
+export const RINGTONES = {
+  default: { id: 'default', label: 'Clásico', emoji: '📞', desc: 'Tono de llamada estándar', play: () => play('ring-default.mp3') },
+  soft:    { id: 'soft',    label: 'Suave',   emoji: '🎶', desc: 'Tono suave y tranquilo',  play: () => play('ring-soft.mp3') },
+  retro:   { id: 'retro',   label: 'Retro',   emoji: '🕹',  desc: 'Tono estilo 8-bit',      play: () => play('ring-retro.mp3') },
+}
+
+export const OUTGOING_TONES = {
+  default: { id: 'default', label: 'Estándar', emoji: '📲', desc: 'Tono de llamada saliente', play: () => play('ring-outgoing.mp3') },
+  soft:    { id: 'soft',    label: 'Suave',    emoji: '🎵', desc: 'Tono suave de llamada',    play: () => play('ring-outgoing-soft.mp3') },
+}
+
+export const soundSettings = {
+  isEnabled: () => { const s = getSoundSettings(); return s.enabled !== false },
+  toggle:    () => { const s = getSoundSettings(); const next = s.enabled === false; saveSoundSettings({ ...s, enabled: next }); return next },
+  getPack:   () => getSoundSettings().pack || 'default',
+  setPack:   (id) => saveSoundSettings({ ...getSoundSettings(), pack: id }),
+}
+
+export const ringSettings = {
+  getRing: () => getSoundSettings().ringtone || 'default',
+  setRing: (id) => saveSoundSettings({ ...getSoundSettings(), ringtone: id }),
+  getOut:  () => getSoundSettings().outgoing || 'default',
+  setOut:  (id) => saveSoundSettings({ ...getSoundSettings(), outgoing: id }),
+}
+
+// ── Loop-able sound objects for calls (start/stop API) ────────────────────────
+function makeLoopSound(filename) {
+  let audio = null
+  return {
+    start() {
+      try {
+        if (!audio) { audio = new Audio(`/sounds/${filename}`); audio.loop = true; audio.volume = 0.6 }
+        audio.currentTime = 0
+        audio.play().catch(() => {})
+      } catch {}
+    },
+    stop() {
+      try { if (audio) { audio.pause(); audio.currentTime = 0 } } catch {}
+    },
+  }
+}
+
+export const ringtone    = makeLoopSound('ring-default.mp3')
+export const outgoingRing = makeLoopSound('ring-outgoing.mp3')
+export const busyTone    = makeLoopSound('busy-tone.mp3')
+
+// One-shot call sounds
+export const sounds = {
+  callConnect: () => play('call-connect.mp3'),
+  callEnd:     () => play('call-end.mp3'),
+}

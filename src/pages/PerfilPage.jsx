@@ -85,6 +85,21 @@ function PreferenciasTab({ profile }) {
       {/* Temas */}
       <section>
         <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 12 }}>🎨 Tema</div>
+        {/* Seguir sistema */}
+        <button onClick={() => changeTheme('system')} style={{
+          width: '100%', padding: '12px 16px', borderRadius: 12, marginBottom: 10,
+          border: `2px solid ${themeId === 'system' ? C.green : C.border}`,
+          background: themeId === 'system' ? `${C.green}12` : C.panel,
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12,
+          boxShadow: themeId === 'system' ? `0 0 0 1px ${C.green}` : 'none',
+        }}>
+          <span style={{ fontSize: 22 }}>🖥</span>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>Seguir tema del sistema</div>
+            <div style={{ color: C.textDim, fontSize: 11, marginTop: 2 }}>Cambia automáticamente según tu OS</div>
+          </div>
+          {themeId === 'system' && <span style={{ marginLeft: 'auto', color: C.green, fontSize: 18 }}>✓</span>}
+        </button>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
           {Object.values(THEMES).map(t => (
             <button key={t.id} onClick={() => changeTheme(t.id)} style={{
