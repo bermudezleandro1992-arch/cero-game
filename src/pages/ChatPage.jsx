@@ -1763,11 +1763,12 @@ export default function ChatPage({ onBack }) {
                   ? (isFirst && isLast ? '14px 4px 14px 14px' : isFirst ? '14px 4px 4px 14px' : isLast ? '14px 14px 4px 14px' : '14px 4px 4px 14px')
                   : (isFirst && isLast ? '4px 14px 14px 14px' : isFirst ? '4px 14px 14px 4px' : isLast ? '4px 14px 14px 4px' : '4px 14px 14px 4px')
 
-                // Sent: green-tinted. Received: panel2
+                // Sent: solid teal gradient. Received: panel2
                 const bubbleBg = isMine
-                  ? `linear-gradient(135deg, ${C.green}1a 0%, ${C.green}26 100%)`
+                  ? `linear-gradient(135deg, ${C.green}, ${C.green2})`
                   : C.panel2
-                const bubbleBorder = isMine ? `1px solid ${C.green}33` : `1px solid ${C.border}`
+                const bubbleBorder = isMine ? 'none' : `1px solid ${C.border}`
+                const bubbleColor = isMine ? '#000' : C.text
 
                 const isMsgSelected = selectedMsgs.has(msg.id)
                 return (
@@ -1840,7 +1841,7 @@ export default function ChatPage({ onBack }) {
                         background: bubbleBg,
                         borderRadius: br,
                         padding: msg.type === 'image' ? '4px' : '7px 11px 5px',
-                        color: C.text, fontSize: 14, lineHeight: 1.45,
+                        color: bubbleColor, fontSize: 14, lineHeight: 1.45,
                         boxShadow: isMine ? '0 2px 8px rgba(0,0,0,0.4)' : '0 1px 4px rgba(0,0,0,0.3)',
                         wordBreak: 'break-word',
                         border: bubbleBorder,
@@ -2427,7 +2428,8 @@ export default function ChatPage({ onBack }) {
             {text.trim() ? (
               <button type="submit" disabled={sending} style={{
                 width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
-                background: C.green, border: 'none', cursor: 'pointer',
+                background: `linear-gradient(135deg, ${C.green}, ${C.green2})`,
+                border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 opacity: sending ? 0.5 : 1,
                 boxShadow: `0 4px 16px ${C.green}55`,
@@ -2436,7 +2438,7 @@ export default function ChatPage({ onBack }) {
                 onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)' }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'none' }}
               >
-                <svg width="17" height="17" viewBox="0 0 24 24" fill={C.bg}><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="#000"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
               </button>
             ) : (
               <div style={{ display: 'flex', gap: 6 }}>
@@ -2448,7 +2450,7 @@ export default function ChatPage({ onBack }) {
                     onClick={startRecording}
                     style={{
                       width: 42, height: 42, borderRadius: '50%',
-                      background: C.green,
+                      background: `linear-gradient(135deg, ${C.green}, ${C.green2})`,
                       border: 'none', cursor: 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       boxShadow: `0 4px 16px ${C.green}55`,
@@ -2456,7 +2458,7 @@ export default function ChatPage({ onBack }) {
                       transition: 'background .15s, box-shadow .15s, transform .15s',
                       userSelect: 'none', WebkitUserSelect: 'none',
                     }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill={C.bg}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="#000">
                       <path d="M12 1c-1.66 0-3 1.34-3 3v8c0 1.66 1.34 3 3 3s3-1.34 3-3V4c0-1.66-1.34-3-3-3zm5.3 9c0 3-2.54 5.1-5.3 5.1S6.7 13 6.7 10H5c0 3.41 2.72 6.23 6 6.72V20h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
                     </svg>
                   </button>

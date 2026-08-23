@@ -54,8 +54,8 @@ function Avatar({ name, size = 48, color, url }) {
 function GroupAvatar({ members = [], size = 50, isCommunity = false }) {
   const shown = members.slice(0, 4)
   const bg = isCommunity
-    ? 'linear-gradient(135deg,#7c3aed,#4f46e5)'
-    : 'linear-gradient(135deg,#0B7A2A,#065f21)'
+    ? 'linear-gradient(135deg,#00f5d4,#7c3aed)'
+    : 'linear-gradient(135deg,#00f5d4,#00b894)'
 
   if (shown.length < 2) {
     // Single face or no members — show icon
@@ -355,7 +355,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
             {/* Logo icon */}
             <div style={{
               width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-              background: `linear-gradient(135deg, ${C.greenDk} 0%, #0f3d1a 100%)`,
+              background: `linear-gradient(135deg, ${C.greenDk} 0%, ${C.green}66 100%)`,
               border: `1px solid ${C.green}40`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: `0 0 12px ${C.green}22`,
