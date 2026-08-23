@@ -86,14 +86,6 @@ const NAV = [
     ),
   },
   {
-    id: 'admin', label: 'Admin',
-    icon: (a) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
-    ),
-  },
-  {
     id: 'ranking', label: 'Ranking',
     icon: (a) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -411,10 +403,7 @@ export default function App() {
 
         {/* DESKTOP sidebar nav */}
         <nav className="slfa-side-nav">
-          {NAV.filter(({ id }) => {
-            if (id === 'admin') return ['ceo','admin'].includes(profile?.role)
-            return true
-          }).map(({ id, label, icon }) => {
+          {NAV.map(({ id, label, icon }) => {
             const active = (id === 'ajustes' ? showProfile : !showProfile && tab === id)
             return (
               <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : (setShowProfile(false), setTab(id))} style={{
@@ -525,7 +514,6 @@ export default function App() {
               { id: 'anuncios',   icon: '📢', label: 'Anuncios' },
               ...(['ceo','admin'].includes(profile?.role) ? [
                 { id: 'panel-ceo', icon: '⭐', label: 'Panel CEO' },
-                { id: 'admin',     icon: '🛡️', label: 'Admin' },
               ] : []),
               { id: 'ajustes',    icon: '⚙️', label: 'Ajustes' },
             ].map(({ id, icon, label }) => (
