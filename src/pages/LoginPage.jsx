@@ -54,7 +54,11 @@ export default function LoginPage() {
       if (age < 13) { setError('Debés tener al menos 13 años para registrarte.'); setLoading(false); return }
       if (!termsAccepted) { setError('Aceptá los términos y condiciones para continuar'); setLoading(false); return }
       if (age < 18 && !guardianConsent) {
-        setError('Los menores de 18 años deben tener autorización de un tutor legal para registrarse.')
+        setError('Tenés que confirmar que tu tutor legal autorizó tu registro.')
+        setLoading(false); return
+      }
+      if (age < 18 && !guardianEmail) {
+        setError('Ingresá el email de tu tutor legal para que pueda confirmar tu registro.')
         setLoading(false); return
       }
 
@@ -95,6 +99,16 @@ export default function LoginPage() {
               await supabase.from('referrals').insert({ referrer_id: referrer.id, referred_id: user.id })
             }
           }
+          // Send guardian verification email for minors
+          if (age < 18 && guardianEmail && user) {
+            const fnUrl = import.meta.env.VITE_SUPABASE_URL?.replace('/rest/v1','')
+              ?? supabase.supabaseUrl
+            await fetch(`${fnUrl}/functions/v1/guardian-verify`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+              body: JSON.stringify({ action: 'send', minor_id: user.id, guardian_email: guardianEmail, minor_name: name || email.split('@')[0] }),
+            }).catch(() => {})
+          }
         }, 3000)
         setSent(true)
       }
@@ -118,6 +132,7 @@ export default function LoginPage() {
       minHeight: '100dvh', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
       background: C.bg, padding: '24px 20px',
+      overflowY: 'auto',
     }}>
       <div style={{ width: '100%', maxWidth: 380 }}>
 
@@ -265,13 +280,20 @@ export default function LoginPage() {
                           Mi tutor legal autorizó mi registro en Mi Mensajero.
                         </span>
                       </label>
-                      <input
-                        type="email"
-                        placeholder="Email del tutor (opcional)"
-                        value={guardianEmail}
-                        onChange={e => setGuardianEmail(e.target.value)}
-                        style={{ ...inp, fontSize: 13 }}
-                      />
+                      <div>
+                        <label style={{ fontSize: 11, color: '#f59e0b', display: 'block', marginBottom: 4 }}>
+                          Email del tutor <span style={{ color: '#ef4444' }}>*</span>
+                          <span style={{ opacity: 0.7, marginLeft: 4 }}>(va a recibir un email para confirmar)</span>
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="tutor@email.com"
+                          value={guardianEmail}
+                          onChange={e => setGuardianEmail(e.target.value)}
+                          required
+                          style={{ ...inp, fontSize: 13, borderColor: '#f59e0b66' }}
+                        />
+                      </div>
                     </div>
                   )}
                 </>
@@ -356,20 +378,48 @@ export default function LoginPage() {
 
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: '50%',
-              background: `${C.green}18`, border: `1.5px solid ${C.green}33`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
-            }}>📩</div>
-            <p style={{ color: C.text, fontSize: 15, margin: 0 }}>
-              Email enviado a <span style={{ color: C.green, fontWeight: 600 }}>{email}</span>
-            </p>
-            <p style={{ color: C.textDim, fontSize: 12, margin: 0 }}>
-              {mode === 'register'
-                ? 'Confirmá tu cuenta desde el email y después volvé a iniciar sesión.'
-                : 'Hacé click en el link para entrar.'}
-            </p>
-            <button onClick={() => { setSent(false); setEmail(''); setPassword(''); setName('') }}
+            {guardianEmail && getAge(birthdate) !== null && getAge(birthdate) < 18 ? (
+              <>
+                <div style={{
+                  width: 64, height: 64, borderRadius: '50%',
+                  background: '#f59e0b18', border: '1.5px solid #f59e0b44',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
+                }}>👤</div>
+                <p style={{ color: C.text, fontSize: 15, margin: 0 }}>
+                  Cuenta creada — esperando autorización
+                </p>
+                <div style={{
+                  background: '#f59e0b0f', border: '1px solid #f59e0b33',
+                  borderRadius: 12, padding: '14px 16px', textAlign: 'left',
+                }}>
+                  <p style={{ margin: '0 0 8px', color: '#f59e0b', fontSize: 13, fontWeight: 700 }}>📧 Email enviado al tutor</p>
+                  <p style={{ margin: 0, color: C.textDim, fontSize: 12, lineHeight: 1.6 }}>
+                    Le mandamos un email a <strong style={{ color: C.text }}>{guardianEmail}</strong> para que autorice tu cuenta.
+                    Una vez que lo confirme, vas a poder iniciar sesión.
+                  </p>
+                </div>
+                <p style={{ color: C.textDim, fontSize: 11, margin: 0, lineHeight: 1.5 }}>
+                  También confirmá tu propio email ({email}) desde el mensaje que te enviamos.
+                </p>
+              </>
+            ) : (
+              <>
+                <div style={{
+                  width: 64, height: 64, borderRadius: '50%',
+                  background: `${C.green}18`, border: `1.5px solid ${C.green}33`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
+                }}>📩</div>
+                <p style={{ color: C.text, fontSize: 15, margin: 0 }}>
+                  Email enviado a <span style={{ color: C.green, fontWeight: 600 }}>{email}</span>
+                </p>
+                <p style={{ color: C.textDim, fontSize: 12, margin: 0 }}>
+                  {mode === 'register'
+                    ? 'Confirmá tu cuenta desde el email y después volvé a iniciar sesión.'
+                    : 'Hacé click en el link para entrar.'}
+                </p>
+              </>
+            )}
+            <button onClick={() => { setSent(false); setEmail(''); setPassword(''); setName(''); setBirthdate(''); setGuardianEmail(''); setGuardianConsent(false) }}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.green, fontSize: 13, fontWeight: 600, marginTop: 4 }}>
               Volver
             </button>
