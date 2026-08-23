@@ -269,8 +269,53 @@ function CuentaTab({ profile, onGoVip }) {
   const role = profile?.role || 'free'
   const plan = PLAN_CFG[role] || PLAN_CFG.free
   const limits = PLAN_LIMITS[role] || PLAN_LIMITS.free
-  const isPro = role === 'comunidad' || role === 'ceo'
-  const isVip = role === 'vip'
+  const isPro = role === 'comunidad' || role === 'ceo' || role === 'vip'
+  const canUpgrade = role === 'free' || role === 'vip'
+  const [copied, setCopied] = useState(false)
+  const [bots, setBots] = useState([])
+  const [loadingBots, setLoadingBots] = useState(false)
+  const [showBotForm, setShowBotForm] = useState(false)
+  const [newBotName, setNewBotName] = useState('')
+  const [creatingBot, setCreatingBot] = useState(false)
+  const { conversations } = typeof useChatStore !== 'undefined' ? useChatStore() : { conversations: [] }
+
+  useEffect(() => {
+    if (!isPro || !profile?.id) return
+    setLoadingBots(true)
+    supabase.from('bot_tokens').select('*').eq('owner_id', profile.id).order('created_at', { ascending: false })
+      .then(({ data }) => { setBots(data || []); setLoadingBots(false) })
+  }, [isPro, profile?.id])
+
+  function copyToken(token) {
+    navigator.clipboard.writeText(token).catch(() => {})
+    setCopied(token)
+    setTimeout(() => setCopied(null), 2000)
+  }
+
+  async function createBot(e) {
+    e.preventDefault()
+    if (!newBotName.trim()) return
+    setCreatingBot(true)
+    const arr = new Uint8Array(32)
+    crypto.getRandomValues(arr)
+    const token = 'nxt_' + Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join('')
+    const { data } = await supabase.from('bot_tokens').insert({
+      owner_id: profile.id,
+      name: newBotName.trim(),
+      token,
+      active: true,
+    }).select('*').single()
+    if (data) setBots(prev => [data, ...prev])
+    setNewBotName('')
+    setShowBotForm(false)
+    setCreatingBot(false)
+  }
+
+  async function revokeBot(id) {
+    if (!confirm('¿Revocar este token? Los bots que lo usen dejarán de funcionar.')) return
+    await supabase.from('bot_tokens').delete().eq('id', id)
+    setBots(prev => prev.filter(b => b.id !== id))
+  }
 
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -284,13 +329,11 @@ function CuentaTab({ profile, onGoVip }) {
             <div style={{ color: C.textDim, fontSize: 11, marginTop: 2 }}>{limits.desc}</div>
           </div>
         </div>
-
         {profile?.subscription_expires_at && (
           <div style={{ padding: '8px 16px', background: C.panel2, fontSize: 11, color: C.textDim, borderBottom: `1px solid ${C.border}` }}>
             📅 Vence: {new Date(profile.subscription_expires_at).toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' })}
           </div>
         )}
-
         <div style={{ padding: 14 }}>
           <div style={{ color: C.textDim, fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>Límites incluidos</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -305,31 +348,101 @@ function CuentaTab({ profile, onGoVip }) {
       </div>
 
       {/* Upgrade */}
-      {(role === 'free' || role === 'vip') && (
+      {canUpgrade && (
         <button onClick={() => onGoVip?.()}
           style={{ padding: '14px', background: 'linear-gradient(135deg, #f59e0b, #8b5cf6)', border: 'none', borderRadius: 12, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', letterSpacing: 0.3 }}>
-          ⭐ Mejorar a VIP o PRO →
+          {role === 'vip' ? '💎 Mejorar a Comunidad PRO →' : '⭐ Mejorar a VIP o PRO →'}
         </button>
       )}
 
-      {/* API de Bots (solo PRO/CEO) */}
+      {/* API de Bots */}
       {isPro && (
         <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
-          <div style={{ color: C.text, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>🤖 API de Bots</div>
-          <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: C.green, wordBreak: 'break-all', marginBottom: 8, userSelect: 'all' }}>
-            {profile?.api_token || 'nxt_' + profile?.id?.replace(/-/g,'').slice(0,24)}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ color: C.text, fontWeight: 800, fontSize: 14 }}>🤖 API de Bots</div>
+            <button onClick={() => setShowBotForm(s => !s)} style={{
+              padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.green}44`,
+              background: `${C.green}18`, color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            }}>+ Nuevo token</button>
           </div>
-          <div style={{ color: C.textDim, fontSize: 11 }}>Tocá el token para copiarlo. Usalo para integrar bots con la API de Mi Mensajero.</div>
+
+          {/* Create bot form */}
+          {showBotForm && (
+            <form onSubmit={createBot} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <input
+                value={newBotName}
+                onChange={e => setNewBotName(e.target.value)}
+                placeholder="Nombre del bot (ej: TorneoBot)"
+                autoFocus
+                style={{ flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', color: C.text, fontSize: 12, outline: 'none' }}
+              />
+              <button type="submit" disabled={creatingBot || !newBotName.trim()} style={{
+                padding: '7px 12px', borderRadius: 8, border: 'none',
+                background: C.green, color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              }}>{creatingBot ? '...' : 'Crear'}</button>
+            </form>
+          )}
+
+          {/* Token list */}
+          {loadingBots ? (
+            <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: '8px 0' }}>Cargando tokens...</div>
+          ) : bots.length === 0 ? (
+            <div style={{ color: C.textDim, fontSize: 12, padding: '8px 0' }}>Sin tokens creados. Creá uno para integrar bots con la API de Mi Mensajero.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {bots.map(bot => (
+                <div key={bot.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>🤖 {bot.name}</span>
+                    <button onClick={() => revokeBot(bot.id)} style={{ background: 'none', border: 'none', color: C.textDim, fontSize: 11, cursor: 'pointer', padding: '2px 6px' }}>Revocar</button>
+                  </div>
+                  <div
+                    onClick={() => copyToken(bot.token)}
+                    style={{ background: C.panel2, borderRadius: 7, padding: '7px 10px', fontFamily: 'monospace', fontSize: 11, color: C.green, wordBreak: 'break-all', cursor: 'pointer', userSelect: 'all' }}
+                    title="Tocá para copiar"
+                  >
+                    {copied === bot.token ? '✓ Copiado!' : bot.token}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ color: C.textDim, fontSize: 11, marginTop: 10 }}>
+            Usá estos tokens para integrar bots con la API de Mi Mensajero. Endpoint: <code style={{ color: C.green, fontSize: 10 }}>/functions/v1/bot-api</code>
+          </div>
         </div>
       )}
 
-      {/* Soporte */}
+      {/* Apoyá el proyecto */}
       <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
         <div style={{ color: C.text, fontWeight: 800, fontSize: 14, marginBottom: 6 }}>❤️ Apoyá el proyecto</div>
-        <div style={{ color: C.textDim, fontSize: 12, marginBottom: 12 }}>Tu apoyo nos ayuda a mantener Mi Mensajero gratuito y en constante mejora.</div>
-        <button style={{ padding: '9px 18px', background: `${C.green}20`, border: `1px solid ${C.green}40`, borderRadius: 8, color: C.green, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-          💚 Hacer una donación
-        </button>
+        <div style={{ color: C.textDim, fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
+          Tu apoyo nos ayuda a mantener Mi Mensajero gratuito y en constante mejora. Podés donar desde $1 USD.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button onClick={() => onGoVip?.()} style={{
+            padding: '10px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: 'linear-gradient(135deg, #f59e0b44, #8b5cf644)',
+            border: '1px solid #f59e0b44',
+            color: C.text, fontSize: 13, fontWeight: 700, textAlign: 'left',
+          }}>
+            💳 Pagar con tarjeta / MercadoPago →
+          </button>
+          <button onClick={() => onGoVip?.()} style={{
+            padding: '10px 16px', borderRadius: 10, cursor: 'pointer',
+            background: C.panel2, border: `1px solid ${C.border}`,
+            color: C.text, fontSize: 13, fontWeight: 700, textAlign: 'left',
+          }}>
+            ₿ Pagar con crypto (USDT, BTC) →
+          </button>
+          <button onClick={() => onGoVip?.()} style={{
+            padding: '10px 16px', borderRadius: 10, cursor: 'pointer',
+            background: C.panel2, border: `1px solid ${C.border}`,
+            color: C.text, fontSize: 13, fontWeight: 700, textAlign: 'left',
+          }}>
+            🏦 Transferencia bancaria / local →
+          </button>
+        </div>
       </div>
     </div>
   )
