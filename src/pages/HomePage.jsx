@@ -421,65 +421,74 @@ export default function HomePage({ onGoTorneos, onGoRanking, onGoExplorar, onGoA
 
       <Hero profile={profile} onGoTorneos={onGoTorneos} onGoExplorar={onGoExplorar} />
 
-      <div style={{ padding: '24px 16px 40px', maxWidth: 960, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 32 }}>
+      <div style={{ padding: '24px 16px 40px', maxWidth: 960, margin: '0 auto' }}>
+        <style>{`
+          .home-grid { display: flex; flex-direction: column; gap: 32px; }
+          .home-two-col { display: grid; grid-template-columns: 1fr; gap: 32px; }
+          @media (min-width: 760px) {
+            .home-two-col { grid-template-columns: 1fr 1fr; }
+          }
+        `}</style>
 
-        {/* Stats */}
-        {!loading && <StatsStrip torneos={torneos} comunidades={comunidades} ranking={ranking} />}
+        <div className="home-grid">
+          {/* Stats */}
+          {!loading && <StatsStrip torneos={torneos} comunidades={comunidades} ranking={ranking} />}
 
-        {/* Torneos destacados */}
-        <section>
-          <SectionTitle icon="🏆" label="Torneos Destacados" action="Ver todos" onAction={onGoTorneos} />
-          {loading ? <Spinner /> : torneos.length === 0 ? (
-            <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', padding: '28px 0' }}>No hay torneos activos por ahora</div>
-          ) : (
-            <div className="home-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6 }}>
-              {torneos.map(t => (
-                <TorneoCard key={t.id} torneo={t} onClick={onGoTorneos} />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Comunidades populares */}
-        <section>
-          <SectionTitle icon="🌐" label="Comunidades Populares" action="Explorar" onAction={onGoExplorar} />
-          {loading ? <Spinner /> : comunidades.length === 0 ? (
-            <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', padding: '28px 0' }}>Sin comunidades aún</div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
-              {comunidades.slice(0, 4).map(c => (
-                <ComunidadCard key={c.id} comunidad={c} />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Ranking global top 5 */}
-        <section>
-          <SectionTitle icon="📊" label="Ranking Global" action="Ver completo" onAction={onGoRanking} />
-          {loading ? <Spinner /> : ranking.length === 0 ? (
-            <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', padding: '28px 0' }}>Sin datos de ranking aún</div>
-          ) : (
-            <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
-              {ranking.map(p => (
-                <RankRow key={p.id} rank={p.rank} player={p} isMe={p.id === profile?.id} />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Anuncios */}
-        {(anuncios.length > 0 || loading) && (
+          {/* Torneos destacados — full width */}
           <section>
-            <SectionTitle icon="📢" label="Últimos Anuncios" action="Ver todos" onAction={onGoAnuncios} />
-            {loading ? <Spinner /> : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {anuncios.map(a => <AnuncioCard key={a.id} anuncio={a} />)}
+            <SectionTitle icon="🏆" label="Torneos Destacados" action="Ver todos" onAction={onGoTorneos} />
+            {loading ? <Spinner /> : torneos.length === 0 ? (
+              <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', padding: '28px 0' }}>No hay torneos activos</div>
+            ) : (
+              <div className="home-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6 }}>
+                {torneos.map(t => (
+                  <TorneoCard key={t.id} torneo={t} onClick={onGoTorneos} />
+                ))}
               </div>
             )}
           </section>
-        )}
 
+          {/* 2-col: Comunidades + Ranking */}
+          <div className="home-two-col">
+            <section>
+              <SectionTitle icon="🌐" label="Comunidades" action="Explorar" onAction={onGoExplorar} />
+              {loading ? <Spinner /> : comunidades.length === 0 ? (
+                <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', padding: '28px 0' }}>Sin comunidades aún</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {comunidades.slice(0, 4).map(c => (
+                    <ComunidadCard key={c.id} comunidad={c} />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section>
+              <SectionTitle icon="📊" label="Ranking Global" action="Ver completo" onAction={onGoRanking} />
+              {loading ? <Spinner /> : ranking.length === 0 ? (
+                <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', padding: '28px 0' }}>Sin datos de ranking aún</div>
+              ) : (
+                <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
+                  {ranking.map(p => (
+                    <RankRow key={p.id} rank={p.rank} player={p} isMe={p.id === profile?.id} />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+
+          {/* Anuncios */}
+          {(anuncios.length > 0 || loading) && (
+            <section>
+              <SectionTitle icon="📢" label="Últimos Anuncios" action="Ver todos" onAction={onGoAnuncios} />
+              {loading ? <Spinner /> : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+                  {anuncios.map(a => <AnuncioCard key={a.id} anuncio={a} />)}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
       </div>
     </div>
   )
