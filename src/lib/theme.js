@@ -46,11 +46,18 @@ export const THEMES = {
 const STORAGE_KEY = 'app_theme'
 
 export function getSavedThemeId() {
-  try { return localStorage.getItem(STORAGE_KEY) || 'dark' } catch { return 'dark' }
+  try { return localStorage.getItem(STORAGE_KEY) || 'system' } catch { return 'dark' }
+}
+
+function getSystemThemeId() {
+  try {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  } catch { return 'dark' }
 }
 
 export function applyTheme(id) {
-  const t = THEMES[id] || THEMES.dark
+  const resolved = id === 'system' ? getSystemThemeId() : id
+  const t = THEMES[resolved] || THEMES.dark
   const root = document.documentElement
   Object.entries(t).forEach(([k, v]) => {
     if (typeof v === 'string') root.style.setProperty(`--c-${k}`, v)
@@ -58,6 +65,13 @@ export function applyTheme(id) {
   try { localStorage.setItem(STORAGE_KEY, id) } catch {}
   return t
 }
+
+// Listen for OS theme changes when user chose "system"
+try {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (getSavedThemeId() === 'system') applyTheme('system')
+  })
+} catch {}
 
 // Apply saved theme immediately on module load (before React renders)
 applyTheme(getSavedThemeId())
