@@ -9,18 +9,16 @@ const APK_URL = '/mimensajero.apk'
 export default function LoginPage() {
   const { updateAvailable, newVersion, apkUrl } = useAppVersion()
   const isNative = Capacitor.isNativePlatform()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
-  const [birthdate, setBirthdate] = useState('')
+  const [email, setEmail]           = useState('')
+  const [password, setPassword]     = useState('')
+  const [name, setName]             = useState('')
+  const [birthdate, setBirthdate]   = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
-  const [referralCode, setReferralCode] = useState('')
-  const [guardianConsent, setGuardianConsent] = useState(false)
-  const [guardianEmail, setGuardianEmail] = useState('')
-  const [mode, setMode] = useState('login') // 'login' | 'register' | 'magic'
-  const [sent, setSent] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [referralCode, setReferralCode]   = useState('')
+  const [mode, setMode]             = useState('login') // 'login' | 'register' | 'magic'
+  const [sent, setSent]             = useState(false)
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState('')
 
   // Auto-fill referral code from URL param (?ref=CODE or ?referral=CODE)
   useEffect(() => {
@@ -48,70 +46,49 @@ export default function LoginPage() {
         email, options: { emailRedirectTo: window.location.origin },
       })
       if (error) setError(error.message); else setSent(true)
+
     } else if (mode === 'register') {
       const age = getAge(birthdate)
       if (!birthdate || age === null) { setError('Ingresá tu fecha de nacimiento'); setLoading(false); return }
-      if (age < 13) { setError('Debés tener al menos 13 años para registrarte.'); setLoading(false); return }
+      if (age < 18) { setError('Debés tener al menos 18 años para registrarte.'); setLoading(false); return }
       if (!termsAccepted) { setError('Aceptá los términos y condiciones para continuar'); setLoading(false); return }
-      if (age < 18 && !guardianConsent) {
-        setError('Tenés que confirmar que tu tutor legal autorizó tu registro.')
-        setLoading(false); return
-      }
-      if (age < 18 && !guardianEmail) {
-        setError('Ingresá el email de tu tutor legal para que pueda confirmar tu registro.')
-        setLoading(false); return
-      }
 
-      // Geolocate by IP to capture country at registration
+      // Geolocate by IP
       let countryCode = null
       try {
         const geo = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(4000) })
-        if (geo.ok) {
-          const geoData = await geo.json()
-          countryCode = geoData.country_code || null
-        }
-      } catch { /* silent — non-blocking */ }
-
-      const metaData = {
-        display_name: name || email.split('@')[0],
-        country_code: countryCode,
-        ...(referralCode ? { referred_by_code: referralCode } : {}),
-        ...(age < 18 ? { guardian_consent: true, ...(guardianEmail ? { guardian_email: guardianEmail } : {}) } : {}),
-      }
+        if (geo.ok) { const geoData = await geo.json(); countryCode = geoData.country_code || null }
+      } catch { /* silent */ }
 
       const { error } = await supabase.auth.signUp({
         email, password,
-        options: { data: metaData, emailRedirectTo: window.location.origin }
+        options: {
+          data: {
+            display_name: name || email.split('@')[0],
+            country_code: countryCode,
+            ...(referralCode ? { referred_by_code: referralCode } : {}),
+          },
+          emailRedirectTo: window.location.origin,
+        },
       })
+
       if (error) { setError(error.message) } else {
-        // After signup: save country_code + register referral
+        // Post-signup: save country_code + register referral
         setTimeout(async () => {
           const { data: { user } } = await supabase.auth.getUser()
           if (!user) return
-          const updates = {}
-          if (countryCode) updates.country_code = countryCode
-          if (Object.keys(updates).length) await supabase.from('users').update(updates).eq('id', user.id)
-          // Link referral if code provided
+          if (countryCode) await supabase.from('users').update({ country_code: countryCode }).eq('id', user.id)
           if (referralCode) {
             const { data: referrer } = await supabase
               .from('users').select('id').eq('referral_code', referralCode).maybeSingle()
             if (referrer) {
-              await supabase.from('referrals').insert({ referrer_id: referrer.id, referred_id: user.id })
+              await supabase.from('referrals').insert({ referrer_id: referrer.id, referred_id: user.id }).catch(() => {})
             }
-          }
-          // Send guardian verification email for minors
-          if (age < 18 && guardianEmail && user) {
-            const fnUrl = import.meta.env.VITE_SUPABASE_URL?.replace('/rest/v1','')
-              ?? supabase.supabaseUrl
-            await fetch(`${fnUrl}/functions/v1/guardian-verify`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
-              body: JSON.stringify({ action: 'send', minor_id: user.id, guardian_email: guardianEmail, minor_name: name || email.split('@')[0] }),
-            }).catch(() => {})
           }
         }, 3000)
         setSent(true)
       }
+
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) setError('Email o contraseña incorrectos')
@@ -123,43 +100,39 @@ export default function LoginPage() {
   const inp = {
     width: '100%', padding: '13px 16px', borderRadius: 12, outline: 'none',
     background: C.panel2, border: `1px solid ${C.border}`,
-    color: C.text, fontSize: 15, boxSizing: 'border-box',
-    transition: 'border-color .15s',
+    color: C.text, fontSize: 15, boxSizing: 'border-box', transition: 'border-color .15s',
   }
 
   return (
     <div style={{
       minHeight: '100dvh', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      background: C.bg, padding: '24px 20px',
-      overflowY: 'auto',
+      background: C.bg, padding: '24px 20px', overflowY: 'auto',
     }}>
       <div style={{ width: '100%', maxWidth: 380 }}>
 
-        {/* Update banner — inside native app when update available */}
+        {/* Update banner (native) */}
         {isNative && updateAvailable && (
           <a href={apkUrl || APK_URL} style={{
             display: 'flex', alignItems: 'center', gap: 10,
             background: `${C.green}20`, border: `1.5px solid ${C.green}66`,
-            borderRadius: 14, padding: '12px 16px', marginBottom: 20,
-            textDecoration: 'none', animation: 'pulse 2s ease-in-out infinite',
+            borderRadius: 14, padding: '12px 16px', marginBottom: 20, textDecoration: 'none',
           }}>
             <span style={{ fontSize: 22 }}>🆕</span>
             <div style={{ flex: 1 }}>
-              <p style={{ margin: 0, color: C.green, fontWeight: 800, fontSize: 13 }}>¡Nueva versión disponible! {newVersion}</p>
-              <p style={{ margin: 0, color: C.textDim, fontSize: 11, marginTop: 2 }}>Tocá para actualizar la app</p>
+              <p style={{ margin: 0, color: C.green, fontWeight: 800, fontSize: 13 }}>¡Nueva versión! {newVersion}</p>
+              <p style={{ margin: 0, color: C.textDim, fontSize: 11, marginTop: 2 }}>Tocá para actualizar</p>
             </div>
             <span style={{ color: C.green, fontSize: 18 }}>⬇️</span>
           </a>
         )}
 
-        {/* APK Download Banner — only on web (not inside native app) */}
+        {/* APK Download Banner (web) */}
         {!isNative && (
           <a href={APK_URL} style={{
             display: 'flex', alignItems: 'center', gap: 10,
             background: `${C.green}15`, border: `1px solid ${C.green}44`,
-            borderRadius: 14, padding: '12px 16px', marginBottom: 20,
-            textDecoration: 'none', transition: 'background .15s',
+            borderRadius: 14, padding: '12px 16px', marginBottom: 20, textDecoration: 'none', transition: 'background .15s',
           }}
             onMouseEnter={e => e.currentTarget.style.background = `${C.green}25`}
             onMouseLeave={e => e.currentTarget.style.background = `${C.green}15`}
@@ -173,15 +146,14 @@ export default function LoginPage() {
           </a>
         )}
 
-        {/* Logo / Hero */}
+        {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{
-            width: 80, height: 80, borderRadius: 24,
+            width: 80, height: 80, borderRadius: 24, margin: '0 auto 20px',
             background: `radial-gradient(circle at 35% 35%, ${C.green}22 0%, ${C.greenDk}44 100%)`,
             border: `1.5px solid ${C.green}44`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 38, margin: '0 auto 20px',
-            boxShadow: `0 0 40px ${C.green}22`,
+            fontSize: 38, boxShadow: `0 0 40px ${C.green}22`,
           }}>⚡</div>
           <h1 style={{ color: C.text, fontWeight: 800, fontSize: 24, margin: '0 0 6px', letterSpacing: '-0.5px' }}>
             Mi Mensajero
@@ -208,9 +180,10 @@ export default function LoginPage() {
                 <div>
                   <label style={{ fontSize: 11, color: C.textDim, display: 'block', marginBottom: 4 }}>
                     Fecha de nacimiento <span style={{ color: '#ef4444' }}>*</span>
+                    <span style={{ opacity: 0.6, marginLeft: 4 }}>(requerís 18+ años)</span>
                   </label>
                   <input type="date" value={birthdate} onChange={e => setBirthdate(e.target.value)}
-                    max={new Date(new Date().setFullYear(new Date().getFullYear() - 13)).toISOString().split('T')[0]}
+                    max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
                     required style={{ ...inp, colorScheme: 'dark' }} />
                 </div>
               </>
@@ -227,78 +200,34 @@ export default function LoginPage() {
                 required style={inp} />
             )}
 
-            {mode === 'register' && (() => {
-              const age = getAge(birthdate)
-              const isMinor = age !== null && age >= 13 && age < 18
-              return (
-                <>
-                  {/* Referral code */}
-                  <div>
-                    <label style={{ fontSize: 11, color: C.textDim, display: 'block', marginBottom: 4 }}>
-                      Código de referido <span style={{ opacity: 0.5 }}>(opcional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ej: ABC123"
-                      value={referralCode}
-                      onChange={e => setReferralCode(e.target.value.toUpperCase().trim())}
-                      maxLength={12}
-                      style={{ ...inp, fontFamily: 'monospace', letterSpacing: 2, fontSize: 14 }}
-                    />
-                  </div>
-
-                  {/* Terms */}
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '4px 0' }}>
-                    <input type="checkbox" checked={termsAccepted}
-                      onChange={e => setTermsAccepted(e.target.checked)}
-                      style={{ marginTop: 2, accentColor: C.green, width: 16, height: 16, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>
-                      Tengo al menos 13 años y acepto los{' '}
-                      <span style={{ color: C.green, fontWeight: 600 }}>Términos de Uso</span>
-                      {' '}y la{' '}
-                      <span style={{ color: C.green, fontWeight: 600 }}>Política de Privacidad</span>.
-                    </span>
+            {mode === 'register' && (
+              <>
+                {/* Referral */}
+                <div>
+                  <label style={{ fontSize: 11, color: C.textDim, display: 'block', marginBottom: 4 }}>
+                    Código de referido <span style={{ opacity: 0.5 }}>(opcional)</span>
                   </label>
+                  <input type="text" placeholder="Ej: ABC123" value={referralCode}
+                    onChange={e => setReferralCode(e.target.value.toUpperCase().trim())}
+                    maxLength={12}
+                    style={{ ...inp, fontFamily: 'monospace', letterSpacing: 2, fontSize: 14 }} />
+                </div>
 
-                  {/* Minor guardian consent — shown only when age 13–17 detected */}
-                  {isMinor && (
-                    <div style={{
-                      background: '#f59e0b0f', border: '1px solid #f59e0b44',
-                      borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10,
-                    }}>
-                      <p style={{ margin: 0, fontSize: 12, color: '#f59e0b', fontWeight: 700 }}>
-                        👤 Tenés menos de 18 años
-                      </p>
-                      <p style={{ margin: 0, fontSize: 11, color: C.textDim, lineHeight: 1.5 }}>
-                        Para registrarte necesitás la autorización de un padre, madre o tutor legal.
-                      </p>
-                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
-                        <input type="checkbox" checked={guardianConsent}
-                          onChange={e => setGuardianConsent(e.target.checked)}
-                          style={{ marginTop: 2, accentColor: '#f59e0b', width: 16, height: 16, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>
-                          Mi tutor legal autorizó mi registro en Mi Mensajero.
-                        </span>
-                      </label>
-                      <div>
-                        <label style={{ fontSize: 11, color: '#f59e0b', display: 'block', marginBottom: 4 }}>
-                          Email del tutor <span style={{ color: '#ef4444' }}>*</span>
-                          <span style={{ opacity: 0.7, marginLeft: 4 }}>(va a recibir un email para confirmar)</span>
-                        </label>
-                        <input
-                          type="email"
-                          placeholder="tutor@email.com"
-                          value={guardianEmail}
-                          onChange={e => setGuardianEmail(e.target.value)}
-                          required
-                          style={{ ...inp, fontSize: 13, borderColor: '#f59e0b66' }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </>
-              )
-            })()}
+                {/* Terms */}
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '4px 0' }}>
+                  <input type="checkbox" checked={termsAccepted}
+                    onChange={e => setTermsAccepted(e.target.checked)}
+                    style={{ marginTop: 2, accentColor: C.green, width: 16, height: 16, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>
+                    Tengo 18 años o más y acepto los{' '}
+                    <span style={{ color: C.green, fontWeight: 600 }}>Términos de Uso</span>
+                    {' '}y la{' '}
+                    <span style={{ color: C.green, fontWeight: 600 }}>Política de Privacidad</span>.
+                    Esta plataforma es exclusivamente para mayores de 18 años.
+                  </span>
+                </label>
+              </>
+            )}
 
             {error && (
               <div style={{
@@ -315,8 +244,7 @@ export default function LoginPage() {
               color: disabled ? C.textDim : C.bg,
               fontSize: 15, fontWeight: 800, marginTop: 4,
               boxShadow: disabled ? 'none' : `0 4px 24px ${C.green}44`,
-              transition: 'all .2s',
-              letterSpacing: '.3px',
+              transition: 'all .2s', letterSpacing: '.3px',
             }}>
               {loading ? '...' : mode === 'login' ? 'Entrar' : mode === 'register' ? 'Crear cuenta' : 'Enviar link'}
             </button>
@@ -378,48 +306,20 @@ export default function LoginPage() {
 
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
-            {guardianEmail && getAge(birthdate) !== null && getAge(birthdate) < 18 ? (
-              <>
-                <div style={{
-                  width: 64, height: 64, borderRadius: '50%',
-                  background: '#f59e0b18', border: '1.5px solid #f59e0b44',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
-                }}>👤</div>
-                <p style={{ color: C.text, fontSize: 15, margin: 0 }}>
-                  Cuenta creada — esperando autorización
-                </p>
-                <div style={{
-                  background: '#f59e0b0f', border: '1px solid #f59e0b33',
-                  borderRadius: 12, padding: '14px 16px', textAlign: 'left',
-                }}>
-                  <p style={{ margin: '0 0 8px', color: '#f59e0b', fontSize: 13, fontWeight: 700 }}>📧 Email enviado al tutor</p>
-                  <p style={{ margin: 0, color: C.textDim, fontSize: 12, lineHeight: 1.6 }}>
-                    Le mandamos un email a <strong style={{ color: C.text }}>{guardianEmail}</strong> para que autorice tu cuenta.
-                    Una vez que lo confirme, vas a poder iniciar sesión.
-                  </p>
-                </div>
-                <p style={{ color: C.textDim, fontSize: 11, margin: 0, lineHeight: 1.5 }}>
-                  También confirmá tu propio email ({email}) desde el mensaje que te enviamos.
-                </p>
-              </>
-            ) : (
-              <>
-                <div style={{
-                  width: 64, height: 64, borderRadius: '50%',
-                  background: `${C.green}18`, border: `1.5px solid ${C.green}33`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
-                }}>📩</div>
-                <p style={{ color: C.text, fontSize: 15, margin: 0 }}>
-                  Email enviado a <span style={{ color: C.green, fontWeight: 600 }}>{email}</span>
-                </p>
-                <p style={{ color: C.textDim, fontSize: 12, margin: 0 }}>
-                  {mode === 'register'
-                    ? 'Confirmá tu cuenta desde el email y después volvé a iniciar sesión.'
-                    : 'Hacé click en el link para entrar.'}
-                </p>
-              </>
-            )}
-            <button onClick={() => { setSent(false); setEmail(''); setPassword(''); setName(''); setBirthdate(''); setGuardianEmail(''); setGuardianConsent(false) }}
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%',
+              background: `${C.green}18`, border: `1.5px solid ${C.green}33`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
+            }}>📩</div>
+            <p style={{ color: C.text, fontSize: 15, margin: 0 }}>
+              Email enviado a <span style={{ color: C.green, fontWeight: 600 }}>{email}</span>
+            </p>
+            <p style={{ color: C.textDim, fontSize: 12, margin: 0 }}>
+              {mode === 'register'
+                ? 'Confirmá tu cuenta desde el email y después volvé a iniciar sesión.'
+                : 'Hacé click en el link para entrar.'}
+            </p>
+            <button onClick={() => { setSent(false); setEmail(''); setPassword(''); setName(''); setBirthdate('') }}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.green, fontSize: 13, fontWeight: 600, marginTop: 4 }}>
               Volver
             </button>
