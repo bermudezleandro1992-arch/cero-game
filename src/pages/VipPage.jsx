@@ -277,8 +277,8 @@ export default function VipPage({ onBack }) {
   const planIdToSend = annual && plan?.annual
     ? (activeTier ? activeTier.id + '_anual' : plan.annual.id)
     : (activeTier ? activeTier.id : selected)
-  const planUSD = annual
-    ? parseFloat((activePriceUSD * 12 * 0.67).toFixed(2))
+  const planUSD = annual && plan?.annual
+    ? parseFloat(plan.annual.price.replace('$', ''))
     : activePriceUSD
 
   async function handleMercadoPago() {
@@ -737,7 +737,7 @@ export default function VipPage({ onBack }) {
                 color: annual === isAnnual ? C.bg : C.textDim,
                 fontSize: 12, fontWeight: 700, transition: 'all .2s',
               }}>
-                {isAnnual ? '🗓 Anual (-33%)' : 'Mensual'}
+                {isAnnual ? '🗓 Anual (-25%)' : 'Mensual'}
               </button>
             ))}
           </div>
@@ -762,7 +762,7 @@ export default function VipPage({ onBack }) {
             const basePrice = tier ? tier.price : p.price
             const basePriceUSD = tier ? tier.priceUSD : (p.priceUSD || 0)
             const displayPrice = annual && p.annual
-              ? `$${Math.round(basePriceUSD * 12 * 0.67)}`
+              ? p.annual.price
               : basePrice
             return (
               <button
