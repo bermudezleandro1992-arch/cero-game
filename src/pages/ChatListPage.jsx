@@ -176,6 +176,10 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
   useEffect(() => { setFilter(initialFilter || 'todos') }, [initialFilter])
   const [showFab, setShowFab] = useState(false)
+  const [showAddContact, setShowAddContact] = useState(false)
+  const [addContactQuery, setAddContactQuery] = useState('')
+  const [addContactResults, setAddContactResults] = useState([])
+  const [addContactLoading, setAddContactLoading] = useState(false)
   const [loadingConvs, setLoadingConvs] = useState(conversations.length === 0)
   const storyUserIds = useStoryUserIds()
   const onlineUsers = useOnlineUsers()
@@ -332,6 +336,8 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
     if (filter === 'directos')    return !c.isGroup && !c.isCommunity
     if (filter === 'grupos')      return c.isGroup && !c.isCommunity
     if (filter === 'comunidades') return c.isCommunity
+    if (filter === 'torneos')     return c.group_type === 'tournament'
+    if (filter === 'ligas')       return c.group_type === 'liga'
     if (filter === 'amigo')       return !c.isGroup && contactCategories[c.user?.id] === 'amigo'
     if (filter === 'clan')        return !c.isGroup && contactCategories[c.user?.id] === 'clan'
     if (filter === 'conocido')    return !c.isGroup && contactCategories[c.user?.id] === 'conocido'
@@ -467,6 +473,8 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
               ['chats','Chats','👤'],
               ['grupos','Grupos','👥'],
               ['comunidades','Comunidades','🌐'],
+              ['torneos','Torneos','🏆'],
+              ['ligas','Ligas','⚽'],
               ['amigo','Amigos','🤝'],
               ['clan','Clan','⚔️'],
               ['conocido','Conocidos','👋'],
@@ -816,6 +824,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
           <>
             <FabItem label="Nueva comunidad" icon="🌐" onClick={() => { setShowFab(false); setNewGroupType('community'); setShowNewGroup(true) }} />
             <FabItem label="Nuevo grupo" icon="👥" onClick={() => { setShowFab(false); setNewGroupType('group'); setShowNewGroup(true) }} />
+            <FabItem label="Agregar contacto" icon="➕" onClick={() => { setShowFab(false); setShowAddContact(true); setAddContactQuery(''); setAddContactResults([]) }} />
             <FabItem label="Nuevo chat" icon="💬" onClick={() => { setShowFab(false); document.querySelector('input[placeholder*="Buscar"]')?.focus() }} />
           </>
         )}
@@ -891,6 +900,84 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
         onConfirm={confirmDialog?.onConfirm}
         onCancel={() => setConfirmDialog(null)}
       />
+
+      {/* ── Modal Agregar Contacto ── */}
+      {showAddContact && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200,
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        }} onClick={() => setShowAddContact(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '100%', maxWidth: 480, background: C.panel,
+            borderRadius: '20px 20px 0 0', padding: '20px 20px 32px',
+            display: 'flex', flexDirection: 'column', gap: 14,
+            maxHeight: '80vh',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ color: C.text, fontWeight: 800, fontSize: 16 }}>➕ Agregar contacto</div>
+              <button onClick={() => setShowAddContact(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 20 }}>✕</button>
+            </div>
+            <input
+              autoFocus
+              placeholder="Buscar por nombre o @usuario"
+              value={addContactQuery}
+              onChange={async e => {
+                const q = e.target.value
+                setAddContactQuery(q)
+                if (q.trim().length < 2) { setAddContactResults([]); return }
+                setAddContactLoading(true)
+                const { data } = await supabase.from('users')
+                  .select('id, display_name, username, avatar_url, elo')
+                  .or(`display_name.ilike.%${q}%,username.ilike.%${q}%`)
+                  .neq('id', profile.id)
+                  .limit(15)
+                setAddContactResults(data || [])
+                setAddContactLoading(false)
+              }}
+              style={{
+                padding: '11px 14px', borderRadius: 12, outline: 'none',
+                background: C.panel2, border: `1px solid ${C.border}`,
+                color: C.text, fontSize: 14,
+              }}
+            />
+            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {addContactLoading && <div style={{ textAlign: 'center', color: C.textDim, padding: 16 }}>Buscando...</div>}
+              {!addContactLoading && addContactQuery.length >= 2 && addContactResults.length === 0 && (
+                <div style={{ textAlign: 'center', color: C.textDim, padding: 16 }}>Sin resultados</div>
+              )}
+              {addContactResults.map(u => (
+                <button key={u.id} onClick={async () => {
+                  // Open or create DM
+                  const existing = conversations.find(c => !c.isGroup && c.user?.id === u.id)
+                  if (existing) {
+                    setActiveConversation(existing)
+                  } else {
+                    const { data } = await supabase.rpc('get_or_create_dm', { other_user_id: u.id })
+                    if (data) fetchConversations(profile.id)
+                  }
+                  setShowAddContact(false)
+                }} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 12px', borderRadius: 12, background: C.panel2,
+                  border: `1px solid ${C.border}`, cursor: 'pointer', textAlign: 'left',
+                }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: C.border, overflow: 'hidden', flexShrink: 0 }}>
+                    {u.avatar_url
+                      ? <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.green, fontWeight: 700 }}>{u.display_name?.[0]?.toUpperCase()}</div>
+                    }
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>{u.display_name}</div>
+                    {u.username && <div style={{ color: C.textDim, fontSize: 12 }}>@{u.username}</div>}
+                  </div>
+                  <span style={{ color: C.green, fontSize: 12, fontWeight: 700 }}>💬 Chat</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
