@@ -1424,6 +1424,31 @@ export default function ChatPage({ onBack }) {
                   </div>
                 ))}
                 <div
+                  onClick={() => {
+                    const opts = [
+                      { label: '1 hora', ms: 3600_000 },
+                      { label: '8 horas', ms: 28800_000 },
+                      { label: '24 horas', ms: 86400_000 },
+                      { label: 'Siempre', ms: 9999999_000 },
+                    ]
+                    const choice = prompt('Silenciar por:\n' + opts.map((o,i) => `${i+1}. ${o.label}`).join('\n') + '\n\nEscribí el número:')
+                    const idx = parseInt(choice) - 1
+                    if (idx >= 0 && idx < opts.length) {
+                      const until = Date.now() + opts[idx].ms
+                      try { localStorage.setItem(`mute_${activeConversation?.id}`, String(until)) } catch {}
+                    }
+                  }}
+                  style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
+                  onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🔕</span>
+                  <div>
+                    <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>Silenciar notificaciones</div>
+                    <div style={{ fontSize: 11, color: C.textDim }}>1h · 8h · 24h · Siempre</div>
+                  </div>
+                </div>
+                <div
                   onClick={handleClearHistory}
                   style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
                   onMouseEnter={e => e.currentTarget.style.background = C.panel2}
