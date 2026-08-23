@@ -1,0 +1,169 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
+import { useAuthStore } from '../store/authStore'
+import { useChatStore } from '../store/chatStore'
+import { C } from '../theme'
+
+const AVATAR_COLORS = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100','#c62828']
+function avatarColor(id) {
+  if (!id) return C.panel2
+  let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
+}
+function Avatar({ name, url, size = 48 }) {
+  return url
+    ? <img src={url} alt={name} style={{ width: size, height: size, borderRadius: 14, objectFit: 'cover', flexShrink: 0 }} />
+    : <div style={{ width: size, height: size, borderRadius: 14, flexShrink: 0, background: avatarColor(name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.38, fontWeight: 800, color: '#fff' }}>{name?.slice(0,2).toUpperCase() || '?'}</div>
+}
+
+const TYPE_CFG = {
+  community:  { label: 'Comunidad', color: '#8b5cf6', bg: '#8b5cf618' },
+  group:      { label: 'Grupo',     color: '#22c55e', bg: '#22c55e18' },
+  tournament: { label: 'Torneo',    color: '#f59e0b', bg: '#f59e0b18' },
+  liga:       { label: 'Liga',      color: '#38bdf8', bg: '#38bdf818' },
+}
+
+const TABS = [
+  { id: 'all',        label: 'Todas',     emoji: '🌐' },
+  { id: 'community',  label: 'Comunidades', emoji: '🏘️' },
+  { id: 'group',      label: 'Grupos',    emoji: '👥' },
+  { id: 'tournament', label: 'Torneos',   emoji: '🏆' },
+]
+
+export default function CommunidadesPage() {
+  const { profile } = useAuthStore()
+  const { setActiveConversation } = useChatStore()
+
+  const [tab, setTab] = useState('all')
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    if (!profile?.id) return
+    setLoading(true)
+
+    let q = supabase
+      .from('conversation_members')
+      .select('conversation_id, conversations(id, name, description, avatar_url, group_type, game, tags, created_at)')
+      .eq('user_id', profile.id)
+
+    q.then(({ data }) => {
+      let rows = (data || [])
+        .map(r => r.conversations)
+        .filter(Boolean)
+
+      if (tab !== 'all') {
+        if (tab === 'tournament') rows = rows.filter(r => r.group_type === 'tournament' || r.group_type === 'liga')
+        else rows = rows.filter(r => r.group_type === tab)
+      }
+
+      if (search.trim()) {
+        const q = search.trim().toLowerCase()
+        rows = rows.filter(r => r.name?.toLowerCase().includes(q) || r.description?.toLowerCase().includes(q))
+      }
+
+      rows.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      setItems(rows)
+      setLoading(false)
+    })
+  }, [profile?.id, tab, search])
+
+  function openConv(conv) {
+    setActiveConversation(conv)
+  }
+
+  const tc = TYPE_CFG
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg }}>
+      {/* Header */}
+      <div style={{ padding: '16px 16px 0', background: C.panel }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 12 }}>Mis Comunidades</div>
+
+        {/* Search */}
+        <div style={{ display: 'flex', alignItems: 'center', background: C.panel2, borderRadius: 12, padding: '0 12px', marginBottom: 12, gap: 8 }}>
+          <span style={{ color: C.textDim, fontSize: 16 }}>🔍</span>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar comunidades..."
+            style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 14, padding: '10px 0' }}
+          />
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 1 }}>
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              style={{
+                flexShrink: 0,
+                padding: '6px 14px',
+                borderRadius: 20,
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: tab === t.id ? 700 : 400,
+                background: tab === t.id ? C.green : C.panel2,
+                color: tab === t.id ? '#fff' : C.textDim,
+                transition: 'all .15s',
+              }}
+            >{t.emoji} {t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* List */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', color: C.textDim, padding: 40, fontSize: 14 }}>Cargando...</div>
+        ) : items.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 60 }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🌐</div>
+            <div style={{ color: C.text, fontWeight: 700, fontSize: 16, marginBottom: 6 }}>
+              {search ? 'Sin resultados' : 'No estás en ninguna comunidad'}
+            </div>
+            <div style={{ color: C.textDim, fontSize: 13 }}>
+              {search ? 'Intenta con otro término' : 'Explorá y unite a comunidades en la sección Explorar'}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {items.map(item => {
+              const cfg = tc[item.group_type] || tc.group
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => openConv(item)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    background: C.panel, borderRadius: 14,
+                    padding: '12px 14px', cursor: 'pointer',
+                    border: `1px solid ${C.border || C.panel2}`,
+                  }}
+                >
+                  <Avatar name={item.name} url={item.avatar_url} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontWeight: 700, fontSize: 15, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: cfg.color, background: cfg.bg, borderRadius: 6, padding: '1px 7px', flexShrink: 0 }}>{cfg.label}</span>
+                    </div>
+                    {item.description && (
+                      <div style={{ fontSize: 12, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description}</div>
+                    )}
+                    {item.game && (
+                      <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>🎮 {item.game}</div>
+                    )}
+                  </div>
+                  <span style={{ color: C.textDim, fontSize: 18 }}>›</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
