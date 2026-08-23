@@ -121,6 +121,10 @@ export const busyTone    = makeLoopSound('busy-tone.mp3')
 
 // One-shot call sounds
 export const sounds = {
-  callConnect: () => play('call-connect.mp3'),
-  callEnd:     () => play('call-end.mp3'),
+  callConnect:  () => play('call-connect.mp3'),
+  callEnd:      () => play('call-end.mp3'),
+  chatOpen:     () => play('msg-default.mp3'),
+  msgSent:      () => play('msg-default.mp3'),
+  msgReceived:  () => play('msg-default.mp3'),
+  nudge:        () => play('msg-default.mp3'),
 }

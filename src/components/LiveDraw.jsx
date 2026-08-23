@@ -302,6 +302,7 @@ export default function LiveDraw({
   groupNames  = ['A','B','C','D','E','F','G','H'],
   classifies  = 2,
   onDrawComplete,
+  participantCount = 0,
 }) {
   const { isPro } = useSubscription(profile?.id)
   const canUseDraw = isPro || isAdmin
@@ -530,9 +531,16 @@ export default function LiveDraw({
         </div>
       </div>
 
+      {participantCount > 0 && participantCount < 8 && phase === 'idle' && (
+        <div style={{ background: '#f59e0b18', border: '1px solid #f59e0b44', borderRadius: 10, padding: '10px 14px', color: '#f59e0b', fontSize: 12 }}>
+          ⚠️ Tenés {participantCount} jugador{participantCount !== 1 ? 'es' : ''}. Lo ideal es 8 o más para un sorteo equilibrado.
+          {participantCount >= 2 && ' Podés iniciar igual.'}
+        </div>
+      )}
+
       {drawErr && (
         <div style={{ background: '#ef444418', border: '1px solid #ef444444', borderRadius: 10, padding: '10px 14px', color: '#ef4444', fontSize: 12 }}>
-          ⚠️ {drawErr}
+          ⚠️ {drawErr === 'not_enough_participants' ? `No hay suficientes jugadores para ${numGroups} grupo${numGroups !== 1 ? 's' : ''} (necesitás al menos ${numGroups * 2}).` : drawErr}
         </div>
       )}
 
