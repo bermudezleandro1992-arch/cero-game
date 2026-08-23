@@ -45,20 +45,20 @@ const PLANS = [
       '✅ Hasta 3 torneos/ligas simultáneos',
       '✅ Soporte prioritario 24/7',
     ],
-    annual: { id: 'vip_anual', price: '$40', save: '33%' },
+    annual: { id: 'vip_anual', price: '$72', save: '25%' },
   },
   {
     id: 'comunidad',
     name: 'Comunidad PRO',
-    price: '$10',
-    priceUSD: 10,
+    price: '$15',
+    priceUSD: 15,
     period: 'por mes',
     emoji: '🏆',
     color: '#8b5cf6',
     tiers: [
-      { label: 'Starter', price: '$10', priceUSD: 10, desc: 'Hasta 500 miembros', id: 'com_starter' },
-      { label: 'Growth',  price: '$15', priceUSD: 15, desc: 'Hasta 2.000 miembros', id: 'com_growth' },
-      { label: 'Elite',   price: '$20', priceUSD: 20, desc: 'Miembros ilimitados', id: 'com_elite' },
+      { label: 'Starter', price: '$15', priceUSD: 15, desc: 'Hasta 500 miembros', id: 'com_starter' },
+      { label: 'Growth',  price: '$22', priceUSD: 22, desc: 'Hasta 2.000 miembros', id: 'com_growth' },
+      { label: 'Elite',   price: '$35', priceUSD: 35, desc: 'Miembros ilimitados', id: 'com_elite' },
     ],
     features: [
       '✅ Todo lo del plan VIP',
@@ -73,7 +73,7 @@ const PLANS = [
       '✅ Badge especial 🏆 y sin publicidad',
       '✅ Acceso anticipado a novedades',
     ],
-    annual: { id: 'com_anual', price: '$80', save: '33%' },
+    annual: { id: 'com_anual', price: '$135', save: '25%' },
   },
 ]
 

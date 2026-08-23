@@ -196,20 +196,24 @@ function NewAnnouncementForm({ onClose, onCreate }) {
             )}
           </div>
 
-          {/* Comunidad origen */}
-          {myCommunities.length > 0 && (
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Publicar como</label>
+          {/* Comunidad origen — requerido */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Comunidad *</label>
+            {myCommunities.length === 0 ? (
+              <div style={{ padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${C.border}`, color: C.textDim, fontSize: 13 }}>
+                Necesitás administrar una comunidad para publicar anuncios.
+              </div>
+            ) : (
               <select value={selectedCommunity} onChange={e => setSelectedCommunity(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                <option value="">Mi perfil (sin comunidad)</option>
+                <option value="">— Seleccionar comunidad —</option>
                 {myCommunities.map(c => (
                   <option key={c.id} value={c.id}>
                     {c.group_type === 'community' ? '🌐' : '👥'} {c.name}
                   </option>
                 ))}
               </select>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Title */}
           <div>
@@ -283,10 +287,10 @@ function NewAnnouncementForm({ onClose, onCreate }) {
           </label>
 
           {/* Submit */}
-          <button type="submit" disabled={saving || !title.trim()} style={{
-            padding: '13px', borderRadius: 12, border: 'none', cursor: saving || !title.trim() ? 'default' : 'pointer',
-            background: saving || !title.trim() ? C.panel2 : C.green,
-            color: saving || !title.trim() ? C.textDim : C.bg,
+          <button type="submit" disabled={saving || !title.trim() || !selectedCommunity} style={{
+            padding: '13px', borderRadius: 12, border: 'none', cursor: saving || !title.trim() || !selectedCommunity ? 'default' : 'pointer',
+            background: saving || !title.trim() || !selectedCommunity ? C.panel2 : C.green,
+            color: saving || !title.trim() || !selectedCommunity ? C.textDim : C.bg,
             fontSize: 14, fontWeight: 800, transition: 'all .15s',
             boxShadow: !saving && title.trim() ? `0 4px 20px ${C.green}44` : 'none',
           }}>
@@ -510,17 +514,19 @@ export default function AnnouncementsPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Check if user can publish announcements
+  // Can publish: must be CEO/admin/organizador/moderador role, or own/admin a community
   useEffect(() => {
     if (!profile?.id) return
-    // Role-based check first (ceo, admin, organizador, vip, comunidad can publish)
-    if (canPublishAnnouncements(profile)) { setCanPublish(true); return }
-    // Fallback: also allow if user owns/admins at least one group or community
+    const role = profile.role || 'member'
+    if (['ceo', 'admin', 'comunidad', 'organizador', 'moderador'].includes(role)) {
+      setCanPublish(true); return
+    }
+    // VIP also can publish if they manage a community
     supabase
       .from('group_roles')
       .select('conversation_id', { count: 'exact', head: true })
       .eq('user_id', profile.id)
-      .in('role', ['owner', 'admin'])
+      .in('role', ['owner', 'admin', 'organizador'])
       .then(({ count }) => setCanPublish((count || 0) > 0))
   }, [profile?.id, profile?.role])
 
@@ -610,7 +616,7 @@ export default function AnnouncementsPage() {
             </button>
           ) : (
             <div style={{ fontSize: 11, color: C.textDim, padding: '6px 10px', borderRadius: 8, background: C.panel2, border: `1px solid ${C.border}` }}>
-              Solo organizadores
+              Solo admins de comunidades
             </div>
           )}
         </div>
