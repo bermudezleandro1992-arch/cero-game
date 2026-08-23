@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import { useAppVersion } from '../hooks/useAppVersion'
@@ -14,10 +14,20 @@ export default function LoginPage() {
   const [name, setName] = useState('')
   const [birthdate, setBirthdate] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
+  const [referralCode, setReferralCode] = useState('')
+  const [guardianConsent, setGuardianConsent] = useState(false)
+  const [guardianEmail, setGuardianEmail] = useState('')
   const [mode, setMode] = useState('login') // 'login' | 'register' | 'magic'
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Auto-fill referral code from URL param (?ref=CODE or ?referral=CODE)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('ref') || params.get('referral') || ''
+    if (ref) { setReferralCode(ref.toUpperCase().trim()); setMode('register') }
+  }, [])
 
   function getAge(dateStr) {
     if (!dateStr) return null
@@ -43,6 +53,10 @@ export default function LoginPage() {
       if (!birthdate || age === null) { setError('Ingresá tu fecha de nacimiento'); setLoading(false); return }
       if (age < 13) { setError('Debés tener al menos 13 años para registrarte.'); setLoading(false); return }
       if (!termsAccepted) { setError('Aceptá los términos y condiciones para continuar'); setLoading(false); return }
+      if (age < 18 && !guardianConsent) {
+        setError('Los menores de 18 años deben tener autorización de un tutor legal para registrarse.')
+        setLoading(false); return
+      }
 
       // Geolocate by IP to capture country at registration
       let countryCode = null
@@ -54,21 +68,34 @@ export default function LoginPage() {
         }
       } catch { /* silent — non-blocking */ }
 
+      const metaData = {
+        display_name: name || email.split('@')[0],
+        country_code: countryCode,
+        ...(referralCode ? { referred_by_code: referralCode } : {}),
+        ...(age < 18 ? { guardian_consent: true, ...(guardianEmail ? { guardian_email: guardianEmail } : {}) } : {}),
+      }
+
       const { error } = await supabase.auth.signUp({
         email, password,
-        options: {
-          data: { display_name: name || email.split('@')[0], country_code: countryCode },
-          emailRedirectTo: window.location.origin,
-        }
+        options: { data: metaData, emailRedirectTo: window.location.origin }
       })
       if (error) { setError(error.message) } else {
-        // Also save country_code in users table after signup
-        if (countryCode) {
-          setTimeout(async () => {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (user) await supabase.from('users').update({ country_code: countryCode }).eq('id', user.id)
-          }, 2000)
-        }
+        // After signup: save country_code + register referral
+        setTimeout(async () => {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (!user) return
+          const updates = {}
+          if (countryCode) updates.country_code = countryCode
+          if (Object.keys(updates).length) await supabase.from('users').update(updates).eq('id', user.id)
+          // Link referral if code provided
+          if (referralCode) {
+            const { data: referrer } = await supabase
+              .from('users').select('id').eq('referral_code', referralCode).maybeSingle()
+            if (referrer) {
+              await supabase.from('referrals').insert({ referrer_id: referrer.id, referred_id: user.id })
+            }
+          }
+        }, 3000)
         setSent(true)
       }
     } else {
@@ -185,23 +212,71 @@ export default function LoginPage() {
                 required style={inp} />
             )}
 
-            {mode === 'register' && (
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '4px 0' }}>
-                <input
-                  type="checkbox"
-                  checked={termsAccepted}
-                  onChange={e => setTermsAccepted(e.target.checked)}
-                  style={{ marginTop: 2, accentColor: C.green, width: 16, height: 16, flexShrink: 0 }}
-                />
-                <span style={{ fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>
-                  Tengo al menos 13 años y acepto los{' '}
-                  <span style={{ color: C.green, fontWeight: 600 }}>Términos de Uso</span>
-                  {' '}y la{' '}
-                  <span style={{ color: C.green, fontWeight: 600 }}>Política de Privacidad</span>.
-                  Los menores de 18 años requieren autorización de un tutor legal.
-                </span>
-              </label>
-            )}
+            {mode === 'register' && (() => {
+              const age = getAge(birthdate)
+              const isMinor = age !== null && age >= 13 && age < 18
+              return (
+                <>
+                  {/* Referral code */}
+                  <div>
+                    <label style={{ fontSize: 11, color: C.textDim, display: 'block', marginBottom: 4 }}>
+                      Código de referido <span style={{ opacity: 0.5 }}>(opcional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej: ABC123"
+                      value={referralCode}
+                      onChange={e => setReferralCode(e.target.value.toUpperCase().trim())}
+                      maxLength={12}
+                      style={{ ...inp, fontFamily: 'monospace', letterSpacing: 2, fontSize: 14 }}
+                    />
+                  </div>
+
+                  {/* Terms */}
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '4px 0' }}>
+                    <input type="checkbox" checked={termsAccepted}
+                      onChange={e => setTermsAccepted(e.target.checked)}
+                      style={{ marginTop: 2, accentColor: C.green, width: 16, height: 16, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>
+                      Tengo al menos 13 años y acepto los{' '}
+                      <span style={{ color: C.green, fontWeight: 600 }}>Términos de Uso</span>
+                      {' '}y la{' '}
+                      <span style={{ color: C.green, fontWeight: 600 }}>Política de Privacidad</span>.
+                    </span>
+                  </label>
+
+                  {/* Minor guardian consent — shown only when age 13–17 detected */}
+                  {isMinor && (
+                    <div style={{
+                      background: '#f59e0b0f', border: '1px solid #f59e0b44',
+                      borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10,
+                    }}>
+                      <p style={{ margin: 0, fontSize: 12, color: '#f59e0b', fontWeight: 700 }}>
+                        👤 Tenés menos de 18 años
+                      </p>
+                      <p style={{ margin: 0, fontSize: 11, color: C.textDim, lineHeight: 1.5 }}>
+                        Para registrarte necesitás la autorización de un padre, madre o tutor legal.
+                      </p>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={guardianConsent}
+                          onChange={e => setGuardianConsent(e.target.checked)}
+                          style={{ marginTop: 2, accentColor: '#f59e0b', width: 16, height: 16, flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>
+                          Mi tutor legal autorizó mi registro en Mi Mensajero.
+                        </span>
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="Email del tutor (opcional)"
+                        value={guardianEmail}
+                        onChange={e => setGuardianEmail(e.target.value)}
+                        style={{ ...inp, fontSize: 13 }}
+                      />
+                    </div>
+                  )}
+                </>
+              )
+            })()}
 
             {error && (
               <div style={{
