@@ -14,6 +14,7 @@ import ContactsListPage from './pages/ContactsListPage'
 import NotificationsPage from './pages/NotificationsPage'
 import TorneosPage from './pages/TorneosPage'
 import DiscoverPage from './pages/DiscoverPage'
+import CommunidadesPage from './pages/CommunidadesPage'
 import AnnouncementsPage from './pages/AnnouncementsPage'
 import AdminPage from './pages/AdminPage'
 import InviteJoinPage from './pages/InviteJoinPage'
@@ -526,7 +527,7 @@ export default function App() {
             : tab === 'explorar'
             ? <DiscoverPage />
             : tab === 'comunidades'
-            ? <DiscoverPage />
+            ? <CommunidadesPage />
             : tab === 'torneos'
             ? <DiscoverPage />
             : tab === 'anuncios'
