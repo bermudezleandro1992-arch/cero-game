@@ -1,10 +1,10 @@
 export const THEMES = {
   dark: {
     id: 'dark', label: 'Oscuro', emoji: '🌑',
-    bg: '#05080A', bg2: '#0A1014', panel: '#0D151A', panel2: '#111B21',
-    border: '#1C292F', text: '#FFFFFF', text2: '#A7B0B5', textDim: '#667078',
-    green: '#39FF14', green2: '#19D84A', greenDk: '#0B7A2A',
-    red: '#FF3B30', yellow: '#FFD600',
+    bg: '#0a0a0f', bg2: '#12121a', panel: '#1a1a2e', panel2: '#1e293b',
+    border: '#1e2a3a', text: '#ffffff', text2: '#94a3b8', textDim: '#64748b',
+    green: '#00f5d4', green2: '#00b894', greenDk: '#007a64',
+    red: '#f43f5e', yellow: '#fbbf24',
   },
   light: {
     id: 'light', label: 'Claro', emoji: '☀️',
