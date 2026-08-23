@@ -415,14 +415,34 @@ const pc = useRef(null)
       new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + ms + 'ms')), ms))
     ])
 
+    const audioConstraints = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    }
+
     let stream
+    // Video calls: request camera + mic; audio calls: mic only
+    const constraints = isVideo
+      ? { audio: audioConstraints, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } }
+      : { audio: audioConstraints }
+
     try {
-      console.log('[CALL]','getUserMedia simple...')
-      stream = await withTimeout(navigator.mediaDevices.getUserMedia({ audio: true }), 8000)
+      console.log('[CALL]','getUserMedia', JSON.stringify(constraints))
+      stream = await withTimeout(navigator.mediaDevices.getUserMedia(constraints), 15000)
       console.log('[CALL]','getUserMedia OK tracks=' + stream.getTracks().length)
     } catch (e1) {
       console.log('[CALL]','getUserMedia ERR: ' + e1.name + ' ' + e1.message)
-      throw e1
+      // If video permission denied, fallback to audio only
+      if (isVideo && (e1.name === 'NotAllowedError' || e1.name === 'NotFoundError')) {
+        console.log('[CALL]','video denied, falling back to audio-only')
+        try {
+          stream = await withTimeout(navigator.mediaDevices.getUserMedia({ audio: audioConstraints }), 8000)
+          console.log('[CALL]','audio fallback OK tracks=' + stream.getTracks().length)
+        } catch (e2) { throw e2 }
+      } else {
+        throw e1
+      }
     }
     localStream.current = stream
     if (localVid.current) { localVid.current.srcObject = stream; localVid.current.muted = true }
