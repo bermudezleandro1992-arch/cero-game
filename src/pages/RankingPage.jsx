@@ -221,7 +221,7 @@ export default function RankingPage() {
 
     const ids = pageSlice.map(p => p.id)
     const { data: profiles } = await supabase
-      .from('profiles')
+      .from('users')
       .select('id, display_name, avatar_url')
       .in('id', ids)
 
