@@ -17,6 +17,7 @@ import DiscoverPage from './pages/DiscoverPage'
 import CommunidadesPage from './pages/CommunidadesPage'
 import AnnouncementsPage from './pages/AnnouncementsPage'
 import AdminPage from './pages/AdminPage'
+import AdminGate from './components/AdminGate'
 import InviteJoinPage from './pages/InviteJoinPage'
 import HomePage from './pages/HomePage'
 import RankingPage from './pages/RankingPage'
@@ -524,7 +525,7 @@ export default function App() {
             : tab === 'anuncios'
             ? <AnnouncementsPage />
             : tab === 'admin'
-            ? <AdminPage onBack={() => setTab('chats')} />
+            ? <AdminGate profile={profile}><AdminPage onBack={() => setTab('chats')} /></AdminGate>
             : tab === 'panel-organizador'
             ? <OrganizadorPanelPicker onBack={() => setTab('chats')} />
             : tab === 'panel-ceo' && ['ceo','admin'].includes(profile?.role)

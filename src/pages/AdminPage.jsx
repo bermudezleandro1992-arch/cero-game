@@ -50,6 +50,9 @@ function Tab({ label, active, count, onClick }) {
   )
 }
 
+const TICKET_PRIORITY = { low: { label: 'Baja', color: '#6b7280' }, normal: { label: 'Normal', color: '#3b82f6' }, high: { label: 'Alta', color: '#f59e0b' }, urgent: { label: 'Urgente', color: '#ef4444' } }
+const DISPUTE_STATUS  = { open: { label: 'Abierta', color: '#f59e0b' }, reviewing: { label: 'En revisión', color: '#3b82f6' }, resolved: { label: 'Resuelta', color: '#22c55e' }, dismissed: { label: 'Desestimada', color: '#6b7280' } }
+
 export default function AdminPage({ onBack }) {
   const { profile } = useAuthStore()
   const [tab, setTab] = useState('payments')
@@ -57,29 +60,22 @@ export default function AdminPage({ onBack }) {
   const [payments, setPayments] = useState([])
   const [users, setUsers] = useState([])
   const [banners, setBanners] = useState([])
-  const [bannerForm, setBannerForm] = useState(null) // null | {} (new/edit)
+  const [bannerForm, setBannerForm] = useState(null)
+  const [tickets, setTickets] = useState([])
+  const [disputes, setDisputes] = useState([])
   const [searchUser, setSearchUser] = useState('')
   const [loading, setLoading] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [selectedUser, setSelectedUser] = useState(null)
+  const [selectedTicket, setSelectedTicket] = useState(null)
+  const [selectedDispute, setSelectedDispute] = useState(null)
+  const [ticketNote, setTicketNote] = useState('')
+  const [disputeResolution, setDisputeResolution] = useState('')
   const [editPlan, setEditPlan] = useState('free')
   const [editRole, setEditRole] = useState(null)
   const [msg, setMsg] = useState(null)
 
-  // Seguridad: solo CEO/admin
-  if (!profile || !['ceo', 'admin'].includes(profile.role)) {
-    return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
-        <Header onBack={onBack} title="Panel Admin" />
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
-          <span style={{ fontSize: 48 }}>🔒</span>
-          <p style={{ color: C.textDim, fontSize: 14 }}>Acceso restringido</p>
-        </div>
-      </div>
-    )
-  }
-
-  useEffect(() => { loadPayments() }, [])
+  useEffect(() => { loadPayments(); loadTickets(); loadDisputes() }, [])
 
   async function loadPayments() {
     setLoading(true)
@@ -124,6 +120,38 @@ export default function AdminPage({ onBack }) {
     setLoading(false)
   }
 
+  async function loadTickets() {
+    const { data } = await supabase
+      .from('support_tickets')
+      .select('*, users:user_id(id, username, avatar_url, email)')
+      .order('created_at', { ascending: false })
+      .limit(60)
+    setTickets(data || [])
+  }
+
+  async function updateTicket(id, updates) {
+    await supabase.from('support_tickets').update({ ...updates, assigned_to: profile.id }).eq('id', id)
+    loadTickets()
+    setSelectedTicket(t => t?.id === id ? { ...t, ...updates } : t)
+    setMsg({ type: 'ok', text: 'Ticket actualizado' })
+  }
+
+  async function loadDisputes() {
+    const { data } = await supabase
+      .from('disputes')
+      .select('*, reporter:reporter_id(id, username, avatar_url), accused:accused_id(id, username, avatar_url)')
+      .order('created_at', { ascending: false })
+      .limit(60)
+    setDisputes(data || [])
+  }
+
+  async function updateDispute(id, updates) {
+    await supabase.from('disputes').update({ ...updates, resolved_by: profile.id, updated_at: new Date().toISOString() }).eq('id', id)
+    loadDisputes()
+    setSelectedDispute(null)
+    setMsg({ type: 'ok', text: 'Disputa actualizada' })
+  }
+
   const pendingCount = payments.filter(p => p.status === 'pending').length
 
   async function loadReferrals() {
@@ -161,10 +189,12 @@ export default function AdminPage({ onBack }) {
       <Header onBack={onBack} title="Panel Admin" />
 
       {/* Tabs */}
-      <div style={{ display: 'flex', background: C.panel, borderBottom: `1px solid ${C.border}` }}>
-        <Tab label="Pagos" active={tab === 'payments'} count={pendingCount} onClick={() => setTab('payments')} />
-        <Tab label="Usuarios" active={tab === 'users'} count={0} onClick={() => setTab('users')} />
-        <Tab label="Banners" active={tab === 'banners'} count={0} onClick={() => { setTab('banners'); loadBanners() }} />
+      <div style={{ display: 'flex', background: C.panel, borderBottom: `1px solid ${C.border}`, overflowX: 'auto' }}>
+        <Tab label="Pagos"     active={tab === 'payments'}  count={pendingCount} onClick={() => setTab('payments')} />
+        <Tab label="Tickets"   active={tab === 'tickets'}   count={tickets.filter(t => t.status === 'open').length} onClick={() => setTab('tickets')} />
+        <Tab label="Disputas"  active={tab === 'disputes'}  count={disputes.filter(d => d.status === 'open').length} onClick={() => setTab('disputes')} />
+        <Tab label="Usuarios"  active={tab === 'users'}     count={0} onClick={() => setTab('users')} />
+        <Tab label="Banners"   active={tab === 'banners'}   count={0} onClick={() => { setTab('banners'); loadBanners() }} />
         <Tab label="Referidos" active={tab === 'referrals'} count={0} onClick={() => { setTab('referrals'); loadReferrals() }} />
       </div>
 
@@ -328,6 +358,130 @@ export default function AdminPage({ onBack }) {
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {/* ── TAB TICKETS ── */}
+        {tab === 'tickets' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <p style={{ margin: 0, fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                {tickets.filter(t => t.status === 'open').length} abiertos · {tickets.length} total
+              </p>
+              <button onClick={loadTickets} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', color: C.textDim, fontSize: 11 }}>🔄</button>
+            </div>
+            {tickets.length === 0 && <div style={{ textAlign: 'center', padding: '40px 0', color: C.textDim, fontSize: 13 }}>Sin tickets</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {tickets.map(t => {
+                const isOpen = t.status === 'open'
+                const isExp  = selectedTicket?.id === t.id
+                const pri    = TICKET_PRIORITY[t.priority] || TICKET_PRIORITY.normal
+                return (
+                  <div key={t.id} style={{ background: C.panel, borderRadius: 14, border: `1.5px solid ${isOpen ? pri.color + '44' : C.border}`, overflow: 'hidden' }}>
+                    <div onClick={() => { setSelectedTicket(isExp ? null : t); setTicketNote(t.staff_note || '') }}
+                      style={{ padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: C.panel2, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {t.users?.avatar_url ? <img src={t.users.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 18 }}>👤</span>}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{t.ticket_no || `#${t.id}`}</span>
+                          <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: `${pri.color}22`, color: pri.color }}>{pri.label}</span>
+                          <span style={{ fontSize: 10, color: isOpen ? '#f59e0b' : t.status === 'resolved' ? C.green : C.textDim }}>{isOpen ? '⏳ ABIERTO' : t.status === 'in_progress' ? '🔵 EN PROCESO' : '✅ RESUELTO'}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
+                          @{t.users?.username || '—'} · {new Date(t.created_at).toLocaleDateString('es-AR')}
+                          {t.title && <span> · {t.title}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    {isExp && (
+                      <div style={{ borderTop: `1px solid ${C.border}`, padding: 14 }}>
+                        {t.body && <p style={{ margin: '0 0 12px', fontSize: 13, color: C.text, lineHeight: 1.6 }}>{t.body}</p>}
+                        <p style={{ margin: '0 0 6px', fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Nota interna</p>
+                        <textarea value={ticketNote} onChange={e => setTicketNote(e.target.value)}
+                          placeholder="Notas del equipo (internas, no visibles al usuario)..."
+                          rows={3} style={{ width: '100%', boxSizing: 'border-box', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 13, resize: 'vertical', marginBottom: 10, outline: 'none' }} />
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {['open','in_progress','resolved'].map(s => (
+                            <button key={s} onClick={() => updateTicket(t.id, { status: s, staff_note: ticketNote })} style={{
+                              flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                              background: s === 'resolved' ? C.green : s === 'in_progress' ? '#3b82f6' : C.panel2,
+                              color: s === 'open' ? C.textDim : C.bg,
+                            }}>
+                              {s === 'open' ? '↩ Reabrir' : s === 'in_progress' ? '🔵 En proceso' : '✅ Resolver'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {/* ── TAB DISPUTAS ── */}
+        {tab === 'disputes' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <p style={{ margin: 0, fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                {disputes.filter(d => d.status === 'open').length} abiertas · {disputes.length} total
+              </p>
+              <button onClick={loadDisputes} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', color: C.textDim, fontSize: 11 }}>🔄</button>
+            </div>
+            {disputes.length === 0 && <div style={{ textAlign: 'center', padding: '40px 0', color: C.textDim, fontSize: 13 }}><div style={{ fontSize: 36, marginBottom: 8 }}>⚖️</div>Sin disputas registradas</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {disputes.map(d => {
+                const st   = DISPUTE_STATUS[d.status] || DISPUTE_STATUS.open
+                const isExp = selectedDispute?.id === d.id
+                const typeLabels = { result: '🏆 Resultado', conduct: '⚠️ Conducta', cheating: '🚫 Trampa', other: '📋 Otro' }
+                return (
+                  <div key={d.id} style={{ background: C.panel, borderRadius: 14, border: `1.5px solid ${d.status === 'open' ? '#f59e0b44' : C.border}`, overflow: 'hidden' }}>
+                    <div onClick={() => { setSelectedDispute(isExp ? null : d); setDisputeResolution(d.resolution || '') }}
+                      style={{ padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ fontSize: 28, flexShrink: 0 }}>⚖️</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{typeLabels[d.type] || d.type}</span>
+                          <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: `${st.color}22`, color: st.color }}>{st.label.toUpperCase()}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
+                          @{d.reporter?.username} vs @{d.accused?.username || '—'} · {new Date(d.created_at).toLocaleDateString('es-AR')}
+                        </div>
+                      </div>
+                    </div>
+                    {isExp && (
+                      <div style={{ borderTop: `1px solid ${C.border}`, padding: 14 }}>
+                        <p style={{ margin: '0 0 10px', fontSize: 13, color: C.text, lineHeight: 1.6, background: C.panel2, padding: '10px 12px', borderRadius: 10 }}>{d.description}</p>
+                        {d.evidence_urls?.length > 0 && (
+                          <div style={{ marginBottom: 12 }}>
+                            <p style={{ margin: '0 0 8px', fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Evidencia</p>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              {d.evidence_urls.map((url, i) => (
+                                <a key={i} href={url} target="_blank" rel="noreferrer">
+                                  <img src={url} alt="" onError={e => { e.target.style.display = 'none' }} style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <p style={{ margin: '0 0 6px', fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Resolución</p>
+                        <textarea value={disputeResolution} onChange={e => setDisputeResolution(e.target.value)}
+                          placeholder="Describí la decisión tomada..."
+                          rows={3} style={{ width: '100%', boxSizing: 'border-box', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 13, resize: 'vertical', marginBottom: 10, outline: 'none' }} />
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={() => updateDispute(d.id, { status: 'reviewing', resolution: disputeResolution })} style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer', background: '#3b82f620', color: '#3b82f6' }}>🔵 En revisión</button>
+                          <button onClick={() => updateDispute(d.id, { status: 'resolved', resolution: disputeResolution })} style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer', background: `${C.green}20`, color: C.green }}>✅ Resolver</button>
+                          <button onClick={() => updateDispute(d.id, { status: 'dismissed', resolution: disputeResolution })} style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer', background: '#6b728020', color: C.textDim }}>✕ Desestimar</button>
+                        </div>
                       </div>
                     )}
                   </div>
