@@ -60,6 +60,7 @@ function NewAnnouncementForm({ onClose, onCreate }) {
   const [linkLabel, setLinkLabel] = useState('')
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
+  const [isPinned, setIsPinned] = useState(false)
   const [saving, setSaving]     = useState(false)
   const [myCommunities, setMyCommunities] = useState([])
   const [selectedCommunity, setSelectedCommunity] = useState('')
@@ -109,6 +110,19 @@ function NewAnnouncementForm({ onClose, onCreate }) {
       if (imageFile) {
         image_url = await uploadImage(imageFile, profile.id)
       }
+      // Enforce max 3 pinned per community
+      let pinned = isPinned
+      if (pinned && selectedCommunity) {
+        const { count } = await supabase
+          .from('announcements')
+          .select('id', { count: 'exact', head: true })
+          .eq('conversation_id', selectedCommunity)
+          .eq('is_pinned', true)
+        if ((count || 0) >= 3) {
+          alert('Solo se permiten 3 anuncios fijados por comunidad. Desancla uno antes de fijar este.')
+          pinned = false
+        }
+      }
       const { data, error } = await supabase.from('announcements').insert({
         author_id: profile.id,
         title: title.trim(),
@@ -116,6 +130,7 @@ function NewAnnouncementForm({ onClose, onCreate }) {
         image_url,
         game: game || null,
         category,
+        is_pinned: pinned,
         link_url: linkUrl.trim() || null,
         link_label: linkUrl.trim() ? (linkLabel.trim() || 'Ver más') : null,
         conversation_id: selectedCommunity || null,
@@ -257,6 +272,15 @@ function NewAnnouncementForm({ onClose, onCreate }) {
               <input value={linkLabel} onChange={e => setLinkLabel(e.target.value)} placeholder='Etiqueta del botón ("Inscribirse", "Ver bracket")' style={{ ...inputStyle, marginTop: 6 }} />
             )}
           </div>
+
+          {/* Pin toggle */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${isPinned ? C.green : C.border}`, transition: 'border-color .15s' }}>
+            <input type="checkbox" checked={isPinned} onChange={e => setIsPinned(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.green, cursor: 'pointer' }} />
+            <div>
+              <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>📌 Fijar anuncio</div>
+              <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>Aparece primero en la comunidad (máx. 3 fijados)</div>
+            </div>
+          </label>
 
           {/* Submit */}
           <button type="submit" disabled={saving || !title.trim()} style={{
