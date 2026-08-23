@@ -50,24 +50,19 @@ const TABS = [
 ]
 
 // ── Chat interno (canal General) ─────────────────────────────────────────────
-function CommunityChat({ community, profile }) {
+function CommunityChat({ community }) {
   const { setActiveConversation } = useChatStore()
 
   useEffect(() => {
     setActiveConversation({
       ...community,
       isGroup: true,
-      isCommunity: true,
+      isCommunity: false,
       group_type: 'community',
-      _openedFromDashboard: true,
     })
   }, [community.id])
 
-  return (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.textDim, fontSize: 13 }}>
-      Abriendo chat...
-    </div>
-  )
+  return null
 }
 
 // ── Inicio tab ────────────────────────────────────────────────────────────────
@@ -333,11 +328,36 @@ function MiembrosTab({ communityId, ownerId }) {
   useEffect(() => {
     supabase
       .from('conversation_members')
-      .select('user_id, role, joined_at, users(id, display_name, username, avatar_url)')
+      .select('user_id, role, joined_at, users!inner(id, display_name, username, avatar_url)')
       .eq('conversation_id', communityId)
       .order('joined_at', { ascending: true })
       .limit(100)
-      .then(({ data }) => { setMembers(data || []); setLoading(false) })
+      .then(({ data, error }) => {
+        if (error) {
+          // fallback: two-step query
+          supabase
+            .from('conversation_members')
+            .select('user_id, role, joined_at')
+            .eq('conversation_id', communityId)
+            .order('joined_at', { ascending: true })
+            .limit(100)
+            .then(async ({ data: mData }) => {
+              const ids = (mData || []).map(r => r.user_id)
+              if (!ids.length) { setMembers([]); setLoading(false); return }
+              const { data: uData } = await supabase
+                .from('users')
+                .select('id, display_name, username, avatar_url')
+                .in('id', ids)
+              const uMap = {}
+              ;(uData || []).forEach(u => { uMap[u.id] = u })
+              setMembers((mData || []).map(m => ({ ...m, users: uMap[m.user_id] })))
+              setLoading(false)
+            })
+        } else {
+          setMembers(data || [])
+          setLoading(false)
+        }
+      })
   }, [communityId])
 
   const ROLE_CFG = {
@@ -452,10 +472,11 @@ export default function CommunityDashboard({ community, onBack }) {
   useEffect(() => { loadData() }, [loadData])
 
   function openChat() {
+    // isCommunity: false so App.jsx routes to ChatPage instead of CommunityDashboard
     setActiveConversation({
       ...community,
       isGroup: true,
-      isCommunity: true,
+      isCommunity: false,
       group_type: 'community',
     })
   }

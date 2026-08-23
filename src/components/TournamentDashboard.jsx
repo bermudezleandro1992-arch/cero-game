@@ -223,7 +223,6 @@ function MatchProgress({ matches }) {
 // ── TORNEO: Tabs ──────────────────────────────────────────────────────────────
 const TORNEO_TABS = [
   { id: 'overview', label: 'Resumen',  icon: '📊' },
-  { id: 'draw',     label: 'Sorteo',   icon: '🎱' },
   { id: 'groups',   label: 'Grupos',   icon: '📋' },
   { id: 'bracket',  label: 'Bracket',  icon: '🏆' },
   { id: 'fixture',  label: 'Fixture',  icon: '⚽' },
@@ -270,7 +269,7 @@ function TabBar({ tabs, active, onChange, visible }) {
 }
 
 // ── TORNEO: OverviewTab ───────────────────────────────────────────────────────
-function TorneoOverview({ data }) {
+function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete }) {
   const fillPct = data.max_participants
     ? Math.round((data.participant_count / data.max_participants) * 100)
     : null
@@ -334,16 +333,26 @@ function TorneoOverview({ data }) {
       {/* Progreso partidos */}
       {data.matches?.total > 0 && <MatchProgress matches={data.matches} />}
 
-      {/* Grupos */}
+      {/* Sorteo / Grupos */}
       <div>
         <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
-          Grupos / Fase de grupos
+          {data.groups?.length ? 'Grupos / Fase de grupos' : '🎱 Sorteo'}
         </p>
         {(!data.groups?.length) ? (
-          <div style={{ background: C.panel2, border: `1px dashed ${C.border}`, borderRadius: 14, padding: '28px 16px', textAlign: 'center' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>🎱</div>
-            <p style={{ margin: 0, color: C.textDim, fontSize: 13 }}>Sorteo pendiente — aún no hay grupos asignados</p>
-          </div>
+          tournamentId
+            ? <LiveDraw
+                tournamentId={tournamentId}
+                profile={profile}
+                isAdmin={isAdmin}
+                numGroups={4}
+                groupNames={['A','B','C','D']}
+                classifies={2}
+                onDrawComplete={onDrawComplete}
+              />
+            : <div style={{ background: C.panel2, border: `1px dashed ${C.border}`, borderRadius: 14, padding: '28px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>🎱</div>
+                <p style={{ margin: 0, color: C.textDim, fontSize: 13 }}>Sorteo pendiente</p>
+              </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
             {data.groups.map((g, i) => {
@@ -526,7 +535,6 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
     visibleTabs = ['overview', 'apertura', 'clausura', 'tabla', 'chat']
   } else {
     visibleTabs = ['overview']
-    if (data.status === 'inscripcion' || hasGroups) visibleTabs.push('draw')
     if (hasGroups) visibleTabs.push('groups')
     if (hasBracket) visibleTabs.push('bracket')
     if (hasMatches) visibleTabs.push('fixture')
@@ -587,23 +595,16 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
         {activeTab === 'overview' && (
           isLiga
             ? <LigaOverview data={data} />
-            : <TorneoOverview data={data} />
-        )}
-
-        {/* TORNEO tabs */}
-        {activeTab === 'draw' && !isLiga && (
-          <LiveDraw
-            tournamentId={tournamentId}
-            profile={profile}
-            isAdmin={isAdmin}
-            numGroups={data.groups?.length || 4}
-            groupNames={data.groups?.map(g => g.name) || ['A','B','C','D']}
-            classifies={data.groups?.[0]?.classifies || 2}
-            onDrawComplete={() => {
-              fetchDashboard(tournamentId).then(setData)
-              setActiveTab('groups')
-            }}
-          />
+            : <TorneoOverview
+                data={data}
+                tournamentId={tournamentId}
+                profile={profile}
+                isAdmin={isAdmin}
+                onDrawComplete={() => {
+                  fetchDashboard(tournamentId).then(setData)
+                  setActiveTab('groups')
+                }}
+              />
         )}
 
         {activeTab === 'groups' && !isLiga && (
