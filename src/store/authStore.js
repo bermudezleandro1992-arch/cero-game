@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
+import { applyTheme } from '../lib/theme'
+import { loadSoundSettingsFromProfile } from '../lib/sounds'
 
 export const useAuthStore = create((set) => ({
   user: null,
@@ -16,6 +18,8 @@ export const useAuthStore = create((set) => ({
       .select('*')
       .eq('id', userId)
       .single()
+    if (data?.theme) applyTheme(data.theme)
+    loadSoundSettingsFromProfile(data)
     set({ profile: data })
   },
 

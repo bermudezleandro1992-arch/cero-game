@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { C } from '../theme'
 import { THEMES } from '../lib/theme'
 import { useTheme } from '../lib/ThemeContext'
+import { saveSoundSettings } from '../lib/sounds'
 
 function Spinner() {
   return (
@@ -68,6 +69,7 @@ function PreferenciasTab({ profile }) {
   async function saveSound(key, val) {
     const updated = { ...sounds, [key]: val }
     setSounds(updated)
+    saveSoundSettings(updated)
     setSavingSound(true)
     await supabase.from('users').update({ sound_settings: updated }).eq('id', profile.id)
     setSavingSound(false)
