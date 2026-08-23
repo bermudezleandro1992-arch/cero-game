@@ -67,13 +67,12 @@ const NAV = [
     ),
   },
   {
-    id: 'torneos', label: 'Comunidad PRO',
+    id: 'comunidades', label: 'Comunidades',
     icon: (a) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
-        <path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
-        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
-        <path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/>
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
       </svg>
     ),
   },
@@ -450,7 +449,7 @@ export default function App() {
           {showProfile
             ? <ProfileSheet onClose={() => { setShowProfile(false); setOpenVipDirect(false) }} initialShowVip={openVipDirect} />
             : tab === 'inicio'
-            ? <HomePage onGoTorneos={() => setTab('torneos')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} />
+            ? <HomePage onGoTorneos={() => setTab('comunidades')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} />
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'
@@ -461,8 +460,10 @@ export default function App() {
             ? <ChatListPage onProfileClick={() => setShowProfile(true)} initialFilter="grupos" />
             : tab === 'explorar'
             ? <DiscoverPage />
+            : tab === 'comunidades'
+            ? <DiscoverPage />
             : tab === 'torneos'
-            ? <TorneosPage />
+            ? <DiscoverPage />
             : tab === 'anuncios'
             ? <AnnouncementsPage />
             : tab === 'admin'
@@ -549,7 +550,7 @@ export default function App() {
           {[
             { id: 'inicio',  label: 'Inicio' },
             { id: 'chats',   label: 'Chats' },
-            { id: 'torneos', label: 'Torneos' },
+            { id: 'comunidades', label: 'Comunidades' },
             { id: 'ranking', label: 'Ranking' },
             { id: 'perfil',  label: 'Perfil' },
           ].map(({ id, label }) => {
