@@ -6,8 +6,8 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
-  "background_color": "#05080A",
-  "theme_color": "#05080A",
+  "background_color": "#111B21",
+  "theme_color": "#111B21",
   "orientation": "portrait-primary",
   "categories": ["social", "communication"],
   "launch_handler": {
@@ -15,10 +15,10 @@
   },
   "handle_links": "preferred",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/icon.svg",     "sizes": "any",      "type": "image/svg+xml", "purpose": "any" }
+    { "src": "/icon-192.png",          "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png",          "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.svg",              "sizes": "any",     "type": "image/svg+xml", "purpose": "any" }
   ],
   "shortcuts": [
     {
@@ -27,6 +27,15 @@
       "description": "Abrir chats",
       "url": "/",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mi Mensajero"
     }
   ]
 }
