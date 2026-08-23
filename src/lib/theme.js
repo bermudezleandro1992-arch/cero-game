@@ -27,6 +27,20 @@ export const THEMES = {
     green: '#A78BFA', green2: '#C4B5FD', greenDk: '#5B21B6',
     red: '#F87171', yellow: '#FCD34D',
   },
+  fire: {
+    id: 'fire', label: 'Fuego', emoji: '🔥',
+    bg: '#0f0800', bg2: '#1a0e00', panel: '#1f1200', panel2: '#2a1800',
+    border: '#3a2200', text: '#fff0e0', text2: '#c0906a', textDim: '#8a5a38',
+    green: '#ff6b2b', green2: '#ff9a4d', greenDk: '#c03a00',
+    red: '#ff3333', yellow: '#ffc107',
+  },
+  nature: {
+    id: 'nature', label: 'Naturaleza', emoji: '🌿',
+    bg: '#060f06', bg2: '#0d1a0d', panel: '#112211', panel2: '#162c16',
+    border: '#1e3a1e', text: '#e8f5e8', text2: '#7eab7e', textDim: '#4e7a4e',
+    green: '#4caf50', green2: '#81c784', greenDk: '#1b5e20',
+    red: '#ef5350', yellow: '#ffd54f',
+  },
 }
 
 const STORAGE_KEY = 'app_theme'

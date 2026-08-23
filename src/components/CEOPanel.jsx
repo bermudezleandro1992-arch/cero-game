@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { C } from '../theme'
 import TournamentDashboard from './TournamentDashboard'
+import ReferidosPanel from './ReferidosPanel'
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 function Header({ onBack, title, subtitle }) {
@@ -1039,6 +1040,7 @@ export default function CEOPanel({ community, onBack }) {
     { id: 'solicitudes', icon: '🔔', label: 'Solicitudes' },
     { id: 'miembros',    icon: '👥', label: 'Miembros' },
     { id: 'estadisticas',icon: '📈', label: 'Stats' },
+    { id: 'referidos',   icon: '🔗', label: 'Referidos' },
     { id: 'config',      icon: '⚙️', label: 'Config' },
   ]
 
@@ -1099,6 +1101,9 @@ export default function CEOPanel({ community, onBack }) {
         )}
         {tab === 'estadisticas' && (
           <EstadisticasTab communityId={communityId} />
+        )}
+        {tab === 'referidos' && (
+          <ReferidosPanel communityId={communityId} />
         )}
         {tab === 'config' && (
           <ConfiguracionTab communityId={communityId} toast={showToast} />
