@@ -22,6 +22,7 @@ import RankingPage from './pages/RankingPage'
 import PerfilPage from './pages/PerfilPage'
 import ProfileSheet from './components/ProfileSheet'
 import CEOPanel from './components/CEOPanel'
+import OrganizadorPanel from './components/OrganizadorPanel'
 import UpdateBanner from './components/UpdateBanner'
 import CommunityDashboard from './components/CommunityDashboard'
 import { usePresence } from './hooks/usePresence'
@@ -164,6 +165,70 @@ function CEOPanelPicker({ onBack }) {
           <div style={{ textAlign: 'center', paddingTop: 60, color: C.textDim }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>🌐</div>
             <div>No tenés comunidades administradas</div>
+          </div>
+        ) : communities.map(c => (
+          <button key={c.id} onClick={() => setSelected(c)} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+            padding: '14px 16px', background: C.panel, border: `1px solid ${C.border}`,
+            borderRadius: 12, marginBottom: 10, cursor: 'pointer', textAlign: 'left',
+          }}>
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.border, flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+              {c.avatar_url ? <img src={c.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : '🌐'}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{c.name}</div>
+              {c.description && <div style={{ color: C.textDim, fontSize: 12, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.description}</div>}
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Organizador Panel Picker ──────────────────────────────────────────────────
+function OrganizadorPanelPicker({ onBack }) {
+  const { profile } = useAuthStore()
+  const [communities, setCommunities] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState(null)
+
+  useEffect(() => {
+    async function load() {
+      const { data: roles } = await supabase
+        .from('group_roles')
+        .select('group_id, conversations!group_roles_group_id_fkey(id, name, description, avatar_url)')
+        .eq('user_id', profile.id)
+        .in('role', ['organizador', 'admin', 'owner'])
+      setCommunities((roles || []).map(r => r.conversations).filter(Boolean))
+      setLoading(false)
+    }
+    load()
+  }, [profile?.id])
+
+  if (selected) return <OrganizadorPanel community={selected} onBack={() => setSelected(null)} />
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
+      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4, display: 'flex' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <div>
+          <div style={{ color: C.text, fontWeight: 700, fontSize: 16 }}>🎯 Panel Organizador</div>
+          <div style={{ color: C.textDim, fontSize: 11 }}>Seleccioná una comunidad</div>
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+            <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+          </div>
+        ) : communities.length === 0 ? (
+          <div style={{ textAlign: 'center', paddingTop: 60, color: C.textDim }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🎯</div>
+            <div>No tenés comunidades como organizador</div>
           </div>
         ) : communities.map(c => (
           <button key={c.id} onClick={() => setSelected(c)} style={{
@@ -468,6 +533,8 @@ export default function App() {
             ? <AnnouncementsPage />
             : tab === 'admin'
             ? <AdminPage onBack={() => setTab('chats')} />
+            : tab === 'panel-organizador'
+            ? <OrganizadorPanelPicker onBack={() => setTab('chats')} />
             : tab === 'panel-ceo' && ['ceo','admin'].includes(profile?.role)
             ? <CEOPanelPicker onBack={() => setTab('chats')} />
             : tab === 'panel-ceo'
@@ -516,6 +583,7 @@ export default function App() {
               ...(['ceo','admin'].includes(profile?.role) ? [
                 { id: 'panel-ceo', icon: '⭐', label: 'Panel CEO' },
               ] : []),
+              { id: 'panel-organizador', icon: '🎯', label: 'Panel Organizador' },
               { id: 'ajustes',    icon: '⚙️', label: 'Ajustes' },
             ].map(({ id, icon, label }) => (
               <button key={id} onClick={() => {
