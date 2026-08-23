@@ -277,17 +277,6 @@ export default function RankingPage() {
           ))}
         </div>
 
-        {/* Sort tabs */}
-        <div style={{ display: 'flex', gap: 6 }}>
-          {[['elo', '⚡ ELO'], ['wins', '🏆 Victorias'], ['ratio', '📈 % Victorias']].map(([id, label]) => (
-            <button key={id} onClick={() => setSortBy(id)} style={{
-              padding: '4px 12px', borderRadius: 8, border: `1px solid ${sortBy === id ? C.green : C.border}`,
-              background: sortBy === id ? `${C.green}18` : 'transparent',
-              color: sortBy === id ? C.green : C.textDim,
-              fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
-            }}>{label}</button>
-          ))}
-        </div>
       </div>
 
       {/* My position */}

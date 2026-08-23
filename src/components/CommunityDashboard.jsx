@@ -62,7 +62,7 @@ function ChannelsTab({ community, profile, isAdmin }) {
   const loadChannels = useCallback(async () => {
     const { data } = await supabase
       .from('conversations')
-      .select('id, name, description, group_type, created_by, created_at')
+      .select('id, name, description, group_type, created_by, created_at, is_public')
       .eq('community_id', community.id)
       .eq('group_type', 'channel')
       .order('created_at', { ascending: true })
@@ -89,8 +89,8 @@ function ChannelsTab({ community, profile, isAdmin }) {
 
   async function createDefaultChannels() {
     const defaults = [
-      { name: 'General', description: 'Canal principal de la comunidad', note: 'general' },
-      { name: 'Avisos', description: 'Anuncios importantes del equipo', note: 'avisos' },
+      { name: 'General', description: 'Canal principal de la comunidad', is_public: false },
+      { name: 'Avisos', description: 'Solo el admin puede publicar', is_public: true },
     ]
     for (const ch of defaults) {
       const { data } = await supabase.from('conversations').insert({
@@ -99,8 +99,8 @@ function ChannelsTab({ community, profile, isAdmin }) {
         group_type: 'channel',
         community_id: community.id,
         created_by: profile.id,
-        is_public: false,
-      }).select('id, name, description, group_type, created_by, created_at').single()
+        is_public: ch.is_public,
+      }).select('id, name, description, group_type, created_by, created_at, is_public').single()
       if (data) {
         await supabase.from('conversation_members').insert({ conversation_id: data.id, user_id: profile.id, role: 'owner' })
       }
@@ -114,12 +114,12 @@ function ChannelsTab({ community, profile, isAdmin }) {
     setCreating(true)
     const { data, error } = await supabase.from('conversations').insert({
       name: newName.trim(),
-      description: newType === 'avisos' ? 'Solo admins pueden publicar' : null,
+      description: newType === 'avisos' ? 'Solo el admin puede publicar' : null,
       group_type: 'channel',
       community_id: community.id,
       created_by: profile.id,
-      is_public: false,
-    }).select('id, name, description, group_type, created_by, created_at').single()
+      is_public: newType === 'avisos',
+    }).select('id, name, description, group_type, created_by, created_at, is_public').single()
     if (data) {
       await supabase.from('conversation_members').insert({ conversation_id: data.id, user_id: profile.id, role: 'owner' })
       setChannels(prev => [...prev, data])
@@ -141,12 +141,14 @@ function ChannelsTab({ community, profile, isAdmin }) {
       isGroup: true,
       isCommunity: false,
       group_type: 'channel',
+      is_announcement: ch.is_public === true,
     })
   }
 
-  const CHANNEL_ICONS = { 'General': '💬', 'Avisos': '📢' }
-  function channelIcon(name) {
-    return CHANNEL_ICONS[name] || '#'
+  function channelIcon(ch) {
+    if (ch.is_public) return '📢'
+    if (ch.name === 'General') return '💬'
+    return '#'
   }
 
   if (loading) {
@@ -243,15 +245,18 @@ function ChannelsTab({ community, profile, isAdmin }) {
                 >
                   <div style={{
                     width: 40, height: 40, borderRadius: 12,
-                    background: ch.name === 'Avisos' ? `#f59e0b22` : `${C.green}18`,
+                    background: ch.is_public ? `#f59e0b22` : `${C.green}18`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 18, flexShrink: 0,
-                    border: `1px solid ${ch.name === 'Avisos' ? '#f59e0b33' : C.green + '33'}`,
+                    border: `1px solid ${ch.is_public ? '#f59e0b33' : C.green + '33'}`,
                   }}>
-                    {channelIcon(ch.name)}
+                    {channelIcon(ch)}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{ch.name}</div>
+                    <div style={{ color: C.text, fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {ch.name}
+                      {ch.is_public && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: '#f59e0b22', color: '#f59e0b', letterSpacing: 0.5 }}>SOLO LECTURA</span>}
+                    </div>
                     {ch.description && (
                       <div style={{ color: C.textDim, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.description}</div>
                     )}

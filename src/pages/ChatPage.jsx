@@ -995,8 +995,11 @@ export default function ChatPage({ onBack }) {
     activeConversation?.members?.find(m => m?.id === profile?.id)?.role === 'owner' ||
     activeConversation?.members?.find(m => m?.id === profile?.id)?.role === 'admin'
   )
+  // Announcement-only channel (set when opening from ChannelsTab)
+  const isAnnouncementChannel = activeConversation?.group_type === 'channel' && activeConversation?.is_announcement === true
   // Can the user send in the active channel?
-  const activeChannelLocked = activeTopic?.who_can_send === 'admins' && !isCommunityAdmin
+  const activeChannelLocked = (activeTopic?.who_can_send === 'admins' && !isCommunityAdmin) ||
+    (isAnnouncementChannel && !isCommunityAdmin && activeConversation?.created_by !== profile?.id)
 
   if (showGroupInfo && isGroup) return (
     <GroupInfoPage
@@ -2357,8 +2360,10 @@ export default function ChatPage({ onBack }) {
             display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
             paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
           }}>
-            <span style={{ fontSize: 18 }}>{isAnnouncementTopic ? '📢' : '🔒'}</span>
-            <span style={{ color: C.textDim, fontSize: 13 }}>Solo los administradores pueden escribir en este canal</span>
+            <span style={{ fontSize: 18 }}>{isAnnouncementTopic || isAnnouncementChannel ? '📢' : '🔒'}</span>
+            <span style={{ color: C.textDim, fontSize: 13 }}>
+              {isAnnouncementChannel ? 'Solo el administrador puede publicar en este canal de anuncios' : 'Solo los administradores pueden escribir en este canal'}
+            </span>
           </div>
         )}
 
