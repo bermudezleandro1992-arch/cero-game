@@ -63,6 +63,7 @@ export default function AdminPage({ onBack }) {
   const [bannerForm, setBannerForm] = useState(null)
   const [tickets, setTickets] = useState([])
   const [disputes, setDisputes] = useState([])
+  const [verifications, setVerifications] = useState([])
   const [searchUser, setSearchUser] = useState('')
   const [loading, setLoading] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState(null)
@@ -71,11 +72,13 @@ export default function AdminPage({ onBack }) {
   const [selectedDispute, setSelectedDispute] = useState(null)
   const [ticketNote, setTicketNote] = useState('')
   const [disputeResolution, setDisputeResolution] = useState('')
+  const [rejectVerifId, setRejectVerifId] = useState(null)
+  const [rejectVerifReason, setRejectVerifReason] = useState('')
   const [editPlan, setEditPlan] = useState('free')
   const [editRole, setEditRole] = useState(null)
   const [msg, setMsg] = useState(null)
 
-  useEffect(() => { loadPayments(); loadTickets(); loadDisputes() }, [])
+  useEffect(() => { loadPayments(); loadTickets(); loadDisputes(); loadVerifications() }, [])
 
   async function loadPayments() {
     setLoading(true)
@@ -136,6 +139,37 @@ export default function AdminPage({ onBack }) {
     setMsg({ type: 'ok', text: 'Ticket actualizado' })
   }
 
+  async function loadVerifications() {
+    const { data } = await supabase
+      .from('identity_verifications')
+      .select('*, users:user_id(id, username, avatar_url, email)')
+      .order('created_at', { ascending: false })
+      .limit(60)
+    setVerifications(data || [])
+  }
+
+  async function approveVerification(id) {
+    setLoading(true)
+    const { error } = await supabase.rpc('approve_identity_verification', {
+      p_verification_id: id, p_reviewer_id: profile.id,
+    })
+    if (error) setMsg({ type: 'err', text: error.message })
+    else setMsg({ type: 'ok', text: '✅ Identidad verificada' })
+    loadVerifications()
+    setLoading(false)
+  }
+
+  async function rejectVerification(id, reason) {
+    setLoading(true)
+    const { error } = await supabase.rpc('reject_identity_verification', {
+      p_verification_id: id, p_reviewer_id: profile.id, p_reason: reason,
+    })
+    if (error) setMsg({ type: 'err', text: error.message })
+    else setMsg({ type: 'ok', text: 'Verificación rechazada' })
+    loadVerifications()
+    setLoading(false)
+  }
+
   async function loadDisputes() {
     const { data } = await supabase
       .from('disputes')
@@ -194,6 +228,7 @@ export default function AdminPage({ onBack }) {
         <Tab label="Tickets"   active={tab === 'tickets'}   count={tickets.filter(t => t.status === 'open').length} onClick={() => setTab('tickets')} />
         <Tab label="Disputas"  active={tab === 'disputes'}  count={disputes.filter(d => d.status === 'open').length} onClick={() => setTab('disputes')} />
         <Tab label="Usuarios"  active={tab === 'users'}     count={0} onClick={() => setTab('users')} />
+        <Tab label="Identidad" active={tab === 'verif'}     count={verifications.filter(v => v.status === 'pending').length} onClick={() => setTab('verif')} />
         <Tab label="Banners"   active={tab === 'banners'}   count={0} onClick={() => { setTab('banners'); loadBanners() }} />
         <Tab label="Referidos" active={tab === 'referrals'} count={0} onClick={() => { setTab('referrals'); loadReferrals() }} />
       </div>
@@ -660,6 +695,136 @@ export default function AdminPage({ onBack }) {
               ))}
             </div>
           </div>
+        )}
+
+        {/* ── TAB IDENTIDAD ── */}
+        {tab === 'verif' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <p style={{ margin: 0, fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                {verifications.filter(v => v.status === 'pending').length} pendiente{verifications.filter(v => v.status === 'pending').length !== 1 ? 's' : ''} · {verifications.length} total
+              </p>
+              <button onClick={loadVerifications} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', color: C.textDim, fontSize: 11 }}>
+                🔄 Actualizar
+              </button>
+            </div>
+
+            {verifications.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: C.textDim, fontSize: 13 }}>
+                <div style={{ fontSize: 40, marginBottom: 8 }}>🪪</div>
+                <p style={{ margin: 0 }}>Sin solicitudes de verificación.</p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {verifications.map(v => {
+                const u = v.users
+                const isPending = v.status === 'pending'
+                const statusColor = v.status === 'approved' ? C.green : v.status === 'rejected' ? '#ef4444' : '#f59e0b'
+                const statusLabel = v.status === 'approved' ? 'Aprobado' : v.status === 'rejected' ? 'Rechazado' : 'Pendiente'
+                const rejectOpen = rejectVerifId === v.id
+
+                return (
+                  <div key={v.id} style={{ background: C.panel, borderRadius: 14, border: `1.5px solid ${isPending ? '#f59e0b44' : statusColor + '33'}`, overflow: 'hidden' }}>
+                    {/* Header */}
+                    <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: C.panel2, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {u?.avatar_url ? <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 18 }}>👤</span>}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>@{u?.username || 'desconocido'}</span>
+                          <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: `${statusColor}22`, color: statusColor }}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
+                          {u?.email} · {new Date(v.created_at).toLocaleDateString('es-AR')}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Datos personales */}
+                    <div style={{ borderTop: `1px solid ${C.border}`, padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+                        {v.full_name && (
+                          <div>
+                            <p style={{ margin: '0 0 2px', fontSize: 10, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Nombre</p>
+                            <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: 600 }}>{v.full_name}</p>
+                          </div>
+                        )}
+                        {v.dni_number && (
+                          <div>
+                            <p style={{ margin: '0 0 2px', fontSize: 10, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>DNI</p>
+                            <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{v.dni_number}</p>
+                          </div>
+                        )}
+                        {v.birth_date && (
+                          <div>
+                            <p style={{ margin: '0 0 2px', fontSize: 10, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Nacimiento</p>
+                            <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: 600 }}>{new Date(v.birth_date + 'T00:00:00').toLocaleDateString('es-AR')}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Fotos del DNI */}
+                      <p style={{ margin: '0 0 8px', fontSize: 10, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Documentos</p>
+                      <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                        {v.dni_front_url && (
+                          <a href={v.dni_front_url} target="_blank" rel="noreferrer" style={{ flex: 1, display: 'block', borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}`, aspectRatio: '4/3', background: C.panel2 }}>
+                            <img src={v.dni_front_url} alt="Frente DNI" onError={e => { e.target.parentElement.style.display = 'none' }}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </a>
+                        )}
+                        {v.dni_back_url && (
+                          <a href={v.dni_back_url} target="_blank" rel="noreferrer" style={{ flex: 1, display: 'block', borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}`, aspectRatio: '4/3', background: C.panel2 }}>
+                            <img src={v.dni_back_url} alt="Dorso DNI" onError={e => { e.target.parentElement.style.display = 'none' }}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </a>
+                        )}
+                        {!v.dni_front_url && !v.dni_back_url && (
+                          <p style={{ margin: 0, fontSize: 12, color: C.textDim }}>Sin fotos adjuntas</p>
+                        )}
+                      </div>
+
+                      {v.rejection_reason && (
+                        <div style={{ background: '#ef444410', border: '1px solid #ef444433', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
+                          <p style={{ margin: 0, fontSize: 12, color: '#ef4444' }}>Motivo anterior: {v.rejection_reason}</p>
+                        </div>
+                      )}
+
+                      {/* Acciones solo si está pendiente */}
+                      {isPending && (
+                        <>
+                          {rejectOpen && (
+                            <div style={{ marginBottom: 10 }}>
+                              <textarea value={rejectVerifReason} onChange={e => setRejectVerifReason(e.target.value)}
+                                placeholder="Motivo del rechazo..."
+                                rows={2} style={{ width: '100%', boxSizing: 'border-box', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px', color: C.text, fontSize: 13, resize: 'none', outline: 'none', marginBottom: 8 }} />
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => { setRejectVerifId(null); setRejectVerifReason('') }} style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
+                                <button onClick={() => { rejectVerification(v.id, rejectVerifReason || 'Documento no válido'); setRejectVerifId(null); setRejectVerifReason('') }} style={{ flex: 2, padding: '9px 0', borderRadius: 10, border: '1px solid #ef444444', background: '#ef444422', color: '#ef4444', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>❌ Confirmar rechazo</button>
+                              </div>
+                            </div>
+                          )}
+                          {!rejectOpen && (
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button onClick={() => setRejectVerifId(v.id)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid #ef444444', background: '#ef444412', color: '#ef4444', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                                ❌ Rechazar
+                              </button>
+                              <button onClick={() => approveVerification(v.id)} disabled={loading} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: C.green, color: C.bg, fontWeight: 800, fontSize: 13, cursor: loading ? 'wait' : 'pointer' }}>
+                                ✅ Aprobar identidad
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
         )}
 
         {/* ── REFERIDOS ── */}
