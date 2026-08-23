@@ -1,6 +1,5 @@
 /**
- * TournamentDashboard — vista principal de un torneo.
- * Navega entre: Resumen | Sorteo | Grupos | Bracket
+ * TournamentDashboard — diferencia TORNEO (grupos + bracket) de LIGA (todos vs todos, apertura/clausura).
  */
 
 import { useEffect, useState } from 'react'
@@ -13,21 +12,7 @@ import FixtureTab      from './FixtureTab'
 import LigaTab         from './LigaTab'
 import TournamentChat  from './TournamentChat'
 
-// ── Fases del stepper ─────────────────────────────────────────────────────────
-const PHASES = [
-  { id: 'inscripcion', label: 'Inscripción', icon: '📋' },
-  { id: 'sorteo',      label: 'Sorteo',      icon: '🎱' },
-  { id: 'en_curso',    label: 'En curso',    icon: '⚡' },
-  { id: 'finalizado',  label: 'Finalizado',  icon: '🏆' },
-]
-
-function statusToPhaseIndex(status) {
-  if (!status || status === 'inscripcion') return 0
-  if (status === 'en_curso') return 2
-  if (status === 'finalizado' || status === 'cancelado') return 3
-  return 0
-}
-
+// ── Status ────────────────────────────────────────────────────────────────────
 const STATUS_COLOR = {
   inscripcion: '#22c55e',
   en_curso:    '#f59e0b',
@@ -41,27 +26,57 @@ const STATUS_LABEL = {
   cancelado:   'Cancelado',
 }
 
-const GROUP_COLORS = ['#22c55e','#3b82f6','#f59e0b','#ef4444','#a78bfa','#06b6d4','#f97316','#ec4899']
+// ── Stepper para TORNEO ───────────────────────────────────────────────────────
+const TORNEO_PHASES = [
+  { id: 'inscripcion', label: 'Inscripción', icon: '📋' },
+  { id: 'sorteo',      label: 'Sorteo',      icon: '🎱' },
+  { id: 'en_curso',    label: 'En curso',    icon: '⚡' },
+  { id: 'finalizado',  label: 'Final',       icon: '🏆' },
+]
+
+// ── Stepper para LIGA ─────────────────────────────────────────────────────────
+const LIGA_PHASES = [
+  { id: 'inscripcion', label: 'Inscripción', icon: '📋' },
+  { id: 'apertura',    label: 'Apertura',    icon: '⚽' },
+  { id: 'clausura',    label: 'Clausura',    icon: '🔄' },
+  { id: 'finalizado',  label: 'Final',       icon: '🏆' },
+]
+
+function torneoPhaseIdx(status) {
+  if (!status || status === 'inscripcion') return 0
+  if (status === 'en_curso') return 2
+  if (status === 'finalizado' || status === 'cancelado') return 3
+  return 0
+}
+
+function ligaPhaseIdx(status, ligaFase) {
+  if (!status || status === 'inscripcion') return 0
+  if (status === 'en_curso') return ligaFase === 'clausura' ? 2 : 1
+  if (status === 'finalizado' || status === 'cancelado') return 3
+  return 0
+}
 
 function fmtDate(ts) {
   if (!ts) return null
   return new Date(ts).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-// ── Fetch datos del dashboard ─────────────────────────────────────────────────
+const GROUP_COLORS = ['#22c55e','#3b82f6','#f59e0b','#ef4444','#a78bfa','#06b6d4','#f97316','#ec4899']
+
+// ── Fetch ─────────────────────────────────────────────────────────────────────
 async function fetchDashboard(tournamentId) {
   const { data: conv, error } = await supabase
     .from('conversations')
     .select(`
       id, name, tournament_status, format, game, max_participants,
       tournament_format, tournament_mode,
-      liga_tipo, liga_fase, temporada, division,
-      registration_deadline, start_date, description, banner_url, group_type
+      liga_tipo, liga_fase, temporada, division, group_type,
+      registration_deadline, start_date, description, banner_url
     `)
     .eq('id', tournamentId)
     .single()
 
-  if (error || !conv) throw error ?? new Error('Torneo no encontrado')
+  if (error || !conv) throw error ?? new Error('No encontrado')
   conv.status = conv.tournament_status
 
   const { count: participantCount } = await supabase
@@ -94,7 +109,7 @@ async function fetchDashboard(tournamentId) {
 
   const { data: matchStats } = await supabase
     .from('tournament_matches')
-    .select('status')
+    .select('status, phase')
     .eq('tournament_id', tournamentId)
 
   const total       = matchStats?.length ?? 0
@@ -111,18 +126,16 @@ async function fetchDashboard(tournamentId) {
   }
 }
 
-// ── Sub-componentes del resumen ───────────────────────────────────────────────
-
-function Stepper({ status }) {
-  const phaseIdx = statusToPhaseIndex(status)
+// ── Shared UI ──────────────────────────────────────────────────────────────────
+function Stepper({ phases, phaseIdx }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0 4px' }}>
-      {PHASES.map((phase, i) => {
+      {phases.map((phase, i) => {
         const done   = i < phaseIdx
         const active = i === phaseIdx
         const color  = active ? C.green : done ? C.green2 : C.border
         return (
-          <div key={phase.id} style={{ display: 'flex', alignItems: 'center', flex: i < PHASES.length - 1 ? 1 : 'none' }}>
+          <div key={phase.id} style={{ display: 'flex', alignItems: 'center', flex: i < phases.length - 1 ? 1 : 'none' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: '50%',
@@ -143,7 +156,7 @@ function Stepper({ status }) {
                 {phase.label}
               </span>
             </div>
-            {i < PHASES.length - 1 && (
+            {i < phases.length - 1 && (
               <div style={{
                 flex: 1, height: 2, marginBottom: 22,
                 background: done
@@ -169,54 +182,6 @@ function StatCard({ icon, label, value, accent }) {
       <span style={{ fontSize: 20 }}>{icon}</span>
       <span style={{ fontSize: 22, fontWeight: 800, color: accent ?? C.text, lineHeight: 1 }}>{value}</span>
       <span style={{ fontSize: 11, color: C.textDim, fontWeight: 500 }}>{label}</span>
-    </div>
-  )
-}
-
-function GroupGrid({ groups }) {
-  if (!groups?.length) return (
-    <div style={{
-      background: C.panel2, border: `1px dashed ${C.border}`,
-      borderRadius: 14, padding: '28px 16px', textAlign: 'center',
-    }}>
-      <div style={{ fontSize: 32, marginBottom: 8 }}>🎱</div>
-      <p style={{ margin: 0, color: C.textDim, fontSize: 13 }}>Sorteo pendiente — aún no hay grupos asignados</p>
-    </div>
-  )
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
-      {groups.map((g, i) => {
-        const color = g.color ?? GROUP_COLORS[i % GROUP_COLORS.length]
-        const pct   = g.member_count ? Math.round((g.member_count / (g.member_count + 1)) * 100) : 0
-        return (
-          <div key={g.id} style={{
-            background: `${color}0d`, border: `1.5px solid ${color}44`,
-            borderRadius: 14, padding: '14px 12px',
-            display: 'flex', flexDirection: 'column', gap: 8,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
-              <span style={{ fontWeight: 800, fontSize: 13, color: C.text }}>Grupo {g.name}</span>
-            </div>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                <span style={{ fontSize: 11, color: C.textDim }}>Jugadores</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color }}>{g.member_count}</span>
-              </div>
-              <div style={{ height: 4, background: C.panel, borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 4, transition: 'width .4s' }} />
-              </div>
-            </div>
-            <div style={{
-              fontSize: 10, color, fontWeight: 700,
-              background: `${color}18`, border: `1px solid ${color}33`,
-              borderRadius: 6, padding: '3px 7px', alignSelf: 'flex-start',
-            }}>
-              Top {g.classifies} clasifican
-            </div>
-          </div>
-        )
-      })}
     </div>
   )
 }
@@ -250,39 +215,39 @@ function MatchProgress({ matches }) {
             <span style={{ fontSize: 11, fontWeight: 700, color: s.color }}>{s.count}</span>
           </div>
         ))}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 'auto' }}>
-          <span style={{ fontSize: 11, color: C.textDim }}>Total</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.text }}>{matches.total}</span>
-        </div>
       </div>
     </div>
   )
 }
 
-// ── Tab bar ───────────────────────────────────────────────────────────────────
-const TABS = [
+// ── TORNEO: Tabs ──────────────────────────────────────────────────────────────
+const TORNEO_TABS = [
   { id: 'overview', label: 'Resumen',  icon: '📊' },
   { id: 'draw',     label: 'Sorteo',   icon: '🎱' },
   { id: 'groups',   label: 'Grupos',   icon: '📋' },
   { id: 'bracket',  label: 'Bracket',  icon: '🏆' },
   { id: 'fixture',  label: 'Fixture',  icon: '⚽' },
-  { id: 'liga',     label: 'Liga',     icon: '🏅' },
   { id: 'chat',     label: 'Chat',     icon: '💬' },
 ]
 
-function TabBar({ active, onChange, hasGroups, hasBracket, isLiga, hasMatches }) {
+// ── LIGA: Tabs ────────────────────────────────────────────────────────────────
+const LIGA_TABS = [
+  { id: 'overview',  label: 'Resumen',  icon: '📊' },
+  { id: 'apertura',  label: 'Apertura', icon: '⚽' },
+  { id: 'clausura',  label: 'Clausura', icon: '🔄' },
+  { id: 'tabla',     label: 'Tabla',    icon: '🏅' },
+  { id: 'chat',      label: 'Chat',     icon: '💬' },
+]
+
+function TabBar({ tabs, active, onChange, visible }) {
+  const shown = tabs.filter(t => visible.includes(t.id))
   return (
     <div style={{
       display: 'flex', background: C.panel,
       borderBottom: `1px solid ${C.border}`,
       overflowX: 'auto', flexShrink: 0,
     }}>
-      {TABS.map(tab => {
-        if (tab.id === 'draw'    && isLiga)                return null
-        if (tab.id === 'groups'  && !hasGroups)            return null
-        if (tab.id === 'bracket' && !hasBracket)           return null
-        if (tab.id === 'fixture' && !hasMatches)           return null
-        if (tab.id === 'liga'    && !isLiga)               return null
+      {shown.map(tab => {
         const isActive = tab.id === active
         return (
           <button key={tab.id} onClick={() => onChange(tab.id)} style={{
@@ -304,33 +269,28 @@ function TabBar({ active, onChange, hasGroups, hasBracket, isLiga, hasMatches })
   )
 }
 
-// ── Vista Resumen ─────────────────────────────────────────────────────────────
-function OverviewTab({ data }) {
-  const statusColor = STATUS_COLOR[data.status] ?? C.textDim
+// ── TORNEO: OverviewTab ───────────────────────────────────────────────────────
+function TorneoOverview({ data }) {
   const fillPct = data.max_participants
     ? Math.round((data.participant_count / data.max_participants) * 100)
     : null
+  const phaseIdx = torneoPhaseIdx(data.status)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Stepper */}
       <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20 }}>
         <p style={{ margin: '0 0 16px', fontSize: 12, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
-          Estado de la competencia
+          Estado del torneo
         </p>
-        <Stepper status={data.status} />
+        <Stepper phases={TORNEO_PHASES} phaseIdx={phaseIdx} />
       </div>
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
-        <StatCard
-          icon="👥" label="Participantes"
-          value={`${data.participant_count}${data.max_participants ? ` / ${data.max_participants}` : ''}`}
-          accent={fillPct >= 90 ? '#f59e0b' : undefined}
-        />
-        <StatCard icon="🎯" label="Grupos" value={data.groups?.length || '—'} accent={data.groups?.length ? C.green : undefined} />
-        {data.open_disputes > 0 && <StatCard icon="⚠️" label="Disputas abiertas" value={data.open_disputes} accent="#ef4444" />}
-        {data.group_type === 'liga' && data.temporada != null && <StatCard icon="📅" label="Temporada" value={`T${data.temporada}`} />}
+        <StatCard icon="👥" label="Participantes" value={`${data.participant_count}${data.max_participants ? ` / ${data.max_participants}` : ''}`} accent={fillPct >= 90 ? '#f59e0b' : undefined} />
+        <StatCard icon="📋" label="Grupos" value={data.groups?.length || '—'} accent={data.groups?.length ? C.green : undefined} />
+        {data.open_disputes > 0 && <StatCard icon="⚠️" label="Disputas" value={data.open_disputes} accent="#ef4444" />}
         {data.format && <StatCard icon="🔀" label="Formato" value={data.format} />}
       </div>
 
@@ -364,14 +324,14 @@ function OverviewTab({ data }) {
           )}
           {data.start_date && (
             <div style={{ flex: 1, minWidth: 140, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 14, padding: '12px 14px' }}>
-              <p style={{ margin: '0 0 4px', fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 600 }}>Inicio del torneo</p>
+              <p style={{ margin: '0 0 4px', fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 600 }}>Inicio</p>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text }}>{fmtDate(data.start_date)}</p>
             </div>
           )}
         </div>
       )}
 
-      {/* Progreso */}
+      {/* Progreso partidos */}
       {data.matches?.total > 0 && <MatchProgress matches={data.matches} />}
 
       {/* Grupos */}
@@ -379,10 +339,33 @@ function OverviewTab({ data }) {
         <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
           Grupos / Fase de grupos
         </p>
-        <GroupGrid groups={data.groups} />
+        {(!data.groups?.length) ? (
+          <div style={{ background: C.panel2, border: `1px dashed ${C.border}`, borderRadius: 14, padding: '28px 16px', textAlign: 'center' }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>🎱</div>
+            <p style={{ margin: 0, color: C.textDim, fontSize: 13 }}>Sorteo pendiente — aún no hay grupos asignados</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
+            {data.groups.map((g, i) => {
+              const color = g.color ?? GROUP_COLORS[i % GROUP_COLORS.length]
+              return (
+                <div key={g.id} style={{ background: `${color}0d`, border: `1.5px solid ${color}44`, borderRadius: 14, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                    <span style={{ fontWeight: 800, fontSize: 13, color: C.text }}>Grupo {g.name}</span>
+                  </div>
+                  <span style={{ fontSize: 11, color: C.textDim }}>👥 {g.member_count} jugadores</span>
+                  <div style={{ fontSize: 10, color, fontWeight: 700, background: `${color}18`, border: `1px solid ${color}33`, borderRadius: 6, padding: '3px 7px', alignSelf: 'flex-start' }}>
+                    Top {g.classifies} clasifican
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Descripción */}
+      {/* Desc */}
       {data.description && (
         <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
           <p style={{ margin: '0 0 6px', fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 600 }}>Descripción / Reglas</p>
@@ -393,16 +376,118 @@ function OverviewTab({ data }) {
   )
 }
 
+// ── LIGA: OverviewTab ─────────────────────────────────────────────────────────
+function LigaOverview({ data }) {
+  const phaseIdx = ligaPhaseIdx(data.status, data.liga_fase)
+  const fillPct = data.max_participants
+    ? Math.round((data.participant_count / data.max_participants) * 100)
+    : null
+
+  // Fase actual de la liga
+  const faseActual = data.liga_fase === 'clausura' ? 'Clausura (vuelta)' : data.status === 'en_curso' ? 'Apertura (ida)' : null
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Banner de fase */}
+      {faseActual && (
+        <div style={{
+          background: `linear-gradient(135deg, ${C.green}18, ${C.greenDk}18)`,
+          border: `1.5px solid ${C.green}44`,
+          borderRadius: 16, padding: '14px 18px',
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <span style={{ fontSize: 28 }}>{data.liga_fase === 'clausura' ? '🔄' : '⚽'}</span>
+          <div>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: C.green }}>{faseActual}</p>
+            <p style={{ margin: 0, fontSize: 12, color: C.textDim }}>
+              {data.liga_fase === 'clausura' ? 'Segunda mitad de temporada — partidos de vuelta' : 'Primera mitad de temporada — partidos de ida'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Stepper */}
+      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20 }}>
+        <p style={{ margin: '0 0 16px', fontSize: 12, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+          Temporada {data.temporada != null ? `— T${data.temporada}` : ''}
+        </p>
+        <Stepper phases={LIGA_PHASES} phaseIdx={phaseIdx} />
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
+        <StatCard icon="👥" label="Equipos" value={`${data.participant_count}${data.max_participants ? ` / ${data.max_participants}` : ''}`} />
+        {data.temporada != null && <StatCard icon="📅" label="Temporada" value={`T${data.temporada}`} accent={C.green} />}
+        {data.division && <StatCard icon="🏟️" label="División" value={data.division} />}
+        {data.open_disputes > 0 && <StatCard icon="⚠️" label="Disputas" value={data.open_disputes} accent="#ef4444" />}
+      </div>
+
+      {/* Cómo funciona esta liga */}
+      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, padding: 18 }}>
+        <p style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+          Cómo funciona
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[
+            { icon: '⚽', title: 'Apertura (Ida)', desc: 'Primera vuelta — todos juegan contra todos una vez.' },
+            { icon: '🔄', title: 'Clausura (Vuelta)', desc: 'Segunda vuelta — se invierten los locales. Dos veces cada partido.' },
+            { icon: '⬆️', title: 'Ascensos', desc: 'Los primeros puestos ascienden a una división superior.' },
+            { icon: '⬇️', title: 'Descensos', desc: 'Los últimos descienden a la división inferior.' },
+          ].map(item => (
+            <div key={item.title} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 18, flexShrink: 0 }}>{item.icon}</span>
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: C.text }}>{item.title}</p>
+                <p style={{ margin: 0, fontSize: 12, color: C.textDim, marginTop: 2 }}>{item.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Progreso partidos */}
+      {data.matches?.total > 0 && <MatchProgress matches={data.matches} />}
+
+      {/* Fechas */}
+      {(data.start_date || data.registration_deadline) && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {data.registration_deadline && (
+            <div style={{ flex: 1, minWidth: 140, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 14, padding: '12px 14px' }}>
+              <p style={{ margin: '0 0 4px', fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 600 }}>Cierre inscripciones</p>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text }}>{fmtDate(data.registration_deadline)}</p>
+            </div>
+          )}
+          {data.start_date && (
+            <div style={{ flex: 1, minWidth: 140, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 14, padding: '12px 14px' }}>
+              <p style={{ margin: '0 0 4px', fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 600 }}>Inicio</p>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text }}>{fmtDate(data.start_date)}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Desc */}
+      {data.description && (
+        <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
+          <p style={{ margin: '0 0 6px', fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 600 }}>Descripción / Reglamento</p>
+          <p style={{ margin: 0, fontSize: 13, color: C.text2, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{data.description}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function TournamentDashboard({ tournamentId, profile, isAdmin, onBack }) {
-  const [data, setData]       = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState(null)
+  const [data, setData]           = useState(null)
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
 
   useEffect(() => {
     if (!tournamentId) return
     setLoading(true)
+    setActiveTab('overview')
     fetchDashboard(tournamentId)
       .then(setData)
       .catch(e => setError(e?.message ?? 'Error al cargar'))
@@ -421,7 +506,7 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
     <div style={{ padding: 32, textAlign: 'center' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
       <p style={{ color: '#ef4444', fontWeight: 700 }}>{error}</p>
-      <button onClick={onBack} style={{ marginTop: 12, padding: '10px 24px', borderRadius: 10, border: 'none', background: C.green, color: C.bg, fontWeight: 700, cursor: 'pointer' }}>
+      <button onClick={onBack} style={{ marginTop: 12, padding: '10px 24px', borderRadius: 10, border: 'none', background: C.green, color: '#000', fontWeight: 700, cursor: 'pointer' }}>
         Volver
       </button>
     </div>
@@ -429,10 +514,26 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
 
   if (!data) return null
 
+  const isLiga    = data.group_type === 'liga'
   const hasGroups  = (data.groups?.length ?? 0) > 0
-  const hasBracket = data.status === 'en_curso' || data.status === 'finalizado'
+  const hasBracket = !isLiga && (data.status === 'en_curso' || data.status === 'finalizado')
   const hasMatches = data.matches?.total > 0
   const statusColor = STATUS_COLOR[data.status] ?? C.textDim
+
+  // Determine visible tabs
+  let visibleTabs
+  if (isLiga) {
+    visibleTabs = ['overview', 'apertura', 'clausura', 'tabla', 'chat']
+  } else {
+    visibleTabs = ['overview']
+    if (data.status === 'inscripcion' || hasGroups) visibleTabs.push('draw')
+    if (hasGroups) visibleTabs.push('groups')
+    if (hasBracket) visibleTabs.push('bracket')
+    if (hasMatches) visibleTabs.push('fixture')
+    visibleTabs.push('chat')
+  }
+
+  const tabs = isLiga ? LIGA_TABS : TORNEO_TABS
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg }}>
@@ -452,40 +553,45 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
           </button>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {data.name}
-          </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: isLiga ? 16 : 14 }}>{isLiga ? '🏅' : '🏆'}</span>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {data.name}
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
             <span style={{
               fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
               background: `${statusColor}18`, color: statusColor, border: `1px solid ${statusColor}44`,
             }}>
               {STATUS_LABEL[data.status] ?? data.status}
             </span>
-            {data.game && <span style={{ fontSize: 11, color: C.textDim }}>{data.game}</span>}
-            {data.group_type === 'liga' && data.division && (
-              <span style={{ fontSize: 11, color: C.textDim }}>División {data.division}</span>
+            {isLiga && (
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: `${C.green}15`, color: C.green, border: `1px solid ${C.green}33` }}>
+                Liga
+              </span>
             )}
+            {data.game && <span style={{ fontSize: 11, color: C.textDim }}>{data.game}</span>}
+            {isLiga && data.division && <span style={{ fontSize: 11, color: C.textDim }}>Div. {data.division}</span>}
+            {isLiga && data.temporada != null && <span style={{ fontSize: 11, color: C.textDim }}>T{data.temporada}</span>}
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <TabBar
-        active={activeTab}
-        onChange={setActiveTab}
-        hasGroups={hasGroups}
-        hasBracket={hasBracket}
-        hasMatches={hasMatches}
-        isLiga={data.group_type === 'liga'}
-      />
+      <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} visible={visibleTabs} />
 
-      {/* Contenido por tab */}
+      {/* Contenido */}
       <div style={{ flex: 1, minHeight: 0, overflowY: activeTab === 'bracket' ? 'hidden' : 'auto', padding: activeTab === 'bracket' ? 0 : 16 }}>
 
-        {activeTab === 'overview' && <OverviewTab data={data} />}
+        {activeTab === 'overview' && (
+          isLiga
+            ? <LigaOverview data={data} />
+            : <TorneoOverview data={data} />
+        )}
 
-        {activeTab === 'draw' && (
+        {/* TORNEO tabs */}
+        {activeTab === 'draw' && !isLiga && (
           <LiveDraw
             tournamentId={tournamentId}
             profile={profile}
@@ -494,51 +600,60 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
             groupNames={data.groups?.map(g => g.name) || ['A','B','C','D']}
             classifies={data.groups?.[0]?.classifies || 2}
             onDrawComplete={() => {
-              // Recargar data para reflejar grupos creados
               fetchDashboard(tournamentId).then(setData)
               setActiveTab('groups')
             }}
           />
         )}
 
-        {activeTab === 'groups' && (
-          <GroupStage
-            tournamentId={tournamentId}
-            profile={profile}
-            isAdmin={isAdmin}
-          />
+        {activeTab === 'groups' && !isLiga && (
+          <GroupStage tournamentId={tournamentId} profile={profile} isAdmin={isAdmin} />
         )}
 
-        {activeTab === 'bracket' && (
-          <BracketView
-            tournamentId={tournamentId}
-            profile={profile}
-            isAdmin={isAdmin}
-          />
+        {activeTab === 'bracket' && !isLiga && (
+          <BracketView tournamentId={tournamentId} profile={profile} isAdmin={isAdmin} />
         )}
 
-        {activeTab === 'fixture' && (
-          <FixtureTab
-            tournamentId={tournamentId}
-            profile={profile}
-            isAdmin={isAdmin}
-          />
+        {activeTab === 'fixture' && !isLiga && (
+          <FixtureTab tournamentId={tournamentId} profile={profile} isAdmin={isAdmin} />
         )}
 
-        {activeTab === 'liga' && (
+        {/* LIGA tabs */}
+        {activeTab === 'apertura' && isLiga && (
           <LigaTab
             tournamentId={tournamentId}
             profile={profile}
-            ascensos={data.liga_fase === 'ascenso' ? 2 : 0}
-            descensos={data.liga_fase === 'ascenso' ? 1 : 0}
+            fase="apertura"
+            ascensos={0}
+            descensos={0}
+            showFixture
+          />
+        )}
+
+        {activeTab === 'clausura' && isLiga && (
+          <LigaTab
+            tournamentId={tournamentId}
+            profile={profile}
+            fase="clausura"
+            ascensos={0}
+            descensos={0}
+            showFixture
+          />
+        )}
+
+        {activeTab === 'tabla' && isLiga && (
+          <LigaTab
+            tournamentId={tournamentId}
+            profile={profile}
+            fase="all"
+            ascensos={2}
+            descensos={1}
+            showFixture={false}
           />
         )}
 
         {activeTab === 'chat' && (
-          <TournamentChat
-            tournamentId={tournamentId}
-            profile={profile}
-          />
+          <TournamentChat tournamentId={tournamentId} profile={profile} />
         )}
 
       </div>
