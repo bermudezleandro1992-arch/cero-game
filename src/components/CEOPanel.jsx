@@ -889,7 +889,7 @@ function ConfiguracionTab({ communityId, toast }) {
       setLoading(true)
       const { data } = await supabase
         .from('conversations')
-        .select('name, description, avatar_url, is_private, dispute_timeout_minutes, max_members')
+        .select('name, description, avatar_url, is_public, plan')
         .eq('id', communityId)
         .single()
       setCfg(data || {})
@@ -898,6 +898,13 @@ function ConfiguracionTab({ communityId, toast }) {
     load()
   }, [communityId])
 
+  const PLAN_LIMITS = {
+    free:    { label: 'Gratis',        members: 100 },
+    starter: { label: 'PRO Starter',   members: 500 },
+    elite:   { label: 'PRO Elite',     members: 2000 },
+    pro:     { label: 'PRO',           members: 1000 },
+  }
+
   async function save() {
     setSaving(true)
     const { error } = await supabase
@@ -905,9 +912,7 @@ function ConfiguracionTab({ communityId, toast }) {
       .update({
         name: cfg.name,
         description: cfg.description,
-        is_private: cfg.is_private,
-        dispute_timeout_minutes: cfg.dispute_timeout_minutes,
-        max_members: cfg.max_members,
+        is_public: cfg.is_public,
       })
       .eq('id', communityId)
     setSaving(false)
@@ -938,31 +943,34 @@ function ConfiguracionTab({ communityId, toast }) {
         <textarea value={cfg.description || ''} onChange={e => setCfg(c => ({ ...c, description: e.target.value }))}
           rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
       </F>
-      <F label="Capacidad máxima de miembros">
-        <input type="number" value={cfg.max_members || ''} onChange={e => setCfg(c => ({ ...c, max_members: parseInt(e.target.value) || null }))} style={inputStyle} />
-      </F>
-      <F label="Tiempo límite para disputas (minutos)">
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {[2, 5, 10, 15, 30, 60, 120].map(m => (
-            <button key={m} onClick={() => setCfg(c => ({ ...c, dispute_timeout_minutes: m }))} style={{
-              padding: '6px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
-              background: cfg.dispute_timeout_minutes === m ? C.green : C.panel,
-              color: cfg.dispute_timeout_minutes === m ? C.bg : C.textDim,
-            }}>
-              {m < 60 ? `${m}m` : `${m / 60}h`}
-            </button>
-          ))}
-        </div>
+      <F label="Plan de comunidad">
+        {(() => {
+          const plan = cfg.plan || 'free'
+          const pCfg = PLAN_LIMITS[plan] || PLAN_LIMITS.free
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.panel, borderRadius: 8, border: `1px solid ${C.border}` }}>
+              <div>
+                <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{pCfg.label}</div>
+                <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>Capacidad: hasta {pCfg.members} miembros</div>
+              </div>
+              <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 8, background: `${C.green}20`, color: C.green }}>
+                {plan === 'free' ? 'Actualizar' : 'Activo'}
+              </span>
+            </div>
+          )
+        })()}
       </F>
       <F label="Visibilidad">
         <div style={{ display: 'flex', gap: 8 }}>
-          {[{ v: false, label: '🌐 Pública' }, { v: true, label: '🔒 Privada' }].map(opt => (
-            <button key={String(opt.v)} onClick={() => setCfg(c => ({ ...c, is_private: opt.v }))} style={{
-              flex: 1, padding: '10px 8px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
-              background: cfg.is_private === opt.v ? C.green : C.panel,
-              color: cfg.is_private === opt.v ? C.bg : C.textDim,
+          {[{ v: true, label: '🌐 Pública', desc: 'Aparece en Explorar' }, { v: false, label: '🔒 Privada', desc: 'Solo por invitación' }].map(opt => (
+            <button key={String(opt.v)} onClick={() => setCfg(c => ({ ...c, is_public: opt.v }))} style={{
+              flex: 1, padding: '10px 8px', borderRadius: 8, border: `1px solid ${cfg.is_public === opt.v ? C.green : C.border}`,
+              cursor: 'pointer', fontSize: 13, fontWeight: 700,
+              background: cfg.is_public === opt.v ? `${C.green}22` : C.panel,
+              color: cfg.is_public === opt.v ? C.green : C.textDim,
             }}>
-              {opt.label}
+              <div>{opt.label}</div>
+              <div style={{ fontSize: 10, fontWeight: 400, marginTop: 2 }}>{opt.desc}</div>
             </button>
           ))}
         </div>
