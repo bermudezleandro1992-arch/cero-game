@@ -522,7 +522,7 @@ export default function App() {
           {showProfile
             ? <ProfileSheet onClose={() => { setShowProfile(false); setOpenVipDirect(false) }} />
             : tab === 'inicio'
-            ? <HomePage onGoTorneos={() => setTab('comunidades')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} />
+            ? <HomePage onGoTorneos={() => setTab('comunidades')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} onGoCuenta={() => setTab('perfil')} />
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'
