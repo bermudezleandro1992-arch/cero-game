@@ -70,7 +70,9 @@ export default function CommunidadesPage() {
   }, [profile?.id, tab, search])
 
   function openConv(conv) {
-    setActiveConversation({ ...conv, isCommunity: conv.group_type === 'community' })
+    const isCommunity = conv.group_type === 'community'
+    const isGroup = !isCommunity && ['group','channel','tournament','liga'].includes(conv.group_type)
+    setActiveConversation({ ...conv, isCommunity, isGroup })
   }
 
   const tc = TYPE_CFG
