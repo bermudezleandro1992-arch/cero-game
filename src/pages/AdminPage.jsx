@@ -72,6 +72,7 @@ export default function AdminPage({ onBack }) {
   const [ticketNote, setTicketNote] = useState('')
   const [disputeResolution, setDisputeResolution] = useState('')
   const [rejectVerifId, setRejectVerifId] = useState(null)
+  const [verifFilter, setVerifFilter] = useState(null)
   const [rejectVerifReason, setRejectVerifReason] = useState('')
   const [editPlan, setEditPlan] = useState('free')
   const [editRole, setEditRole] = useState(null)
@@ -735,24 +736,38 @@ export default function AdminPage({ onBack }) {
         {/* ── TAB IDENTIDAD ── */}
         {tab === 'verif' && (
           <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <p style={{ margin: 0, fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
-                {verifications.filter(v => v.status === 'pending').length} pendiente{verifications.filter(v => v.status === 'pending').length !== 1 ? 's' : ''} · {verifications.length} total
-              </p>
-              <button onClick={loadVerifications} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', color: C.textDim, fontSize: 11 }}>
-                🔄 Actualizar
-              </button>
+            {/* Stats bar */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              {[
+                { key: 'all', label: 'Todos', count: verifications.length, color: C.textDim },
+                { key: 'pending', label: 'Pendientes', count: verifications.filter(v => v.status === 'pending').length, color: '#f59e0b' },
+                { key: 'approved', label: 'Verificados', count: verifications.filter(v => v.status === 'approved').length, color: C.green },
+                { key: 'rejected', label: 'Rechazados', count: verifications.filter(v => v.status === 'rejected').length, color: '#ef4444' },
+              ].map(f => {
+                const active = (verifFilter || 'all') === f.key
+                return (
+                  <button key={f.key} onClick={() => setVerifFilter(f.key === 'all' ? null : f.key)} style={{
+                    flex: 1, padding: '8px 4px', borderRadius: 10, border: `1.5px solid ${active ? f.color : C.border}`,
+                    background: active ? `${f.color}15` : C.panel, cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                  }}>
+                    <span style={{ color: f.color, fontWeight: 900, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>{f.count}</span>
+                    <span style={{ color: active ? f.color : C.textDim, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>{f.label}</span>
+                  </button>
+                )
+              })}
+              <button onClick={loadVerifications} style={{ padding: '8px 10px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, cursor: 'pointer', color: C.textDim, fontSize: 14 }}>🔄</button>
             </div>
 
-            {verifications.length === 0 && (
+            {verifications.filter(v => !verifFilter || v.status === verifFilter).length === 0 && (
               <div style={{ textAlign: 'center', padding: '40px 0', color: C.textDim, fontSize: 13 }}>
                 <div style={{ fontSize: 40, marginBottom: 8 }}>🪪</div>
-                <p style={{ margin: 0 }}>Sin solicitudes de verificación.</p>
+                <p style={{ margin: 0 }}>Sin solicitudes.</p>
               </div>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {verifications.map(v => {
+              {verifications.filter(v => !verifFilter || v.status === verifFilter).map(v => {
                 const u = v.users
                 const isPending = v.status === 'pending'
                 const statusColor = v.status === 'approved' ? C.green : v.status === 'rejected' ? '#ef4444' : '#f59e0b'

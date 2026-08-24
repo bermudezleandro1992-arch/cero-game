@@ -277,13 +277,13 @@ const PAYPAL_LINKS_PERFIL = {
 }
 
 const PAY_METHODS = [
-  { id: 'ar',       label: 'Transferencia Argentina', emoji: '🇦🇷', desc: 'Pesos ARS — CVU/Alias, cualquier banco o billetera', color: '#74b9ff', manual: true },
-  { id: 'astropay', label: 'AstroPay — LATAM',        emoji: '🌎', desc: 'Colombia, Chile, Brasil, Uruguay, Perú, Paraguay + más', color: '#a855f7', manual: true },
-  { id: 'mxn',      label: 'Pesos Mexicanos (MXN)',   emoji: '🇲🇽', desc: 'CLABE — Arcus / ARQ Dólar', color: '#e17055', manual: true },
-  { id: 'crypto',   label: 'Crypto — USDT',           emoji: '🟡', desc: 'TRC-20, ERC-20, Polygon, Binance Pay', color: '#F3BA2F', manual: true },
-  { id: 'usd_wire', label: 'USD — Wire Transfer',     emoji: '🇺🇸', desc: 'Desde cualquier banco al exterior', color: '#00b894', manual: true },
   { id: 'paypal',   label: 'PayPal',                  emoji: '🅿️', desc: 'Tarjeta de crédito/débito o cuenta PayPal — USD', color: '#009CDE', direct: true },
-  { id: 'mp',       label: 'Mercado Pago (checkout)', emoji: '💳', desc: 'Próximamente', color: '#009EE3', disabled: true },
+  { id: 'ar',       label: 'Transferencia Argentina', emoji: '🇦🇷', desc: 'Próximamente', color: '#74b9ff', comingSoon: true },
+  { id: 'astropay', label: 'AstroPay — LATAM',        emoji: '🌎', desc: 'Próximamente', color: '#a855f7', comingSoon: true },
+  { id: 'mxn',      label: 'Pesos Mexicanos (MXN)',   emoji: '🇲🇽', desc: 'Próximamente', color: '#e17055', comingSoon: true },
+  { id: 'crypto',   label: 'Crypto — USDT',           emoji: '🟡', desc: 'Próximamente', color: '#F3BA2F', comingSoon: true },
+  { id: 'usd_wire', label: 'USD — Wire Transfer',     emoji: '🇺🇸', desc: 'Próximamente', color: '#00b894', comingSoon: true },
+  { id: 'mp',       label: 'Mercado Pago (checkout)', emoji: '💳', desc: 'Próximamente', color: '#009EE3', comingSoon: true },
 ]
 
 const AR_ACCS = [
@@ -322,7 +322,7 @@ function CopyRow({ label, value }) {
   )
 }
 
-function PaymentFlow({ plan, onBack, profile, onGoIdentidad, onPlanActivated }) {
+function PaymentFlow({ plan, onBack, profile, onGoIdentidad, onPlanActivated, isSuperAdmin }) {
   const [method, setMethod] = useState(null)
   const [latam, setLatam] = useState(null)
   const [paypalPaid, setPaypalPaid] = useState(false)
@@ -600,19 +600,22 @@ function PaymentFlow({ plan, onBack, profile, onGoIdentidad, onPlanActivated }) 
 
       <div style={{ color: C.textDim, fontSize: 10, fontWeight: 800, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>Método de pago</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {PAY_METHODS.map(m => (
-          <button key={m.id} onClick={() => handleMethod(m)} disabled={m.disabled} style={{
+        {PAY_METHODS.filter(m => !m.comingSoon || isSuperAdmin).map(m => (
+          <button key={m.id} onClick={() => handleMethod(m)} disabled={m.comingSoon} style={{
             display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px',
-            background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12,
-            cursor: m.disabled ? 'default' : 'pointer', textAlign: 'left', width: '100%',
-            opacity: m.disabled ? 0.45 : 1,
+            background: C.panel, border: `1px solid ${m.comingSoon ? C.border : C.border}`, borderRadius: 12,
+            cursor: m.comingSoon ? 'default' : 'pointer', textAlign: 'left', width: '100%',
+            opacity: m.comingSoon ? 0.45 : 1,
           }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: `${m.color}20`, border: `1px solid ${m.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{m.emoji}</div>
             <div style={{ flex: 1 }}>
               <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{m.label}</div>
               <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{m.desc}</div>
             </div>
-            {!m.disabled && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>}
+            {m.comingSoon
+              ? <span style={{ fontSize: 9, fontWeight: 800, color: C.textDim, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '2px 6px', flexShrink: 0 }}>PRONTO</span>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            }
           </button>
         ))}
       </div>
@@ -690,8 +693,9 @@ const PLANES = [
 
 function PlanesSection({ role, profile, onGoIdentidad, onPlanActivated }) {
   const [payPlan, setPayPlan] = useState(null)
+  const isSuperAdmin = profile?.role === 'superadmin'
 
-  if (payPlan) return <PaymentFlow plan={payPlan} onBack={() => setPayPlan(null)} profile={profile} onGoIdentidad={onGoIdentidad} onPlanActivated={onPlanActivated} />
+  if (payPlan) return <PaymentFlow plan={payPlan} onBack={() => setPayPlan(null)} profile={profile} onGoIdentidad={onGoIdentidad} onPlanActivated={onPlanActivated} isSuperAdmin={isSuperAdmin} />
 
   const roleToKey = { vip: 'vip', comunidad: 'com_elite', superadmin: 'com_elite', admin: 'com_elite', ceo: 'com_starter' }
   const currentKey = roleToKey[role] || 'free'
