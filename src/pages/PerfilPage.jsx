@@ -348,11 +348,76 @@ function CuentaTab({ profile, onGoVip }) {
         </div>
       </div>
 
-      {/* Upgrade */}
-      {canUpgrade && (
-        <button onClick={() => onGoVip?.()}
-          style={{ padding: '14px', background: 'linear-gradient(135deg, #f59e0b, #8b5cf6)', border: 'none', borderRadius: 12, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', letterSpacing: 0.3 }}>
-          {role === 'vip' ? '💎 Mejorar a Comunidad PRO →' : '⭐ Mejorar a VIP o PRO →'}
+      {/* Upgrade — cards VIP y PRO para usuarios free/vip */}
+      {role === 'free' && (
+        <>
+          {/* Card VIP */}
+          <div style={{
+            background: 'linear-gradient(135deg, #1a1200 0%, #0f0800 100%)',
+            border: '1.5px solid #f59e0b44', borderRadius: 18, padding: '18px 20px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f59e0b22', border: '1px solid #f59e0b44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>⭐</div>
+              <div>
+                <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: '#f59e0b' }}>Plan VIP</p>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(245,158,11,0.6)' }}>Acceso premium sin límites</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 14 }}>
+              {[
+                '🎖️ Torneos con premio en dinero',
+                '🔇 Sin publicidad',
+                '🪪 Verificación de identidad incluida',
+                '📊 Estadísticas avanzadas de rendimiento',
+                '🎨 Perfil personalizado con badge VIP',
+              ].map(f => (
+                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, color: '#fff' }}>{f}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => onGoVip?.()} style={{ width: '100%', padding: '11px', background: '#f59e0b', border: 'none', borderRadius: 10, color: '#0f0800', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}>
+              ⭐ Activar VIP
+            </button>
+          </div>
+
+          {/* Card Comunidad PRO */}
+          <div style={{
+            background: 'linear-gradient(135deg, #0d0a1a 0%, #080510 100%)',
+            border: '1.5px solid #8b5cf644', borderRadius: 18, padding: '18px 20px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#8b5cf622', border: '1px solid #8b5cf644', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🏆</div>
+              <div>
+                <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: '#8b5cf6' }}>Comunidad PRO</p>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(139,92,246,0.6)' }}>Para organizadores serios · Sin límites</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 14 }}>
+              {[
+                '🚀 Comunidad propia con hasta 10.000 miembros',
+                '🤖 Bot personalizado para torneos automáticos',
+                '💰 Torneos con inscripción paga y premios',
+                '📢 Anuncios y banners propios',
+                '📈 Panel de estadísticas de tu comunidad',
+                '🎯 Todo lo del VIP incluido',
+              ].map(f => (
+                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, color: '#fff' }}>{f}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => onGoVip?.()} style={{ width: '100%', padding: '11px', background: '#8b5cf6', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}>
+              🏆 Crear mi comunidad PRO
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Solo VIP puede upgradar a PRO */}
+      {role === 'vip' && (
+        <button onClick={() => onGoVip?.()} style={{ padding: '14px', background: 'linear-gradient(135deg, #f59e0b, #8b5cf6)', border: 'none', borderRadius: 12, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', letterSpacing: 0.3 }}>
+          💎 Mejorar a Comunidad PRO →
         </button>
       )}
 
