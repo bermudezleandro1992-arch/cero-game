@@ -484,20 +484,35 @@ export default function App() {
               </button>
             )
           })}
-          {/* CEO Panel — sidebar only, ceo/admin */}
+          {/* CEO Panel — visible para cualquier usuario con comunidades */}
+          <button onClick={() => { setShowProfile(false); setTab('panel-ceo') }} style={{
+            width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', gap: 4, border: 'none', marginTop: 'auto',
+            background: tab === 'panel-ceo' ? `${C.green}12` : 'none',
+            cursor: 'pointer', padding: '14px 0',
+            borderLeft: `3px solid ${tab === 'panel-ceo' ? C.green : 'transparent'}`,
+            transition: 'background .15s',
+          }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={tab === 'panel-ceo' ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            <span style={{ fontSize: 10, fontWeight: tab === 'panel-ceo' ? 700 : 400, color: tab === 'panel-ceo' ? C.green : C.textDim }}>CEO</span>
+          </button>
+
+          {/* Admin Panel — solo superadmin/admin */}
           {['superadmin','admin'].includes(profile?.role) && (
-            <button onClick={() => { setShowProfile(false); setTab('panel-ceo') }} style={{
+            <button onClick={() => { setShowProfile(false); setTab('admin') }} style={{
               width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'center', gap: 4, border: 'none', marginTop: 'auto',
-              background: tab === 'panel-ceo' ? `${C.green}12` : 'none',
+              justifyContent: 'center', gap: 4, border: 'none',
+              background: tab === 'admin' ? '#ef444412' : 'none',
               cursor: 'pointer', padding: '14px 0',
-              borderLeft: `3px solid ${tab === 'panel-ceo' ? C.green : 'transparent'}`,
+              borderLeft: `3px solid ${tab === 'admin' ? '#ef4444' : 'transparent'}`,
               transition: 'background .15s',
             }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={tab === 'panel-ceo' ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={tab === 'admin' ? '#ef4444' : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
-              <span style={{ fontSize: 10, fontWeight: tab === 'panel-ceo' ? 700 : 400, color: tab === 'panel-ceo' ? C.green : C.textDim }}>CEO</span>
+              <span style={{ fontSize: 10, fontWeight: tab === 'admin' ? 700 : 400, color: tab === 'admin' ? '#ef4444' : C.textDim }}>Admin</span>
             </button>
           )}
         </nav>
@@ -528,10 +543,8 @@ export default function App() {
             ? <AdminGate profile={profile}><AdminPage onBack={() => setTab('chats')} /></AdminGate>
             : tab === 'panel-organizador'
             ? <OrganizadorPanelPicker onBack={() => setTab('chats')} />
-            : tab === 'panel-ceo' && ['superadmin','admin'].includes(profile?.role)
-            ? <CEOPanelPicker onBack={() => setTab('chats')} />
             : tab === 'panel-ceo'
-            ? (setTab('inicio'), null)
+            ? <CEOPanelPicker onBack={() => setTab('chats')} />
             : <ChatListPage onProfileClick={() => setShowProfile(true)} />
           }
         </div>
