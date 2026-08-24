@@ -14,10 +14,7 @@ function avatarColor(id) {
 
 const CATEGORIES = [
   { id: 'efootball', label: 'eFootball', icon: '⚽' },
-  { id: 'fc',        label: 'FC / FIFA',  icon: '🎮' },
-  { id: 'gaming',    label: 'Gaming',     icon: '🎯' },
-  { id: 'deportes',  label: 'Deportes',   icon: '🏅' },
-  { id: 'general',   label: 'General',    icon: '💬' },
+  { id: 'fc',        label: 'FC',        icon: '🎮' },
 ]
 
 const DEFAULT_CHANNELS = [
@@ -25,15 +22,36 @@ const DEFAULT_CHANNELS = [
   { name: 'Avisos',  description: 'Solo admins y organizadores pueden publicar', who_can_send: 'admins' },
 ]
 
-const GAMES = [
-  { id: 'efootball',   label: 'eFootball',    icon: '⚽', available: true  },
-  { id: 'fc26',        label: 'FC 26',         icon: '⚽', available: true  },
-  { id: 'fc27',        label: 'FC 27',         icon: '⚽', available: true  },
-  { id: 'valorant',    label: 'Valorant',      icon: '🎯', available: false },
-  { id: 'cs2',         label: 'CS2',           icon: '🎯', available: false },
-  { id: 'warzone',     label: 'Warzone',       icon: '🔫', available: false },
-  { id: 'freef',       label: 'Free Fire',     icon: '🔥', available: false },
-  { id: 'clashroyale', label: 'Clash Royale',  icon: '👑', available: false },
+const GAME_GROUPS = [
+  {
+    id: 'efootball',
+    label: 'eFootball',
+    icon: '⚽',
+    platforms: [
+      { id: 'efootball',        label: 'Crossplay', desc: 'PC / Consola' },
+      { id: 'efootball_mobile', label: 'Mobile',    desc: 'iOS / Android' },
+    ],
+  },
+  {
+    id: 'fc27',
+    label: 'FC 27',
+    icon: '🎮',
+    platforms: [
+      { id: 'fc27_newgen', label: 'New Gen', desc: 'PS5 / Xbox Series' },
+      { id: 'fc27_oldgen', label: 'Old Gen', desc: 'PS4 / Xbox One' },
+      { id: 'fc27_mobile', label: 'Mobile',  desc: 'iOS / Android' },
+    ],
+  },
+  {
+    id: 'fc26',
+    label: 'FC 26',
+    icon: '🎮',
+    platforms: [
+      { id: 'fc26_newgen', label: 'New Gen', desc: 'PS5 / Xbox Series' },
+      { id: 'fc26_oldgen', label: 'Old Gen', desc: 'PS4 / Xbox One' },
+      { id: 'fc26_mobile', label: 'Mobile',  desc: 'iOS / Android' },
+    ],
+  },
 ]
 
 function planLabel(role) {
@@ -60,7 +78,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
   const [groupType, setGroupType] = useState(initialType || 'group')
   const [description, setDescription] = useState('')
   const [joinMode, setJoinMode] = useState('public')
-  const [category, setCategory] = useState('general')
+  const [category, setCategory] = useState('efootball')
   const [rules, setRules] = useState('')
   const [permissions, setPermissions] = useState({
     who_can_send: 'everyone',
@@ -462,44 +480,46 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
           {isCommunity && (
             <div style={{ width: '100%' }}>
               <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
-                🎮 Juegos de la comunidad
+                🎮 Juegos y plataformas
               </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {GAMES.map(g => {
-                  const sel = selectedGames.includes(g.id)
-                  if (!g.available) return (
-                    <div key={g.id} title="Próximamente" style={{
-                      padding: '7px 14px', borderRadius: 20,
-                      border: `1.5px solid ${C.border}`,
-                      background: C.panel2,
-                      color: C.textDim,
-                      fontSize: 13, fontWeight: 500,
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      opacity: 0.5, cursor: 'not-allowed',
-                    }}>
-                      <span>{g.icon}</span> {g.label}
-                      <span style={{ fontSize: 9, color: C.textDim, fontWeight: 700, background: C.panel, borderRadius: 6, padding: '1px 5px' }}>Próx.</span>
-                    </div>
-                  )
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {GAME_GROUPS.map(group => {
+                  const anySelected = group.platforms.some(p => selectedGames.includes(p.id))
                   return (
-                    <button key={g.id} onClick={() => toggleGame(g.id)} style={{
-                      padding: '7px 14px', borderRadius: 20,
-                      border: `1.5px solid ${sel ? C.green : C.border}`,
-                      background: sel ? `${C.green}18` : C.panel,
-                      color: sel ? C.green : C.text2,
-                      fontSize: 13, fontWeight: sel ? 700 : 500,
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-                      transition: 'all .15s',
+                    <div key={group.id} style={{
+                      background: anySelected ? `${C.green}08` : C.panel,
+                      border: `1.5px solid ${anySelected ? C.green + '44' : C.border}`,
+                      borderRadius: 12, padding: '10px 12px',
                     }}>
-                      <span>{g.icon}</span> {g.label}
-                      {sel && <span style={{ fontSize: 10, fontWeight: 800 }}>✓</span>}
-                    </button>
+                      <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: anySelected ? C.green : C.text }}>
+                        {group.icon} {group.label}
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {group.platforms.map(plat => {
+                          const sel = selectedGames.includes(plat.id)
+                          return (
+                            <button key={plat.id} onClick={() => toggleGame(plat.id)} style={{
+                              padding: '6px 12px', borderRadius: 20,
+                              border: `1.5px solid ${sel ? C.green : C.border}`,
+                              background: sel ? `${C.green}18` : C.panel2,
+                              color: sel ? C.green : C.text2,
+                              fontSize: 12, fontWeight: sel ? 700 : 500,
+                              cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                              transition: 'all .15s', gap: 1,
+                            }}>
+                              <span>{plat.label}</span>
+                              <span style={{ fontSize: 10, color: sel ? C.green : C.textDim, fontWeight: 400 }}>{plat.desc}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   )
                 })}
               </div>
               {selectedGames.length > 0 && (
-                <p style={{ margin: '8px 0 0', fontSize: 11, color: C.textDim }}>
-                  Los torneos y ligas de esta comunidad se organizarán para: {selectedGames.map(id => GAMES.find(g => g.id === id)?.label).join(', ')}
+                <p style={{ margin: '10px 0 0', fontSize: 11, color: C.textDim }}>
+                  Los torneos y ligas de esta comunidad se organizarán para: {selectedGames.join(', ')}
                 </p>
               )}
             </div>
