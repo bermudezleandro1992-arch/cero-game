@@ -15,20 +15,20 @@ const PLANS = [
       '✅ Mensajes 1 a 1 ilimitados',
       '✅ Grupos hasta 50 personas',
       '✅ Archivos hasta 10 MB',
-      '✅ Llamadas de audio y video (como WhatsApp)',
+      '✅ Llamadas de audio y video',
       '✅ Historias y estados',
-      '✅ 1 comunidad básica (hasta 50 miembros)',
+      '✅ Unirse a comunidades gratis',
       '✅ 1 torneo o liga activo a la vez',
       '❌ Sin estadísticas avanzadas',
+      '❌ Sin torneos con premio en dinero',
       '❌ Sin bots personalizados',
-      '❌ Sin panel CEO / admin Pro',
     ],
   },
   {
     id: 'vip',
     name: 'VIP',
-    price: '$5',
-    priceUSD: 5,
+    price: '$3',
+    priceUSD: 3,
     period: 'por mes',
     emoji: '⭐',
     color: '#f59e0b',
@@ -36,23 +36,25 @@ const PLANS = [
     features: [
       '✅ Todo lo del plan Gratis',
       '✅ Grupos hasta 1.000 personas',
-      '✅ Hasta 3 comunidades (200 miembros c/u)',
       '✅ Archivos hasta 2 GB',
-      '✅ Canales de difusión (como Telegram)',
-      '✅ Estadísticas de tus comunidades',
+      '✅ Canales de difusión',
+      '✅ Estadísticas avanzadas de perfil y torneos',
+      '✅ Participar en torneos con premio en dinero 💰',
+      '✅ Historial completo de partidas y rendimiento',
       '✅ Badge VIP ⭐ en tu perfil',
       '✅ Ranking global 🏅',
       '✅ Hasta 3 torneos/ligas simultáneos',
       '✅ Soporte prioritario 24/7',
+      '✅ Acceso anticipado a nuevas funciones',
     ],
-    annual: { id: 'vip_anual', price: '$72', save: '25%' },
+    annual: { id: 'vip_anual', price: '$29', save: '20%' },
   },
   {
     id: 'comunidad',
     name: 'Comunidad PRO',
     price: '$15',
     priceUSD: 15,
-    period: 'por mes',
+    period: 'por mes · pagado por el CEO',
     emoji: '🏆',
     color: '#8b5cf6',
     tiers: [
@@ -60,15 +62,14 @@ const PLANS = [
       { label: 'Elite',   price: '$29', priceUSD: 29, desc: 'Miembros ilimitados', id: 'com_elite' },
     ],
     features: [
-      '✅ Todo lo del plan VIP',
-      '✅ Comunidades sin límite de miembros (según tier)',
+      '✅ Miembros entran GRATIS a tu comunidad',
+      '✅ Comunidad sin límite de miembros (según tier)',
       '✅ Panel CEO completo 🎛️',
-      '✅ Roles y permisos avanzados (CEO, Admin, Org, Mod)',
-      '✅ Torneos y ligas ilimitados',
+      '✅ Roles y permisos avanzados (CEO, Org, Mod)',
+      '✅ Torneos y ligas ilimitados con premios',
       '✅ Sorteos en vivo 🎰',
       '✅ API completa para bots de torneos',
-      '✅ Compartir pantalla grupal (como Discord)',
-      '✅ Estadísticas en tiempo real',
+      '✅ Estadísticas en tiempo real de tu comunidad',
       '✅ Badge especial 🏆 en tu perfil',
       '✅ Acceso anticipado a novedades',
     ],
@@ -78,7 +79,7 @@ const PLANS = [
 
 // Tasas de cambio fijas de respaldo (se actualizan si la API falla)
 const FALLBACK_RATES = {
-  ARS: 1250,   // Argentina
+  ARS: 1580,   // Argentina
   MXN: 17.5,   // México
   BRL: 5.75,   // Brasil
   COP: 4200,   // Colombia
