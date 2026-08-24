@@ -93,12 +93,12 @@ function getPromos(role) {
       id: 'invite', icon: '🔗', color: '#00b0ff',
       title: 'Invitá a tu comunidad',
       desc: 'Compartí el link de unión para que más jugadores se sumen gratis.',
-      cta: 'Explorar comunidades',
+      cta: 'Ir al Panel CEO',
     },
   ]
 }
 
-function PromoBanner({ profile, onGoCuenta, onGoExplorar }) {
+function PromoBanner({ profile, onGoCuenta, onGoExplorar, onGoPanelCeo }) {
   const [idx, setIdx] = useState(0)
   const [fade, setFade] = useState(true)
   const promos = getPromos(profile?.role)
@@ -115,7 +115,8 @@ function PromoBanner({ profile, onGoCuenta, onGoExplorar }) {
   const p = promos[idx]
 
   function handleCta() {
-    if (p.id === 'invite' || p.id === 'community') { onGoExplorar?.(); return }
+    if (p.id === 'invite') { onGoPanelCeo?.(); return }
+    if (p.id === 'community') { onGoExplorar?.(); return }
     onGoCuenta?.()
   }
 
@@ -425,7 +426,7 @@ function StatsStrip({ torneos, comunidades, ranking }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function HomePage({ onGoTorneos, onGoRanking, onGoExplorar, onGoAnuncios, onGoCuenta }) {
+export default function HomePage({ onGoTorneos, onGoRanking, onGoExplorar, onGoAnuncios, onGoCuenta, onGoPanelCeo }) {
   const { profile } = useAuthStore()
   const [torneos,    setTorneos]    = useState([])
   const [comunidades, setComunidades] = useState([])
@@ -526,7 +527,7 @@ export default function HomePage({ onGoTorneos, onGoRanking, onGoExplorar, onGoA
       <Hero profile={profile} onGoTorneos={onGoTorneos} onGoExplorar={onGoExplorar} />
 
       <div style={{ paddingTop: 16 }}>
-        <PromoBanner profile={profile} onGoCuenta={onGoCuenta} onGoExplorar={onGoExplorar} />
+        <PromoBanner profile={profile} onGoCuenta={onGoCuenta} onGoExplorar={onGoExplorar} onGoPanelCeo={onGoPanelCeo} />
       </div>
 
       <div style={{ padding: '24px 16px 40px', maxWidth: 960, margin: '0 auto' }}>
