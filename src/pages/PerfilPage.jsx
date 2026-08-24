@@ -7,6 +7,7 @@ import { useTheme } from '../lib/ThemeContext'
 import { saveSoundSettings } from '../lib/sounds'
 import LegalPage from './LegalPage'
 import IdentityVerification from '../components/IdentityVerification'
+import BotApiPage from './BotApiPage'
 
 function Spinner() {
   return (
@@ -410,57 +411,11 @@ function PlanesSection({ role, onGoVip }) {
   )
 }
 
-function CuentaTab({ profile, onGoVip }) {
+function CuentaTab({ profile, onGoVip, onGoBots }) {
   const role = profile?.role || 'free'
   const plan = PLAN_CFG[role] || PLAN_CFG.free
   const limits = PLAN_LIMITS[role] || PLAN_LIMITS.free
-  const isPro = role === 'comunidad' || role === 'ceo' || role === 'vip' || role === 'superadmin'
-  const canUpgrade = role === 'free' || role === 'vip'
-  const [copied, setCopied] = useState(false)
-  const [bots, setBots] = useState([])
-  const [loadingBots, setLoadingBots] = useState(false)
-  const [showBotForm, setShowBotForm] = useState(false)
-  const [newBotName, setNewBotName] = useState('')
-  const [creatingBot, setCreatingBot] = useState(false)
-  const { conversations } = typeof useChatStore !== 'undefined' ? useChatStore() : { conversations: [] }
-
-  useEffect(() => {
-    if (!isPro || !profile?.id) return
-    setLoadingBots(true)
-    supabase.from('bot_tokens').select('*').eq('owner_id', profile.id).order('created_at', { ascending: false })
-      .then(({ data }) => { setBots(data || []); setLoadingBots(false) })
-  }, [isPro, profile?.id])
-
-  function copyToken(token) {
-    navigator.clipboard.writeText(token).catch(() => {})
-    setCopied(token)
-    setTimeout(() => setCopied(null), 2000)
-  }
-
-  async function createBot(e) {
-    e.preventDefault()
-    if (!newBotName.trim()) return
-    setCreatingBot(true)
-    const arr = new Uint8Array(32)
-    crypto.getRandomValues(arr)
-    const token = 'nxt_' + Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join('')
-    const { data } = await supabase.from('bot_tokens').insert({
-      owner_id: profile.id,
-      name: newBotName.trim(),
-      token,
-      active: true,
-    }).select('*').single()
-    if (data) setBots(prev => [data, ...prev])
-    setNewBotName('')
-    setShowBotForm(false)
-    setCreatingBot(false)
-  }
-
-  async function revokeBot(id) {
-    if (!confirm('¿Revocar este token? Los bots que lo usen dejarán de funcionar.')) return
-    await supabase.from('bot_tokens').delete().eq('id', id)
-    setBots(prev => prev.filter(b => b.id !== id))
-  }
+  const isPro = role === 'comunidad' || role === 'ceo' || role === 'vip' || role === 'superadmin' || role === 'admin'
 
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -492,65 +447,25 @@ function CuentaTab({ profile, onGoVip }) {
         </div>
       </div>
 
-      {/* Sección Planes — visible para free y vip */}
-      {(role === 'free' || role === 'vip') && <PlanesSection role={role} onGoVip={onGoVip} />}
+      {/* Sección Planes */}
+      <PlanesSection role={role} onGoVip={onGoVip} />
 
-      {/* API de Bots */}
+      {/* API de Bots — row */}
       {isPro && (
-        <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ color: C.text, fontWeight: 800, fontSize: 14 }}>🤖 API de Bots</div>
-            <button onClick={() => setShowBotForm(s => !s)} style={{
-              padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.green}44`,
-              background: `${C.green}18`, color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-            }}>+ Nuevo token</button>
+        <button onClick={onGoBots} style={{
+          display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
+          background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14,
+          cursor: 'pointer', textAlign: 'left', width: '100%',
+        }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: `${C.green}18`, border: `1px solid ${C.green}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🤖</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>API de Bots</div>
+            <div style={{ color: C.textDim, fontSize: 11, marginTop: 2 }}>Conectá plataformas externas y bots</div>
           </div>
-
-          {/* Create bot form */}
-          {showBotForm && (
-            <form onSubmit={createBot} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <input
-                value={newBotName}
-                onChange={e => setNewBotName(e.target.value)}
-                placeholder="Nombre del bot (ej: TorneoBot)"
-                autoFocus
-                style={{ flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', color: C.text, fontSize: 12, outline: 'none' }}
-              />
-              <button type="submit" disabled={creatingBot || !newBotName.trim()} style={{
-                padding: '7px 12px', borderRadius: 8, border: 'none',
-                background: C.green, color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-              }}>{creatingBot ? '...' : 'Crear'}</button>
-            </form>
-          )}
-
-          {/* Token list */}
-          {loadingBots ? (
-            <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: '8px 0' }}>Cargando tokens...</div>
-          ) : bots.length === 0 ? (
-            <div style={{ color: C.textDim, fontSize: 12, padding: '8px 0' }}>Sin tokens creados. Creá uno para integrar bots con la API de NexoTribu.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {bots.map(bot => (
-                <div key={bot.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>🤖 {bot.name}</span>
-                    <button onClick={() => revokeBot(bot.id)} style={{ background: 'none', border: 'none', color: C.textDim, fontSize: 11, cursor: 'pointer', padding: '2px 6px' }}>Revocar</button>
-                  </div>
-                  <div
-                    onClick={() => copyToken(bot.token)}
-                    style={{ background: C.panel2, borderRadius: 7, padding: '7px 10px', fontFamily: 'monospace', fontSize: 11, color: C.green, wordBreak: 'break-all', cursor: 'pointer', userSelect: 'all' }}
-                    title="Tocá para copiar"
-                  >
-                    {copied === bot.token ? '✓ Copiado!' : bot.token}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <div style={{ color: C.textDim, fontSize: 11, marginTop: 10 }}>
-            Usá estos tokens para integrar bots con la API de NexoTribu. Endpoint: <code style={{ color: C.green, fontSize: 10 }}>/functions/v1/bot-api</code>
-          </div>
-        </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </button>
       )}
 
       {/* Apoyá el proyecto */}
@@ -624,6 +539,7 @@ function LegalTab() {
 export default function PerfilPage({ onClose, onGoVip }) {
   const { profile, fetchProfile } = useAuthStore()
   const [tab, setTab] = useState('perfil')
+  const [showBots, setShowBots] = useState(false)
   const [stats, setStats] = useState(null)
   const [history, setHistory] = useState([])
   const [editing, setEditing] = useState(false)
@@ -775,7 +691,10 @@ export default function PerfilPage({ onClose, onGoVip }) {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-      {tab === 'cuenta' && <CuentaTab profile={profile} onGoVip={onGoVip} />}
+      {tab === 'cuenta' && !showBots && <CuentaTab profile={profile} onGoVip={onGoVip} onGoBots={() => setShowBots(true)} />}
+      {tab === 'cuenta' && showBots && (
+        <BotApiPage onBack={() => setShowBots(false)} />
+      )}
       {tab === 'preferencias' && <PreferenciasTab profile={profile} />}
       {tab === 'identidad' && (
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
