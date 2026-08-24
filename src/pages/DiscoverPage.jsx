@@ -124,7 +124,7 @@ export default function DiscoverPage() {
     } else {
       let q = supabase
         .from('conversations')
-        .select('id, name, description, avatar_url, group_type, tags, created_at, game, created_by, is_public, requires_approval')
+        .select('id, name, description, avatar_url, group_type, tags, created_at, game, created_by, is_public, requires_approval, is_official')
         .eq('is_public', true)
         .eq('group_type', tab)
         .order('created_at', { ascending: false })
@@ -384,6 +384,16 @@ export default function DiscoverPage() {
             <span style={{ color: C.text, fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
               {isPrivate && <span style={{ marginRight: 4 }}>🔒</span>}{item.name}
             </span>
+            {item.is_official && (
+              <span style={{
+                fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 20,
+                background: 'linear-gradient(90deg, #3b82f620, #6366f120)',
+                color: '#6366f1', border: '1px solid #6366f140', flexShrink: 0,
+                display: 'flex', alignItems: 'center', gap: 3,
+              }}>
+                ✦ OFICIAL
+              </span>
+            )}
             <span style={{
               fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20,
               background: `${typeColor}20`, color: typeColor, flexShrink: 0,
