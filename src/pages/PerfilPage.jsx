@@ -576,7 +576,7 @@ function CuentaTab({ profile, onGoVip }) {
         {/* Montos sugeridos */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
           {['$1', '$2', '$5', '$10'].map(amt => (
-            <a key={amt} href={`https://www.paypal.com/paypalme/nexotribu/${amt.replace('$','')}`}
+            <a key={amt} href={`https://www.paypal.com/paypalme/nexotribuapp/${amt.replace('$','')}`}
               target="_blank" rel="noopener noreferrer"
               style={{
                 flex: 1, minWidth: 52, padding: '9px 4px', borderRadius: 10,
@@ -591,7 +591,7 @@ function CuentaTab({ profile, onGoVip }) {
 
         {/* Botón principal PayPal */}
         <a
-          href="https://www.paypal.com/paypalme/nexotribu"
+          href="https://www.paypal.com/paypalme/nexotribuapp"
           target="_blank"
           rel="noopener noreferrer"
           style={{
