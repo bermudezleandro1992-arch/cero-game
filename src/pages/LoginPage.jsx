@@ -156,7 +156,7 @@ export default function LoginPage() {
             fontSize: 38, boxShadow: `0 0 40px ${C.green}22`,
           }}>⚡</div>
           <h1 style={{ color: C.text, fontWeight: 800, fontSize: 24, margin: '0 0 6px', letterSpacing: '-0.5px' }}>
-            Mi Mensajero
+            NexoTribu
           </h1>
           <p style={{ color: C.textDim, fontSize: 11, margin: '0 0 4px', letterSpacing: '2.5px', textTransform: 'uppercase', fontWeight: 600 }}>
             COMPETÍ · CONECTÁ · GANÁ

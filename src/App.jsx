@@ -774,7 +774,7 @@ function EmptyState() {
               <path d="M13 2L4.5 13.5H11L10 22L20.5 10H14L13 2Z" fill="url(#boltGrad)"/>
             </svg>
           </div>
-          <p style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: C.text }}>Mi Mensajero</p>
+          <p style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: C.text }}>NexoTribu</p>
           <p style={{ margin: 0, fontSize: 11, color: C.textDim, letterSpacing: '2px', textTransform: 'uppercase' }}>Competí · Conectá · Ganá</p>
         </div>
 
