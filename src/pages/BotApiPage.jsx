@@ -268,10 +268,10 @@ botRequest('/announce', ['message' => '🏆 Resultados publicados']);`,
   const firstBotToken = bots[0]?.token
 
   return (
-    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif', minHeight: '100%' }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: 4, display: 'flex' }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 5l-7 7 7 7"/>
@@ -286,7 +286,7 @@ botRequest('/announce', ['message' => '🏆 Resultados publicados']);`,
         </span>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
         {/* Cómo funciona */}
         <div style={{ background: `${C.green}08`, border: `1px solid ${C.green}30`, borderRadius: 14, padding: '14px 16px' }}>
