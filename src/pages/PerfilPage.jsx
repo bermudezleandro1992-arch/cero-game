@@ -390,9 +390,14 @@ function CopyRow({ label, value }) {
   )
 }
 
-function PaymentFlow({ plan, onBack, profile, onGoIdentidad }) {
+function PaymentFlow({ plan, onBack, profile, onGoIdentidad, onPlanActivated }) {
   const [method, setMethod] = useState(null)
   const [latam, setLatam] = useState(null)
+  const [paypalPaid, setPaypalPaid] = useState(false)
+  const [txId, setTxId] = useState('')
+  const [verifying, setVerifying] = useState(false)
+  const [verifyError, setVerifyError] = useState(null)
+  const [activated, setActivated] = useState(null)
   const isVerified = profile?.is_verified
 
   // Gate: si no está verificado, pedir verificación primero
@@ -426,9 +431,33 @@ function PaymentFlow({ plan, onBack, profile, onGoIdentidad }) {
     </div>
   )
 
+  async function verifyPaypal() {
+    if (!txId.trim()) return
+    setVerifying(true)
+    setVerifyError(null)
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-paypal', {
+        body: { planKey: plan.key, transactionId: txId.trim() },
+      })
+      if (error || !data?.ok) {
+        setVerifyError(data?.error || 'Error al verificar. Intentá de nuevo.')
+      } else {
+        setActivated(data)
+        if (onPlanActivated) onPlanActivated()
+      }
+    } catch (e) {
+      setVerifyError('Error de conexión. Intentá de nuevo.')
+    }
+    setVerifying(false)
+  }
+
   function handleMethod(m) {
     if (m.disabled) return
-    if (m.direct) { window.open(PAYPAL_LINKS_PERFIL[plan.paypalKey], '_blank'); return }
+    if (m.direct) {
+      window.open(PAYPAL_LINKS_PERFIL[plan.paypalKey], '_blank')
+      setPaypalPaid(true)
+      return
+    }
     setMethod(m)
   }
 
@@ -548,6 +577,78 @@ function PaymentFlow({ plan, onBack, profile, onGoIdentidad }) {
     </div>
   )
 
+  // Plan activated success screen
+  if (activated) return (
+    <div style={{ padding: 16 }}>
+      <div style={{ background: 'linear-gradient(135deg, #001a00, #000f00)', border: `1.5px solid ${C.green}55`, borderRadius: 20, padding: 28, textAlign: 'center' }}>
+        <div style={{ fontSize: 56, marginBottom: 12 }}>🎉</div>
+        <div style={{ color: C.green, fontWeight: 900, fontSize: 20, marginBottom: 6 }}>¡Plan activado!</div>
+        <div style={{ color: C.text, fontWeight: 800, fontSize: 16, marginBottom: 4 }}>{plan.icon} {activated.planLabel}</div>
+        <div style={{ color: C.textDim, fontSize: 12, marginBottom: 20 }}>
+          Válido hasta: {new Date(activated.expiresAt).toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' })}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20, textAlign: 'left' }}>
+          {plan.features?.filter(f => f.ok).slice(0, 4).map(f => (
+            <div key={f.text} style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.text, fontSize: 13 }}>
+              <span style={{ color: C.green, flexShrink: 0 }}>✓</span> {f.text}
+            </div>
+          ))}
+        </div>
+        <button onClick={onBack} style={{ width: '100%', padding: '13px', background: C.green, color: '#000', border: 'none', borderRadius: 12, fontWeight: 900, fontSize: 14, cursor: 'pointer' }}>
+          ¡Entendido!
+        </button>
+      </div>
+    </div>
+  )
+
+  // PayPal "ya pagué" verification screen
+  if (paypalPaid) return (
+    <div style={{ padding: 16 }}>
+      <button onClick={() => setPaypalPaid(false)} style={{ background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, padding: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Volver
+      </button>
+      <div style={{ background: C.panel, border: `1.5px solid #009CDE44`, borderRadius: 18, padding: 22 }}>
+        <div style={{ textAlign: 'center', marginBottom: 18 }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>🅿️</div>
+          <div style={{ color: C.text, fontWeight: 900, fontSize: 16 }}>¿Ya realizaste el pago?</div>
+          <div style={{ color: C.textDim, fontSize: 12, marginTop: 6, lineHeight: 1.6 }}>
+            Ingresá el <strong style={{ color: C.text }}>ID de transacción</strong> de PayPal para activar tu plan automáticamente.
+          </div>
+          <div style={{ color: C.textDim, fontSize: 11, marginTop: 6 }}>
+            Lo encontrás en el email de confirmación de PayPal o en Actividad → detalles de la transacción.
+          </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ color: C.textDim, fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>ID de transacción PayPal</div>
+          <input
+            value={txId}
+            onChange={e => { setTxId(e.target.value); setVerifyError(null) }}
+            placeholder="Ej: 5HC96843KS2207541"
+            style={{ width: '100%', padding: '12px 14px', background: C.bg, border: `1.5px solid ${verifyError ? '#ef4444' : C.border}`, borderRadius: 10, color: C.text, fontSize: 14, fontFamily: 'monospace', boxSizing: 'border-box', letterSpacing: 1 }}
+          />
+          {verifyError && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{verifyError}</div>}
+        </div>
+        <button
+          onClick={verifyPaypal}
+          disabled={verifying || !txId.trim()}
+          style={{ width: '100%', padding: '13px', background: txId.trim() ? '#009CDE' : C.border, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 900, fontSize: 14, cursor: txId.trim() ? 'pointer' : 'not-allowed', opacity: verifying ? 0.7 : 1 }}
+        >
+          {verifying ? '⏳ Verificando...' : '✓ Verificar y activar plan'}
+        </button>
+        <div style={{ color: C.textDim, fontSize: 11, marginTop: 10, textAlign: 'center', lineHeight: 1.5 }}>
+          La verificación es automática e instantánea. Si hay algún problema, contactá a soporte.
+        </div>
+        <div style={{ marginTop: 14, padding: '10px 12px', background: `${C.green}0a`, border: `1px solid ${C.green}20`, borderRadius: 10 }}>
+          <div style={{ color: C.textDim, fontSize: 11 }}>¿No realizaste el pago todavía?</div>
+          <button onClick={() => { window.open(PAYPAL_LINKS_PERFIL[plan.paypalKey], '_blank') }} style={{ background: 'none', border: 'none', color: '#009CDE', fontWeight: 700, fontSize: 12, cursor: 'pointer', padding: '4px 0 0', display: 'block' }}>
+            🅿️ Abrir PayPal nuevamente →
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
   // Method selector
   return (
     <div style={{ padding: 16 }}>
@@ -655,10 +756,10 @@ const PLANES = [
   },
 ]
 
-function PlanesSection({ role, profile, onGoIdentidad }) {
+function PlanesSection({ role, profile, onGoIdentidad, onPlanActivated }) {
   const [payPlan, setPayPlan] = useState(null)
 
-  if (payPlan) return <PaymentFlow plan={payPlan} onBack={() => setPayPlan(null)} profile={profile} onGoIdentidad={onGoIdentidad} />
+  if (payPlan) return <PaymentFlow plan={payPlan} onBack={() => setPayPlan(null)} profile={profile} onGoIdentidad={onGoIdentidad} onPlanActivated={onPlanActivated} />
 
   const roleToKey = { vip: 'vip', comunidad: 'com_elite', superadmin: 'com_elite', admin: 'com_elite', ceo: 'com_starter' }
   const currentKey = roleToKey[role] || 'free'
@@ -722,7 +823,7 @@ function PlanesSection({ role, profile, onGoIdentidad }) {
   )
 }
 
-function CuentaTab({ profile, onGoVip, onGoBots, onGoIdentidad }) {
+function CuentaTab({ profile, onGoVip, onGoBots, onGoIdentidad, onPlanActivated }) {
   const role = profile?.role || 'free'
   const plan = PLAN_CFG[role] || PLAN_CFG.free
   const limits = PLAN_LIMITS[role] || PLAN_LIMITS.free
@@ -759,7 +860,7 @@ function CuentaTab({ profile, onGoVip, onGoBots, onGoIdentidad }) {
       </div>
 
       {/* Sección Planes */}
-      <PlanesSection role={role} profile={profile} onGoIdentidad={onGoIdentidad} />
+      <PlanesSection role={role} profile={profile} onGoIdentidad={onGoIdentidad} onPlanActivated={onPlanActivated} />
 
       {/* API de Bots — row */}
       {isPro && (
@@ -986,7 +1087,7 @@ export default function PerfilPage({ onClose, onGoVip }) {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-      {tab === 'cuenta' && !showBots && <CuentaTab profile={profile} onGoVip={onGoVip} onGoBots={() => setShowBots(true)} onGoIdentidad={() => setTab('identidad')} />}
+      {tab === 'cuenta' && !showBots && <CuentaTab profile={profile} onGoVip={onGoVip} onGoBots={() => setShowBots(true)} onGoIdentidad={() => setTab('identidad')} onPlanActivated={() => fetchProfile(profile.id)} />}
       {tab === 'cuenta' && showBots && (
         <BotApiPage onBack={() => setShowBots(false)} />
       )}
