@@ -9,15 +9,10 @@ const PLAN_OPTIONS = [
   { id: 'comunidad', label: 'Comunidad Pro',  emoji: '🏆', color: '#8b5cf6' },
 ]
 
-const ROLE_OPTIONS = [
-  { id: 'member',       label: 'Miembro' },
-  { id: 'organizador',  label: 'Organizador' },
-  { id: 'moderador',    label: 'Moderador' },
-  { id: 'vip',          label: 'VIP' },
-  { id: 'comunidad',    label: 'Comunidad' },
-  { id: 'ceo',          label: 'CEO (comunidad)' },
-  { id: 'admin',        label: 'Admin (plataforma)' },
-  { id: 'superadmin',   label: 'SuperAdmin' },
+// Solo roles asignables manualmente desde el panel (el resto son automáticos)
+const PLATFORM_ROLES = [
+  { id: 'moderador',  label: 'Moderador', color: '#06b6d4' },
+  { id: 'admin',      label: 'Admin',     color: '#ef4444' },
 ]
 
 function Header({ onBack, title }) {
@@ -106,17 +101,18 @@ export default function AdminPage({ onBack }) {
     setLoading(true)
     setMsg(null)
     try {
-      const { data, error } = await supabase.rpc('admin_set_user_plan', {
-        target_user_id: userId,
-        new_plan: plan,
-        new_role: role || null,
-      })
+      const updates = {}
+      if (plan) updates.plan = plan
+      if (role !== undefined) updates.role = role || 'member'
+      const { error } = await supabase.from('users').update(updates).eq('id', userId)
       if (error) throw error
-      setMsg({ type: 'ok', text: `Plan actualizado a ${plan.toUpperCase()}` })
-      await loadPayments()
+      if (selectedPayment) {
+        await supabase.from('payments').update({ status: 'approved', reviewed_by: profile.id, updated_at: new Date().toISOString() }).eq('id', selectedPayment.id)
+        await loadPayments()
+      }
+      setMsg({ type: 'ok', text: plan ? `Plan actualizado a ${plan.toUpperCase()}` : `Rol actualizado a ${role || 'member'}` })
       setSelectedPayment(null)
       setSelectedUser(null)
-      // Refrescar lista de usuarios si está activa
       if (searchUser) searchUsers(searchUser)
     } catch (e) {
       setMsg({ type: 'err', text: e.message || 'Error al actualizar' })
@@ -572,51 +568,40 @@ export default function AdminPage({ onBack }) {
 
                     {isSelected && (
                       <div style={{ borderTop: `1px solid ${C.border}`, padding: '14px' }}>
-                        {profile?.role === 'superadmin' && (
-                          <>
-                            <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: C.text }}>Plan</p>
-                            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-                              {PLAN_OPTIONS.map(opt => (
-                                <button key={opt.id} onClick={() => setEditPlan(opt.id)} style={{
-                                  padding: '7px 14px', borderRadius: 20, border: `1.5px solid ${editPlan === opt.id ? opt.color : C.border}`,
-                                  background: editPlan === opt.id ? `${opt.color}20` : 'transparent',
-                                  color: editPlan === opt.id ? opt.color : C.textDim,
-                                  cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                                }}>
-                                  {opt.emoji} {opt.label}
-                                </button>
-                              ))}
-                            </div>
-                          </>
-                        )}
-
-                        <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: C.text }}>Rol de plataforma</p>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-                          {ROLE_OPTIONS.filter(r => {
-                            if (profile?.role === 'superadmin') return true
-                            if (profile?.role === 'ceo') return r.id === 'organizador' || r.id === 'member'
-                            return false
-                          }).map(r => (
+                        <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>Rol de plataforma</p>
+                        <p style={{ margin: '0 0 10px', fontSize: 11, color: C.textDim }}>
+                          Solo roles de staff. VIP/Comunidad/CEO/Organizador se asignan automáticamente.
+                        </p>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                          <button onClick={() => setEditRole('member')} style={{
+                            padding: '7px 14px', borderRadius: 20, border: `1.5px solid ${editRole === 'member' ? C.border : C.border}`,
+                            background: editRole === 'member' ? '#64748b22' : 'transparent',
+                            color: editRole === 'member' ? '#64748b' : C.textDim,
+                            cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                          }}>
+                            👤 Sin rol especial
+                          </button>
+                          {PLATFORM_ROLES.map(r => (
                             <button key={r.id} onClick={() => setEditRole(r.id)} style={{
-                              padding: '6px 12px', borderRadius: 20, border: `1.5px solid ${editRole === r.id ? C.green : C.border}`,
-                              background: editRole === r.id ? `${C.green}18` : 'transparent',
-                              color: editRole === r.id ? C.green : C.textDim,
-                              cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                              padding: '7px 14px', borderRadius: 20, border: `1.5px solid ${editRole === r.id ? r.color : C.border}`,
+                              background: editRole === r.id ? `${r.color}20` : 'transparent',
+                              color: editRole === r.id ? r.color : C.textDim,
+                              cursor: 'pointer', fontSize: 12, fontWeight: 700,
                             }}>
-                              {r.label}
+                              🛡️ {r.label}
                             </button>
                           ))}
                         </div>
 
                         <button
-                          onClick={() => applyPlan(u.id, profile?.role === 'superadmin' ? editPlan : u.plan, editRole)}
+                          onClick={() => applyPlan(u.id, u.plan || 'free', editRole)}
                           disabled={loading}
                           style={{
                             width: '100%', padding: '11px 0', borderRadius: 10, border: 'none',
                             background: C.green, color: C.bg, fontWeight: 800, fontSize: 13, cursor: 'pointer',
                           }}
                         >
-                          {loading ? 'Guardando...' : profile?.role === 'superadmin' ? `💾 Guardar — ${editPlan.toUpperCase()} / ${editRole}` : `💾 Asignar rol: ${editRole}`}
+                          {loading ? 'Guardando...' : `💾 Asignar rol: ${editRole || 'member'}`}
                         </button>
                       </div>
                     )}
