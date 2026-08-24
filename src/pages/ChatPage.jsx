@@ -598,6 +598,11 @@ export default function ChatPage({ onBack }) {
   const fileRef = useRef(null)
   const longPressTimer = useRef(null)
 
+  // Invitation status for DM chats: null | 'pending_sent' | 'pending_received'
+  const [invStatus, setInvStatus] = useState(null)
+  const [invId, setInvId] = useState(null)
+  const [invLoading, setInvLoading] = useState(false)
+
   useEffect(() => {
     if (!showChatMenu) return
     const h = () => setShowChatMenu(false)
@@ -793,6 +798,32 @@ export default function ChatPage({ onBack }) {
       setChatBg(saved ? JSON.parse(saved) : null)
     } catch { setChatBg(null) }
   }, [activeConversation?.id])
+
+  // Check invitation status for DM chats
+  useEffect(() => {
+    if (!profile?.id || !otherUser?.id || isGroup) { setInvStatus(null); return }
+    supabase.from('chat_invitations')
+      .select('id, from_user_id')
+      .or(`and(from_user_id.eq.${profile.id},to_user_id.eq.${otherUser.id}),and(from_user_id.eq.${otherUser.id},to_user_id.eq.${profile.id})`)
+      .eq('status', 'pending')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setInvId(data.id)
+          setInvStatus(data.from_user_id === profile.id ? 'pending_sent' : 'pending_received')
+        } else {
+          setInvStatus(null); setInvId(null)
+        }
+      })
+  }, [profile?.id, otherUser?.id, isGroup])
+
+  async function acceptInvitation() {
+    if (!invId) return
+    setInvLoading(true)
+    const { data, error } = await supabase.rpc('accept_chat_invitation', { p_invitation_id: invId })
+    if (!error && data?.ok) { setInvStatus(null); setInvId(null) }
+    setInvLoading(false)
+  }
 
   function saveChatBg(bg) {
     setChatBg(bg)
@@ -2367,8 +2398,38 @@ export default function ChatPage({ onBack }) {
           </div>
         )}
 
+        {/* ── INVITATION BANNER ── */}
+        {invStatus && (
+          <div style={{ padding: '12px 16px', background: C.panel, borderTop: `1px solid ${C.border}`, textAlign: 'center', flexShrink: 0 }}>
+            {invStatus === 'pending_sent' ? (
+              <div style={{ color: C.textDim, fontSize: 13 }}>
+                ⏳ Esperando que <strong style={{ color: C.text }}>{otherUser?.display_name}</strong> acepte tu invitación
+              </div>
+            ) : (
+              <div>
+                <div style={{ color: C.textDim, fontSize: 12, marginBottom: 10 }}>
+                  <strong style={{ color: C.text }}>{otherUser?.display_name}</strong> quiere enviarte mensajes
+                </div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                  <button onClick={acceptInvitation} disabled={invLoading} style={{
+                    padding: '9px 20px', background: C.green, border: 'none', borderRadius: 20,
+                    color: '#000', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  }}>{invLoading ? '...' : '✓ Aceptar'}</button>
+                  <button onClick={async () => {
+                    await supabase.from('chat_invitations').update({ status: 'rejected' }).eq('id', invId)
+                    setInvStatus(null); setInvId(null)
+                  }} style={{
+                    padding: '9px 20px', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 20,
+                    color: C.textDim, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                  }}>✕ Rechazar</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── INPUT BAR ── */}
-        {!isAnnouncementTopic && !activeChannelLocked && !recLocked && (
+        {!invStatus && !isAnnouncementTopic && !activeChannelLocked && !recLocked && (
           <form onSubmit={handleSend} style={{
             display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 12px 10px',
             background: C.panel, borderTop: `1px solid ${C.border}`, flexShrink: 0,
