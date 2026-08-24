@@ -27,8 +27,8 @@ const PLANS = [
   {
     id: 'vip',
     name: 'VIP',
-    price: '$3',
-    priceUSD: 3,
+    price: '$3.99',
+    priceUSD: 3.99,
     period: 'por mes',
     emoji: '⭐',
     color: '#f59e0b',
@@ -58,8 +58,8 @@ const PLANS = [
     emoji: '🏆',
     color: '#8b5cf6',
     tiers: [
-      { label: 'Starter', price: '$15', priceUSD: 15, desc: 'Hasta 1.000 miembros', id: 'com_starter' },
-      { label: 'Elite',   price: '$29', priceUSD: 29, desc: 'Miembros ilimitados', id: 'com_elite' },
+      { label: 'Starter', price: '$15.99', priceUSD: 15.99, desc: 'Hasta 1.000 miembros', id: 'com_starter' },
+      { label: 'Elite',   price: '$29.99', priceUSD: 29.99, desc: 'Miembros ilimitados', id: 'com_elite' },
     ],
     features: [
       '✅ Miembros entran GRATIS a tu comunidad',
@@ -145,6 +145,16 @@ const PAYMENT_METHODS = [
     currency: 'USD',
   },
   {
+    id: 'paypal',
+    label: 'PayPal',
+    emoji: '🅿️',
+    desc: 'Tarjeta de crédito/débito o cuenta PayPal — USD',
+    color: '#009CDE',
+    available: true,
+    direct: true,
+    currency: 'USD',
+  },
+  {
     id: 'mercadopago',
     label: 'Mercado Pago (checkout)',
     emoji: '💳',
@@ -153,6 +163,14 @@ const PAYMENT_METHODS = [
     available: false,
   },
 ]
+
+// Links de PayPal por plan/tier
+const PAYPAL_LINKS = {
+  vip:         'https://www.paypal.com/ncp/payment/FPCGXDATUR7G6',
+  com_starter: 'https://www.paypal.com/ncp/payment/H9W3RWW496T6L',
+  com_elite:   'https://www.paypal.com/ncp/payment/MZ5MX9XK88B68',
+  donation:    'https://www.paypal.com/ncp/payment/JF3S2VLK75MZS',
+}
 
 // Países LATAM para AstroPay
 const ASTROPAY_COUNTRIES = [
@@ -280,6 +298,12 @@ export default function VipPage({ onBack }) {
   const planUSD = annual && plan?.annual
     ? parseFloat(plan.annual.price.replace('$', ''))
     : activePriceUSD
+
+  function handlePayPal() {
+    const tierKey = activeTier ? activeTier.id : selected
+    const url = PAYPAL_LINKS[tierKey] || PAYPAL_LINKS[selected]
+    if (url) window.open(url, '_blank')
+  }
 
   async function handleMercadoPago() {
     setLoading(true)
@@ -661,6 +685,7 @@ export default function VipPage({ onBack }) {
                   key={m.id}
                   onClick={() => {
                     if (!m.available) return
+                    if (m.direct) { setPayMethod(m.id); handlePayPal(); return }
                     setPayMethod(m.id)
                     setStep('manual')
                   }}
@@ -698,7 +723,7 @@ export default function VipPage({ onBack }) {
 
           <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', marginTop: 8 }}>
             <p style={{ margin: 0, fontSize: 11, color: C.textDim, lineHeight: 1.6 }}>
-              🔒 Pago 100% seguro. Para Mercado Pago: procesado directamente por MP, nunca guardamos tu tarjeta. Para crypto: verificación manual en menos de 24hs.
+              🔒 Pago 100% seguro. PayPal: procesado por PayPal, nunca guardamos tu tarjeta. Transferencias y crypto: verificación manual en menos de 24hs.
             </p>
           </div>
         </div>
