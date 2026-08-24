@@ -520,7 +520,7 @@ export default function App() {
         {/* LEFT — list or profile */}
         <div className={`slfa-left${showChat ? ' slfa-left--hidden' : ''}`}>
           {showProfile
-            ? <ProfileSheet onClose={() => { setShowProfile(false); setOpenVipDirect(false) }} initialShowVip={openVipDirect} />
+            ? <ProfileSheet onClose={() => { setShowProfile(false); setOpenVipDirect(false) }} />
             : tab === 'inicio'
             ? <HomePage onGoTorneos={() => setTab('comunidades')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} />
             : tab === 'ranking'

@@ -52,12 +52,11 @@ function VerifiedBadge() {
   )
 }
 
-export default function ProfileSheet({ onClose, forceSetup = false, initialShowVip = false }) {
+export default function ProfileSheet({ onClose, forceSetup = false }) {
   const { profile, updateProfile } = useAuthStore()
   const { themeId, setTheme, themes } = useTheme()
   const [showLegal, setShowLegal] = useState(false)
   const [showBotApi, setShowBotApi] = useState(false)
-  const [showVip, setShowVip] = useState(initialShowVip)
   const [showDonations, setShowDonations] = useState(false)
   const [showSub, setShowSub] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
@@ -141,9 +140,8 @@ export default function ProfileSheet({ onClose, forceSetup = false, initialShowV
 
   if (showLegal) return <LegalPage onBack={() => setShowLegal(false)} />
   if (showBotApi) return <BotApiPage onBack={() => setShowBotApi(false)} />
-  if (showVip) return <VipPage onBack={() => setShowVip(false)} />
   if (showDonations) return <DonationsPage onBack={() => setShowDonations(false)} />
-  if (showSub) return <SubscriptionPanel onBack={() => setShowSub(false)} onUpgrade={() => { setShowSub(false); setShowVip(true) }} />
+  if (showSub) return <SubscriptionPanel onBack={() => setShowSub(false)} />
 
   const inp = {
     width: '100%', background: C.panel2,
@@ -435,8 +433,6 @@ export default function ProfileSheet({ onClose, forceSetup = false, initialShowV
 
             {/* Acciones */}
             {[
-              { icon: planCfg.icon, label: `Mi Suscripción · ${planCfg.label}`, desc: userPlan === 'free' ? 'Mejorar a VIP o PRO' : 'Ver plan, historial de pagos y más', color: planCfg.color, action: () => setShowSub(true) },
-              { icon: '⭐', label: 'Planes VIP y PRO', desc: 'Comunidades ilimitadas, bots y más', color: '#f59e0b', action: () => setShowVip(true) },
               { icon: '💚', label: 'Apoyá el proyecto', desc: 'Donaciones para mantener todo gratis', color: C.green, action: () => setShowDonations(true) },
               { icon: '🤖', label: 'API de Bots', desc: 'Conectá plataformas externas y bots', color: C.textDim, action: () => setShowBotApi(true) },
               { icon: '⚖️', label: 'Legal y Privacidad', desc: 'Términos, privacidad y reglamento', color: C.textDim, action: () => setShowLegal(true) },

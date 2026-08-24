@@ -337,12 +337,332 @@ const PLANES = [
   },
 ]
 
-const PAYPAL_PLAN_LINKS = {
-  vip:      'https://www.paypal.com/ncp/payment/FPCGXDATUR7G6',
-  comunidad:'https://www.paypal.com/ncp/payment/MZ5MX9XK88B68',
+// ── Payment data ──────────────────────────────────────────────────────────────
+const PAYPAL_LINKS_PERFIL = {
+  vip:         'https://www.paypal.com/ncp/payment/FPCGXDATUR7G6',
+  com_starter: 'https://www.paypal.com/ncp/payment/H9W3RWW496T6L',
+  com_elite:   'https://www.paypal.com/ncp/payment/MZ5MX9XK88B68',
 }
 
-function PlanesSection({ role }) {
+const PAY_METHODS = [
+  { id: 'ar',       label: 'Transferencia Argentina', emoji: '🇦🇷', desc: 'Pesos ARS — CVU/Alias, cualquier banco o billetera', color: '#74b9ff', manual: true },
+  { id: 'astropay', label: 'AstroPay — LATAM',        emoji: '🌎', desc: 'Colombia, Chile, Brasil, Uruguay, Perú, Paraguay + más', color: '#a855f7', manual: true },
+  { id: 'mxn',      label: 'Pesos Mexicanos (MXN)',   emoji: '🇲🇽', desc: 'CLABE — Arcus / ARQ Dólar', color: '#e17055', manual: true },
+  { id: 'crypto',   label: 'Crypto — USDT',           emoji: '🟡', desc: 'TRC-20, ERC-20, Polygon, Binance Pay', color: '#F3BA2F', manual: true },
+  { id: 'usd_wire', label: 'USD — Wire Transfer',     emoji: '🇺🇸', desc: 'Desde cualquier banco al exterior', color: '#00b894', manual: true },
+  { id: 'paypal',   label: 'PayPal',                  emoji: '🅿️', desc: 'Tarjeta de crédito/débito o cuenta PayPal — USD', color: '#009CDE', direct: true },
+  { id: 'mp',       label: 'Mercado Pago (checkout)', emoji: '💳', desc: 'Próximamente', color: '#009EE3', disabled: true },
+]
+
+const AR_ACCS = [
+  { label: 'AstroPay', titular: 'Leandro Bermudez', cvu: '0000177500090225090423', alias: 'somoslfa', banco: 'AstroPay' },
+  { label: 'ARQ Dólar', titular: 'Leandro Bermudez', cvu: '0000069703532557685274', alias: 'neles.batazo.arq', banco: 'Garpa S.A.' },
+]
+const USD_WIRE_DATA = { titular: 'Leandro Bermudez', banco: 'Lead Bank', aba: '101019644', cuenta: '218096984037', tipo: 'Corriente', dir: '1801 Main St, Kansas City, MO 64108, EE.UU.', comision: '3 USD' }
+const MXN_DATA = { banco: 'Arcus (ARQ Dólar)', clabe: '706969130679795077', titular: 'Leandro Bermudez', comision: 'Gratis' }
+const CRYPTO_WALLETS = [
+  { key: 'polygon', label: 'USDT/USDc — Polygon', addr: '0x1e53fFCd7A176A1ec293d5e34a97A81265775FcA', red: 'Polygon', comision: 'Gratis ✅' },
+  { key: 'binance', label: 'Binance Pay (ID)',      addr: '359177674',                                  red: 'Binance Pay', comision: 'Gratis ✅' },
+  { key: 'trc20',   label: 'USDT — TRC-20',        addr: 'TUGgg59HrePJpNmL2Kvj36CJ318cSZMRjS',        red: 'Tron', comision: '3 USDT' },
+]
+const ASTROPAY_COUNTRIES = [
+  { id: 'co', flag: '🇨🇴', name: 'Colombia',  bank: 'Nequi / Bancolombia' },
+  { id: 'cl', flag: '🇨🇱', name: 'Chile',     bank: 'Cuenta RUT / banco' },
+  { id: 'br', flag: '🇧🇷', name: 'Brasil',    bank: 'PIX' },
+  { id: 'uy', flag: '🇺🇾', name: 'Uruguay',   bank: 'Transferencia' },
+  { id: 'pe', flag: '🇵🇪', name: 'Perú',      bank: 'Yape / Plin / banco' },
+  { id: 'py', flag: '🇵🇾', name: 'Paraguay',  bank: 'Tigo Money / banco' },
+]
+
+function CopyRow({ label, value }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: C.bg, borderRadius: 8, marginBottom: 6 }}>
+      <div>
+        <div style={{ color: C.textDim, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>{label}</div>
+        <div style={{ color: C.text, fontSize: 12, fontFamily: 'monospace', marginTop: 2 }}>{value}</div>
+      </div>
+      <button onClick={() => { navigator.clipboard.writeText(value).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+        style={{ padding: '4px 10px', background: copied ? C.green : C.panel2, border: `1px solid ${C.border}`, borderRadius: 6, color: copied ? '#000' : C.text, fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0, marginLeft: 8 }}>
+        {copied ? '✓' : 'Copiar'}
+      </button>
+    </div>
+  )
+}
+
+function PaymentFlow({ plan, onBack, profile, onGoIdentidad }) {
+  const [method, setMethod] = useState(null)
+  const [latam, setLatam] = useState(null)
+  const isVerified = profile?.is_verified
+
+  // Gate: si no está verificado, pedir verificación primero
+  if (!isVerified) return (
+    <div style={{ padding: 16 }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, padding: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Volver
+      </button>
+      <div style={{ background: 'linear-gradient(135deg, #0a1a0a, #050f05)', border: `1.5px solid ${C.green}44`, borderRadius: 18, padding: 24, textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🪪</div>
+        <div style={{ color: C.text, fontWeight: 900, fontSize: 17, marginBottom: 8 }}>Verificá tu identidad primero</div>
+        <div style={{ color: C.textDim, fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>
+          Para activar el plan <strong style={{ color: plan.color }}>{plan.label}</strong> necesitás verificar tu identidad. Esto protege a todos los miembros y permite torneos con premios en dinero.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20, textAlign: 'left' }}>
+          {['Plan VIP', 'Comunidades PRO', 'Torneos con premios en dinero'].map(item => (
+            <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.text, fontSize: 13 }}>
+              <span style={{ color: C.green }}>✓</span> {item}
+            </div>
+          ))}
+        </div>
+        <button onClick={onGoIdentidad} style={{
+          width: '100%', padding: '13px', background: C.green, color: '#000',
+          border: 'none', borderRadius: 12, fontWeight: 900, fontSize: 14, cursor: 'pointer',
+        }}>
+          🪪 Verificar mi identidad
+        </button>
+        <div style={{ color: C.textDim, fontSize: 11, marginTop: 10 }}>Rápido y seguro · Una sola vez</div>
+      </div>
+    </div>
+  )
+
+  function handleMethod(m) {
+    if (m.disabled) return
+    if (m.direct) { window.open(PAYPAL_LINKS_PERFIL[plan.paypalKey], '_blank'); return }
+    setMethod(m)
+  }
+
+  if (method && method.id === 'ar') return (
+    <div style={{ padding: 16 }}>
+      <button onClick={() => setMethod(null)} style={{ background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, padding: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Volver
+      </button>
+      <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 14 }}>🇦🇷 Transferencia Argentina</div>
+      {AR_ACCS.map(acc => (
+        <div key={acc.label} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+          <div style={{ color: C.green, fontWeight: 800, fontSize: 13, marginBottom: 10 }}>{acc.banco} · {acc.label}</div>
+          <CopyRow label="Titular" value={acc.titular} />
+          <CopyRow label="CVU" value={acc.cvu} />
+          <CopyRow label="Alias" value={acc.alias} />
+        </div>
+      ))}
+      <div style={{ color: C.textDim, fontSize: 11, marginTop: 8 }}>Luego de transferir, enviá el comprobante a soporte para activar tu plan.</div>
+    </div>
+  )
+
+  if (method && method.id === 'astropay') {
+    if (!latam) return (
+      <div style={{ padding: 16 }}>
+        <button onClick={() => setMethod(null)} style={{ background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, padding: 0 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          Volver
+        </button>
+        <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 14 }}>🌎 Elegí tu país</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {ASTROPAY_COUNTRIES.map(c => (
+            <button key={c.id} onClick={() => setLatam(c)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ fontSize: 22 }}>{c.flag}</span>
+              <div>
+                <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{c.name}</div>
+                <div style={{ color: C.textDim, fontSize: 11 }}>{c.bank}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+    return (
+      <div style={{ padding: 16 }}>
+        <button onClick={() => setLatam(null)} style={{ background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, padding: 0 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          Volver
+        </button>
+        <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 14 }}>{latam.flag} {latam.name} — {latam.bank}</div>
+        {AR_ACCS.map(acc => (
+          <div key={acc.label} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+            <div style={{ color: '#a855f7', fontWeight: 800, fontSize: 13, marginBottom: 10 }}>{acc.banco} · {acc.label}</div>
+            <CopyRow label="Titular" value={acc.titular} />
+            <CopyRow label="CVU/Alias" value={acc.alias} />
+          </div>
+        ))}
+        <div style={{ color: C.textDim, fontSize: 11, marginTop: 8 }}>Enviá comprobante a soporte para activar tu plan.</div>
+      </div>
+    )
+  }
+
+  if (method && method.id === 'mxn') return (
+    <div style={{ padding: 16 }}>
+      <button onClick={() => setMethod(null)} style={{ background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, padding: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Volver
+      </button>
+      <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 14 }}>🇲🇽 Pesos Mexicanos (MXN)</div>
+      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
+        <CopyRow label="Banco" value={MXN_DATA.banco} />
+        <CopyRow label="CLABE" value={MXN_DATA.clabe} />
+        <CopyRow label="Titular" value={MXN_DATA.titular} />
+      </div>
+      <div style={{ color: C.textDim, fontSize: 11, marginTop: 8 }}>Comisión: {MXN_DATA.comision}. Enviá comprobante a soporte para activar.</div>
+    </div>
+  )
+
+  if (method && method.id === 'usd_wire') return (
+    <div style={{ padding: 16 }}>
+      <button onClick={() => setMethod(null)} style={{ background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, padding: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Volver
+      </button>
+      <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 14 }}>🇺🇸 USD — Wire Transfer</div>
+      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
+        <CopyRow label="Titular" value={USD_WIRE_DATA.titular} />
+        <CopyRow label="Banco" value={USD_WIRE_DATA.banco} />
+        <CopyRow label="ABA Routing" value={USD_WIRE_DATA.aba} />
+        <CopyRow label="Cuenta" value={USD_WIRE_DATA.cuenta} />
+        <CopyRow label="Tipo" value={USD_WIRE_DATA.tipo} />
+        <CopyRow label="Dirección" value={USD_WIRE_DATA.dir} />
+      </div>
+      <div style={{ color: C.textDim, fontSize: 11, marginTop: 8 }}>Comisión estimada: {USD_WIRE_DATA.comision}. Enviá comprobante a soporte.</div>
+    </div>
+  )
+
+  if (method && method.id === 'crypto') return (
+    <div style={{ padding: 16 }}>
+      <button onClick={() => setMethod(null)} style={{ background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, padding: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Volver
+      </button>
+      <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 14 }}>🟡 Crypto — USDT/USDc</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {CRYPTO_WALLETS.map(w => (
+          <div key={w.key} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{w.label}</span>
+              <span style={{ fontSize: 11, color: w.comision.includes('Gratis') ? C.green : '#ef4444' }}>{w.comision}</span>
+            </div>
+            <CopyRow label={`Red: ${w.red}`} value={w.addr} />
+          </div>
+        ))}
+      </div>
+      <div style={{ color: C.textDim, fontSize: 11, marginTop: 8 }}>Enviá comprobante o TX ID a soporte para activar tu plan.</div>
+    </div>
+  )
+
+  // Method selector
+  return (
+    <div style={{ padding: 16 }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, padding: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Volver a planes
+      </button>
+
+      {/* Plan summary */}
+      <div style={{ background: plan.bg || C.panel, border: `1.5px solid ${plan.color}55`, borderRadius: 14, padding: '14px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 28 }}>{plan.icon}</span>
+        <div>
+          <div style={{ color: plan.color, fontWeight: 900, fontSize: 16 }}>{plan.label}</div>
+          <div style={{ color: C.text, fontWeight: 700, fontSize: 18 }}>{plan.price} <span style={{ fontSize: 12, color: C.textDim, fontWeight: 400 }}>por mes</span></div>
+        </div>
+      </div>
+
+      <div style={{ color: C.textDim, fontSize: 10, fontWeight: 800, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>Método de pago</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {PAY_METHODS.map(m => (
+          <button key={m.id} onClick={() => handleMethod(m)} disabled={m.disabled} style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px',
+            background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12,
+            cursor: m.disabled ? 'default' : 'pointer', textAlign: 'left', width: '100%',
+            opacity: m.disabled ? 0.45 : 1,
+          }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: `${m.color}20`, border: `1px solid ${m.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{m.emoji}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{m.label}</div>
+              <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{m.desc}</div>
+            </div>
+            {!m.disabled && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>}
+          </button>
+        ))}
+      </div>
+      <div style={{ marginTop: 16, padding: '10px 12px', background: `${C.green}0a`, border: `1px solid ${C.green}20`, borderRadius: 10, color: C.textDim, fontSize: 11 }}>
+        🔒 Pago 100% seguro. PayPal: procesado por PayPal, nunca guardamos tu tarjeta. Transferencias y crypto: verificación manual en menos de 24hs.
+      </div>
+    </div>
+  )
+}
+
+const PLANES = [
+  {
+    key: 'free', icon: '🆓', label: 'Free', price: 'Gratis', priceDesc: 'Para siempre',
+    color: '#64748b', bg: 'transparent', border: '#64748b44',
+    features: [
+      { text: 'Mensajes 1 a 1 ilimitados', ok: true },
+      { text: '1 comunidad propia (hasta 50 miembros)', ok: true },
+      { text: '1 torneo simultáneo', ok: true },
+      { text: 'Llamadas de audio y video', ok: true },
+      { text: 'Estadísticas avanzadas', ok: false },
+      { text: 'Torneos con premios en dinero', ok: false },
+      { text: 'Bots personalizados', ok: false },
+    ],
+    cta: null,
+  },
+  {
+    key: 'vip', icon: '⭐', label: 'VIP', price: 'US$3.99', priceDesc: 'por mes',
+    color: '#f59e0b', bg: 'linear-gradient(160deg, #1a1200 0%, #0f0800 100%)', border: '#f59e0b55',
+    paypalKey: 'vip',
+    features: [
+      { text: 'Todo lo del plan Gratis', ok: true },
+      { text: 'Hasta 3 comunidades (200 miembros c/u)', ok: true },
+      { text: 'Hasta 3 torneos simultáneos', ok: true },
+      { text: 'Estadísticas avanzadas de perfil', ok: true },
+      { text: 'Torneos con premios en dinero 💰', ok: true },
+      { text: 'Badge VIP ⭐ en tu perfil', ok: true },
+      { text: 'Ranking global 🏅', ok: true },
+      { text: 'Soporte prioritario 24/7', ok: true },
+    ],
+    cta: '⭐ Activar VIP',
+    highlight: false,
+  },
+  {
+    key: 'com_starter', icon: '🏆', label: 'PRO Starter', price: 'US$15.99', priceDesc: 'por mes · pagado por el CEO',
+    color: '#8b5cf6', bg: 'linear-gradient(160deg, #0d0a1a 0%, #080510 100%)', border: '#8b5cf655',
+    paypalKey: 'com_starter',
+    features: [
+      { text: 'Hasta 1.000 miembros (entran GRATIS)', ok: true },
+      { text: 'Torneos y ligas ilimitados con premios', ok: true },
+      { text: 'Panel CEO completo 🎛️', ok: true },
+      { text: 'Bot propio para torneos automáticos', ok: true },
+      { text: 'Roles avanzados (CEO, Org, Mod)', ok: true },
+      { text: 'Estadísticas en tiempo real', ok: true },
+      { text: 'Todo lo del VIP incluido', ok: true },
+    ],
+    cta: '🏆 Activar PRO Starter',
+    highlight: false,
+  },
+  {
+    key: 'com_elite', icon: '💎', label: 'PRO Elite', price: 'US$29.99', priceDesc: 'por mes · pagado por el CEO',
+    color: '#6366f1', bg: 'linear-gradient(160deg, #0a0a1a 0%, #050510 100%)', border: '#6366f155',
+    paypalKey: 'com_elite',
+    features: [
+      { text: 'Miembros ilimitados (entran GRATIS)', ok: true },
+      { text: 'Todo lo del PRO Starter', ok: true },
+      { text: 'Sorteos en vivo 🎰', ok: true },
+      { text: 'API completa para bots', ok: true },
+      { text: 'Badge especial 💎 en tu perfil', ok: true },
+      { text: 'Acceso anticipado a novedades', ok: true },
+    ],
+    cta: '💎 Activar PRO Elite',
+    highlight: true,
+  },
+]
+
+function PlanesSection({ role, profile, onGoIdentidad }) {
+  const [payPlan, setPayPlan] = useState(null)
+
+  if (payPlan) return <PaymentFlow plan={payPlan} onBack={() => setPayPlan(null)} profile={profile} onGoIdentidad={onGoIdentidad} />
+
+  const roleToKey = { vip: 'vip', comunidad: 'com_elite', superadmin: 'com_elite', admin: 'com_elite', ceo: 'com_starter' }
+  const currentKey = roleToKey[role] || 'free'
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -352,28 +672,20 @@ function PlanesSection({ role }) {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {PLANES.map(p => {
-          const isCurrent = p.key === role || (role === 'vip' && p.key === 'vip')
-          const isLocked = p.key === 'free' && role !== 'free'
+          const isCurrent = p.key === currentKey
           return (
             <div key={p.key} style={{
               background: p.bg || C.panel,
               border: `1.5px solid ${isCurrent ? p.color : p.border}`,
-              borderRadius: 18,
-              overflow: 'hidden',
-              position: 'relative',
+              borderRadius: 18, overflow: 'hidden', position: 'relative',
             }}>
-              {p.highlight && (
-                <div style={{ background: p.color, padding: '4px 0', textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#fff', letterSpacing: 1 }}>
-                  MÁS POPULAR
-                </div>
+              {p.highlight && !isCurrent && (
+                <div style={{ background: p.color, padding: '4px 0', textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#fff', letterSpacing: 1 }}>MÁS POPULAR</div>
               )}
               {isCurrent && (
-                <div style={{ background: `${p.color}22`, padding: '4px 0', textAlign: 'center', fontSize: 10, fontWeight: 800, color: p.color, letterSpacing: 1 }}>
-                  TU PLAN ACTUAL
-                </div>
+                <div style={{ background: `${p.color}22`, padding: '4px 0', textAlign: 'center', fontSize: 10, fontWeight: 800, color: p.color, letterSpacing: 1 }}>TU PLAN ACTUAL</div>
               )}
               <div style={{ padding: '16px 18px' }}>
-                {/* Header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 40, height: 40, borderRadius: 10, background: `${p.color}22`, border: `1px solid ${p.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{p.icon}</div>
@@ -382,11 +694,8 @@ function PlanesSection({ role }) {
                       <p style={{ margin: 0, fontSize: 10, color: C.textDim }}>{p.priceDesc}</p>
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ margin: 0, fontWeight: 900, fontSize: 20, color: p.key === 'free' ? C.textDim : p.color }}>{p.price}</p>
-                  </div>
+                  <p style={{ margin: 0, fontWeight: 900, fontSize: 18, color: p.key === 'free' ? C.textDim : p.color }}>{p.price}</p>
                 </div>
-                {/* Features */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: p.cta && !isCurrent ? 14 : 0 }}>
                   {p.features.map(f => (
                     <div key={f.text} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -395,18 +704,14 @@ function PlanesSection({ role }) {
                     </div>
                   ))}
                 </div>
-                {/* CTA */}
-                {p.cta && !isCurrent && PAYPAL_PLAN_LINKS[p.key] && (
-                  <a href={PAYPAL_PLAN_LINKS[p.key]} target="_blank" rel="noopener noreferrer" style={{
-                    display: 'block', width: '100%', padding: '11px', borderRadius: 10, boxSizing: 'border-box',
-                    background: p.key === 'comunidad' ? p.color : `${p.color}22`,
-                    color: p.key === 'comunidad' ? '#fff' : p.color,
+                {p.cta && !isCurrent && (
+                  <button onClick={() => setPayPlan(p)} style={{
+                    width: '100%', padding: '11px', border: 'none', borderRadius: 10,
+                    background: p.color, color: '#fff',
                     fontWeight: 900, fontSize: 13, cursor: 'pointer', marginTop: 4,
-                    border: p.key !== 'comunidad' ? `1px solid ${p.color}55` : 'none',
-                    textDecoration: 'none', textAlign: 'center',
                   }}>
                     {p.cta}
-                  </a>
+                  </button>
                 )}
               </div>
             </div>
@@ -417,7 +722,7 @@ function PlanesSection({ role }) {
   )
 }
 
-function CuentaTab({ profile, onGoVip, onGoBots }) {
+function CuentaTab({ profile, onGoVip, onGoBots, onGoIdentidad }) {
   const role = profile?.role || 'free'
   const plan = PLAN_CFG[role] || PLAN_CFG.free
   const limits = PLAN_LIMITS[role] || PLAN_LIMITS.free
@@ -454,7 +759,7 @@ function CuentaTab({ profile, onGoVip, onGoBots }) {
       </div>
 
       {/* Sección Planes */}
-      <PlanesSection role={role} />
+      <PlanesSection role={role} profile={profile} onGoIdentidad={onGoIdentidad} />
 
       {/* API de Bots — row */}
       {isPro && (
@@ -681,7 +986,7 @@ export default function PerfilPage({ onClose, onGoVip }) {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-      {tab === 'cuenta' && !showBots && <CuentaTab profile={profile} onGoVip={onGoVip} onGoBots={() => setShowBots(true)} />}
+      {tab === 'cuenta' && !showBots && <CuentaTab profile={profile} onGoVip={onGoVip} onGoBots={() => setShowBots(true)} onGoIdentidad={() => setTab('identidad')} />}
       {tab === 'cuenta' && showBots && (
         <BotApiPage onBack={() => setShowBots(false)} />
       )}
@@ -742,8 +1047,11 @@ export default function PerfilPage({ onClose, onGoVip }) {
               <div style={{ color: C.text, fontSize: 20, fontWeight: 900 }}>{profile.display_name || 'Sin nombre'}</div>
               {profile.username && <div style={{ color: C.textDim, fontSize: 13, marginTop: 2 }}>@{profile.username}</div>}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                <span style={{ background: `${plan.color}20`, color: plan.color, border: `1px solid ${plan.color}40`, borderRadius: 20, padding: '3px 12px', fontSize: 11, fontWeight: 700 }}>
+                <span style={{ background: `${plan.color}20`, color: plan.color, border: `1px solid ${plan.color}40`, borderRadius: 20, padding: '3px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
                   {plan.icon} {plan.label}
+                  {profile.is_verified && ['vip','comunidad','ceo','superadmin','admin','organizador'].includes(profile.role) && (
+                    <span title="Identidad verificada" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: '#00b0ff', color: '#fff', fontSize: 10, fontWeight: 900, marginLeft: 2 }}>✓</span>
+                  )}
                 </span>
               </div>
               {profile.bio && <div style={{ color: C.textDim, fontSize: 12, marginTop: 8, lineHeight: 1.6, maxWidth: 320 }}>{profile.bio}</div>}
