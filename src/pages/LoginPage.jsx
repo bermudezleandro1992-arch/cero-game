@@ -106,7 +106,7 @@ export default function LoginPage() {
   return (
     <div style={{
       minHeight: '100dvh', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
+      alignItems: 'center', justifyContent: 'safe center',
       background: C.bg, padding: '24px 20px', overflowY: 'auto',
     }}>
       <div style={{ width: '100%', maxWidth: 380 }}>
