@@ -354,6 +354,8 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete }
                     classifies={2}
                     onDrawComplete={onDrawComplete}
                     participantCount={n}
+                    maxParticipants={data.max_participants || 0}
+                    autoStart={true}
                   />
                 )
               })()
