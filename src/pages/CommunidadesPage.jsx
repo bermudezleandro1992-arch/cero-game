@@ -79,7 +79,7 @@ export default function CommunidadesPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg }}>
       {/* Header */}
       <div style={{ padding: '16px 16px 0', background: C.panel }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 12 }}>Mis Comunidades</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 12 }}>Comunidades</div>
 
         {/* Search */}
         <div style={{ display: 'flex', alignItems: 'center', background: C.panel2, borderRadius: 12, padding: '0 12px', marginBottom: 12, gap: 8 }}>
