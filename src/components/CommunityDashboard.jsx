@@ -66,7 +66,8 @@ function ChannelsTab({ community, profile, isAdmin }) {
       .eq('community_id', community.id)
       .eq('group_type', 'channel')
       .order('created_at', { ascending: true })
-    setChannels(data || [])
+    // Avisos lives in Inicio tab — exclude it from Chat channels
+    setChannels((data || []).filter(c => c.name !== 'Avisos' && !c.is_public))
     setLoading(false)
   }, [community.id])
 
@@ -90,7 +91,6 @@ function ChannelsTab({ community, profile, isAdmin }) {
   async function createDefaultChannels() {
     const defaults = [
       { name: 'General', description: 'Canal principal de la comunidad', is_public: false },
-      { name: 'Avisos', description: 'Solo el admin puede publicar', is_public: true },
     ]
     for (const ch of defaults) {
       const { data } = await supabase.from('conversations').insert({
@@ -380,20 +380,30 @@ function InicioTab({ community, profile, torneos, announcements, memberCount, on
         </div>
       )}
 
-      {/* Últimos anuncios */}
-      {announcements.length > 0 && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <h3 style={{ margin: 0, color: C.text, fontSize: 14, fontWeight: 800 }}>📢 Últimos anuncios</h3>
+      {/* Avisos — siempre visible */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <h3 style={{ margin: 0, color: C.text, fontSize: 14, fontWeight: 800 }}>📢 Avisos</h3>
+          {announcements.length > 0 && (
             <button onClick={() => onChangeTab('anuncios')} style={{ background: 'none', border: 'none', color: C.green, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Ver todos →</button>
+          )}
+          {isAdmin && (
+            <button onClick={() => onChangeTab('anuncios')} style={{ background: `${C.green}18`, border: `1px solid ${C.green}44`, borderRadius: 8, color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '4px 10px' }}>+ Publicar aviso</button>
+          )}
+        </div>
+        {announcements.length === 0 ? (
+          <div style={{ background: C.panel, borderRadius: 12, padding: '20px 16px', border: `1px solid ${C.border}`, textAlign: 'center', color: C.textDim }}>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>📭</div>
+            <p style={{ margin: 0, fontSize: 12 }}>No hay avisos publicados aún</p>
           </div>
+        ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {announcements.slice(0, 3).map(a => (
               <div key={a.id} style={{
                 background: C.panel, borderRadius: 12, padding: '12px 14px',
                 border: `1px solid ${C.border}`,
               }}>
-                <div style={{ display: 'flex', align: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ color: C.text, fontWeight: 700, fontSize: 13, marginBottom: 3 }}>{a.title}</div>
                     {a.body && <p style={{ margin: 0, color: C.textDim, fontSize: 12, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{a.body}</p>}
@@ -403,17 +413,8 @@ function InicioTab({ community, profile, torneos, announcements, memberCount, on
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Estado vacío */}
-      {torneos.length === 0 && announcements.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '32px 0', color: C.textDim }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🌟</div>
-          <p style={{ margin: 0, fontWeight: 700, color: C.text2 }}>Comunidad recién creada</p>
-          <p style={{ margin: '6px 0 0', fontSize: 12 }}>Crea torneos y publica anuncios para empezar</p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -550,30 +551,19 @@ function MiembrosTab({ communityId, ownerId, isAdmin, myId }) {
 
   const loadMembers = useCallback(async () => {
     setLoading(true)
-    const { data, error } = await supabase
+    // Two-step: get member rows, then fetch user profiles
+    const { data: mData } = await supabase
       .from('conversation_members')
-      .select('user_id, role, joined_at, users!inner(id, display_name, username, avatar_url)')
+      .select('user_id, role')
       .eq('conversation_id', communityId)
-      .order('joined_at', { ascending: true })
       .limit(200)
-
-    if (error) {
-      const { data: mData } = await supabase
-        .from('conversation_members')
-        .select('user_id, role, joined_at')
-        .eq('conversation_id', communityId)
-        .order('joined_at', { ascending: true })
-        .limit(200)
-      const ids = (mData || []).map(r => r.user_id)
-      if (!ids.length) { setMembers([]); setLoading(false); return }
-      const { data: uData } = await supabase
-        .from('users').select('id, display_name, username, avatar_url').in('id', ids)
-      const uMap = {}
-      ;(uData || []).forEach(u => { uMap[u.id] = u })
-      setMembers((mData || []).map(m => ({ ...m, users: uMap[m.user_id] })))
-    } else {
-      setMembers(data || [])
-    }
+    const ids = (mData || []).map(r => r.user_id)
+    if (!ids.length) { setMembers([]); setLoading(false); return }
+    const { data: uData } = await supabase
+      .from('users').select('id, display_name, username, avatar_url').in('id', ids)
+    const uMap = {}
+    ;(uData || []).forEach(u => { uMap[u.id] = u })
+    setMembers((mData || []).map(m => ({ ...m, users: uMap[m.user_id] })).filter(m => m.users))
     setLoading(false)
   }, [communityId])
 

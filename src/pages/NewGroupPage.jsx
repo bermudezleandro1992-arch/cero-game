@@ -19,7 +19,6 @@ const CATEGORIES = [
 
 const DEFAULT_CHANNELS = [
   { name: 'General', description: 'Canal principal de la comunidad', who_can_send: 'everyone' },
-  { name: 'Avisos',  description: 'Solo admins y organizadores pueden publicar', who_can_send: 'admins' },
 ]
 
 const GAME_GROUPS = [
