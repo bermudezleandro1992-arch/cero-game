@@ -1,10 +1,11 @@
 // Role hierarchy and permissions helper
 
-export const ROLE_HIERARCHY = ['member', 'organizador', 'moderador', 'vip', 'comunidad', 'admin', 'ceo']
+export const ROLE_HIERARCHY = ['member', 'organizador', 'moderador', 'vip', 'comunidad', 'ceo', 'admin', 'superadmin']
 
 export const ROLE_CFG = {
-  ceo:          { label: 'CEO',              color: '#a855f7', bg: '#a855f718', icon: '👑', tier: 6 },
-  admin:        { label: 'Admin',            color: '#ef4444', bg: '#ef444418', icon: '🛡️', tier: 5 },
+  superadmin:   { label: 'SuperAdmin',       color: '#00e676', bg: '#00e67618', icon: '⚡', tier: 7 },
+  admin:        { label: 'Admin',            color: '#ef4444', bg: '#ef444418', icon: '🛡️', tier: 6 },
+  ceo:          { label: 'CEO',              color: '#a855f7', bg: '#a855f718', icon: '👑', tier: 5 },
   comunidad:    { label: 'Comunidad',        color: '#3b82f6', bg: '#3b82f618', icon: '🌐', tier: 4 },
   vip:          { label: 'VIP',              color: '#f59e0b', bg: '#f59e0b18', icon: '⭐', tier: 3 },
   moderador:    { label: 'Moderador',        color: '#06b6d4', bg: '#06b6d418', icon: '🛡️', tier: 2 },
@@ -14,8 +15,9 @@ export const ROLE_CFG = {
 
 // Tier limits per role
 export const ROLE_LIMITS = {
-  ceo:         { maxParticipants: 9999, maxCommunityMembers: 9999, maxTournamentsPerDay: 999, canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
+  superadmin:  { maxParticipants: 9999, maxCommunityMembers: 9999, maxTournamentsPerDay: 999, canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
   admin:       { maxParticipants: 9999, maxCommunityMembers: 9999, maxTournamentsPerDay: 99,  canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
+  ceo:         { maxParticipants: 9999, maxCommunityMembers: 10000,maxTournamentsPerDay: 50,  canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
   comunidad:   { maxParticipants: 9999, maxCommunityMembers: 10000,maxTournamentsPerDay: 20,  canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
   vip:         { maxParticipants: 128,  maxCommunityMembers: 1000, maxTournamentsPerDay: 10,  canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
   moderador:   { maxParticipants: 64,   maxCommunityMembers: 50,   maxTournamentsPerDay: 5,   canPublishAnnouncements: true, canCreateGroup: true, canCreateCommunity: true },
@@ -35,11 +37,20 @@ export function getLimits(profile) {
 export function canPublishAnnouncements(profile) {
   if (!profile) return false
   const role = profile.role || 'member'
-  // App-level role check
   if (ROLE_LIMITS[role]?.canPublishAnnouncements) return true
   return false
 }
 
 export function getMaxParticipants(profile) {
   return getLimits(profile).maxParticipants
+}
+
+// Check if user is platform staff (superadmin or admin)
+export function isPlatformStaff(profile) {
+  return ['superadmin', 'admin'].includes(profile?.role)
+}
+
+// Check if user has full platform access
+export function isSuperAdmin(profile) {
+  return profile?.role === 'superadmin'
 }

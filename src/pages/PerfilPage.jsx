@@ -42,8 +42,9 @@ const PLAN_CFG = {
   free:      { label: 'Free',       color: '#64748b', icon: '🆓' },
   vip:       { label: 'VIP',        color: '#f59e0b', icon: '⭐' },
   comunidad: { label: 'PRO',        color: '#8b5cf6', icon: '💎' },
-  ceo:       { label: 'CEO',        color: '#00e676', icon: '👑' },
+  superadmin:{ label: 'SuperAdmin',  color: '#00e676', icon: '⚡' },
   admin:     { label: 'Admin',      color: '#ef4444', icon: '🛡️' },
+  ceo:       { label: 'CEO',        color: '#a855f7', icon: '👑' },
 }
 
 // ── Preferencias Tab ─────────────────────────────────────────────────────────
@@ -263,7 +264,8 @@ const PLAN_LIMITS = {
   free:      { label: 'Gratis',        color: '#64748b', icon: '🆓', desc: 'Gratuito · Sin vencimiento', limits: [['🌐 Comunidades', '1'], ['👥 Miembros por comunidad', '50'], ['🏆 Torneos simultáneos', '1'], ['⚽ Jugadores por torneo', '8']] },
   vip:       { label: 'VIP',           color: '#f59e0b', icon: '⭐', desc: 'Premium · Acceso completo',   limits: [['🌐 Comunidades', '3'], ['👥 Miembros por comunidad', '200'], ['🏆 Torneos simultáneos', '3'], ['⚽ Jugadores por torneo', '64']] },
   comunidad: { label: 'Comunidad PRO', color: '#8b5cf6', icon: '🏆', desc: 'Profesional · Sin límites',  limits: [['🌐 Comunidades', 'Ilimitadas'], ['👥 Miembros', 'Según tier'], ['🏆 Torneos', 'Ilimitados'], ['⚽ Jugadores', '512+']] },
-  ceo:       { label: 'CEO',           color: '#00e676', icon: '👑', desc: 'Administrador · Acceso total', limits: [['🌐 Comunidades', 'Ilimitadas'], ['👥 Miembros', 'Ilimitados'], ['🏆 Torneos', 'Ilimitados'], ['⚽ Jugadores', 'Ilimitados']] },
+  superadmin:{ label: 'SuperAdmin',     color: '#00e676', icon: '⚡', desc: 'Dueño plataforma · Acceso total', limits: [['🌐 Comunidades', 'Ilimitadas'], ['👥 Miembros', 'Ilimitados'], ['🏆 Torneos', 'Ilimitados'], ['⚽ Jugadores', 'Ilimitados']] },
+  ceo:       { label: 'CEO',           color: '#a855f7', icon: '👑', desc: 'CEO de comunidad · Acceso completo', limits: [['🌐 Comunidades', 'Ilimitadas'], ['👥 Miembros', '10.000'], ['🏆 Torneos', 'Ilimitados'], ['⚽ Jugadores', '512+']] },
 }
 
 const PLANES = [
@@ -412,7 +414,7 @@ function CuentaTab({ profile, onGoVip }) {
   const role = profile?.role || 'free'
   const plan = PLAN_CFG[role] || PLAN_CFG.free
   const limits = PLAN_LIMITS[role] || PLAN_LIMITS.free
-  const isPro = role === 'comunidad' || role === 'ceo' || role === 'vip'
+  const isPro = role === 'comunidad' || role === 'ceo' || role === 'vip' || role === 'superadmin'
   const canUpgrade = role === 'free' || role === 'vip'
   const [copied, setCopied] = useState(false)
   const [bots, setBots] = useState([])

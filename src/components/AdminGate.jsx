@@ -19,7 +19,7 @@ const UNLOCK_KEY   = 'admin_unlocked_at'
 const SESSION_TTL  = 30 * 60 * 1000 // 30 min
 const RP_ID        = window.location.hostname // 'mimensajero.vercel.app' or 'localhost'
 const RP_NAME      = 'Mi Mensajero Admin'
-const ADMIN_ROLES  = ['ceo', 'admin', 'moderador']
+const ADMIN_ROLES  = ['superadmin', 'admin', 'moderador']
 
 function b64url(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf)))

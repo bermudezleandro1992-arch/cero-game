@@ -15,8 +15,9 @@ const ROLE_OPTIONS = [
   { id: 'moderador',    label: 'Moderador' },
   { id: 'vip',          label: 'VIP' },
   { id: 'comunidad',    label: 'Comunidad' },
-  { id: 'admin',        label: 'Admin' },
-  { id: 'ceo',          label: 'CEO' },
+  { id: 'ceo',          label: 'CEO (comunidad)' },
+  { id: 'admin',        label: 'Admin (plataforma)' },
+  { id: 'superadmin',   label: 'SuperAdmin' },
 ]
 
 function Header({ onBack, title }) {
@@ -231,7 +232,7 @@ export default function AdminPage({ onBack }) {
         <Tab label="Identidad" active={tab === 'verif'}     count={verifications.filter(v => v.status === 'pending').length} onClick={() => setTab('verif')} />
         <Tab label="Banners"   active={tab === 'banners'}   count={0} onClick={() => { setTab('banners'); loadBanners() }} />
         <Tab label="Referidos" active={tab === 'referrals'} count={0} onClick={() => { setTab('referrals'); loadReferrals() }} />
-        {profile?.role === 'ceo' && (
+        {profile?.role === 'superadmin' && (
           <Tab label="Planes" active={tab === 'planes'} count={0} onClick={() => setTab('planes')} />
         )}
       </div>
@@ -587,7 +588,7 @@ export default function AdminPage({ onBack }) {
 
                         <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: C.text }}>Rol de plataforma</p>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-                          {ROLE_OPTIONS.filter(r => profile.role === 'ceo' || r.id !== 'ceo').map(r => (
+                          {ROLE_OPTIONS.filter(r => profile.role === 'superadmin' || r.id !== 'superadmin').map(r => (
                             <button key={r.id} onClick={() => setEditRole(r.id)} style={{
                               padding: '6px 12px', borderRadius: 20, border: `1.5px solid ${editRole === r.id ? C.green : C.border}`,
                               background: editRole === r.id ? `${C.green}18` : 'transparent',
@@ -831,7 +832,7 @@ export default function AdminPage({ onBack }) {
         )}
 
         {/* ── TAB PLANES (CEO only) ── */}
-        {tab === 'planes' && profile?.role === 'ceo' && (
+        {tab === 'planes' && profile?.role === 'superadmin' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <p style={{ margin: '0 0 4px', fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>
               Vista previa — lo que ve un usuario free al abrir la app

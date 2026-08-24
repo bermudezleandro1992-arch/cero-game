@@ -485,7 +485,7 @@ export default function App() {
             )
           })}
           {/* CEO Panel — sidebar only, ceo/admin */}
-          {['ceo','admin'].includes(profile?.role) && (
+          {['superadmin','admin'].includes(profile?.role) && (
             <button onClick={() => { setShowProfile(false); setTab('panel-ceo') }} style={{
               width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', gap: 4, border: 'none', marginTop: 'auto',
@@ -528,7 +528,7 @@ export default function App() {
             ? <AdminGate profile={profile}><AdminPage onBack={() => setTab('chats')} /></AdminGate>
             : tab === 'panel-organizador'
             ? <OrganizadorPanelPicker onBack={() => setTab('chats')} />
-            : tab === 'panel-ceo' && ['ceo','admin'].includes(profile?.role)
+            : tab === 'panel-ceo' && ['superadmin','admin'].includes(profile?.role)
             ? <CEOPanelPicker onBack={() => setTab('chats')} />
             : tab === 'panel-ceo'
             ? (setTab('inicio'), null)
@@ -573,7 +573,7 @@ export default function App() {
               { id: 'contactos',  icon: '👥', label: 'Contactos' },
               { id: 'explorar',   icon: '🔭', label: 'Explorar' },
               { id: 'anuncios',   icon: '📢', label: 'Anuncios' },
-              ...(['ceo','admin'].includes(profile?.role) ? [
+              ...(['superadmin','admin'].includes(profile?.role) ? [
                 { id: 'panel-ceo', icon: '⭐', label: 'Panel CEO' },
               ] : []),
               { id: 'panel-organizador', icon: '🎯', label: 'Panel Organizador' },

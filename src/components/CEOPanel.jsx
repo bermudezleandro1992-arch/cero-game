@@ -989,7 +989,7 @@ export default function CEOPanel({ community, onBack }) {
   const [openDisputesCount, setOpenDisputesCount] = useState(0)
 
   // Role guard
-  const isCeo = ['ceo', 'admin'].includes(profile?.role)
+  const isCeo = ['superadmin', 'admin'].includes(profile?.role)
   const communityRole = community?.myRole
   const isAdmin = isCeo || ['owner', 'admin'].includes(communityRole)
 
