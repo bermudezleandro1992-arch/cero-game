@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuthStore } from '../store/authStore'
 
 const LIMITS = {
   free: { comunidades: 1, miembros: 50,  torneos_dia: 1, torneos_activos: 1, jugadores: 8   },
@@ -8,6 +9,8 @@ const LIMITS = {
 }
 
 export function useSubscription(userId) {
+  const { profile } = useAuthStore()
+  const isSuperAdmin = profile?.role === 'superadmin' || profile?.role === 'admin'
   const [plan,           setPlan]           = useState('free')
   const [loading,        setLoading]        = useState(true)
   const [torneos_hoy,    setTorneosHoy]     = useState(0)
@@ -48,10 +51,11 @@ export function useSubscription(userId) {
     return !!data
   }, [userId])
 
-  const isPro  = plan === 'pro'
-  const isVip  = plan === 'vip' || plan === 'pro'
-  const isFree = plan === 'free'
-  const limits = LIMITS[plan] || LIMITS.free
+  const effectivePlan = isSuperAdmin ? 'pro' : plan
+  const isPro  = effectivePlan === 'pro'
+  const isVip  = effectivePlan === 'vip' || effectivePlan === 'pro'
+  const isFree = effectivePlan === 'free'
+  const limits = LIMITS[effectivePlan] || LIMITS.free
 
   function canCreateTournament(participants) {
     if (torneos_hoy >= limits.torneos_dia)
@@ -64,7 +68,7 @@ export function useSubscription(userId) {
   }
 
   return {
-    plan, loading, isPro, isVip, isFree, limits,
+    plan: effectivePlan, loading, isPro, isVip, isFree, limits,
     torneos_hoy, torneos_activos,
     canCreateTournament, refresh, hasFeature,
   }

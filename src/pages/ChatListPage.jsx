@@ -577,6 +577,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
             : lastMsg?.type === 'audio' ? '🎤 Audio'
             : lastMsg?.content?.startsWith('[↩ ') ? '↩ ' + (lastMsg.content.split('\n')[1] || lastMsg.content)
             : lastMsg?.content || ''
+          const channelName = isCommunity ? lastMsg?.channel_name : null
           // For groups: find sender name from members list
           const senderMember = isGroup && !isMine && lastMsg
             ? conv.members?.find(m => m.id === lastMsg.sender_id)
@@ -730,18 +731,20 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
                 )}
                 {lastMsg && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {isMine && <Ticks read={!!lastMsg.read_at} />}
+                    {isMine && !isCommunity && <Ticks read={!!lastMsg.read_at} />}
                     <p style={{
                       margin: 0, fontSize: 12,
                       color: conv.unread > 0 ? C.text2 : C.textDim,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
                       fontWeight: conv.unread > 0 ? 500 : 400,
                     }}>
-                      {isMine
-                        ? <span style={{ color: C.textDim }}>Vos: </span>
-                        : senderName
-                          ? <span style={{ color: C.text2, fontWeight: 600 }}>{senderName.split(' ')[0]}: </span>
-                          : null
+                      {isCommunity && channelName
+                        ? <span style={{ color: C.textDim }}>#{channelName}: </span>
+                        : isMine
+                          ? <span style={{ color: C.textDim }}>Vos: </span>
+                          : senderName
+                            ? <span style={{ color: C.text2, fontWeight: 600 }}>{senderName.split(' ')[0]}: </span>
+                            : null
                       }
                       {preview || 'Conversación iniciada'}
                     </p>
