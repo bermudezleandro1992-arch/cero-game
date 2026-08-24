@@ -318,7 +318,8 @@ export default function ProfileSheet({ onClose, forceSetup = false, initialShowV
       )}
 
       {/* Content — scrollable area */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 40px', minHeight: 0 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 40px', minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ width: '100%', maxWidth: 680 }}>
 
         {/* ── PERFIL ── */}
         {(section === 'perfil' || forceSetup) && (
@@ -623,6 +624,7 @@ export default function ProfileSheet({ onClose, forceSetup = false, initialShowV
             </div>
           </div>
         )}
+      </div>{/* maxWidth wrapper */}
       </div>
     </div>
   )

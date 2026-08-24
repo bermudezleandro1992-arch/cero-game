@@ -6,6 +6,7 @@ import { THEMES } from '../lib/theme'
 import { useTheme } from '../lib/ThemeContext'
 import { saveSoundSettings } from '../lib/sounds'
 import LegalPage from './LegalPage'
+import IdentityVerification from '../components/IdentityVerification'
 
 function Spinner() {
   return (
@@ -561,6 +562,7 @@ export default function PerfilPage({ onClose, onGoVip }) {
     { id: 'perfil', label: 'Perfil', icon: '👤' },
     { id: 'cuenta', label: 'Cuenta', icon: '💳' },
     { id: 'preferencias', label: 'Preferencias', icon: '⚙️' },
+    { id: 'identidad', label: 'Identidad', icon: '🪪' },
     { id: 'referidos', label: 'Referidos', icon: '🔗' },
     { id: 'legal', label: 'Legal', icon: '📋' },
   ]
@@ -609,6 +611,11 @@ export default function PerfilPage({ onClose, onGoVip }) {
       <div style={{ flex: 1, overflowY: 'auto' }}>
       {tab === 'cuenta' && <CuentaTab profile={profile} onGoVip={onGoVip} />}
       {tab === 'preferencias' && <PreferenciasTab profile={profile} />}
+      {tab === 'identidad' && (
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <IdentityVerification profile={profile} />
+        </div>
+      )}
       {tab === 'referidos' && <ReferidosTab profile={profile} />}
       {tab === 'legal' && <LegalTab />}
       {tab === 'perfil' && (
