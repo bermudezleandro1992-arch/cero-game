@@ -31,7 +31,7 @@ export default function BannerAd({ position = 'chats', style }) {
 
   // VIP y Comunidad no ven banners
   const noBanners = ['vip', 'comunidad'].includes(profile?.plan) ||
-                    ['vip', 'comunidad', 'admin', 'ceo'].includes(profile?.role)
+                    ['vip', 'comunidad', 'admin', 'superadmin'].includes(profile?.role)
 
   useEffect(() => {
     if (noBanners) return

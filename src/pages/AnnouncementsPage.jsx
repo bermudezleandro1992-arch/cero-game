@@ -518,7 +518,7 @@ export default function AnnouncementsPage() {
   useEffect(() => {
     if (!profile?.id) return
     const role = profile.role || 'member'
-    if (['ceo', 'admin', 'comunidad', 'organizador', 'moderador'].includes(role)) {
+    if (['superadmin', 'admin', 'ceo', 'comunidad', 'organizador', 'moderador'].includes(role)) {
       setCanPublish(true); return
     }
     // VIP also can publish if they manage a community

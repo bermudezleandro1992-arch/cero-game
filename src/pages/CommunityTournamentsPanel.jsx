@@ -97,7 +97,7 @@ const COUNTRIES = [
 
 function getPlanLimits(profile) {
   const role = profile?.role || 'member'
-  if (['ceo', 'admin', 'comunidad'].includes(role)) return { max: 9999, label: 'Sin límite' }
+  if (['superadmin', 'admin', 'ceo', 'comunidad'].includes(role)) return { max: 9999, label: 'Sin límite' }
   if (role === 'vip')        return { max: 128, label: 'VIP — hasta 128 jugadores' }
   if (role === 'moderador')  return { max: 64,  label: 'Moderador — hasta 64 jugadores' }
   if (role === 'organizador')return { max: 32,  label: 'Organizador — hasta 32 jugadores' }

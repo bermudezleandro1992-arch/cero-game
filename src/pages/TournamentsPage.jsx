@@ -172,7 +172,7 @@ const FORMATS = ['1vs1', '2vs2', 'Equipos', 'Liga', 'Copa', 'Bracket', 'Grupos +
 function usePlan(profile) {
   const plan = profile?.plan || 'community'
   const role = profile?.role || 'member'
-  const isCommunity = plan === 'community' || plan === 'vip' || role === 'ceo' || role === 'organizador'
+  const isCommunity = plan === 'community' || plan === 'vip' || role === 'superadmin' || role === 'ceo' || role === 'organizador'
   return { isCommunity, plan, role }
 }
 
