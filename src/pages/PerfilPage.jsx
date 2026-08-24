@@ -215,7 +215,21 @@ function ReferidosTab({ profile }) {
             {copied ? '✓ Copiado' : 'Copiar'}
           </button>
         </div>
-        <div style={{ color: C.textDim, fontSize: 11, marginTop: 8 }}>Compartí tu código para que otros se registren en NexoTribu</div>
+        <div style={{ color: C.textDim, fontSize: 11, marginTop: 8 }}>Compartí tu link para que otros se registren en NexoTribu</div>
+        {code && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ color: C.textDim, fontSize: 11, fontWeight: 600, marginBottom: 6 }}>TU LINK DE REFERIDO</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px' }}>
+              <span style={{ flex: 1, fontSize: 11, color: C.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {`${window.location.origin}/?ref=${code}`}
+              </span>
+              <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/?ref=${code}`).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+                style={{ padding: '6px 10px', background: copied ? C.green : C.panel2, border: `1px solid ${C.border}`, borderRadius: 6, color: copied ? C.bg : C.text, fontWeight: 700, fontSize: 11, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                {copied ? '✓ Copiado' : '📋 Copiar link'}
+              </button>
+            </div>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ color: C.text, fontSize: 22, fontWeight: 900 }}>{referrals.length}</div>
