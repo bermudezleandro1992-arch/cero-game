@@ -149,11 +149,12 @@ function Avatar({ name, size = 32, color, url }) {
 }
 
 // ── Ticks ─────────────────────────────────────────────────────────────────────
-function Ticks({ read }) {
+function Ticks({ read, onGreen }) {
+  const color = read ? '#34b7f1' : (onGreen ? 'rgba(0,0,0,0.45)' : C.textDim)
   return (
-    <svg width="14" height="9" viewBox="0 0 16 11" fill="none" style={{ display: 'inline', verticalAlign: 'middle', marginLeft: 3 }}>
-      <path d="M1 5.5L5 9.5L11 2" stroke={read ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M5 5.5L9 9.5L15 2" stroke={read ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    <svg width="14" height="9" viewBox="0 0 16 11" fill="none" style={{ display: 'inline', verticalAlign: 'middle', marginLeft: 2, flexShrink: 0 }}>
+      <path d="M1 5.5L5 9.5L11 2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 5.5L9 9.5L15 2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
@@ -2678,13 +2679,13 @@ function FileBubble({ data, isMine }) {
 function MsgBody({ msg, isMine, otherLastRead }) {
   const time = (
     <span style={{
-      fontSize: 10, color: isMine ? `${C.green}99` : C.textDim,
+      fontSize: 10, color: isMine ? 'rgba(0,0,0,0.55)' : C.textDim,
       marginLeft: 6, whiteSpace: 'nowrap',
       display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'bottom',
     }}>
       {msg.edited_at && <span style={{ fontSize: 9, opacity: 0.7 }}>editado · </span>}
       {formatTime(msg.created_at)}
-      {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} />}
+      {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} onGreen={isMine} />}
     </span>
   )
   if (msg.type === 'image') return (
