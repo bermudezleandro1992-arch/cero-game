@@ -303,6 +303,8 @@ export default function LiveDraw({
   classifies  = 2,
   onDrawComplete,
   participantCount = 0,
+  maxParticipants  = 0,
+  autoStart        = true,
 }) {
   const { isPro } = useSubscription(profile?.id)
   const canUseDraw = isPro || isAdmin
@@ -328,6 +330,7 @@ export default function LiveDraw({
   const [currentEventIdx, setCurrentEventIdx] = useState(0)
   const [drawErr, setDrawErr]   = useState(null)
   const [running, setRunning]   = useState(false)
+  const [loaded,  setLoaded]    = useState(false)
   const timerRef = useRef(null)
 
   // Inyectar CSS una sola vez
@@ -363,7 +366,15 @@ export default function LiveDraw({
     return { groups: g, events: e, profileMap: pm ?? {} }
   }, [tournamentId])
 
-  useEffect(() => { loadExisting() }, [loadExisting])
+  useEffect(() => {
+    loadExisting().then(({ events: e }) => {
+      setLoaded(true)
+      // Auto-start: if slots are full, no draw has run yet, and admin
+      if (autoStart && isAdmin && e.length === 0 && maxParticipants > 0 && participantCount >= maxParticipants) {
+        handleStartDraw()
+      }
+    })
+  }, [loadExisting]) // eslint-disable-line
 
   // ── Iniciar sorteo (llamar RPC) ───────────────────────────────────────────
   async function handleStartDraw() {
@@ -498,7 +509,9 @@ export default function LiveDraw({
         <div>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.text }}>🎱 Sorteo en Vivo</p>
           <p style={{ margin: '3px 0 0', fontSize: 12, color: C.textDim }}>
-            {phase === 'idle'   && 'Listo para iniciar el sorteo de grupos'}
+            {phase === 'idle'   && (autoStart && maxParticipants > 0 && participantCount < maxParticipants
+              ? `Esperando jugadores… ${participantCount}/${maxParticipants} inscriptos`
+              : 'Listo para iniciar el sorteo de grupos')}
             {phase === 'starting' && 'Iniciando sorteo…'}
             {phase === 'spinning' && 'El bolillero está girando…'}
             {phase === 'drawing'  && 'Asignando jugadores a grupos…'}
@@ -518,8 +531,8 @@ export default function LiveDraw({
             </button>
           )}
 
-          {/* Botón iniciar — solo admins y si no hay sorteo o está idle */}
-          {isAdmin && (phase === 'idle' || (phase === 'done' && !running)) && (
+          {/* Botón iniciar manual — solo si autoStart está desactivado o slots no llenos */}
+          {isAdmin && phase === 'idle' && loaded && (!autoStart || maxParticipants === 0 || participantCount < maxParticipants) && (
             <button onClick={handleStartDraw} style={{
               padding: '9px 20px', borderRadius: 10, border: 'none',
               background: accentColor, color: C.bg, fontWeight: 800, fontSize: 13, cursor: 'pointer',
@@ -644,8 +657,8 @@ export default function LiveDraw({
           </p>
           <p style={{ margin: 0, fontSize: 12, color: C.textDim, lineHeight: 1.6 }}>
             {isAdmin
-              ? `Cuando todos los jugadores estén inscritos, presioná "Iniciar Sorteo" para asignarlos a los ${numGroups} grupos automáticamente.`
-              : 'El organizador iniciará el sorteo en vivo. La asignación a grupos aparecerá aquí.'}
+              ? `El sorteo arrancará automáticamente cuando los ${maxParticipants || numGroups * 2} cupos estén completos.`
+              : 'El sorteo arrancará automáticamente cuando todos los cupos estén completos.'}
           </p>
         </div>
       )}
