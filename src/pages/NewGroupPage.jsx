@@ -93,6 +93,8 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
   const [isPublic, setIsPublic] = useState(true)
   const [creating, setCreating] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [avatarFile, setAvatarFile] = useState(null)
+  const [avatarPreview, setAvatarPreview] = useState(null)
 
   async function searchUsers(q) {
     if (!q.trim()) { setSearchResults([]); return }
@@ -155,6 +157,20 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             user_id: profile.id,
             role: 'owner',
           })
+        }
+      }
+    }
+    // Upload avatar if provided
+    if (convId && avatarFile) {
+      const ext = avatarFile.name.split('.').pop()
+      const path = `community-avatars/${convId}.${ext}`
+      const { data: uploadData } = await supabase.storage
+        .from('avatars')
+        .upload(path, avatarFile, { upsert: true, contentType: avatarFile.type })
+      if (uploadData) {
+        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+        if (urlData?.publicUrl) {
+          await supabase.from('conversations').update({ avatar_url: urlData.publicUrl }).eq('id', convId)
         }
       }
     }
@@ -421,18 +437,42 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             )
           })()}
 
-          {/* Avatar preview */}
-          <div style={{
-            width: 90, height: 90,
-            borderRadius: isCommunity ? 24 : '50%',
-            background: groupName ? `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})` : C.panel2,
-            border: `2px solid ${groupName ? C.green : C.border}44`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: groupName ? 28 : 32, fontWeight: 800, color: C.text,
-            boxShadow: groupName ? `0 0 24px ${C.green}22` : 'none',
-            transition: 'all .2s',
-          }}>
-            {groupName ? groupName.slice(0, 2).toUpperCase() : (isCommunity ? '🌐' : '👥')}
+          {/* Avatar preview — clickable to upload */}
+          <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => document.getElementById('avatar-upload-input').click()}>
+            <input
+              id="avatar-upload-input"
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                setAvatarFile(file)
+                setAvatarPreview(URL.createObjectURL(file))
+              }}
+            />
+            <div style={{
+              width: 90, height: 90,
+              borderRadius: isCommunity ? 24 : '50%',
+              background: groupName ? `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})` : C.panel2,
+              border: `2px solid ${groupName ? C.green : C.border}44`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: groupName ? 28 : 32, fontWeight: 800, color: C.text,
+              boxShadow: groupName ? `0 0 24px ${C.green}22` : 'none',
+              transition: 'all .2s', overflow: 'hidden',
+            }}>
+              {avatarPreview
+                ? <img src={avatarPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : groupName ? groupName.slice(0, 2).toUpperCase() : (isCommunity ? '🌐' : '👥')
+              }
+            </div>
+            <div style={{
+              position: 'absolute', bottom: 0, right: 0,
+              width: 26, height: 26, borderRadius: '50%',
+              background: C.green, border: `2px solid ${C.bg}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13,
+            }}>📷</div>
           </div>
 
           {/* Name */}
