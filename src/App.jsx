@@ -603,21 +603,19 @@ export default function App() {
                 { id: 'panel-ceo', icon: '⭐', label: 'Panel CEO' },
               ] : []),
               { id: 'panel-organizador', icon: '🎯', label: 'Panel Organizador' },
-              { id: 'ajustes',    icon: '⚙️', label: 'Ajustes' },
             ].map(({ id, icon, label }) => (
               <button key={id} onClick={() => {
                 setShowMoreDrawer(false)
-                if (id === 'ajustes') { setShowProfile(true) }
-                else { setShowProfile(false); setTab(id) }
+                setShowProfile(false); setTab(id)
               }} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 16,
                 padding: '14px 24px', border: 'none', background: 'none',
                 cursor: 'pointer', textAlign: 'left',
-                borderLeft: `3px solid ${(tab === id && !showProfile) || (id === 'ajustes' && showProfile) ? C.green : 'transparent'}`,
+                borderLeft: `3px solid ${tab === id && !showProfile ? C.green : 'transparent'}`,
               }}>
                 <span style={{ fontSize: 22, width: 28, textAlign: 'center' }}>{icon}</span>
                 <span style={{
-                  color: (tab === id && !showProfile) || (id === 'ajustes' && showProfile) ? C.green : C.text,
+                  color: tab === id && !showProfile ? C.green : C.text,
                   fontWeight: 600, fontSize: 15,
                 }}>{label}</span>
               </button>

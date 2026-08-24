@@ -173,11 +173,69 @@ export const useChatStore = create((set, get) => ({
         if (meta?.group_type === 'tournament' || meta?.group_type === 'liga') return false
         return true
       })
-      .sort((a, b) => {
-        const ta = a.lastMessage?.created_at || a.id
-        const tb = b.lastMessage?.created_at || b.id
-        return tb.localeCompare(ta)
-      })
+
+    // For communities: fetch last message across sub-channels and attach channel name
+    const communityConvs = conversations.filter(c => c.isCommunity)
+    if (communityConvs.length > 0) {
+      const communityIds = communityConvs.map(c => c.id)
+      const { data: subChannels } = await supabase
+        .from('conversations')
+        .select('id, name, community_id, group_type')
+        .in('community_id', communityIds)
+        .in('group_type', ['channel', 'group'])
+        .order('created_at', { ascending: true })
+
+      if (subChannels?.length) {
+        const channelIds = subChannels.map(ch => ch.id)
+        const { data: channelMsgs } = await supabase
+          .from('messages')
+          .select('conversation_id, content, created_at, type, sender_id')
+          .in('conversation_id', channelIds)
+          .order('created_at', { ascending: false })
+
+        // Map: communityId → latest msg with channel_name
+        const communityLastMsg = {}
+        channelMsgs?.forEach(msg => {
+          const ch = subChannels.find(c => c.id === msg.conversation_id)
+          if (!ch) return
+          const existing = communityLastMsg[ch.community_id]
+          if (!existing || msg.created_at > existing.created_at) {
+            communityLastMsg[ch.community_id] = { ...msg, channel_name: ch.name }
+          }
+        })
+
+        // Unread count across all sub-channels per community
+        const communityUnread = {}
+        for (const c of communityConvs) {
+          const chIds = subChannels.filter(ch => ch.community_id === c.id).map(ch => ch.id)
+          if (!chIds.length) continue
+          let total = 0
+          for (const chId of chIds) {
+            const lastRead = lastReadMap[c.id]
+            const q = supabase.from('messages').select('*', { count: 'exact', head: true })
+              .eq('conversation_id', chId).neq('sender_id', userId)
+            if (lastRead) q.gt('created_at', lastRead)
+            const { count } = await q
+            total += count || 0
+          }
+          communityUnread[c.id] = total
+        }
+
+        conversations.forEach(c => {
+          if (!c.isCommunity) return
+          if (communityLastMsg[c.id]) {
+            c.lastMessage = communityLastMsg[c.id]
+            c.unread = (communityUnread[c.id] || 0) + (c.unread || 0)
+          }
+        })
+      }
+    }
+
+    conversations.sort((a, b) => {
+      const ta = a.lastMessage?.created_at || a.id
+      const tb = b.lastMessage?.created_at || b.id
+      return tb.localeCompare(ta)
+    })
 
     set({ conversations })
   },
