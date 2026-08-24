@@ -900,6 +900,7 @@ function ConfiguracionTab({ communityId, toast }) {
   const [cfg, setCfg] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -920,6 +921,21 @@ function ConfiguracionTab({ communityId, toast }) {
     starter: { label: 'PRO Starter',   members: 500 },
     elite:   { label: 'PRO Elite',     members: 2000 },
     pro:     { label: 'PRO',           members: 1000 },
+  }
+
+  async function handleAvatarUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingAvatar(true)
+    const ext = file.name.split('.').pop()
+    const path = `community-avatars/${communityId}.${ext}`
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
+    if (upErr) { toast('Error al subir imagen: ' + upErr.message, 'error'); setUploadingAvatar(false); return }
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+    const { error: dbErr } = await supabase.from('conversations').update({ avatar_url: publicUrl }).eq('id', communityId)
+    if (dbErr) { toast('Error al guardar: ' + dbErr.message, 'error') }
+    else { setCfg(c => ({ ...c, avatar_url: publicUrl })); toast('Foto actualizada ✓', 'ok') }
+    setUploadingAvatar(false)
   }
 
   async function save() {
@@ -953,6 +969,29 @@ function ConfiguracionTab({ communityId, toast }) {
 
   return (
     <div style={{ padding: 16 }}>
+      {/* Community avatar */}
+      <F label="Foto de la comunidad">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            {cfg.avatar_url
+              ? <img src={cfg.avatar_url} alt="" style={{ width: 72, height: 72, borderRadius: 18, objectFit: 'cover', border: `2px solid ${C.border}` }} />
+              : <div style={{ width: 72, height: 72, borderRadius: 18, background: 'linear-gradient(135deg,#00f5d4,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>🌐</div>
+            }
+            {uploadingAvatar && (
+              <div style={{ position: 'absolute', inset: 0, borderRadius: 18, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 20, height: 20, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+              </div>
+            )}
+          </div>
+          <div>
+            <label style={{ display: 'inline-block', padding: '8px 14px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer', fontSize: 13, color: C.text, fontWeight: 600 }}>
+              {uploadingAvatar ? 'Subiendo...' : '📷 Cambiar foto'}
+              <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} disabled={uploadingAvatar} />
+            </label>
+            <div style={{ color: C.textDim, fontSize: 11, marginTop: 6 }}>JPG, PNG o WebP · Máx. 2MB</div>
+          </div>
+        </div>
+      </F>
       <F label="Nombre de la comunidad">
         <input value={cfg.name || ''} onChange={e => setCfg(c => ({ ...c, name: e.target.value }))} style={inputStyle} />
       </F>

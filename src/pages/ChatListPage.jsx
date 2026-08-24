@@ -420,6 +420,15 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
                 : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="4" height="4" rx="1"/><rect x="3" y="11" width="4" height="4" rx="1"/><rect x="3" y="17" width="4" height="4" rx="1"/><line x1="10" y1="7" x2="21" y2="7"/><line x1="10" y1="13" x2="21" y2="13"/><line x1="10" y1="19" x2="21" y2="19"/></svg>
               }
             </button>
+            <button onClick={() => onProfileClick?.()} title="Mi perfil" style={{
+              width: 32, height: 32, borderRadius: '50%', background: C.panel2,
+              border: `1px solid ${C.border}`, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+            </button>
             <button onClick={signOut} style={{
               background: 'none', border: `1px solid ${C.border}`, cursor: 'pointer',
               color: C.textDim, fontSize: 11, padding: '4px 10px', borderRadius: 8,

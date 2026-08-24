@@ -543,7 +543,7 @@ export default function App() {
             : tab === 'contactos'
             ? <ContactsListPage />
             : tab === 'grupos'
-            ? <ChatListPage onProfileClick={() => setShowProfile(true)} initialFilter="grupos" />
+            ? <ChatListPage onProfileClick={() => { setShowProfile(false); setTab('perfil') }} initialFilter="grupos" />
             : tab === 'explorar'
             ? <DiscoverPage />
             : tab === 'comunidades'
@@ -558,7 +558,7 @@ export default function App() {
             ? <OrganizadorPanelPicker onBack={() => setTab('chats')} />
             : tab === 'panel-ceo'
             ? <CEOPanelPicker onBack={() => setTab('chats')} />
-            : <ChatListPage onProfileClick={() => setShowProfile(true)} />
+            : <ChatListPage onProfileClick={() => { setShowProfile(false); setTab('perfil') }} />
           }
         </div>
 
