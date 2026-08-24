@@ -746,6 +746,9 @@ function Splash() {
 }
 
 function EmptyState() {
+  const { profile } = useAuthStore()
+  const isPremium = ['vip','comunidad'].includes(profile?.plan) ||
+                    ['ceo','admin','moderador','organizador'].includes(profile?.role)
   return (
     <div style={{
       height: '100%', overflowY: 'auto',
@@ -778,7 +781,8 @@ function EmptyState() {
           <p style={{ margin: 0, fontSize: 11, color: C.textDim, letterSpacing: '2px', textTransform: 'uppercase' }}>Competí · Conectá · Ganá</p>
         </div>
 
-        {/* Card VIP */}
+        {/* Cards VIP/PRO — solo para usuarios free */}
+        {!isPremium && <>
         <div style={{
           background: 'linear-gradient(135deg, #1a1200 0%, #0f0800 100%)',
           border: '1.5px solid #f59e0b44', borderRadius: 18, padding: '18px 20px', marginBottom: 14,
@@ -837,8 +841,7 @@ function EmptyState() {
             <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#8b5cf6' }}>🏆 Crear mi comunidad PRO</p>
           </div>
         </div>
-
-        {/* Features mínimas */}
+        </>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
           {['🔒 Cifrado', '⚡ Tiempo real', '📞 Llamadas', '🎤 Audios'].map(f => (
             <span key={f} style={{ fontSize: 11, color: C.textDim, background: C.panel, padding: '5px 12px', borderRadius: 20, border: `1px solid ${C.border}` }}>{f}</span>

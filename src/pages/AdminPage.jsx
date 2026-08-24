@@ -231,6 +231,9 @@ export default function AdminPage({ onBack }) {
         <Tab label="Identidad" active={tab === 'verif'}     count={verifications.filter(v => v.status === 'pending').length} onClick={() => setTab('verif')} />
         <Tab label="Banners"   active={tab === 'banners'}   count={0} onClick={() => { setTab('banners'); loadBanners() }} />
         <Tab label="Referidos" active={tab === 'referrals'} count={0} onClick={() => { setTab('referrals'); loadReferrals() }} />
+        {profile?.role === 'ceo' && (
+          <Tab label="Planes" active={tab === 'planes'} count={0} onClick={() => setTab('planes')} />
+        )}
       </div>
 
       {/* Mensaje de feedback */}
@@ -825,6 +828,58 @@ export default function AdminPage({ onBack }) {
               })}
             </div>
           </>
+        )}
+
+        {/* ── TAB PLANES (CEO only) ── */}
+        {tab === 'planes' && profile?.role === 'ceo' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ margin: '0 0 4px', fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>
+              Vista previa — lo que ve un usuario free al abrir la app
+            </p>
+
+            {/* Card VIP */}
+            <div style={{ background: 'linear-gradient(135deg, #1a1200 0%, #0f0800 100%)', border: '1.5px solid #f59e0b44', borderRadius: 18, padding: '18px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f59e0b22', border: '1px solid #f59e0b44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>⭐</div>
+                <div>
+                  <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: '#f59e0b' }}>Plan VIP</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(245,158,11,0.6)' }}>Acceso premium sin límites</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 14 }}>
+                {['🎖️ Torneos con premio en dinero', '🔇 Sin publicidad', '🪪 Verificación de identidad incluida', '📊 Estadísticas avanzadas de rendimiento', '🎨 Perfil personalizado con badge VIP'].map(f => (
+                  <span key={f} style={{ fontSize: 13 }}>{f}</span>
+                ))}
+              </div>
+              <div style={{ padding: '10px 14px', background: '#f59e0b18', borderRadius: 10, textAlign: 'center' }}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#f59e0b' }}>⭐ Activar VIP</p>
+              </div>
+            </div>
+
+            {/* Card Comunidad PRO */}
+            <div style={{ background: 'linear-gradient(135deg, #0d0a1a 0%, #080510 100%)', border: '1.5px solid #8b5cf644', borderRadius: 18, padding: '18px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#8b5cf622', border: '1px solid #8b5cf644', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🏆</div>
+                <div>
+                  <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: '#8b5cf6' }}>Comunidad PRO</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(139,92,246,0.6)' }}>Para organizadores serios</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 14 }}>
+                {['🚀 Comunidad propia con hasta 10.000 miembros', '🤖 Bot personalizado para torneos automáticos', '💰 Torneos con inscripción paga y premios', '📢 Anuncios y banners propios', '📈 Panel de estadísticas de tu comunidad'].map(f => (
+                  <span key={f} style={{ fontSize: 13 }}>{f}</span>
+                ))}
+              </div>
+              <div style={{ padding: '10px 14px', background: '#8b5cf618', borderRadius: 10, textAlign: 'center' }}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#8b5cf6' }}>🏆 Crear mi comunidad PRO</p>
+              </div>
+            </div>
+
+            <p style={{ margin: 0, fontSize: 11, color: C.textDim, textAlign: 'center', lineHeight: 1.6 }}>
+              Estos cards aparecen en el panel derecho vacío para usuarios con plan free.<br/>
+              Usuarios VIP, Comunidad PRO, admins y organizadores no los ven.
+            </p>
+          </div>
         )}
 
         {/* ── REFERIDOS ── */}
