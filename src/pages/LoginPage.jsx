@@ -147,9 +147,9 @@ export default function LoginPage() {
         )}
 
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <div style={{
-            width: 80, height: 80, borderRadius: 24, margin: '0 auto 20px',
+            width: 72, height: 72, borderRadius: 22, margin: '0 auto 12px',
             background: `radial-gradient(circle at 35% 35%, ${C.green}22 0%, ${C.greenDk}44 100%)`,
             border: `1.5px solid ${C.green}44`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
