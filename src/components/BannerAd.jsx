@@ -25,7 +25,7 @@ async function fetchBanners() {
 export default function BannerAd({ position = 'chats', style }) {
   const { profile } = useAuthStore()
   const [banner, setBanner] = useState(null)
-  const [visible, setVisible] = useState(true)
+  const [visible] = useState(true)
   const [idx, setIdx] = useState(0)
   const intervalRef = useRef(null)
 
@@ -68,15 +68,11 @@ export default function BannerAd({ position = 'chats', style }) {
     }}
       onClick={() => { if (banner.link_url) window.open(banner.link_url, '_blank', 'noopener') }}
     >
-      {/* Sponsored label + close */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 0' }}>
+      {/* Sponsored label */}
+      <div style={{ padding: '6px 10px 0' }}>
         <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', letterSpacing: '1px', textTransform: 'uppercase' }}>
           Patrocinado
         </span>
-        <button
-          onClick={e => { e.stopPropagation(); setVisible(false) }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', padding: '0 0 0 8px', fontSize: 14, lineHeight: 1 }}
-        >×</button>
       </div>
 
       {/* Content */}

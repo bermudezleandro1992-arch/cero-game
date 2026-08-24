@@ -746,48 +746,107 @@ function Splash() {
 }
 
 function EmptyState() {
+  const { profile } = useAuthStore()
+  const isPremium = ['vip','comunidad'].includes(profile?.plan) ||
+                    ['ceo','admin','moderador','organizador'].includes(profile?.role)
   return (
     <div style={{
-      height: '100%', display: 'flex', flexDirection: 'column',
+      height: '100%', overflowY: 'auto',
+      display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      gap: 20, padding: '0 40px', textAlign: 'center',
-      background: `radial-gradient(ellipse at 50% 60%, ${C.greenDk}18 0%, transparent 65%)`,
+      padding: '32px 32px 48px',
+      background: `radial-gradient(ellipse at 50% 30%, ${C.greenDk}14 0%, transparent 65%)`,
     }}>
-      <div style={{
-        width: 96, height: 96, borderRadius: 24,
-        background: `linear-gradient(145deg, ${C.greenDk}cc 0%, #071a0c 100%)`,
-        border: `1.5px solid ${C.green}40`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: `0 0 48px ${C.green}22, inset 0 1px 0 ${C.green}30`,
-      }}>
-        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="none">
-          <defs>
-            <linearGradient id="boltGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor={C.green}/>
-              <stop offset="100%" stopColor={C.green2}/>
-            </linearGradient>
-          </defs>
-          <path d="M13 2L4.5 13.5H11L10 22L20.5 10H14L13 2Z" fill="url(#boltGrad)"/>
-        </svg>
-      </div>
-      <div>
-        <p style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>
-          Mi Mensajero
-        </p>
-        <p style={{ margin: '0 0 4px', fontSize: 12, color: C.textDim, letterSpacing: '2px', textTransform: 'uppercase', fontWeight: 600 }}>
-          Competí · Conectá · Ganá
-        </p>
-        <p style={{ margin: '12px 0 0', fontSize: 13, color: C.textDim, lineHeight: 1.6 }}>
-          Seleccioná una conversación
-        </p>
-      </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
-        {['🔒 Cifrado', '⚡ Tiempo real', '📞 Llamadas', '🎤 Audios'].map(f => (
-          <span key={f} style={{
-            fontSize: 11, color: C.textDim, background: C.panel,
-            padding: '5px 12px', borderRadius: 20, border: `1px solid ${C.border}`,
-          }}>{f}</span>
-        ))}
+      <div style={{ width: '100%', maxWidth: 480 }}>
+
+        {/* Logo chico */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: 18, margin: '0 auto 12px',
+            background: `linear-gradient(145deg, ${C.greenDk}cc 0%, #071a0c 100%)`,
+            border: `1.5px solid ${C.green}40`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: `0 0 32px ${C.green}20`,
+          }}>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+              <defs>
+                <linearGradient id="boltGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor={C.green}/><stop offset="100%" stopColor={C.green2}/>
+                </linearGradient>
+              </defs>
+              <path d="M13 2L4.5 13.5H11L10 22L20.5 10H14L13 2Z" fill="url(#boltGrad)"/>
+            </svg>
+          </div>
+          <p style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: C.text }}>Mi Mensajero</p>
+          <p style={{ margin: 0, fontSize: 11, color: C.textDim, letterSpacing: '2px', textTransform: 'uppercase' }}>Competí · Conectá · Ganá</p>
+        </div>
+
+        {/* Cards VIP/PRO — solo para usuarios free */}
+        {!isPremium && <>
+        <div style={{
+          background: 'linear-gradient(135deg, #1a1200 0%, #0f0800 100%)',
+          border: '1.5px solid #f59e0b44', borderRadius: 18, padding: '18px 20px', marginBottom: 14,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f59e0b22', border: '1px solid #f59e0b44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>⭐</div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: '#f59e0b' }}>Plan VIP</p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(245,158,11,0.6)' }}>Acceso premium sin límites</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {[
+              '🎖️ Torneos con premio en dinero',
+              '🔇 Sin publicidad',
+              '🪪 Verificación de identidad incluida',
+              '📊 Estadísticas avanzadas de rendimiento',
+              '🎨 Perfil personalizado con badge VIP',
+            ].map(f => (
+              <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13 }}>{f}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 14, padding: '10px 14px', background: '#f59e0b18', borderRadius: 10, textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#f59e0b' }}>⭐ Activar VIP</p>
+          </div>
+        </div>
+
+        {/* Card Comunidad PRO */}
+        <div style={{
+          background: 'linear-gradient(135deg, #0d0a1a 0%, #080510 100%)',
+          border: '1.5px solid #8b5cf644', borderRadius: 18, padding: '18px 20px', marginBottom: 20,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: '#8b5cf622', border: '1px solid #8b5cf644', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🏆</div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: '#8b5cf6' }}>Comunidad PRO</p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(139,92,246,0.6)' }}>Para organizadores serios</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {[
+              '🚀 Comunidad propia con hasta 10.000 miembros',
+              '🤖 Bot personalizado para torneos automáticos',
+              '💰 Torneos con inscripción paga y premios',
+              '📢 Anuncios y banners propios',
+              '📈 Panel de estadísticas de tu comunidad',
+            ].map(f => (
+              <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13 }}>{f}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 14, padding: '10px 14px', background: '#8b5cf618', borderRadius: 10, textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#8b5cf6' }}>🏆 Crear mi comunidad PRO</p>
+          </div>
+        </div>
+        </>}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {['🔒 Cifrado', '⚡ Tiempo real', '📞 Llamadas', '🎤 Audios'].map(f => (
+            <span key={f} style={{ fontSize: 11, color: C.textDim, background: C.panel, padding: '5px 12px', borderRadius: 20, border: `1px solid ${C.border}` }}>{f}</span>
+          ))}
+        </div>
       </div>
     </div>
   )
