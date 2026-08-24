@@ -572,23 +572,31 @@ export default function AdminPage({ onBack }) {
 
                     {isSelected && (
                       <div style={{ borderTop: `1px solid ${C.border}`, padding: '14px' }}>
-                        <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: C.text }}>Plan</p>
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-                          {PLAN_OPTIONS.map(opt => (
-                            <button key={opt.id} onClick={() => setEditPlan(opt.id)} style={{
-                              padding: '7px 14px', borderRadius: 20, border: `1.5px solid ${editPlan === opt.id ? opt.color : C.border}`,
-                              background: editPlan === opt.id ? `${opt.color}20` : 'transparent',
-                              color: editPlan === opt.id ? opt.color : C.textDim,
-                              cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                            }}>
-                              {opt.emoji} {opt.label}
-                            </button>
-                          ))}
-                        </div>
+                        {profile?.role === 'superadmin' && (
+                          <>
+                            <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: C.text }}>Plan</p>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                              {PLAN_OPTIONS.map(opt => (
+                                <button key={opt.id} onClick={() => setEditPlan(opt.id)} style={{
+                                  padding: '7px 14px', borderRadius: 20, border: `1.5px solid ${editPlan === opt.id ? opt.color : C.border}`,
+                                  background: editPlan === opt.id ? `${opt.color}20` : 'transparent',
+                                  color: editPlan === opt.id ? opt.color : C.textDim,
+                                  cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                                }}>
+                                  {opt.emoji} {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
 
                         <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: C.text }}>Rol de plataforma</p>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-                          {ROLE_OPTIONS.filter(r => profile.role === 'superadmin' || r.id !== 'superadmin').map(r => (
+                          {ROLE_OPTIONS.filter(r => {
+                            if (profile?.role === 'superadmin') return true
+                            if (profile?.role === 'ceo') return r.id === 'organizador' || r.id === 'member'
+                            return false
+                          }).map(r => (
                             <button key={r.id} onClick={() => setEditRole(r.id)} style={{
                               padding: '6px 12px', borderRadius: 20, border: `1.5px solid ${editRole === r.id ? C.green : C.border}`,
                               background: editRole === r.id ? `${C.green}18` : 'transparent',
@@ -601,14 +609,14 @@ export default function AdminPage({ onBack }) {
                         </div>
 
                         <button
-                          onClick={() => applyPlan(u.id, editPlan, editRole)}
+                          onClick={() => applyPlan(u.id, profile?.role === 'superadmin' ? editPlan : u.plan, editRole)}
                           disabled={loading}
                           style={{
                             width: '100%', padding: '11px 0', borderRadius: 10, border: 'none',
                             background: C.green, color: C.bg, fontWeight: 800, fontSize: 13, cursor: 'pointer',
                           }}
                         >
-                          {loading ? 'Guardando...' : `💾 Guardar — ${editPlan.toUpperCase()} / ${editRole}`}
+                          {loading ? 'Guardando...' : profile?.role === 'superadmin' ? `💾 Guardar — ${editPlan.toUpperCase()} / ${editRole}` : `💾 Asignar rol: ${editRole}`}
                         </button>
                       </div>
                     )}
