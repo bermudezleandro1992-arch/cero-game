@@ -6,6 +6,7 @@ import { C } from '../theme'
 const K = 32
 const INITIAL_ELO = 1000
 
+// ELO computation from match history
 function computeElo(matches) {
   const elo = {}
   const sorted = [...matches].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
@@ -31,6 +32,14 @@ function eloTier(elo) {
   return                  { label: 'Silver',   color: '#94a3b8', icon: '🪙' }
 }
 
+// Country code → flag emoji
+function countryFlag(code) {
+  if (!code || code.length !== 2) return ''
+  const offset = 0x1F1E6 - 65
+  return String.fromCodePoint(code.toUpperCase().charCodeAt(0) + offset) +
+         String.fromCodePoint(code.toUpperCase().charCodeAt(1) + offset)
+}
+
 function Spinner() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
@@ -39,29 +48,32 @@ function Spinner() {
   )
 }
 
-function Avatar({ url, size = 40 }) {
+function Avatar({ url, name, size = 40 }) {
+  const colors = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100']
+  let h = 0; for (const c of (name || '')) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff
+  const bg = colors[Math.abs(h) % colors.length]
   return (
     <div style={{
-      width: size, height: size, borderRadius: '50%', background: C.border, flexShrink: 0,
-      overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.4,
+      width: size, height: size, borderRadius: '50%', background: bg, flexShrink: 0,
+      overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.38, fontWeight: 800, color: '#fff',
     }}>
-      {url ? <img src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : '👤'}
+      {url ? <img src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : (name?.slice(0,2).toUpperCase() || '?')}
     </div>
   )
 }
 
 function EloBar({ elo }) {
-  const min = 800, max = 2000
-  const pct = Math.max(0, Math.min(100, ((elo - min) / (max - min)) * 100))
+  const pct = Math.max(0, Math.min(100, ((elo - 800) / (2000 - 800)) * 100))
   const tier = eloTier(elo)
   return (
-    <div style={{ height: 4, background: C.border, borderRadius: 2, overflow: 'hidden', width: '100%', marginTop: 4 }}>
+    <div style={{ height: 3, background: C.border, borderRadius: 2, overflow: 'hidden', width: '100%', marginTop: 4 }}>
       <div style={{ height: '100%', width: `${pct}%`, background: tier.color, borderRadius: 2, transition: 'width .5s' }} />
     </div>
   )
 }
 
-function MyRankCard({ entry }) {
+function MyRankCard({ entry, isGlobal }) {
   if (!entry) return null
   const tier = eloTier(entry.elo || INITIAL_ELO)
   return (
@@ -72,7 +84,14 @@ function MyRankCard({ entry }) {
       display: 'flex', alignItems: 'center', gap: 14,
       marginBottom: 20,
     }}>
-      <Avatar url={entry.avatar_url} size={48} />
+      <div style={{ position: 'relative' }}>
+        <Avatar url={entry.avatar_url} name={entry.display_name} size={48} />
+        {entry.country && (
+          <span style={{ position: 'absolute', bottom: -4, right: -6, fontSize: 16, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.4))' }}>
+            {countryFlag(entry.country)}
+          </span>
+        )}
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ color: C.textDim, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tu posición</div>
         <div style={{ color: C.text, fontWeight: 800, fontSize: 16, marginTop: 2 }}>#{entry.rank} · {entry.display_name || 'Vos'}</div>
@@ -85,13 +104,17 @@ function MyRankCard({ entry }) {
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ color: C.green, fontWeight: 900, fontSize: 24, fontVariantNumeric: 'tabular-nums' }}>{entry.elo || INITIAL_ELO}</div>
         <div style={{ color: C.textDim, fontSize: 10 }}>ELO</div>
-        <div style={{ color: C.text, fontSize: 12, fontWeight: 700, marginTop: 4 }}>{entry.wins}V · {entry.losses}D</div>
+        {isGlobal && (
+          <div style={{ color: C.textDim, fontSize: 11, fontWeight: 600, marginTop: 4 }}>
+            👥 {entry.referidos || 0} ref.
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-function Podium({ top3 }) {
+function Podium({ top3, isGlobal }) {
   if (top3.length < 1) return null
   const order = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3.length === 2 ? [top3[1], top3[0]] : [top3[0]]
   const heights = [110, 150, 90]
@@ -108,16 +131,23 @@ function Podium({ top3 }) {
           <div key={player.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: isFirst ? 1.2 : 1 }}>
             <span style={{ fontSize: isFirst ? 24 : 18 }}>{medals[i]}</span>
             <div style={{ position: 'relative' }}>
-              <Avatar url={player.avatar_url} size={isFirst ? 58 : 46} />
-              <span style={{
-                position: 'absolute', bottom: -2, right: -2, fontSize: 14,
-                background: C.bg, borderRadius: '50%', padding: 1,
-              }}>{tier.icon}</span>
+              <Avatar url={player.avatar_url} name={player.display_name} size={isFirst ? 58 : 46} />
+              <span style={{ position: 'absolute', bottom: -2, right: -2, fontSize: 14, background: C.bg, borderRadius: '50%', padding: 1 }}>
+                {tier.icon}
+              </span>
+              {player.country && (
+                <span style={{ position: 'absolute', top: -6, left: -6, fontSize: 14, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.4))' }}>
+                  {countryFlag(player.country)}
+                </span>
+              )}
             </div>
             <div style={{ color: C.text, fontWeight: 700, fontSize: isFirst ? 13 : 11, textAlign: 'center', maxWidth: 76, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {player.display_name || 'Anónimo'}
             </div>
             <div style={{ color: tier.color, fontWeight: 900, fontSize: isFirst ? 15 : 12 }}>{player.elo || INITIAL_ELO} ELO</div>
+            {isGlobal && (
+              <div style={{ color: C.textDim, fontSize: 10, fontWeight: 600 }}>👥 {player.referidos || 0}</div>
+            )}
             <div style={{
               width: '100%', minWidth: 80, height: heights[i],
               background: isFirst ? `${C.green}22` : `${C.border}88`,
@@ -145,7 +175,6 @@ export default function RankingPage() {
   const [hasMore, setHasMore] = useState(false)
   const [communities, setCommunities] = useState([])
   const [filterCommunity, setFilterCommunity] = useState('global')
-  const [sortBy, setSortBy] = useState('elo')
   const PAGE_SIZE = 25
 
   useEffect(() => {
@@ -153,20 +182,23 @@ export default function RankingPage() {
       .select('id, name')
       .eq('group_type', 'community')
       .eq('is_public', true)
-      .limit(20)
+      .order('name')
+      .limit(30)
       .then(({ data }) => setCommunities(data || []))
   }, [])
 
   const load = useCallback(async (pageNum = 0) => {
     setLoading(true)
+    const isGlobal = filterCommunity === 'global'
 
+    // Build match query
     let matchQuery = supabase
       .from('tournament_matches')
       .select('player1_id, player2_id, winner_id, tournament_id, created_at')
       .eq('status', 'finalizado')
       .not('winner_id', 'is', null)
 
-    if (filterCommunity !== 'global') {
+    if (!isGlobal) {
       const { data: tIds } = await supabase
         .from('conversations')
         .select('id')
@@ -182,142 +214,129 @@ export default function RankingPage() {
     const { data: matches } = await matchQuery
     if (!matches?.length) { setRanking([]); setLoading(false); setHasMore(false); return }
 
-    // Compute ELO from all matches
     const eloMap = computeElo(matches)
 
-    // Aggregate wins/losses
-    const wins = {}, played = {}
-    matches.forEach(m => {
-      wins[m.winner_id] = (wins[m.winner_id] || 0) + 1
-      const loser = m.winner_id === m.player1_id ? m.player2_id : m.player1_id
-      if (loser) {
-        played[m.winner_id] = (played[m.winner_id] || 0) + 1
-        played[loser] = (played[loser] || 0) + 1
-      }
-    })
-
-    // All players with their stats
     const allIds = [...new Set([
       ...matches.map(m => m.player1_id),
       ...matches.map(m => m.player2_id),
     ].filter(Boolean))]
 
-    let players = allIds.map(id => ({
-      id,
-      elo: eloMap[id] || INITIAL_ELO,
-      wins: wins[id] || 0,
-      played: played[id] || 0,
-      losses: (played[id] || 0) - (wins[id] || 0),
-    }))
-
-    // Sort
-    if (sortBy === 'elo') players.sort((a, b) => b.elo - a.elo)
-    else if (sortBy === 'wins') players.sort((a, b) => b.wins - a.wins)
-    else players.sort((a, b) => (b.wins / Math.max(b.played, 1)) - (a.wins / Math.max(a.played, 1)))
+    let players = allIds.map(id => ({ id, elo: eloMap[id] || INITIAL_ELO }))
+    players.sort((a, b) => b.elo - a.elo)
 
     const total = players.length
     const pageSlice = players.slice(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE)
     setHasMore(total > (pageNum + 1) * PAGE_SIZE)
 
     const ids = pageSlice.map(p => p.id)
+
+    // Fetch profiles — try to get country field (graceful if missing)
     const { data: profiles } = await supabase
       .from('users')
-      .select('id, display_name, avatar_url')
+      .select('id, display_name, avatar_url, country_code')
       .in('id', ids)
 
+    // Fetch referral counts for these users (global only)
+    let refMap = {}
+    if (isGlobal) {
+      const { data: refs } = await supabase
+        .from('referrals')
+        .select('referrer_id')
+        .in('referrer_id', ids)
+      if (refs) {
+        refs.forEach(r => { refMap[r.referrer_id] = (refMap[r.referrer_id] || 0) + 1 })
+      }
+    }
+
     const rows = pageSlice.map((p, i) => {
-      const prof = profiles?.find(x => x.id === p.id)
-      return { rank: pageNum * PAGE_SIZE + i + 1, ...p, ...(prof || {}) }
+      const prof = profiles?.find(x => x.id === p.id) || {}
+      return {
+        rank: pageNum * PAGE_SIZE + i + 1,
+        ...p,
+        display_name: prof.display_name,
+        avatar_url: prof.avatar_url,
+        country: prof.country_code || null,
+        referidos: refMap[p.id] || 0,
+      }
     })
 
     setRanking(pageNum === 0 ? rows : prev => [...prev, ...rows])
     setLoading(false)
-  }, [filterCommunity, sortBy])
+  }, [filterCommunity])
 
-  useEffect(() => { setPage(0); load(0) }, [filterCommunity, sortBy, load])
+  useEffect(() => { setPage(0); load(0) }, [filterCommunity, load])
 
+  const isGlobal = filterCommunity === 'global'
   const myEntry = profile ? ranking.find(r => r.id === profile.id) : null
   const top3 = ranking.slice(0, 3)
   const rest = ranking.slice(3)
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', background: C.bg }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg) } }
-        .rank-table-grid {
-          display: grid;
-          grid-template-columns: 44px 1fr 60px 44px 44px 70px;
-          gap: 6px;
-        }
-        @media (max-width: 480px) {
-          .rank-table-grid {
-            grid-template-columns: 36px 1fr 54px 38px 60px;
-          }
-          .rank-col-played { display: none; }
-        }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
 
       {/* Header */}
       <div style={{ background: C.panel, padding: '16px', borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ fontWeight: 900, fontSize: 18, color: C.text, marginBottom: 12 }}>📊 Ranking</div>
 
-        {/* Community filter */}
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, scrollbarWidth: 'none' }}>
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
           <button onClick={() => setFilterCommunity('global')} style={{
-            padding: '5px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+            padding: '5px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
             background: filterCommunity === 'global' ? C.green : C.bg,
             color: filterCommunity === 'global' ? '#000' : C.textDim,
           }}>🌐 Global</button>
           {communities.map(c => (
             <button key={c.id} onClick={() => setFilterCommunity(c.id)} style={{
-              padding: '5px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+              padding: '5px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
               background: filterCommunity === c.id ? C.green : C.bg,
               color: filterCommunity === c.id ? '#000' : C.textDim,
             }}>{c.name}</button>
           ))}
         </div>
-
       </div>
 
-      {/* My position */}
+      {/* My position card */}
       {myEntry && (
         <div style={{ padding: '16px 16px 0' }}>
-          <MyRankCard entry={myEntry} />
+          <MyRankCard entry={myEntry} isGlobal={isGlobal} />
         </div>
       )}
 
       {loading && ranking.length === 0 ? <Spinner /> : (
         <>
-          {top3.length > 0 && <Podium top3={top3} />}
+          {top3.length > 0 && <Podium top3={top3} isGlobal={isGlobal} />}
 
           <div style={{ padding: '0 12px 32px' }}>
             {/* Table header */}
-            <div className="rank-table-grid" style={{ padding: '6px 12px', marginBottom: 4 }}>
-              {['#', 'Jugador', 'ELO', 'V', 'D', '%'].map((h, i) => (
-                <div key={h} style={{
-                  color: C.textDim, fontSize: 10, fontWeight: 700,
-                  textAlign: i <= 1 ? 'left' : 'center',
-                  ...(i === 3 ? { className: 'rank-col-played' } : {}),
-                }}>{h}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: `40px 1fr 64px ${isGlobal ? '64px' : '80px'}`, gap: 4, padding: '6px 10px', marginBottom: 4 }}>
+              {['#', 'Jugador', 'ELO', isGlobal ? 'Referidos' : 'Tier'].map((h, i) => (
+                <div key={h} style={{ color: C.textDim, fontSize: 10, fontWeight: 700, textAlign: i <= 1 ? 'left' : 'center' }}>{h}</div>
               ))}
             </div>
 
             {rest.map((player, i) => {
               const isMe = player.id === profile?.id
               const tier = eloTier(player.elo || INITIAL_ELO)
-              const ratio = player.played > 0 ? Math.round((player.wins / player.played) * 100) : 0
               return (
-                <div key={player.id} className="rank-table-grid" style={{
-                  padding: '10px 12px', borderRadius: 10, marginBottom: 3, alignItems: 'center',
+                <div key={player.id} style={{
+                  display: 'grid', gridTemplateColumns: `40px 1fr 64px ${isGlobal ? '64px' : '80px'}`,
+                  gap: 4, padding: '10px 10px', borderRadius: 10, marginBottom: 3, alignItems: 'center',
                   background: isMe ? `${C.green}12` : i % 2 === 0 ? C.panel : 'transparent',
                   border: isMe ? `1px solid ${C.green}40` : '1px solid transparent',
-                  transition: 'background .1s',
                 }}>
                   <div style={{ color: C.textDim, fontWeight: 800, fontSize: 12, textAlign: 'center' }}>
                     {player.rank}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <Avatar url={player.avatar_url} size={30} />
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <Avatar url={player.avatar_url} name={player.display_name} size={30} />
+                      {player.country && (
+                        <span style={{ position: 'absolute', bottom: -4, right: -6, fontSize: 12, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.4))' }}>
+                          {countryFlag(player.country)}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ color: isMe ? C.green : C.text, fontSize: 12, fontWeight: isMe ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {player.display_name || 'Anónimo'}{isMe && <span style={{ marginLeft: 4, fontSize: 9, color: C.textDim }}>(Yo)</span>}
@@ -328,10 +347,20 @@ export default function RankingPage() {
                       </div>
                     </div>
                   </div>
-                  <div style={{ color: C.green, fontWeight: 900, textAlign: 'center', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{player.elo || INITIAL_ELO}</div>
-                  <div style={{ color: '#22c55e', fontWeight: 700, textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>{player.wins}</div>
-                  <div style={{ color: '#ef4444', fontWeight: 600, textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>{player.losses}</div>
-                  <div style={{ color: C.textDim, fontWeight: 600, textAlign: 'center', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>{ratio}%</div>
+                  <div style={{ color: C.green, fontWeight: 900, textAlign: 'center', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                    {player.elo || INITIAL_ELO}
+                  </div>
+                  {isGlobal ? (
+                    <div style={{ color: C.textDim, fontWeight: 600, textAlign: 'center', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                      👥 {player.referidos}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <span style={{ background: tier.color + '22', color: tier.color, borderRadius: 6, padding: '2px 7px', fontSize: 9, fontWeight: 700 }}>
+                        {tier.icon} {tier.label}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -348,7 +377,7 @@ export default function RankingPage() {
             {ranking.length === 0 && !loading && (
               <div style={{ textAlign: 'center', padding: '48px 0', color: C.textDim }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
-                <div>Sin datos de ranking{filterCommunity !== 'global' ? ' en esta comunidad' : ''} aún</div>
+                <div>Sin datos de ranking{!isGlobal ? ' en esta comunidad' : ''} aún</div>
               </div>
             )}
           </div>
