@@ -13,12 +13,12 @@ async function generateToken() {
 function CodeBlock({ code, lang }) {
   const [copied, setCopied] = useState(false)
   return (
-    <div style={{ position: 'relative', marginTop: 8 }}>
+    <div style={{ position: 'relative', marginTop: 8, maxWidth: '100%', overflow: 'hidden' }}>
       <pre style={{
         margin: 0, background: '#0d1117', border: `1px solid ${C.border}`,
         borderRadius: 10, padding: '12px 14px', fontFamily: 'monospace',
         fontSize: 11, color: '#e6edf3', overflowX: 'auto', lineHeight: 1.6,
-        whiteSpace: 'pre',
+        whiteSpace: 'pre', maxWidth: '100%', boxSizing: 'border-box',
       }}>{code}</pre>
       <button
         onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
@@ -268,7 +268,7 @@ botRequest('/announce', ['message' => '🏆 Resultados publicados']);`,
   const firstBotToken = bots[0]?.token
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }}>
+    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif', overflow: 'hidden' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
@@ -324,12 +324,12 @@ botRequest('/announce', ['message' => '🏆 Resultados publicados']);`,
               value={newBotName}
               onChange={e => setNewBotName(e.target.value)}
               placeholder="Nombre del bot (ej: Bot Torneos eFootball)"
-              style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none' }}
+              style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }}
             />
             <select
               value={newBotConv}
               onChange={e => setNewBotConv(e.target.value)}
-              style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px', color: newBotConv ? C.text : C.textDim, fontSize: 14, outline: 'none' }}
+              style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px', color: newBotConv ? C.text : C.textDim, fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }}
             >
               <option value="">Seleccionar grupo o comunidad...</option>
               {groups.map(c => (
@@ -381,7 +381,7 @@ botRequest('/announce', ['message' => '🏆 Resultados publicados']);`,
                         )}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       {/* Toggle activo */}
                       <button
                         onClick={() => toggleBot(bot.id, bot.active)}
@@ -507,15 +507,15 @@ botRequest('/announce', ['message' => '🏆 Resultados publicados']);`,
                               value={newTpl[bot.id]?.name ?? ''}
                               onChange={e => setTplField(bot.id, 'name', e.target.value)}
                               placeholder="Nombre (ej: Nuevo Torneo)"
-                              style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, outline: 'none' }}
+                              style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, outline: 'none', width: '100%', boxSizing: 'border-box' }}
                             />
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
                               <select value={newTpl[bot.id]?.channel ?? 'general'} onChange={e => setTplField(bot.id, 'channel', e.target.value)}
-                                style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 12, outline: 'none' }}>
+                                style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 12, outline: 'none', width: '100%', boxSizing: 'border-box' }}>
                                 {CHANNELS.map(c => <option key={c} value={c}>{CHAN_EMOJI[c]} {c}</option>)}
                               </select>
                               <select value={newTpl[bot.id]?.category ?? 'torneos'} onChange={e => setTplField(bot.id, 'category', e.target.value)}
-                                style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 12, outline: 'none' }}>
+                                style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 12, outline: 'none', width: '100%', boxSizing: 'border-box' }}>
                                 {CATEGORIES.map(c => <option key={c} value={c}>{CAT_EMOJI[c]} {c}</option>)}
                               </select>
                             </div>
@@ -524,7 +524,7 @@ botRequest('/announce', ['message' => '🏆 Resultados publicados']);`,
                               onChange={e => setTplField(bot.id, 'message_template', e.target.value)}
                               placeholder={'Mensaje con variables:\n🏆 {{nombre_torneo}}\n📅 Fecha: {{fecha}}\n🎮 Plataforma: {{plataforma}}\n🔗 {{link}}'}
                               rows={4}
-                              style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, outline: 'none', resize: 'none', fontFamily: 'monospace', lineHeight: 1.5 }}
+                              style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, outline: 'none', resize: 'vertical', fontFamily: 'monospace', lineHeight: 1.5, width: '100%', boxSizing: 'border-box' }}
                             />
                             <div style={{ display: 'flex', gap: 12 }}>
                               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.textDim, cursor: 'pointer' }}>
@@ -579,12 +579,12 @@ botRequest('/announce', ['message' => '🏆 Resultados publicados']);`,
                         <div>
                           <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Webhook URL (opcional)</p>
                           <p style={{ margin: '0 0 8px', fontSize: 11, color: C.textDim }}>Tu servidor recibe un POST cada vez que el bot envía un mensaje.</p>
-                          <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             <input
                               value={editWebhook[bot.id] ?? bot.webhook_url ?? ''}
                               onChange={e => setEditWebhook(prev => ({ ...prev, [bot.id]: e.target.value }))}
                               placeholder="https://tu-servidor.com/webhook"
-                              style={{ flex: 1, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, outline: 'none' }}
+                              style={{ flex: '1 1 180px', minWidth: 0, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
                             />
                             <button onClick={() => saveWebhook(bot.id)} disabled={savingWebhook === bot.id}
                               style={{ background: C.green, border: 'none', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', color: C.bg, fontSize: 12, fontWeight: 700, flexShrink: 0 }}
