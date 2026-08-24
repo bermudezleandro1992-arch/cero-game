@@ -476,8 +476,6 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
               ['torneos','Torneos','🏆'],
               ['ligas','Ligas','⚽'],
               ['amigo','Amigos','🤝'],
-              ['clan','Clan','⚔️'],
-              ['conocido','Conocidos','👋'],
             ].map(([id, label, icon]) => (
               <button key={id} onClick={() => setFilter(id)} style={{
                 background: filter === id ? `${C.green}18` : C.panel2,
