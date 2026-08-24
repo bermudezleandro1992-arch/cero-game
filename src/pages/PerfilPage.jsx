@@ -527,7 +527,7 @@ function CuentaTab({ profile, onGoVip }) {
           {loadingBots ? (
             <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: '8px 0' }}>Cargando tokens...</div>
           ) : bots.length === 0 ? (
-            <div style={{ color: C.textDim, fontSize: 12, padding: '8px 0' }}>Sin tokens creados. Creá uno para integrar bots con la API de Mi Mensajero.</div>
+            <div style={{ color: C.textDim, fontSize: 12, padding: '8px 0' }}>Sin tokens creados. Creá uno para integrar bots con la API de NexoTribu.</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {bots.map(bot => (
@@ -548,7 +548,7 @@ function CuentaTab({ profile, onGoVip }) {
             </div>
           )}
           <div style={{ color: C.textDim, fontSize: 11, marginTop: 10 }}>
-            Usá estos tokens para integrar bots con la API de Mi Mensajero. Endpoint: <code style={{ color: C.green, fontSize: 10 }}>/functions/v1/bot-api</code>
+            Usá estos tokens para integrar bots con la API de NexoTribu. Endpoint: <code style={{ color: C.green, fontSize: 10 }}>/functions/v1/bot-api</code>
           </div>
         </div>
       )}
@@ -570,7 +570,7 @@ function CuentaTab({ profile, onGoVip }) {
         </div>
 
         <p style={{ margin: '0 0 14px', color: C.textDim, fontSize: 12, lineHeight: 1.6 }}>
-          Mi Mensajero es gratis y siempre lo será. Si querés apoyar el proyecto, cualquier monto ayuda muchísimo. ¡Gracias! 🙌
+          NexoTribu es gratis y siempre lo será. Si querés apoyar el proyecto, cualquier monto ayuda muchísimo. ¡Gracias! 🙌
         </p>
 
         {/* Montos sugeridos */}

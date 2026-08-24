@@ -83,7 +83,7 @@ export default function DonationsPage({ onBack }) {
             Ayudanos a crecer
           </h1>
           <p style={{ margin: 0, color: C.textDim, fontSize: 13.5, lineHeight: 1.6, maxWidth: 280, marginLeft: 'auto', marginRight: 'auto' }}>
-            Mi Mensajero es un proyecto independiente.
+            NexoTribu es un proyecto independiente.
             Con tu donación pagamos servidores, desarrollo y mantenemos todo gratis para todos.
           </p>
         </div>

@@ -371,7 +371,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
               </svg>
             </div>
             <span style={{ color: C.text, fontWeight: 800, fontSize: 17, letterSpacing: '-0.3px' }}>
-              Mi Mensajero
+              NexoTribu
             </span>
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

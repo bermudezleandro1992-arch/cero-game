@@ -3,7 +3,7 @@ import { C } from '../theme'
 
 const LAST_UPDATE = '18 de agosto de 2026'
 const CONTACT_EMAIL = 'legal@mimensajero.app'
-const APP_NAME = 'Mi Mensajero'
+const APP_NAME = 'NexoTribu'
 
 const SECTIONS = [
   {
@@ -313,7 +313,7 @@ export default function LegalPage({ onBack }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
               <div style={{ fontSize: 28 }}>⚡</div>
               <div>
-                <div style={{ color: C.text, fontWeight: 800, fontSize: 17 }}>Mi Mensajero</div>
+                <div style={{ color: C.text, fontWeight: 800, fontSize: 17 }}>NexoTribu</div>
                 <div style={{ color: C.green, fontSize: 12, fontWeight: 600 }}>Plataforma de mensajería y comunidades</div>
               </div>
             </div>
@@ -361,7 +361,7 @@ export default function LegalPage({ onBack }) {
           <div style={{
             textAlign: 'center', paddingTop: 12, color: C.textDim, fontSize: 12, lineHeight: 1.8,
           }}>
-            <div>© 2026 Mi Mensajero · Todos los derechos reservados</div>
+            <div>© 2026 NexoTribu · Todos los derechos reservados</div>
             <div>{CONTACT_EMAIL}</div>
           </div>
         </div>

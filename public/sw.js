@@ -70,9 +70,9 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   if (!e.data) return
   let data = {}
-  try { data = e.data.json() } catch { data = { title: 'Mi Mensajero', body: e.data.text() } }
+  try { data = e.data.json() } catch { data = { title: 'NexoTribu', body: e.data.text() } }
 
-  const title = data.title || 'Mi Mensajero'
+  const title = data.title || 'NexoTribu'
   const options = {
     body: data.body || '',
     icon: '/icon-192.png',

@@ -1,6 +1,6 @@
 {
-  "name": "Mi Mensajero",
-  "short_name": "Mensajero",
+  "name": "NexoTribu",
+  "short_name": "NexoTribu",
   "description": "Mensajería moderna con comunidades y bots",
   "start_url": "/",
   "scope": "/",
@@ -35,7 +35,7 @@
       "sizes": "512x512",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Mi Mensajero"
+      "label": "NexoTribu"
     }
   ]
 }

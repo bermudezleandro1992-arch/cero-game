@@ -214,7 +214,7 @@ export const useChatStore = create((set, get) => ({
             // Browser notification when tab is hidden/minimized
             if (document.visibilityState !== 'visible' && Notification.permission === 'granted') {
               const conv = state.conversations.find(c => c.id === msg.conversation_id)
-              const convName = conv?.name || 'Mi Mensajero'
+              const convName = conv?.name || 'NexoTribu'
               const body = msg.type === 'image' ? '📷 Imagen' : msg.type === 'audio' ? '🎵 Audio' : (msg.content || '').slice(0, 80)
               try {
                 new Notification(convName, {
