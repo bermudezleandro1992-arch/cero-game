@@ -53,6 +53,9 @@ export default function AdminPage({ onBack }) {
   const { profile } = useAuthStore()
   const [tab, setTab] = useState('payments')
   const [referrals, setReferrals] = useState([])
+  const [officialCommunities, setOfficialCommunities] = useState([])
+  const [officialSearch, setOfficialSearch] = useState('')
+  const [officialResults, setOfficialResults] = useState([])
   const [payments, setPayments] = useState([])
   const [users, setUsers] = useState([])
   const [banners, setBanners] = useState([])
@@ -183,6 +186,38 @@ export default function AdminPage({ onBack }) {
     setMsg({ type: 'ok', text: 'Disputa actualizada' })
   }
 
+  async function loadOfficialCommunities() {
+    const { data } = await supabase
+      .from('conversations')
+      .select('id, name, description, avatar_url, is_official, created_at, users:created_by(username)')
+      .eq('group_type', 'community')
+      .eq('is_official', true)
+      .order('created_at', { ascending: false })
+    setOfficialCommunities(data || [])
+  }
+
+  async function searchCommunities(q) {
+    if (!q.trim()) { setOfficialResults([]); return }
+    const { data } = await supabase
+      .from('conversations')
+      .select('id, name, description, avatar_url, is_official, created_at, users:created_by(username)')
+      .eq('group_type', 'community')
+      .ilike('name', `%${q}%`)
+      .limit(20)
+    setOfficialResults(data || [])
+  }
+
+  async function toggleOfficial(communityId, currentValue) {
+    const { error } = await supabase
+      .from('conversations')
+      .update({ is_official: !currentValue })
+      .eq('id', communityId)
+    if (error) { setMsg({ type: 'err', text: error.message }); return }
+    setMsg({ type: 'ok', text: !currentValue ? '✦ Comunidad marcada como OFICIAL' : 'Comunidad ya no es oficial' })
+    loadOfficialCommunities()
+    if (officialSearch) searchCommunities(officialSearch)
+  }
+
   const pendingCount = payments.filter(p => p.status === 'pending').length
 
   async function loadReferrals() {
@@ -230,6 +265,9 @@ export default function AdminPage({ onBack }) {
         <Tab label="Referidos" active={tab === 'referrals'} count={0} onClick={() => { setTab('referrals'); loadReferrals() }} />
         {profile?.role === 'superadmin' && (
           <Tab label="Planes" active={tab === 'planes'} count={0} onClick={() => setTab('planes')} />
+        )}
+        {profile?.role === 'superadmin' && (
+          <Tab label="Oficiales" active={tab === 'oficiales'} count={0} onClick={() => { setTab('oficiales'); loadOfficialCommunities() }} />
         )}
       </div>
 
@@ -938,6 +976,88 @@ export default function AdminPage({ onBack }) {
             </div>
           </div>
         )}
+        {tab === 'oficiales' && profile?.role === 'superadmin' && (
+          <div>
+            <div style={{ marginBottom: 14 }}>
+              <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Comunidades oficiales activas
+              </p>
+              {officialCommunities.length === 0 && (
+                <p style={{ color: C.textDim, fontSize: 12, margin: '0 0 12px' }}>Ninguna todavía.</p>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {officialCommunities.map(c => (
+                  <div key={c.id} style={{
+                    background: C.panel, borderRadius: 12, padding: '12px 14px',
+                    border: '1.5px solid #6366f140', display: 'flex', alignItems: 'center', gap: 12,
+                  }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, background: '#6366f118', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, overflow: 'hidden' }}>
+                      {c.avatar_url ? <img src={c.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '🌐'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{c.name}</span>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', background: '#6366f118', padding: '1px 7px', borderRadius: 20 }}>✦ OFICIAL</span>
+                      </div>
+                      {c.description && <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.description}</p>}
+                      {c.users?.username && <p style={{ margin: '1px 0 0', fontSize: 10, color: C.textDim }}>CEO: @{c.users.username}</p>}
+                    </div>
+                    <button
+                      onClick={() => toggleOfficial(c.id, true)}
+                      style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #ef444444', background: '#ef444418', color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+              Buscar comunidad para marcar como oficial
+            </p>
+            <input
+              value={officialSearch}
+              onChange={e => { setOfficialSearch(e.target.value); searchCommunities(e.target.value) }}
+              placeholder="Nombre de la comunidad..."
+              style={{
+                width: '100%', padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.border}`,
+                background: C.panel, color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 10,
+              }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {officialResults.map(c => (
+                <div key={c.id} style={{
+                  background: C.panel, borderRadius: 12, padding: '12px 14px',
+                  border: `1.5px solid ${c.is_official ? '#6366f140' : C.border}`, display: 'flex', alignItems: 'center', gap: 12,
+                }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, background: C.panel2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, overflow: 'hidden' }}>
+                    {c.avatar_url ? <img src={c.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '🌐'}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{c.name}</span>
+                      {c.is_official && <span style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', background: '#6366f118', padding: '1px 7px', borderRadius: 20 }}>✦ OFICIAL</span>}
+                    </div>
+                    {c.users?.username && <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>CEO: @{c.users.username}</p>}
+                  </div>
+                  <button
+                    onClick={() => toggleOfficial(c.id, c.is_official)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 8, border: `1px solid ${c.is_official ? '#ef444444' : '#6366f144'}`,
+                      background: c.is_official ? '#ef444418' : '#6366f118',
+                      color: c.is_official ? '#ef4444' : '#6366f1',
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+                    }}
+                  >
+                    {c.is_official ? 'Quitar' : '✦ Marcar oficial'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )
