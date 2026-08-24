@@ -1375,40 +1375,44 @@ export default function ChatPage({ onBack }) {
                   minWidth: 210,
                 }}
               >
-                {/* Auto-delete / mensajes temporales */}
-                <div
-                  onClick={() => setShowAutoDeletePicker(v => !v)}
-                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${C.border}22`, background: showAutoDeletePicker ? C.panel2 : 'transparent' }}
-                  onMouseEnter={e => e.currentTarget.style.background = C.panel2}
-                  onMouseLeave={e => e.currentTarget.style.background = showAutoDeletePicker ? C.panel2 : 'transparent'}
-                >
-                  <span>⏱️</span>
-                  <span style={{ flex: 1 }}>Mensajes temporales</span>
-                  {autoDeleteHours ? <span style={{ fontSize: 10, color: C.green, fontWeight: 700 }}>ON</span> : <span style={{ fontSize: 10, color: C.textDim }}>▼</span>}
-                </div>
-                {showAutoDeletePicker && (
-                  <div style={{ background: C.panel2, borderBottom: `1px solid ${C.border}22` }}>
-                    {[
-                      [null,'Desactivado'],
-                      [0.083,'5 minutos'],
-                      [1,'1 hora'],
-                      [12,'12 horas'],
-                      [24,'24 horas'],
-                      [168,'7 días'],
-                    ].map(([h, label]) => (
-                      <div
-                        key={label}
-                        onClick={() => handleSetAutoDelete(h)}
-                        style={{
-                          padding: '8px 28px', cursor: 'pointer', fontSize: 12,
-                          color: autoDeleteHours === h ? C.green : C.text,
-                          fontWeight: autoDeleteHours === h ? 700 : 400,
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = C.panel}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >{label} {autoDeleteHours === h ? '✓' : ''}</div>
-                    ))}
-                  </div>
+                {/* Auto-delete / mensajes temporales — solo admin en grupos/canales */}
+                {(!isGroup || isCommunityAdmin) && (
+                  <>
+                    <div
+                      onClick={() => setShowAutoDeletePicker(v => !v)}
+                      style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${C.border}22`, background: showAutoDeletePicker ? C.panel2 : 'transparent' }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                      onMouseLeave={e => e.currentTarget.style.background = showAutoDeletePicker ? C.panel2 : 'transparent'}
+                    >
+                      <span>⏱️</span>
+                      <span style={{ flex: 1 }}>Mensajes temporales</span>
+                      {autoDeleteHours ? <span style={{ fontSize: 10, color: C.green, fontWeight: 700 }}>ON</span> : <span style={{ fontSize: 10, color: C.textDim }}>▼</span>}
+                    </div>
+                    {showAutoDeletePicker && (
+                      <div style={{ background: C.panel2, borderBottom: `1px solid ${C.border}22` }}>
+                        {[
+                          [null,'Desactivado'],
+                          [0.083,'5 minutos'],
+                          [1,'1 hora'],
+                          [12,'12 horas'],
+                          [24,'24 horas'],
+                          [168,'7 días'],
+                        ].map(([h, label]) => (
+                          <div
+                            key={label}
+                            onClick={() => handleSetAutoDelete(h)}
+                            style={{
+                              padding: '8px 28px', cursor: 'pointer', fontSize: 12,
+                              color: autoDeleteHours === h ? C.green : C.text,
+                              fontWeight: autoDeleteHours === h ? 700 : 400,
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = C.panel}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >{label} {autoDeleteHours === h ? '✓' : ''}</div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
                 {[
                   { icon: '☑️', label: 'Seleccionar mensajes', desc: 'Reenviá o borrá varios', onClick: () => { setShowChatMenu(false); setSelectMode(true); setSelectedMsgs(new Set()) } },
@@ -1516,11 +1520,6 @@ export default function ChatPage({ onBack }) {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ color: C.text2, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Canales</span>
-              <button onClick={() => setShowNewTopic(v => !v)} style={{
-                background: showNewTopic ? `${C.green}22` : 'none', border: `1px solid ${showNewTopic ? C.green : C.border}`,
-                borderRadius: 8, color: showNewTopic ? C.green : C.text2, fontSize: 11, padding: '3px 8px',
-                cursor: 'pointer', fontWeight: 600,
-              }}>+ Nuevo</button>
             </div>
 
             {/* New topic form */}
