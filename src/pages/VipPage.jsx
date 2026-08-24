@@ -56,9 +56,8 @@ const PLANS = [
     emoji: '🏆',
     color: '#8b5cf6',
     tiers: [
-      { label: 'Starter', price: '$15', priceUSD: 15, desc: 'Hasta 500 miembros', id: 'com_starter' },
-      { label: 'Growth',  price: '$22', priceUSD: 22, desc: 'Hasta 2.000 miembros', id: 'com_growth' },
-      { label: 'Elite',   price: '$35', priceUSD: 35, desc: 'Miembros ilimitados', id: 'com_elite' },
+      { label: 'Starter', price: '$15', priceUSD: 15, desc: 'Hasta 1.000 miembros', id: 'com_starter' },
+      { label: 'Elite',   price: '$29', priceUSD: 29, desc: 'Miembros ilimitados', id: 'com_elite' },
     ],
     features: [
       '✅ Todo lo del plan VIP',
@@ -70,7 +69,7 @@ const PLANS = [
       '✅ API completa para bots de torneos',
       '✅ Compartir pantalla grupal (como Discord)',
       '✅ Estadísticas en tiempo real',
-      '✅ Badge especial 🏆 y sin publicidad',
+      '✅ Badge especial 🏆 en tu perfil',
       '✅ Acceso anticipado a novedades',
     ],
     annual: { id: 'com_anual', price: '$135', save: '25%' },
