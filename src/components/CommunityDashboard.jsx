@@ -45,7 +45,6 @@ const TABS = [
   { id: 'inicio',    label: 'Inicio',    emoji: '🏠' },
   { id: 'chat',      label: 'Chat',      emoji: '💬' },
   { id: 'torneos',   label: 'Torneos',   emoji: '🏆' },
-  { id: 'anuncios',  label: 'Anuncios',  emoji: '📢' },
   { id: 'miembros',  label: 'Miembros',  emoji: '👥' },
 ]
 
@@ -384,12 +383,6 @@ function InicioTab({ community, profile, torneos, announcements, memberCount, on
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <h3 style={{ margin: 0, color: C.text, fontSize: 14, fontWeight: 800 }}>📢 Avisos</h3>
-          {announcements.length > 0 && (
-            <button onClick={() => onChangeTab('anuncios')} style={{ background: 'none', border: 'none', color: C.green, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Ver todos →</button>
-          )}
-          {isAdmin && (
-            <button onClick={() => onChangeTab('anuncios')} style={{ background: `${C.green}18`, border: `1px solid ${C.green}44`, borderRadius: 8, color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '4px 10px' }}>+ Publicar aviso</button>
-          )}
         </div>
         {announcements.length === 0 ? (
           <div style={{ background: C.panel, borderRadius: 12, padding: '20px 16px', border: `1px solid ${C.border}`, textAlign: 'center', color: C.textDim }}>
