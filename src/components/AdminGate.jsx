@@ -11,7 +11,7 @@
  *   - Auto-locks after 30 min of inactivity
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { C } from '../theme'
 import { supabase } from '../lib/supabase'
 
@@ -35,6 +35,27 @@ function randomBytes(n) {
   const buf = new Uint8Array(n)
   crypto.getRandomValues(buf)
   return buf
+}
+
+// Convierte el SVG de Supabase a PNG en canvas para que Google Authenticator lo pueda escanear
+function QRCanvas({ svgDataUrl }) {
+  const canvasRef = useRef(null)
+  useEffect(() => {
+    if (!svgDataUrl || !canvasRef.current) return
+    const img = new Image()
+    img.onload = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      canvas.width = 220
+      canvas.height = 220
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, 220, 220)
+      ctx.drawImage(img, 10, 10, 200, 200)
+    }
+    img.src = svgDataUrl
+  }, [svgDataUrl])
+  return <canvas ref={canvasRef} style={{ display: 'block', margin: '0 auto 12px', borderRadius: 10, background: '#fff' }} />
 }
 
 export default function AdminGate({ profile, children }) {
@@ -352,12 +373,12 @@ export default function AdminGate({ profile, children }) {
                 3. Escaneá el QR de abajo
               </p>
               {totpQR && (
-                <img src={totpQR} alt="QR TOTP" style={{ width: '100%', maxWidth: 200, display: 'block', margin: '0 auto 12px', borderRadius: 10 }} />
+                <QRCanvas svgDataUrl={totpQR} />
               )}
               {totpSecret && (
-                <div style={{ background: C.panel2, borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
-                  <p style={{ margin: '0 0 4px', fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: 1 }}>Clave manual</p>
-                  <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 12, color: C.text, letterSpacing: 2, wordBreak: 'break-all' }}>{totpSecret}</p>
+                <div style={{ background: C.panel2, borderRadius: 8, padding: '10px 12px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+                  <p style={{ margin: '0 0 6px', fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: 1 }}>O ingresá la clave manual en la app</p>
+                  <p style={{ margin: 0, fontFamily: 'monospace', fontSize: 13, color: '#6366f1', letterSpacing: 3, wordBreak: 'break-all', fontWeight: 700 }}>{totpSecret}</p>
                 </div>
               )}
               <p style={{ color: C.textDim, fontSize: 12, margin: '0 0 10px' }}>
