@@ -484,6 +484,19 @@ export default function App() {
               </button>
             )
           })}
+          {/* Panel Organizador */}
+          <button onClick={() => { setShowProfile(false); setTab('panel-organizador') }} style={{
+            width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', gap: 4, border: 'none', marginTop: 'auto',
+            background: tab === 'panel-organizador' ? `${C.green}12` : 'none',
+            cursor: 'pointer', padding: '14px 0',
+            borderLeft: `3px solid ${tab === 'panel-organizador' ? C.green : 'transparent'}`,
+            transition: 'background .15s',
+          }}>
+            <span style={{ fontSize: 18 }}>🎯</span>
+            <span style={{ fontSize: 9, fontWeight: tab === 'panel-organizador' ? 700 : 400, color: tab === 'panel-organizador' ? C.green : C.textDim }}>Organiz.</span>
+          </button>
+
           {/* CEO Panel — visible para cualquier usuario con comunidades */}
           <button onClick={() => { setShowProfile(false); setTab('panel-ceo') }} style={{
             width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -522,7 +535,7 @@ export default function App() {
           {showProfile
             ? <ProfileSheet onClose={() => { setShowProfile(false); setOpenVipDirect(false) }} />
             : tab === 'inicio'
-            ? <HomePage onGoTorneos={() => setTab('comunidades')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} onGoCuenta={() => setTab('perfil')} />
+            ? <HomePage onGoTorneos={() => setTab('comunidades')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} onGoCuenta={() => setTab('perfil')} onGoPanelCeo={() => setTab('panel-ceo')} />
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'

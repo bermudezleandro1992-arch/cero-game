@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { C } from '../theme'
@@ -1200,7 +1201,7 @@ export default function PerfilPage({ onClose, onGoVip }) {
       {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
 
       {/* Modal eliminar/suspender */}
-      {showDeleteModal && (
+      {showDeleteModal && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 18, padding: 24, width: '100%', maxWidth: 380 }}>
             {showDeleteModal === 'suspend' ? (
@@ -1239,7 +1240,7 @@ export default function PerfilPage({ onClose, onGoVip }) {
             )}
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   )
 }
