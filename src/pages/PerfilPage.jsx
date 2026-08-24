@@ -415,35 +415,62 @@ function CuentaTab({ profile, onGoVip }) {
       )}
 
       {/* Apoyá el proyecto */}
-      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
-        <div style={{ color: C.text, fontWeight: 800, fontSize: 14, marginBottom: 6 }}>❤️ Apoyá el proyecto</div>
-        <div style={{ color: C.textDim, fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
-          Tu apoyo nos ayuda a mantener Mi Mensajero gratuito y en constante mejora. Podés donar desde $1 USD.
+      <div style={{
+        background: 'linear-gradient(135deg, #0d1a0d 0%, #080f08 100%)',
+        border: `1.5px solid ${C.green}33`, borderRadius: 16, padding: 18, overflow: 'hidden', position: 'relative',
+      }}>
+        {/* Glow decorativo */}
+        <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: `${C.green}08`, pointerEvents: 'none' }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: `${C.green}18`, border: `1px solid ${C.green}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>❤️</div>
+          <div>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: C.text }}>Apoyá el proyecto</p>
+            <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>Nos ayudás a seguir creciendo</p>
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button onClick={() => onGoVip?.()} style={{
-            padding: '10px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
-            background: 'linear-gradient(135deg, #f59e0b44, #8b5cf644)',
-            border: '1px solid #f59e0b44',
-            color: C.text, fontSize: 13, fontWeight: 700, textAlign: 'left',
-          }}>
-            💳 Pagar con tarjeta / MercadoPago →
-          </button>
-          <button onClick={() => onGoVip?.()} style={{
-            padding: '10px 16px', borderRadius: 10, cursor: 'pointer',
-            background: C.panel2, border: `1px solid ${C.border}`,
-            color: C.text, fontSize: 13, fontWeight: 700, textAlign: 'left',
-          }}>
-            ₿ Pagar con crypto (USDT, BTC) →
-          </button>
-          <button onClick={() => onGoVip?.()} style={{
-            padding: '10px 16px', borderRadius: 10, cursor: 'pointer',
-            background: C.panel2, border: `1px solid ${C.border}`,
-            color: C.text, fontSize: 13, fontWeight: 700, textAlign: 'left',
-          }}>
-            🏦 Transferencia bancaria / local →
-          </button>
+
+        <p style={{ margin: '0 0 14px', color: C.textDim, fontSize: 12, lineHeight: 1.6 }}>
+          Mi Mensajero es gratis y siempre lo será. Si querés apoyar el proyecto, cualquier monto ayuda muchísimo. ¡Gracias! 🙌
+        </p>
+
+        {/* Montos sugeridos */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+          {['$1', '$2', '$5', '$10'].map(amt => (
+            <a key={amt} href={`https://www.paypal.com/paypalme/nexotribu/${amt.replace('$','')}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{
+                flex: 1, minWidth: 52, padding: '9px 4px', borderRadius: 10,
+                background: C.panel2, border: `1px solid ${C.border}`,
+                color: C.text, fontSize: 13, fontWeight: 700, textAlign: 'center',
+                textDecoration: 'none', display: 'block',
+              }}>
+              {amt}
+            </a>
+          ))}
         </div>
+
+        {/* Botón principal PayPal */}
+        <a
+          href="https://www.paypal.com/paypalme/nexotribu"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            width: '100%', padding: '13px 0', borderRadius: 12, boxSizing: 'border-box',
+            background: '#0070ba', textDecoration: 'none',
+            boxShadow: '0 4px 16px #0070ba44',
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+            <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.076-.026.175-.041.254-.59 3.025-2.566 6.643-8.944 6.643H9.441c-.11 0-.22.01-.328.025L7.698 21.34h4.007l.985-6.275c.083-.518.527-.9 1.051-.9h2.19c4.298 0 7.664-1.748 8.647-6.797.263-1.347.163-2.478-.356-3.45z"/>
+          </svg>
+          <span style={{ color: '#fff', fontWeight: 800, fontSize: 14 }}>Donar con PayPal</span>
+        </a>
+
+        <p style={{ margin: '10px 0 0', fontSize: 10, color: C.textDim, textAlign: 'center' }}>
+          Seguro · Sin cuenta requerida · Tarjeta o saldo PayPal
+        </p>
       </div>
     </div>
   )
