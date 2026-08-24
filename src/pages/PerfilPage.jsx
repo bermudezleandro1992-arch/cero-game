@@ -266,6 +266,148 @@ const PLAN_LIMITS = {
   ceo:       { label: 'CEO',           color: '#00e676', icon: '👑', desc: 'Administrador · Acceso total', limits: [['🌐 Comunidades', 'Ilimitadas'], ['👥 Miembros', 'Ilimitados'], ['🏆 Torneos', 'Ilimitados'], ['⚽ Jugadores', 'Ilimitados']] },
 }
 
+const PLANES = [
+  {
+    key: 'free',
+    icon: '🆓',
+    label: 'Free',
+    price: 'Gratis',
+    priceDesc: 'Para siempre',
+    color: '#64748b',
+    bg: 'transparent',
+    border: '#64748b44',
+    features: [
+      { text: '1 comunidad propia', ok: true },
+      { text: 'Hasta 50 miembros', ok: true },
+      { text: '1 torneo simultáneo', ok: true },
+      { text: 'Hasta 8 jugadores por torneo', ok: true },
+      { text: 'Torneos con premios', ok: false },
+      { text: 'Verificación de identidad', ok: false },
+      { text: 'Bot personalizado', ok: false },
+      { text: 'Estadísticas avanzadas', ok: false },
+    ],
+    cta: null,
+  },
+  {
+    key: 'vip',
+    icon: '⭐',
+    label: 'VIP',
+    price: '$9.99',
+    priceDesc: 'por mes',
+    color: '#f59e0b',
+    bg: 'linear-gradient(160deg, #1a1200 0%, #0f0800 100%)',
+    border: '#f59e0b55',
+    features: [
+      { text: '3 comunidades propias', ok: true },
+      { text: 'Hasta 200 miembros', ok: true },
+      { text: '3 torneos simultáneos', ok: true },
+      { text: 'Hasta 64 jugadores por torneo', ok: true },
+      { text: 'Torneos con premios en dinero', ok: true },
+      { text: 'Verificación de identidad incluida', ok: true },
+      { text: 'Badge VIP exclusivo en perfil', ok: true },
+      { text: 'Estadísticas avanzadas', ok: true },
+    ],
+    cta: '⭐ Activar VIP',
+    highlight: false,
+  },
+  {
+    key: 'comunidad',
+    icon: '🏆',
+    label: 'Comunidad PRO',
+    price: '$29.99',
+    priceDesc: 'por mes',
+    color: '#8b5cf6',
+    bg: 'linear-gradient(160deg, #0d0a1a 0%, #080510 100%)',
+    border: '#8b5cf655',
+    features: [
+      { text: 'Comunidades ilimitadas', ok: true },
+      { text: 'Hasta 10.000 miembros', ok: true },
+      { text: 'Torneos ilimitados', ok: true },
+      { text: 'Hasta 512+ jugadores por torneo', ok: true },
+      { text: 'Todo lo del VIP incluido', ok: true },
+      { text: 'Bot propio para torneos automáticos', ok: true },
+      { text: 'Torneos con inscripción paga', ok: true },
+      { text: 'Panel de estadísticas de comunidad', ok: true },
+    ],
+    cta: '🏆 Crear mi comunidad PRO',
+    highlight: true,
+  },
+]
+
+function PlanesSection({ role, onGoVip }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <div style={{ flex: 1, height: 1, background: C.border }} />
+        <span style={{ fontSize: 10, fontWeight: 800, color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase' }}>Planes disponibles</span>
+        <div style={{ flex: 1, height: 1, background: C.border }} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {PLANES.map(p => {
+          const isCurrent = p.key === role || (role === 'vip' && p.key === 'vip')
+          const isLocked = p.key === 'free' && role !== 'free'
+          return (
+            <div key={p.key} style={{
+              background: p.bg || C.panel,
+              border: `1.5px solid ${isCurrent ? p.color : p.border}`,
+              borderRadius: 18,
+              overflow: 'hidden',
+              position: 'relative',
+            }}>
+              {p.highlight && (
+                <div style={{ background: p.color, padding: '4px 0', textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#fff', letterSpacing: 1 }}>
+                  MÁS POPULAR
+                </div>
+              )}
+              {isCurrent && (
+                <div style={{ background: `${p.color}22`, padding: '4px 0', textAlign: 'center', fontSize: 10, fontWeight: 800, color: p.color, letterSpacing: 1 }}>
+                  TU PLAN ACTUAL
+                </div>
+              )}
+              <div style={{ padding: '16px 18px' }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: `${p.color}22`, border: `1px solid ${p.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{p.icon}</div>
+                    <div>
+                      <p style={{ margin: 0, fontWeight: 900, fontSize: 15, color: p.color }}>{p.label}</p>
+                      <p style={{ margin: 0, fontSize: 10, color: C.textDim }}>{p.priceDesc}</p>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ margin: 0, fontWeight: 900, fontSize: 20, color: p.key === 'free' ? C.textDim : p.color }}>{p.price}</p>
+                  </div>
+                </div>
+                {/* Features */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: p.cta && !isCurrent ? 14 : 0 }}>
+                  {p.features.map(f => (
+                    <div key={f.text} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, color: f.ok ? p.color : '#ffffff22', flexShrink: 0 }}>{f.ok ? '✓' : '✗'}</span>
+                      <span style={{ fontSize: 12, color: f.ok ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.25)' }}>{f.text}</span>
+                    </div>
+                  ))}
+                </div>
+                {/* CTA */}
+                {p.cta && !isCurrent && (
+                  <button onClick={() => onGoVip?.()} style={{
+                    width: '100%', padding: '11px', border: 'none', borderRadius: 10,
+                    background: p.key === 'comunidad' ? p.color : `${p.color}22`,
+                    color: p.key === 'comunidad' ? '#fff' : p.color,
+                    fontWeight: 900, fontSize: 13, cursor: 'pointer', marginTop: 4,
+                    border: p.key !== 'comunidad' ? `1px solid ${p.color}55` : 'none',
+                  }}>
+                    {p.cta}
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function CuentaTab({ profile, onGoVip }) {
   const role = profile?.role || 'free'
   const plan = PLAN_CFG[role] || PLAN_CFG.free
@@ -348,78 +490,8 @@ function CuentaTab({ profile, onGoVip }) {
         </div>
       </div>
 
-      {/* Upgrade — cards VIP y PRO para usuarios free/vip */}
-      {role === 'free' && (
-        <>
-          {/* Card VIP */}
-          <div style={{
-            background: 'linear-gradient(135deg, #1a1200 0%, #0f0800 100%)',
-            border: '1.5px solid #f59e0b44', borderRadius: 18, padding: '18px 20px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f59e0b22', border: '1px solid #f59e0b44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>⭐</div>
-              <div>
-                <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: '#f59e0b' }}>Plan VIP</p>
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(245,158,11,0.6)' }}>Acceso premium sin límites</p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 14 }}>
-              {[
-                '🎖️ Torneos con premio en dinero',
-                '🔇 Sin publicidad',
-                '🪪 Verificación de identidad incluida',
-                '📊 Estadísticas avanzadas de rendimiento',
-                '🎨 Perfil personalizado con badge VIP',
-              ].map(f => (
-                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13, color: '#fff' }}>{f}</span>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => onGoVip?.()} style={{ width: '100%', padding: '11px', background: '#f59e0b', border: 'none', borderRadius: 10, color: '#0f0800', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}>
-              ⭐ Activar VIP
-            </button>
-          </div>
-
-          {/* Card Comunidad PRO */}
-          <div style={{
-            background: 'linear-gradient(135deg, #0d0a1a 0%, #080510 100%)',
-            border: '1.5px solid #8b5cf644', borderRadius: 18, padding: '18px 20px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#8b5cf622', border: '1px solid #8b5cf644', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🏆</div>
-              <div>
-                <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: '#8b5cf6' }}>Comunidad PRO</p>
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(139,92,246,0.6)' }}>Para organizadores serios · Sin límites</p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 14 }}>
-              {[
-                '🚀 Comunidad propia con hasta 10.000 miembros',
-                '🤖 Bot personalizado para torneos automáticos',
-                '💰 Torneos con inscripción paga y premios',
-                '📢 Anuncios y banners propios',
-                '📈 Panel de estadísticas de tu comunidad',
-                '🎯 Todo lo del VIP incluido',
-              ].map(f => (
-                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13, color: '#fff' }}>{f}</span>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => onGoVip?.()} style={{ width: '100%', padding: '11px', background: '#8b5cf6', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}>
-              🏆 Crear mi comunidad PRO
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* Solo VIP puede upgradar a PRO */}
-      {role === 'vip' && (
-        <button onClick={() => onGoVip?.()} style={{ padding: '14px', background: 'linear-gradient(135deg, #f59e0b, #8b5cf6)', border: 'none', borderRadius: 12, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', letterSpacing: 0.3 }}>
-          💎 Mejorar a Comunidad PRO →
-        </button>
-      )}
+      {/* Sección Planes — visible para free y vip */}
+      {(role === 'free' || role === 'vip') && <PlanesSection role={role} onGoVip={onGoVip} />}
 
       {/* API de Bots */}
       {isPro && (
