@@ -70,7 +70,7 @@ export default function CommunidadesPage() {
   }, [profile?.id, tab, search])
 
   function openConv(conv) {
-    setActiveConversation(conv)
+    setActiveConversation({ ...conv, isCommunity: conv.group_type === 'community' })
   }
 
   const tc = TYPE_CFG
