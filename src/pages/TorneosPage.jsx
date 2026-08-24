@@ -197,14 +197,18 @@ function UpgradeNotice({ reason, onViewPlans }) {
 }
 
 // ── Create modal ──────────────────────────────────────────────────────────────
-function CreateModal({ onClose, onCreated, onViewPlans = () => window.dispatchEvent(new CustomEvent('open-vip-page')) }) {
+export function CreateTorneoModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () => window.dispatchEvent(new CustomEvent('open-vip-page')) }) {
+  return <CreateModal onClose={onClose} onCreated={onCreated} onViewPlans={onViewPlans} defaultCommunityId={defaultCommunityId} />
+}
+
+function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () => window.dispatchEvent(new CustomEvent('open-vip-page')) }) {
   const { profile } = useAuthStore()
   const sub = useSubscription(profile?.id)
   const [name,       setName]       = useState('')
   const [type,       setType]       = useState('tournament')
   const [format,     setFormat]     = useState('eliminatorias')
   const [maxPl,      setMaxPl]      = useState(Math.min(8, sub.limits.jugadores))
-  const [communityId, setCommunityId] = useState('')
+  const [communityId, setCommunityId] = useState(defaultCommunityId || '')
   const [isPublic,   setIsPublic]   = useState(true)
   const [game,       setGame]       = useState('')
   const [communities, setCommunities] = useState([])

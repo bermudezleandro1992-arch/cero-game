@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { C } from '../theme'
 import TournamentDashboard from './TournamentDashboard'
 import ReferidosPanel from './ReferidosPanel'
+import { CreateTorneoModal } from '../pages/TorneosPage'
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 function Header({ onBack, title, subtitle }) {
@@ -112,7 +113,7 @@ function Toast({ message, type, onClose }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // Dashboard Tab
 // ══════════════════════════════════════════════════════════════════════════════
-function DashboardTab({ communityId, onViewTorneo, onGoTab }) {
+function DashboardTab({ communityId, onViewTorneo, onGoTab, onNewTorneo }) {
   const [stats, setStats] = useState(null)
   const [recentTournaments, setRecentTournaments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -171,7 +172,7 @@ function DashboardTab({ communityId, onViewTorneo, onGoTab }) {
 
       {/* Quick actions */}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={() => onGoTab('torneos')} style={{
+        <button onClick={() => onNewTorneo()} style={{
           flex: 1, padding: '12px 8px', background: C.green, color: C.bg, border: 'none',
           borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer',
         }}>
@@ -218,10 +219,13 @@ function DashboardTab({ communityId, onViewTorneo, onGoTab }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // Torneos Tab
 // ══════════════════════════════════════════════════════════════════════════════
-function TorneosTab({ communityId, profile, onViewTorneo, toast }) {
+function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onHideCreate }) {
   const [torneos, setTorneos] = useState([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(null)
+  const [localCreate, setLocalCreate] = useState(false)
+  const isCreating = showCreate || localCreate
+  function closeCreate() { onHideCreate?.(); setLocalCreate(false) }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -249,7 +253,19 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast }) {
   if (loading) return <Spinner />
 
   return (
+    <>
+    {isCreating && (
+      <CreateTorneoModal
+        defaultCommunityId={communityId}
+        onClose={closeCreate}
+        onCreated={() => { closeCreate(); load() }}
+      />
+    )}
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <button onClick={() => setLocalCreate(true)} style={{
+        width: '100%', padding: '11px 8px', background: C.green, color: C.bg, border: 'none',
+        borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+      }}>+ Nuevo Torneo / Liga</button>
       {torneos.length === 0
         ? <EmptyState icon="🏆" text="No hay torneos en esta comunidad" />
         : torneos.map(t => (
@@ -288,6 +304,7 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast }) {
         ))
       }
     </div>
+    </>
   )
 }
 
@@ -992,6 +1009,7 @@ function ConfiguracionTab({ communityId, toast }) {
 export default function CEOPanel({ community, onBack }) {
   const { profile } = useAuthStore()
   const [tab, setTab] = useState('dashboard')
+  const [showCreateTorneo, setShowCreateTorneo] = useState(false)
   const [viewTorneo, setViewTorneo] = useState(null)
   const [toast, setToast] = useState(null)
   const [openDisputesCount, setOpenDisputesCount] = useState(0)
@@ -1077,6 +1095,7 @@ export default function CEOPanel({ community, onBack }) {
             communityId={communityId}
             onViewTorneo={setViewTorneo}
             onGoTab={setTab}
+            onNewTorneo={() => { setTab('torneos'); setShowCreateTorneo(true) }}
           />
         )}
         {tab === 'torneos' && (
@@ -1085,6 +1104,8 @@ export default function CEOPanel({ community, onBack }) {
             profile={profile}
             onViewTorneo={setViewTorneo}
             toast={showToast}
+            showCreate={showCreateTorneo}
+            onHideCreate={() => setShowCreateTorneo(false)}
           />
         )}
         {tab === 'disputas' && (
