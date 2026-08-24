@@ -45,6 +45,110 @@ function Avatar({ url, size = 36, fallback = '👤' }) {
   )
 }
 
+// ── Promo Banners ─────────────────────────────────────────────────────────────
+function getPromos(role) {
+  const isFree = !role || role === 'free' || role === 'member'
+  const isVip  = role === 'vip'
+  const isPro  = role === 'comunidad' || role === 'ceo' || role === 'superadmin' || role === 'admin'
+
+  if (isFree) return [
+    {
+      id: 'community', icon: '🏆', color: '#8b5cf6',
+      title: '¿Querés organizar torneos?',
+      desc: 'Creá tu comunidad gratis y empezá a competir con tu gente.',
+      cta: 'Crear comunidad',
+    },
+    {
+      id: 'vip', icon: '⭐', color: '#f59e0b',
+      title: 'Sé miembro VIP',
+      desc: 'Estadísticas avanzadas, torneos con premios y badge exclusivo. Solo US$3.99/mes.',
+      cta: 'Ver plan VIP',
+    },
+    {
+      id: 'pro', icon: '💎', color: '#6366f1',
+      title: 'Llevá tu comunidad al siguiente nivel',
+      desc: 'Con PRO Starter tenés hasta 1.000 miembros y torneos ilimitados. US$15.99/mes.',
+      cta: 'Ver planes PRO',
+    },
+  ]
+
+  if (isVip) return [
+    {
+      id: 'pro', icon: '💎', color: '#6366f1',
+      title: '¿Tenés tu propia comunidad?',
+      desc: 'Con PRO Starter tus miembros entran gratis y tenés torneos ilimitados.',
+      cta: 'Conocer PRO Starter',
+    },
+    {
+      id: 'community', icon: '🏆', color: '#8b5cf6',
+      title: 'Organizá torneos con tus seguidores',
+      desc: 'Comunidades PRO Elite soportan miembros ilimitados y bots automáticos.',
+      cta: 'Ver PRO Elite',
+    },
+  ]
+
+  // PRO/CEO — ya tienen todo, mostrar solo upsell elite si corresponde
+  return [
+    {
+      id: 'invite', icon: '🔗', color: '#00b0ff',
+      title: 'Invitá a tu comunidad',
+      desc: 'Compartí el link de unión para que más jugadores se sumen gratis.',
+      cta: 'Explorar comunidades',
+    },
+  ]
+}
+
+function PromoBanner({ profile, onGoCuenta, onGoExplorar }) {
+  const [idx, setIdx] = useState(0)
+  const [fade, setFade] = useState(true)
+  const promos = getPromos(profile?.role)
+
+  useEffect(() => {
+    if (promos.length <= 1) return
+    const t = setInterval(() => {
+      setFade(false)
+      setTimeout(() => { setIdx(i => (i + 1) % promos.length); setFade(true) }, 300)
+    }, 6000)
+    return () => clearInterval(t)
+  }, [promos.length])
+
+  const p = promos[idx]
+
+  function handleCta() {
+    if (p.id === 'invite' || p.id === 'community') { onGoExplorar?.(); return }
+    onGoCuenta?.()
+  }
+
+  return (
+    <div style={{
+      margin: '0 16px',
+      background: `linear-gradient(135deg, ${p.color}18, ${p.color}08)`,
+      border: `1.5px solid ${p.color}44`,
+      borderRadius: 16, padding: '14px 16px',
+      display: 'flex', alignItems: 'center', gap: 14,
+      opacity: fade ? 1 : 0, transition: 'opacity 0.3s',
+      cursor: 'pointer',
+    }} onClick={handleCta}>
+      <div style={{ width: 44, height: 44, borderRadius: 12, background: `${p.color}22`, border: `1px solid ${p.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{p.icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: p.color, fontWeight: 800, fontSize: 13 }}>{p.title}</div>
+        <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, marginTop: 2, lineHeight: 1.5 }}>{p.desc}</div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+        <span style={{ background: p.color, color: '#fff', fontSize: 10, fontWeight: 800, padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap' }}>{p.cta} →</span>
+        {promos.length > 1 && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            {promos.map((_, i) => (
+              <div key={i} onClick={e => { e.stopPropagation(); setFade(false); setTimeout(() => { setIdx(i); setFade(true) }, 150) }}
+                style={{ width: i === idx ? 16 : 5, height: 5, borderRadius: 3, background: i === idx ? p.color : `${p.color}44`, transition: 'all .3s', cursor: 'pointer' }} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Hero ──────────────────────────────────────────────────────────────────────
 function Hero({ profile, onGoTorneos, onGoExplorar }) {
   const hour = new Date().getHours()
@@ -321,7 +425,7 @@ function StatsStrip({ torneos, comunidades, ranking }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function HomePage({ onGoTorneos, onGoRanking, onGoExplorar, onGoAnuncios }) {
+export default function HomePage({ onGoTorneos, onGoRanking, onGoExplorar, onGoAnuncios, onGoCuenta }) {
   const { profile } = useAuthStore()
   const [torneos,    setTorneos]    = useState([])
   const [comunidades, setComunidades] = useState([])
@@ -420,6 +524,10 @@ export default function HomePage({ onGoTorneos, onGoRanking, onGoExplorar, onGoA
       `}</style>
 
       <Hero profile={profile} onGoTorneos={onGoTorneos} onGoExplorar={onGoExplorar} />
+
+      <div style={{ paddingTop: 16 }}>
+        <PromoBanner profile={profile} onGoCuenta={onGoCuenta} onGoExplorar={onGoExplorar} />
+      </div>
 
       <div style={{ padding: '24px 16px 40px', maxWidth: 960, margin: '0 auto' }}>
         <style>{`
