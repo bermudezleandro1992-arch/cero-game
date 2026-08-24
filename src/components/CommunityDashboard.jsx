@@ -40,8 +40,8 @@ const STATUS_CFG = {
   cancelado:   { label: 'Cancelado',              color: '#ef4444', bg: '#ef444418' },
 }
 
-// ── Tab bar ──────────────────────────────────────────────────────────────────
-const TABS = [
+// ── Tab bar (base — CEO tab added dynamically) ────────────────────────────────
+const BASE_TABS = [
   { id: 'inicio',    label: 'Inicio',    emoji: '🏠' },
   { id: 'chat',      label: 'Chat',      emoji: '💬' },
   { id: 'torneos',   label: 'Torneos',   emoji: '🏆' },
@@ -160,61 +160,11 @@ function ChannelsTab({ community, profile, isAdmin }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* CEO header */}
-      {isAdmin && (
-        <div style={{ padding: '12px 16px 8px', borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ color: C.textDim, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-              Canales · {channels.length}
-            </div>
-            <button onClick={() => setShowCreate(s => !s)} style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              background: C.green, border: 'none', borderRadius: 8,
-              padding: '5px 10px', color: '#000', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-            }}>
-              + Nuevo canal
-            </button>
-          </div>
-
-          {showCreate && (
-            <form onSubmit={createChannel} style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                placeholder="Nombre del canal (ej: Resultados, Reglas...)"
-                autoFocus
-                style={{
-                  width: '100%', background: C.panel2, border: `1px solid ${C.border}`,
-                  borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box',
-                }}
-              />
-              <div style={{ display: 'flex', gap: 6 }}>
-                {[['general','💬 General'],['avisos','📢 Avisos']].map(([id, label]) => (
-                  <button key={id} type="button" onClick={() => setNewType(id)} style={{
-                    flex: 1, padding: '6px', borderRadius: 8,
-                    border: `1px solid ${newType === id ? C.green : C.border}`,
-                    background: newType === id ? `${C.green}18` : C.panel2,
-                    color: newType === id ? C.green : C.textDim,
-                    fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  }}>{label}</button>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="submit" disabled={creating || !newName.trim()} style={{
-                  flex: 1, padding: '8px', borderRadius: 8, border: 'none',
-                  background: C.green, color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                }}>
-                  {creating ? 'Creando...' : 'Crear canal'}
-                </button>
-                <button type="button" onClick={() => setShowCreate(false)} style={{
-                  padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`,
-                  background: 'none', color: C.textDim, fontSize: 12, cursor: 'pointer',
-                }}>Cancelar</button>
-              </div>
-            </form>
-          )}
+      <div style={{ padding: '12px 16px 8px', borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ color: C.textDim, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+          Canales · {channels.length}
         </div>
-      )}
+      </div>
 
       {/* Channel list */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -682,10 +632,293 @@ function MiembrosTab({ communityId, ownerId, isAdmin, myId }) {
   )
 }
 
+// ── CEO Panel ─────────────────────────────────────────────────────────────────
+function CeoPanel({ community, profile }) {
+  const { setActiveConversation } = useChatStore()
+  const [channels, setChannels] = useState([])
+  const [loadingCh, setLoadingCh] = useState(true)
+  const [showCreateCh, setShowCreateCh] = useState(false)
+  const [newChName, setNewChName] = useState('')
+  const [newChDesc, setNewChDesc] = useState('')
+  const [newChAccess, setNewChAccess] = useState('everyone') // who_can_send
+  const [creatingCh, setCreatingCh] = useState(false)
+  const [chPermMenu, setChPermMenu] = useState(null) // channel id with open perm menu
+  const [savingPerm, setSavingPerm] = useState(null)
+
+  // Aviso form
+  const [avisoTitle, setAvisoTitle] = useState('')
+  const [avisoBody, setAvisoBody] = useState('')
+  const [publishingAviso, setPublishingAviso] = useState(false)
+  const [avisoDone, setAvisoDone] = useState(false)
+
+  // Members for role management
+  const [members, setMembers] = useState([])
+  const [loadingM, setLoadingM] = useState(true)
+
+  const ROLE_CFG = {
+    owner:       { label: 'CEO',         color: '#f59e0b' },
+    admin:       { label: 'Admin',       color: '#ef4444' },
+    organizador: { label: 'Organizador', color: '#22c55e' },
+    moderador:   { label: 'Moderador',   color: '#8b5cf6' },
+    member:      { label: 'Miembro',     color: '#64748b' },
+  }
+
+  useEffect(() => {
+    loadChannels()
+    loadMembers()
+  }, [community.id])
+
+  async function loadChannels() {
+    setLoadingCh(true)
+    const { data } = await supabase
+      .from('conversations')
+      .select('id, name, description, is_public, who_can_send, created_at')
+      .eq('community_id', community.id)
+      .eq('group_type', 'channel')
+      .order('created_at', { ascending: true })
+    setChannels(data || [])
+    setLoadingCh(false)
+  }
+
+  async function loadMembers() {
+    setLoadingM(true)
+    const { data: mData } = await supabase
+      .from('conversation_members')
+      .select('user_id, role')
+      .eq('conversation_id', community.id)
+      .limit(200)
+    const ids = (mData || []).map(r => r.user_id)
+    if (!ids.length) { setMembers([]); setLoadingM(false); return }
+    const { data: uData } = await supabase
+      .from('users').select('id, display_name, username, avatar_url').in('id', ids)
+    const uMap = {}
+    ;(uData || []).forEach(u => { uMap[u.id] = u })
+    setMembers((mData || []).map(m => ({ ...m, users: uMap[m.user_id] })).filter(m => m.users))
+    setLoadingM(false)
+  }
+
+  async function createChannel() {
+    if (!newChName.trim()) return
+    setCreatingCh(true)
+    const { data } = await supabase.from('conversations').insert({
+      name: newChName.trim(),
+      description: newChDesc.trim() || null,
+      group_type: 'channel',
+      community_id: community.id,
+      created_by: profile.id,
+      is_public: false,
+      who_can_send: newChAccess,
+    }).select('id, name, description, is_public, who_can_send, created_at').single()
+    if (data) {
+      await supabase.from('conversation_members').insert({ conversation_id: data.id, user_id: profile.id, role: 'owner' })
+      setChannels(prev => [...prev, data])
+    }
+    setNewChName(''); setNewChDesc(''); setNewChAccess('everyone')
+    setShowCreateCh(false); setCreatingCh(false)
+  }
+
+  async function deleteChannel(chId) {
+    if (!confirm('¿Eliminar este canal? Se perderán todos los mensajes.')) return
+    await supabase.from('conversations').delete().eq('id', chId)
+    setChannels(prev => prev.filter(c => c.id !== chId))
+  }
+
+  async function updateChannelPerm(chId, who_can_send) {
+    setSavingPerm(chId)
+    await supabase.from('conversations').update({ who_can_send }).eq('id', chId)
+    setChannels(prev => prev.map(c => c.id === chId ? { ...c, who_can_send } : c))
+    setSavingPerm(null)
+    setChPermMenu(null)
+  }
+
+  async function changeRole(userId, newRole) {
+    await supabase.from('conversation_members')
+      .update({ role: newRole })
+      .eq('conversation_id', community.id)
+      .eq('user_id', userId)
+    setMembers(prev => prev.map(m => m.user_id === userId ? { ...m, role: newRole } : m))
+  }
+
+  async function publishAviso() {
+    if (!avisoTitle.trim()) return
+    setPublishingAviso(true)
+    await supabase.from('announcements').insert({
+      conversation_id: community.id,
+      author_id: profile.id,
+      title: avisoTitle.trim(),
+      body: avisoBody.trim() || null,
+    })
+    setAvisoTitle(''); setAvisoBody(''); setPublishingAviso(false); setAvisoDone(true)
+    setTimeout(() => setAvisoDone(false), 3000)
+  }
+
+  const whoCanSendLabel = { everyone: 'Todos', members: 'Miembros', moderators: 'Moderadores', admins: 'Solo admins' }
+
+  return (
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* ── Canales ── */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <h3 style={{ margin: 0, color: C.text, fontSize: 14, fontWeight: 800 }}>💬 Canales</h3>
+          <button onClick={() => setShowCreateCh(v => !v)} style={{
+            padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.green}`,
+            background: showCreateCh ? `${C.green}22` : 'none', color: C.green,
+            fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}>{showCreateCh ? 'Cancelar' : '+ Nuevo canal'}</button>
+        </div>
+
+        {showCreateCh && (
+          <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <input value={newChName} onChange={e => setNewChName(e.target.value)} placeholder="Nombre del canal"
+              style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+            <input value={newChDesc} onChange={e => setNewChDesc(e.target.value)} placeholder="Descripción (opcional)"
+              style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+            <div>
+              <div style={{ fontSize: 11, color: C.textDim, fontWeight: 700, marginBottom: 6 }}>¿Quién puede enviar mensajes?</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {Object.entries(whoCanSendLabel).map(([v, l]) => (
+                  <button key={v} onClick={() => setNewChAccess(v)} style={{
+                    padding: '5px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    border: `1px solid ${newChAccess === v ? C.green : C.border}`,
+                    background: newChAccess === v ? `${C.green}18` : 'none',
+                    color: newChAccess === v ? C.green : C.textDim,
+                  }}>{l}</button>
+                ))}
+              </div>
+            </div>
+            <button onClick={createChannel} disabled={creatingCh || !newChName.trim()} style={{
+              padding: '9px', borderRadius: 10, border: 'none', background: C.green, color: '#000',
+              fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: creatingCh ? 0.6 : 1,
+            }}>{creatingCh ? 'Creando...' : 'Crear canal'}</button>
+          </div>
+        )}
+
+        {loadingCh ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+            <div style={{ width: 22, height: 22, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+          </div>
+        ) : channels.length === 0 ? (
+          <div style={{ background: C.panel, borderRadius: 12, padding: '20px', textAlign: 'center', color: C.textDim, border: `1px solid ${C.border}` }}>
+            <p style={{ margin: 0, fontSize: 12 }}>Sin canales aún. Creá el primero arriba.</p>
+          </div>
+        ) : channels.map(ch => (
+          <div key={ch.id} style={{ background: C.panel, borderRadius: 12, border: `1px solid ${C.border}`, marginBottom: 8, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
+              <span style={{ fontSize: 18 }}>{ch.is_public ? '📢' : ch.name === 'Avisos' ? '📢' : '💬'}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{ch.name}</div>
+                {ch.description && <div style={{ color: C.textDim, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.description}</div>}
+              </div>
+              <button onClick={() => setChPermMenu(chPermMenu === ch.id ? null : ch.id)} style={{
+                padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                border: `1px solid ${C.border}`, background: C.panel2, color: C.textDim,
+              }}>
+                🔐 {whoCanSendLabel[ch.who_can_send] || 'Todos'}
+              </button>
+              {ch.name !== 'General' && ch.name !== 'Avisos' && (
+                <button onClick={() => deleteChannel(ch.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 16, padding: '4px' }}>🗑</button>
+              )}
+            </div>
+            {chPermMenu === ch.id && (
+              <div style={{ borderTop: `1px solid ${C.border}`, padding: '10px 14px', background: C.panel2 }}>
+                <div style={{ fontSize: 11, color: C.textDim, fontWeight: 700, marginBottom: 8 }}>¿Quién puede enviar mensajes?</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {Object.entries(whoCanSendLabel).map(([v, l]) => (
+                    <button key={v} onClick={() => updateChannelPerm(ch.id, v)} disabled={savingPerm === ch.id} style={{
+                      padding: '5px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                      border: `1px solid ${ch.who_can_send === v ? C.green : C.border}`,
+                      background: ch.who_can_send === v ? `${C.green}18` : 'none',
+                      color: ch.who_can_send === v ? C.green : C.textDim,
+                    }}>{l}{savingPerm === ch.id && ch.who_can_send === v ? ' ✓' : ''}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Publicar Aviso ── */}
+      <div>
+        <h3 style={{ margin: '0 0 10px', color: C.text, fontSize: 14, fontWeight: 800 }}>📢 Publicar Aviso</h3>
+        <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input value={avisoTitle} onChange={e => setAvisoTitle(e.target.value)} placeholder="Título del aviso"
+            style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+          <textarea value={avisoBody} onChange={e => setAvisoBody(e.target.value)} placeholder="Contenido (opcional)" rows={3}
+            style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit' }} />
+          <button onClick={publishAviso} disabled={publishingAviso || !avisoTitle.trim()} style={{
+            padding: '9px', borderRadius: 10, border: 'none',
+            background: avisoDone ? '#22c55e' : C.green,
+            color: '#000', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+            opacity: publishingAviso ? 0.6 : 1,
+          }}>
+            {avisoDone ? '✓ Publicado' : publishingAviso ? 'Publicando...' : '📢 Publicar aviso'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Roles de miembros ── */}
+      <div>
+        <h3 style={{ margin: '0 0 10px', color: C.text, fontSize: 14, fontWeight: 800 }}>👥 Roles de miembros</h3>
+        {loadingM ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+            <div style={{ width: 22, height: 22, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+          </div>
+        ) : members.map(m => {
+          const u = m.users
+          if (!u) return null
+          const isOwner = u.id === community.created_by
+          const isMe = u.id === profile?.id
+          const role = isOwner ? 'owner' : (m.role || 'member')
+          const rCfg = ROLE_CFG[role] || ROLE_CFG.member
+          return (
+            <div key={m.user_id} style={{ background: C.panel, borderRadius: 12, border: `1px solid ${C.border}`, marginBottom: 8, padding: '10px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isOwner || isMe ? 0 : 8 }}>
+                {u.avatar_url
+                  ? <img src={u.avatar_url} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} alt="" />
+                  : <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#334', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#fff' }}>
+                      {(u.display_name || '?').slice(0, 2).toUpperCase()}
+                    </div>
+                }
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{u.display_name}{isMe && <span style={{ color: C.textDim, fontSize: 11, fontWeight: 400 }}> (Vos)</span>}</div>
+                  {u.username && <div style={{ color: C.textDim, fontSize: 11 }}>@{u.username}</div>}
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: `${rCfg.color}20`, color: rCfg.color }}>{rCfg.label}</span>
+              </div>
+              {!isOwner && !isMe && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                  {[
+                    { value: 'admin',       label: '🛡️ Admin' },
+                    { value: 'organizador', label: '🎖️ Organizador' },
+                    { value: 'moderador',   label: '🔰 Moderador' },
+                    { value: 'member',      label: '👤 Miembro' },
+                  ].map(opt => (
+                    <button key={opt.value} onClick={() => changeRole(m.user_id, opt.value)} style={{
+                      padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                      border: `1px solid ${role === opt.value ? C.green : C.border}`,
+                      background: role === opt.value ? `${C.green}18` : 'none',
+                      color: role === opt.value ? C.green : C.textDim,
+                    }}>{opt.label}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main CommunityDashboard ───────────────────────────────────────────────────
 export default function CommunityDashboard({ community, onBack }) {
   const { profile } = useAuthStore()
   const isAdmin = community.created_by === profile?.id
+  const TABS = isAdmin
+    ? [...BASE_TABS, { id: 'ceo', label: 'CEO', emoji: '⚙️' }]
+    : BASE_TABS
   const [tab, setTab] = useState('inicio')
   const [torneos, setTorneos] = useState([])
   const [announcements, setAnnouncements] = useState([])
@@ -830,6 +1063,9 @@ export default function CommunityDashboard({ community, onBack }) {
         )}
         {tab === 'chat' && (
           <ChannelsTab community={community} profile={profile} isAdmin={isAdmin} />
+        )}
+        {tab === 'ceo' && isAdmin && (
+          <CeoPanel community={community} profile={profile} />
         )}
       </div>
 
