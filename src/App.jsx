@@ -746,7 +746,7 @@ export default function App() {
 function Splash() {
   return (
     <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: C.bg, gap: 16 }}>
-      <div style={{ fontSize: 52, animation: 'sp 1.4s ease-in-out infinite' }}>⚡</div>
+      <img src="/logo.svg" alt="NexoTribu" width="72" height="72" style={{ animation: 'sp 1.4s ease-in-out infinite' }} />
       <div style={{ width: 120, height: 3, borderRadius: 3, background: C.panel2, overflow: 'hidden', position: 'relative' }}>
         <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(90deg, transparent, ${C.green}, transparent)`, animation: 'load 1.2s ease-in-out infinite' }} />
       </div>
@@ -771,22 +771,7 @@ function EmptyState() {
 
         {/* Logo chico */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: 18, margin: '0 auto 12px',
-            background: `linear-gradient(145deg, ${C.greenDk}cc 0%, #071a0c 100%)`,
-            border: `1.5px solid ${C.green}40`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: `0 0 32px ${C.green}20`,
-          }}>
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
-              <defs>
-                <linearGradient id="boltGrad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor={C.green}/><stop offset="100%" stopColor={C.green2}/>
-                </linearGradient>
-              </defs>
-              <path d="M13 2L4.5 13.5H11L10 22L20.5 10H14L13 2Z" fill="url(#boltGrad)"/>
-            </svg>
-          </div>
+          <img src="/logo.svg" alt="NexoTribu" width="72" height="72" style={{ display: 'block', margin: '0 auto 12px' }} />
           <p style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: C.text }}>NexoTribu</p>
           <p style={{ margin: 0, fontSize: 11, color: C.textDim, letterSpacing: '2px', textTransform: 'uppercase' }}>Competí · Conectá · Ganá</p>
         </div>

@@ -148,13 +148,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
-          <div style={{
-            width: 72, height: 72, borderRadius: 22, margin: '0 auto 12px',
-            background: `radial-gradient(circle at 35% 35%, ${C.green}22 0%, ${C.greenDk}44 100%)`,
-            border: `1.5px solid ${C.green}44`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 38, boxShadow: `0 0 40px ${C.green}22`,
-          }}>⚡</div>
+          <img src="/logo.svg" alt="NexoTribu" width="80" height="80" style={{ display: 'block', margin: '0 auto 12px' }} />
           <h1 style={{ color: C.text, fontWeight: 800, fontSize: 24, margin: '0 0 6px', letterSpacing: '-0.5px' }}>
             NexoTribu
           </h1>
