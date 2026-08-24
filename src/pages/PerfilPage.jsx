@@ -332,12 +332,17 @@ const PLANES = [
       { text: 'Torneos con inscripción paga', ok: true },
       { text: 'Panel de estadísticas de comunidad', ok: true },
     ],
-    cta: '🏆 Crear mi comunidad PRO',
+    cta: '🏆 Actualizar a Comunidad PRO',
     highlight: true,
   },
 ]
 
-function PlanesSection({ role, onGoVip }) {
+const PAYPAL_PLAN_LINKS = {
+  vip:      'https://www.paypal.com/ncp/payment/FPCGXDATUR7G6',
+  comunidad:'https://www.paypal.com/ncp/payment/MZ5MX9XK88B68',
+}
+
+function PlanesSection({ role }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -391,16 +396,17 @@ function PlanesSection({ role, onGoVip }) {
                   ))}
                 </div>
                 {/* CTA */}
-                {p.cta && !isCurrent && (
-                  <button onClick={() => onGoVip?.()} style={{
-                    width: '100%', padding: '11px', border: 'none', borderRadius: 10,
+                {p.cta && !isCurrent && PAYPAL_PLAN_LINKS[p.key] && (
+                  <a href={PAYPAL_PLAN_LINKS[p.key]} target="_blank" rel="noopener noreferrer" style={{
+                    display: 'block', width: '100%', padding: '11px', borderRadius: 10, boxSizing: 'border-box',
                     background: p.key === 'comunidad' ? p.color : `${p.color}22`,
                     color: p.key === 'comunidad' ? '#fff' : p.color,
                     fontWeight: 900, fontSize: 13, cursor: 'pointer', marginTop: 4,
                     border: p.key !== 'comunidad' ? `1px solid ${p.color}55` : 'none',
+                    textDecoration: 'none', textAlign: 'center',
                   }}>
                     {p.cta}
-                  </button>
+                  </a>
                 )}
               </div>
             </div>
@@ -448,7 +454,7 @@ function CuentaTab({ profile, onGoVip, onGoBots }) {
       </div>
 
       {/* Sección Planes */}
-      <PlanesSection role={role} onGoVip={onGoVip} />
+      <PlanesSection role={role} />
 
       {/* API de Bots — row */}
       {isPro && (
@@ -488,25 +494,9 @@ function CuentaTab({ profile, onGoVip, onGoBots }) {
           NexoTribu es gratis y siempre lo será. Si querés apoyar el proyecto, cualquier monto ayuda muchísimo. ¡Gracias! 🙌
         </p>
 
-        {/* Montos sugeridos */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-          {['$1', '$2', '$5', '$10'].map(amt => (
-            <a key={amt} href={`https://www.paypal.com/paypalme/nexotribuapp/${amt.replace('$','')}`}
-              target="_blank" rel="noopener noreferrer"
-              style={{
-                flex: 1, minWidth: 52, padding: '9px 4px', borderRadius: 10,
-                background: C.panel2, border: `1px solid ${C.border}`,
-                color: C.text, fontSize: 13, fontWeight: 700, textAlign: 'center',
-                textDecoration: 'none', display: 'block',
-              }}>
-              {amt}
-            </a>
-          ))}
-        </div>
-
         {/* Botón principal PayPal */}
         <a
-          href="https://www.paypal.com/paypalme/nexotribuapp"
+          href="https://www.paypal.com/ncp/payment/JF3S2VLK75MZS"
           target="_blank"
           rel="noopener noreferrer"
           style={{
