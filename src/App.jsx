@@ -770,28 +770,90 @@ function Splash() {
 }
 
 function EmptyState() {
+  const steps = [
+    { icon: '🌐', title: 'Creá tu comunidad', desc: 'Armá el espacio de tu tribu con canales, anuncios y configuración propia.' },
+    { icon: '👥', title: 'Sumá a tu gente', desc: 'Compartí el link de invitación y reuní a todos en un solo lugar.' },
+    { icon: '🏆', title: 'Creá torneos y ligas', desc: 'Organizá competencias con brackets, llaves y resultados en tiempo real.' },
+    { icon: '🎲', title: 'Sorteos y brackets', desc: 'Generá cruces automáticos, sorteos en vivo y seguí cada partido.' },
+  ]
+  const features = [
+    { icon: '🔒', label: 'Cifrado E2E' },
+    { icon: '⚡', label: 'Tiempo real' },
+    { icon: '📞', label: 'Llamadas' },
+    { icon: '🎤', label: 'Audios' },
+    { icon: '📊', label: 'Ranking ELO' },
+    { icon: '🤖', label: 'Bots API' },
+  ]
   return (
     <div style={{
       height: '100%', overflowY: 'auto',
       display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      padding: '32px 32px 48px',
-      background: `radial-gradient(ellipse at 50% 30%, ${C.greenDk}14 0%, transparent 65%)`,
+      alignItems: 'center',
+      padding: '40px 32px 56px',
+      background: `radial-gradient(ellipse at 50% 10%, ${C.greenDk}18 0%, transparent 60%)`,
     }}>
-      <div style={{ width: '100%', maxWidth: 480 }}>
+      <div style={{ width: '100%', maxWidth: 500 }}>
 
-        {/* Logo chico */}
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <img src="/logo.svg" alt="NexoTribu" width="72" height="72" style={{ display: 'block', margin: '0 auto 12px' }} />
-          <p style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: C.text }}>NexoTribu</p>
-          <p style={{ margin: 0, fontSize: 11, color: C.textDim, letterSpacing: '2px', textTransform: 'uppercase' }}>Competí · Conectá · Ganá</p>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+          <img src="/logo.svg" alt="NexoTribu" width="64" height="64" style={{ display: 'block', margin: '0 auto 14px' }} />
+          <p style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 900, color: C.text, letterSpacing: '-0.5px' }}>NexoTribu</p>
+          <p style={{ margin: 0, fontSize: 12, color: C.textDim, letterSpacing: '2.5px', textTransform: 'uppercase' }}>Competí · Conectá · Ganá</p>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {['🔒 Cifrado', '⚡ Tiempo real', '📞 Llamadas', '🎤 Audios'].map(f => (
-            <span key={f} style={{ fontSize: 11, color: C.textDim, background: C.panel, padding: '5px 12px', borderRadius: 20, border: `1px solid ${C.border}` }}>{f}</span>
+        {/* Steps */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
+          {steps.map((s, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 14,
+              background: C.panel, border: `1px solid ${C.border}`,
+              borderRadius: 14, padding: '14px 16px',
+              transition: 'border-color .2s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = `${C.green}55`}
+              onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+            >
+              <div style={{
+                width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                background: `${C.green}14`, border: `1px solid ${C.green}30`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+              }}>{s.icon}</div>
+              <div>
+                <div style={{ color: C.text, fontWeight: 700, fontSize: 14, marginBottom: 3 }}>
+                  <span style={{ color: C.green, fontWeight: 800, marginRight: 6 }}>{String(i + 1).padStart(2, '0')}.</span>
+                  {s.title}
+                </div>
+                <div style={{ color: C.textDim, fontSize: 12, lineHeight: 1.5 }}>{s.desc}</div>
+              </div>
+            </div>
           ))}
         </div>
+
+        {/* Divider */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+          <div style={{ flex: 1, height: 1, background: C.border }} />
+          <span style={{ color: C.textDim, fontSize: 11, fontWeight: 600, letterSpacing: '1px' }}>PLATAFORMA</span>
+          <div style={{ flex: 1, height: 1, background: C.border }} />
+        </div>
+
+        {/* Feature pills */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {features.map(f => (
+            <span key={f.label} style={{
+              fontSize: 12, color: C.textDim, background: C.panel,
+              padding: '6px 14px', borderRadius: 20,
+              border: `1px solid ${C.border}`,
+              display: 'flex', alignItems: 'center', gap: 5,
+            }}>
+              <span>{f.icon}</span>{f.label}
+            </span>
+          ))}
+        </div>
+
+        {/* Tagline */}
+        <p style={{ textAlign: 'center', marginTop: 28, fontSize: 11, color: `${C.textDim}88`, letterSpacing: '0.5px' }}>
+          Seleccioná una conversación para comenzar
+        </p>
       </div>
     </div>
   )
