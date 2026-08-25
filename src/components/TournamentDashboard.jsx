@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import GroupStage      from './GroupStage'
-import LiveDraw        from './LiveDraw'
 import BracketView     from './BracketView'
 import FixtureTab      from './FixtureTab'
 import LigaTab         from './LigaTab'
@@ -333,37 +332,12 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete }
       {/* Progreso partidos */}
       {data.matches?.total > 0 && <MatchProgress matches={data.matches} />}
 
-      {/* Sorteo / Grupos */}
-      <div>
-        <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
-          {data.groups?.length ? 'Grupos / Fase de grupos' : '🎱 Sorteo'}
-        </p>
-        {(!data.groups?.length) ? (
-          tournamentId
-            ? (() => {
-                const n = data.participant_count || 0
-                const ng = Math.max(1, Math.min(4, Math.floor(n / 2)))
-                const names = ['A','B','C','D'].slice(0, ng)
-                return (
-                  <LiveDraw
-                    tournamentId={tournamentId}
-                    profile={profile}
-                    isAdmin={isAdmin}
-                    numGroups={ng}
-                    groupNames={names}
-                    classifies={2}
-                    onDrawComplete={onDrawComplete}
-                    participantCount={n}
-                    maxParticipants={data.max_participants || 0}
-                    autoStart={true}
-                  />
-                )
-              })()
-            : <div style={{ background: C.panel2, border: `1px dashed ${C.border}`, borderRadius: 14, padding: '28px 16px', textAlign: 'center' }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>🎱</div>
-                <p style={{ margin: 0, color: C.textDim, fontSize: 13 }}>Sorteo pendiente</p>
-              </div>
-        ) : (
+      {/* Grupos (solo si ya existen) */}
+      {data.groups?.length > 0 && (
+        <div>
+          <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+            Grupos / Fase de grupos
+          </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
             {data.groups.map((g, i) => {
               const color = g.color ?? GROUP_COLORS[i % GROUP_COLORS.length]
@@ -381,8 +355,8 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete }
               )
             })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Desc */}
       {data.description && (
@@ -610,10 +584,6 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
                 tournamentId={tournamentId}
                 profile={profile}
                 isAdmin={isAdmin}
-                onDrawComplete={() => {
-                  fetchDashboard(tournamentId).then(setData)
-                  setActiveTab('groups')
-                }}
               />
         )}
 
