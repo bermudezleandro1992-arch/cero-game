@@ -244,6 +244,8 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
   async function handleDelete(t) {
     if (!window.confirm(`¿Eliminar torneo "${t.name}"? Esta acción no se puede deshacer.`)) return
     setDeleting(t.id)
+    await supabase.from('conversation_members').delete().eq('conversation_id', t.id)
+    await supabase.from('messages').delete().eq('conversation_id', t.id)
     const { error } = await supabase.from('conversations').delete().eq('id', t.id)
     setDeleting(null)
     if (error) toast('Error al eliminar: ' + error.message, 'error')
@@ -820,8 +822,13 @@ function EstadisticasTab({ communityId }) {
 
   if (loading) return <Spinner />
 
-  const months = Object.entries(stats.byMonth)
-  const maxTorneos = Math.max(...months.map(([, v]) => v), 1)
+  // Build a fixed 6-month window ending today
+  const last6Months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(); d.setMonth(d.getMonth() - (5 - i))
+    const key = d.toLocaleString('es', { month: 'short', year: '2-digit' })
+    return [key, stats.byMonth[key] || 0]
+  })
+  const maxTorneos = Math.max(...last6Months.map(([, v]) => v), 1)
 
   function exportCSV() {
     const rows = [['Posición', 'Jugador', 'Victorias'], ...ranking.map(r => [r.rank, r.display_name || r.id, r.wins])]
@@ -842,21 +849,23 @@ function EstadisticasTab({ communityId }) {
       </div>
 
       {/* Torneos por mes */}
-      {months.length > 0 && (
-        <div>
-          <div style={{ color: C.textDim, fontSize: 11, fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Torneos por mes
-          </div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: 80 }}>
-            {months.slice(-6).map(([label, count]) => (
-              <div key={label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <div style={{ width: '100%', background: C.green, borderRadius: '4px 4px 0 0', height: `${(count / maxTorneos) * 60}px`, minHeight: 4 }} />
-                <span style={{ color: C.textDim, fontSize: 9, textAlign: 'center' }}>{label}</span>
-              </div>
-            ))}
-          </div>
+      <div>
+        <div style={{ color: C.textDim, fontSize: 11, fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          Torneos por mes
         </div>
-      )}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: 80 }}>
+          {last6Months.map(([label, count]) => (
+            <div key={label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <div style={{
+                width: '100%', borderRadius: '4px 4px 0 0',
+                background: count > 0 ? C.green : C.border,
+                height: `${Math.max((count / maxTorneos) * 60, count > 0 ? 4 : 2)}px`,
+              }} />
+              <span style={{ color: C.textDim, fontSize: 9, textAlign: 'center' }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Ranking */}
       <div>
@@ -926,12 +935,20 @@ function ConfiguracionTab({ communityId, toast }) {
   async function handleAvatarUpload(e) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 2 * 1024 * 1024) { toast('La imagen no debe superar 2MB', 'error'); return }
     setUploadingAvatar(true)
-    const ext = file.name.split('.').pop()
+    const ext = file.name.split('.').pop().toLowerCase()
     const path = `community-avatars/${communityId}.${ext}`
-    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
-    if (upErr) { toast('Error al subir imagen: ' + upErr.message, 'error'); setUploadingAvatar(false); return }
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+    const { error: upErr } = await supabase.storage
+      .from('avatars')
+      .upload(path, file, { upsert: true, contentType: file.type })
+    if (upErr) {
+      toast('Error al subir: ' + (upErr.message || JSON.stringify(upErr)), 'error')
+      setUploadingAvatar(false)
+      return
+    }
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+    const publicUrl = urlData.publicUrl + '?v=' + Date.now()
     const { error: dbErr } = await supabase.from('conversations').update({ avatar_url: publicUrl }).eq('id', communityId)
     if (dbErr) { toast('Error al guardar: ' + dbErr.message, 'error') }
     else { setCfg(c => ({ ...c, avatar_url: publicUrl })); toast('Foto actualizada ✓', 'ok') }
