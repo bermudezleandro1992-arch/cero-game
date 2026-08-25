@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { C } from '../theme'
@@ -1060,6 +1060,322 @@ function ConfiguracionTab({ communityId, toast }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Anuncios Tab
+// ══════════════════════════════════════════════════════════════════════════════
+const GAMES_LIST = ['eFootball', 'FC 26', 'FC 25', 'FIFA', 'Warzone', 'Fortnite', 'Free Fire', 'Otro']
+
+function AnunciosTab({ communityId, profile, toast }) {
+  const [anuncios, setAnuncios] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [myTournaments, setMyTournaments] = useState([])
+  const fileRef = useRef()
+
+  // Form state
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [game, setGame] = useState('')
+  const [category, setCategory] = useState('torneo')
+  const [selectedTournament, setSelectedTournament] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
+  const [linkLabel, setLinkLabel] = useState('')
+  const [imageFile, setImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
+  const [isPinned, setIsPinned] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('announcements')
+      .select('*, author:users!announcements_author_id_fkey(id, display_name, avatar_url), tournament:conversations!announcements_tournament_id_fkey(id, name, tournament_status, group_type, max_participants)')
+      .eq('conversation_id', communityId)
+      .eq('is_active', true)
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+    setAnuncios(data || [])
+    setLoading(false)
+  }, [communityId])
+
+  useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    supabase.from('conversations')
+      .select('id, name, group_type, tournament_status, max_participants')
+      .in('group_type', ['tournament', 'liga'])
+      .eq('community_id', communityId)
+      .in('tournament_status', ['inscripcion', 'draw', 'en_curso'])
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setMyTournaments(data || []))
+  }, [communityId])
+
+  function resetForm() {
+    setTitle(''); setBody(''); setGame(''); setCategory('torneo')
+    setSelectedTournament(''); setLinkUrl(''); setLinkLabel('')
+    setImageFile(null); setImagePreview(null); setIsPinned(false)
+  }
+
+  function pickImage(e) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setImageFile(f)
+    const reader = new FileReader()
+    reader.onload = ev => setImagePreview(ev.target?.result)
+    reader.readAsDataURL(f)
+  }
+
+  async function handlePublish() {
+    if (!title.trim()) { toast('Escribí un título', 'error'); return }
+    setSaving(true)
+    try {
+      let image_url = null
+      if (imageFile) {
+        const ext = imageFile.name.split('.').pop()
+        const path = `announcements/${communityId}-${Date.now()}.${ext}`
+        const { error: upErr } = await supabase.storage.from('avatars').upload(path, imageFile, { upsert: true, contentType: imageFile.type })
+        if (!upErr) {
+          const { data: ud } = supabase.storage.from('avatars').getPublicUrl(path)
+          image_url = ud.publicUrl
+        }
+      }
+      const { error } = await supabase.from('announcements').insert({
+        author_id: profile.id,
+        conversation_id: communityId,
+        title: title.trim(),
+        body: body.trim() || null,
+        image_url,
+        game: game || null,
+        category,
+        is_pinned: isPinned,
+        link_url: linkUrl.trim() || null,
+        link_label: linkUrl.trim() ? (linkLabel.trim() || 'Ver más') : null,
+        tournament_id: selectedTournament || null,
+      })
+      if (error) throw error
+      toast('Anuncio publicado ✓', 'ok')
+      resetForm()
+      setShowForm(false)
+      load()
+    } catch (e) {
+      toast('Error: ' + e.message, 'error')
+    }
+    setSaving(false)
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('¿Eliminar este anuncio?')) return
+    await supabase.from('announcements').delete().eq('id', id)
+    setAnuncios(prev => prev.filter(a => a.id !== id))
+    toast('Anuncio eliminado', 'ok')
+  }
+
+  const inp = {
+    background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10,
+    padding: '10px 12px', color: C.text, fontSize: 13,
+    width: '100%', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit',
+  }
+  const lbl = { display: 'block', color: C.textDim, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }
+
+  if (loading) return <Spinner />
+
+  return (
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>
+          {anuncios.length} anuncio{anuncios.length !== 1 ? 's' : ''} publicado{anuncios.length !== 1 ? 's' : ''}
+        </div>
+        <button onClick={() => setShowForm(s => !s)} style={{
+          padding: '8px 16px', background: showForm ? C.border : C.green, color: showForm ? C.text : '#000',
+          border: 'none', borderRadius: 9, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+        }}>
+          {showForm ? '✕ Cancelar' : '+ Nuevo anuncio'}
+        </button>
+      </div>
+
+      {/* Create form */}
+      {showForm && (
+        <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 13 }}>
+          <div style={{ color: C.text, fontWeight: 800, fontSize: 15 }}>📢 Nuevo anuncio</div>
+
+          {/* Flyer */}
+          <div>
+            <label style={lbl}>Flyer / Imagen (opcional)</label>
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickImage} />
+            {imagePreview ? (
+              <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden' }}>
+                <img src={imagePreview} alt="" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', display: 'block' }} />
+                <button type="button" onClick={() => { setImageFile(null); setImagePreview(null) }} style={{
+                  position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.65)',
+                  border: 'none', borderRadius: '50%', width: 26, height: 26,
+                  color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>✕</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => fileRef.current?.click()} style={{
+                width: '100%', padding: '20px 0', borderRadius: 10,
+                border: `2px dashed ${C.border}`, background: C.bg, cursor: 'pointer',
+                color: C.textDim, fontSize: 13, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+              }}>
+                <span style={{ fontSize: 24 }}>🖼️</span>
+                <span>Subir flyer</span>
+              </button>
+            )}
+          </div>
+
+          {/* Título */}
+          <div>
+            <label style={lbl}>Título *</label>
+            <input style={inp} value={title} onChange={e => setTitle(e.target.value)} placeholder="Ej: Torneo Relámpago — 16 cupos" maxLength={80} />
+          </div>
+
+          {/* Descripción */}
+          <div>
+            <label style={lbl}>Descripción</label>
+            <textarea style={{ ...inp, resize: 'vertical' }} rows={3} value={body} onChange={e => setBody(e.target.value)} placeholder="Premios, fechas, reglas, requisitos..." />
+          </div>
+
+          {/* Categoría + Juego */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label style={lbl}>Categoría</label>
+              <select style={{ ...inp, appearance: 'none', cursor: 'pointer' }} value={category} onChange={e => setCategory(e.target.value)}>
+                <option value="torneo">🏆 Torneo</option>
+                <option value="liga">⚽ Liga</option>
+                <option value="evento">🎮 Evento</option>
+                <option value="noticia">📰 Noticia</option>
+                <option value="general">💬 General</option>
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={lbl}>Juego</label>
+              <select style={{ ...inp, appearance: 'none', cursor: 'pointer' }} value={game} onChange={e => setGame(e.target.value)}>
+                <option value="">Sin especificar</option>
+                {GAMES_LIST.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Vincular torneo/liga */}
+          {myTournaments.length > 0 && (
+            <div>
+              <label style={lbl}>Vincular torneo/liga (botón "Inscribirse")</label>
+              <select style={{ ...inp, appearance: 'none', cursor: 'pointer' }} value={selectedTournament} onChange={e => setSelectedTournament(e.target.value)}>
+                <option value="">Sin vincular</option>
+                {myTournaments.map(t => (
+                  <option key={t.id} value={t.id}>{t.group_type === 'liga' ? '⚽' : '🏆'} {t.name} ({t.tournament_status === 'inscripcion' ? 'Inscripción abierta' : 'En curso'})</option>
+                ))}
+              </select>
+              {selectedTournament && <div style={{ color: C.green, fontSize: 11, marginTop: 4 }}>✓ Aparecerá botón "Inscribirse →" en el anuncio</div>}
+            </div>
+          )}
+
+          {/* Link externo */}
+          <div>
+            <label style={lbl}>Link externo (opcional)</label>
+            <input style={inp} value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://..." />
+            {linkUrl && <input style={{ ...inp, marginTop: 6 }} value={linkLabel} onChange={e => setLinkLabel(e.target.value)} placeholder='Etiqueta ("Inscribirse", "Ver bracket")' />}
+          </div>
+
+          {/* Fijar */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', background: C.bg, borderRadius: 10, border: `1px solid ${isPinned ? C.green : C.border}` }}>
+            <input type="checkbox" checked={isPinned} onChange={e => setIsPinned(e.target.checked)} style={{ accentColor: C.green, width: 15, height: 15 }} />
+            <div>
+              <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>📌 Fijar anuncio</div>
+              <div style={{ color: C.textDim, fontSize: 11 }}>Aparece primero en el feed global</div>
+            </div>
+          </label>
+
+          <button onClick={handlePublish} disabled={saving || !title.trim()} style={{
+            padding: '12px', background: saving || !title.trim() ? C.border : C.green,
+            color: saving || !title.trim() ? C.textDim : '#000',
+            border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: saving ? 'default' : 'pointer',
+          }}>
+            {saving ? 'Publicando...' : '📢 Publicar anuncio'}
+          </button>
+        </div>
+      )}
+
+      {/* List */}
+      {anuncios.length === 0 && !showForm ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: C.textDim, fontSize: 13 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📢</div>
+          <div style={{ fontWeight: 700, color: C.text, marginBottom: 6 }}>Sin anuncios aún</div>
+          <div>Publicá torneos, ligas o noticias de tu comunidad.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {anuncios.map(ann => {
+            const catColors = { torneo: '#f59e0b', liga: '#10b981', evento: '#6366f1', noticia: '#3b82f6', general: '#6b7280' }
+            const catColor = catColors[ann.category] || '#6b7280'
+            return (
+              <div key={ann.id} style={{
+                background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden',
+                boxShadow: ann.is_pinned ? `0 0 0 2px ${C.green}44` : 'none',
+              }}>
+                {ann.is_pinned && (
+                  <div style={{ background: `${C.green}15`, padding: '5px 12px', borderBottom: `1px solid ${C.green}22`, fontSize: 11, fontWeight: 700, color: C.green }}>
+                    📌 FIJADO
+                  </div>
+                )}
+                {ann.image_url && (
+                  <img src={ann.image_url} alt="" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }} />
+                )}
+                <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ background: `${catColor}20`, color: catColor, borderRadius: 20, padding: '2px 9px', fontSize: 10, fontWeight: 700 }}>
+                      {ann.category?.toUpperCase()}
+                    </span>
+                    {ann.game && <span style={{ color: C.textDim, fontSize: 11 }}>🎮 {ann.game}</span>}
+                    {ann.is_pinned && <span style={{ marginLeft: 'auto', color: C.textDim, fontSize: 10 }}>📌</span>}
+                  </div>
+                  <div style={{ color: C.text, fontWeight: 800, fontSize: 15 }}>{ann.title}</div>
+                  {ann.body && <div style={{ color: C.textDim, fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{ann.body}</div>}
+
+                  {/* CTAs */}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {ann.tournament_id && (
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '8px 16px', borderRadius: 9, background: C.green, color: '#000',
+                        fontSize: 13, fontWeight: 800,
+                      }}>
+                        {ann.category === 'liga' ? '⚽' : '🏆'} Inscribirse →
+                      </div>
+                    )}
+                    {ann.link_url && (
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '8px 14px', borderRadius: 9,
+                        background: C.bg, border: `1px solid ${C.border}`,
+                        color: C.text, fontSize: 13, fontWeight: 700,
+                      }}>
+                        🔗 {ann.link_label || 'Ver más'}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+                    <span style={{ color: C.textDim, fontSize: 11 }}>
+                      {new Date(ann.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </span>
+                    <button onClick={() => handleDelete(ann.id)} style={{
+                      background: 'none', border: `1px solid ${C.border}`, borderRadius: 20,
+                      padding: '4px 10px', cursor: 'pointer', color: '#ef4444', fontSize: 12,
+                    }}>
+                      🗑 Eliminar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Main CEOPanel
 // ══════════════════════════════════════════════════════════════════════════════
 export default function CEOPanel({ community, onBack }) {
@@ -1118,6 +1434,7 @@ export default function CEOPanel({ community, onBack }) {
   const TABS = [
     { id: 'dashboard',   icon: '📊', label: 'Dashboard' },
     { id: 'torneos',     icon: '🏆', label: 'Torneos' },
+    { id: 'anuncios',    icon: '📢', label: 'Anuncios' },
     { id: 'disputas',    icon: '⚖️', label: 'Disputas', badge: openDisputesCount },
     { id: 'solicitudes', icon: '🔔', label: 'Solicitudes' },
     { id: 'miembros',    icon: '👥', label: 'Miembros' },
@@ -1162,6 +1479,13 @@ export default function CEOPanel({ community, onBack }) {
             toast={showToast}
             showCreate={showCreateTorneo}
             onHideCreate={() => setShowCreateTorneo(false)}
+          />
+        )}
+        {tab === 'anuncios' && (
+          <AnunciosTab
+            communityId={communityId}
+            profile={profile}
+            toast={showToast}
           />
         )}
         {tab === 'disputas' && (

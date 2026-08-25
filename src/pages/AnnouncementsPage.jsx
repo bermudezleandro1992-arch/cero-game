@@ -379,13 +379,15 @@ function AnnouncementCard({ ann, myId, onLike, onDelete, onViewTournament }) {
               onClick={() => onViewTournament && onViewTournament(ann.tournament_id)}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '9px 18px', borderRadius: 10,
+                padding: '10px 20px', borderRadius: 10,
                 background: C.green, color: C.bg, border: 'none', cursor: 'pointer',
-                fontSize: 13, fontWeight: 700,
-                boxShadow: `0 2px 10px ${C.green}44`,
+                fontSize: 14, fontWeight: 800,
+                boxShadow: `0 2px 14px ${C.green}55`,
               }}
             >
-              {ann.category === 'liga' ? '⚽ Ver liga →' : '🏆 Ver torneo →'}
+              {ann.tournament?.tournament_status === 'inscripcion'
+                ? (ann.category === 'liga' ? '⚽ Inscribirse a la liga →' : '🏆 Inscribirse al torneo →')
+                : (ann.category === 'liga' ? '⚽ Ver liga →' : '🏆 Ver torneo →')}
             </button>
           )}
           {ann.link_url && (
