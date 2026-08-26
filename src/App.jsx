@@ -10,6 +10,7 @@ import ChatListPage from './pages/ChatListPage'
 import ChatPage from './pages/ChatPage'
 import CallPage from './pages/CallPage'
 import LlamadasPage from './pages/LlamadasPage'
+import EstadosPage from './pages/EstadosPage'
 import ContactsListPage from './pages/ContactsListPage'
 import NotificationsPage from './pages/NotificationsPage'
 import TorneosPage from './pages/TorneosPage'
@@ -32,6 +33,8 @@ import { initPushNotifications, initWebPush, listenNotificationClicks } from './
 import { acquireWakeLock, releaseWakeLock } from './lib/appStartup'
 export { C } from './theme'
 import { C } from './theme'
+import { getSkin, setLayoutSkin } from './lib/layoutSkin'
+export { setLayoutSkin }
 
 // ── Nav icons ─────────────────────────────────────────────────────────────────
 const NAV = [
@@ -242,9 +245,6 @@ function OrganizadorPanelPicker({ onBack }) {
   )
 }
 
-const SKIN_KEY = 'app_layout_skin'
-function getSkin() { try { return localStorage.getItem(SKIN_KEY) || 'default' } catch { return 'default' } }
-export function setLayoutSkin(s) { try { localStorage.setItem(SKIN_KEY, s) } catch {} window.dispatchEvent(new Event('skinchange')) }
 
 export default function App() {
   const { user, profile, loading, setUser, setLoading, fetchProfile } = useAuthStore()
@@ -613,6 +613,10 @@ export default function App() {
             ? <RankingPage />
             : tab === 'perfil'
             ? <PerfilPage onClose={() => setTab('chats')} />
+            : tab === 'llamadas'
+            ? <LlamadasPage />
+            : tab === 'estados'
+            ? <EstadosPage />
             : tab === 'contactos'
             ? <ContactsListPage />
             : tab === 'grupos'
@@ -669,26 +673,35 @@ export default function App() {
             <div style={{ width: 36, height: 4, borderRadius: 2, background: C.border, margin: '0 auto 16px' }} />
 
             {[
-              { id: 'contactos',  icon: '👥', label: 'Contactos' },
-              { id: 'explorar',   icon: '🔭', label: 'Explorar' },
-              { id: 'anuncios',   icon: '📢', label: 'Anuncios' },
-              ...(['superadmin','admin'].includes(profile?.role) ? [
-                { id: 'panel-ceo', icon: '⭐', label: 'Panel CEO' },
-              ] : []),
-              { id: 'panel-organizador', icon: '🎯', label: 'Panel Organizador' },
+              ...(layoutSkin === 'whatsapp' ? [
+                { id: 'comunidades',       icon: '🌐', label: 'Comunidades' },
+                { id: 'anuncios',          icon: '📢', label: 'Anuncios' },
+                { id: 'ranking',           icon: '🏆', label: 'Ranking' },
+                { id: 'contactos',         icon: '👥', label: 'Contactos' },
+                { id: '__perfil__',        icon: '👤', label: 'Perfil' },
+              ] : [
+                { id: 'contactos',         icon: '👥', label: 'Contactos' },
+                { id: 'explorar',          icon: '🔭', label: 'Explorar' },
+                { id: 'anuncios',          icon: '📢', label: 'Anuncios' },
+                ...(['superadmin','admin'].includes(profile?.role) ? [
+                  { id: 'panel-ceo',       icon: '⭐', label: 'Panel CEO' },
+                ] : []),
+                { id: 'panel-organizador', icon: '🎯', label: 'Panel Organizador' },
+              ]),
             ].map(({ id, icon, label }) => (
               <button key={id} onClick={() => {
                 setShowMoreDrawer(false)
-                setShowProfile(false); setTab(id)
+                if (id === '__perfil__') { setShowProfile(true) }
+                else { setShowProfile(false); setTab(id) }
               }} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 16,
                 padding: '14px 24px', border: 'none', background: 'none',
                 cursor: 'pointer', textAlign: 'left',
-                borderLeft: `3px solid ${tab === id && !showProfile ? C.green : 'transparent'}`,
+                borderLeft: `3px solid ${(id === '__perfil__' ? showProfile : tab === id && !showProfile) ? C.green : 'transparent'}`,
               }}>
                 <span style={{ fontSize: 22, width: 28, textAlign: 'center' }}>{icon}</span>
                 <span style={{
-                  color: tab === id && !showProfile ? C.green : C.text,
+                  color: (id === '__perfil__' ? showProfile : tab === id && !showProfile) ? C.green : C.text,
                   fontWeight: 600, fontSize: 15,
                 }}>{label}</span>
               </button>
@@ -705,16 +718,15 @@ export default function App() {
           paddingBottom: 'env(safe-area-inset-bottom)',
         }} className="slfa-bottom-nav">
           {layoutSkin === 'whatsapp' ? (
-            // WhatsApp skin: Chats | Llamadas | Estados | Canales | Comunidades + bottom Anuncios
+            // WhatsApp skin: Chats | Llamadas | Estados | Explorar | Más (drawer)
             <>
               {[
-                { id: 'chats',       label: 'Chats' },
-                { id: 'llamadas',    label: 'Llamadas',
+                { id: 'chats',    label: 'Chats' },
+                { id: 'llamadas', label: 'Llamadas',
                   customIcon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.green:C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.5a16 16 0 0 0 5.55 5.55l.96-.96a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg> },
-                { id: 'estados',     label: 'Estados',
+                { id: 'estados',  label: 'Estados',
                   customIcon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.green:C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> },
-                { id: 'explorar',    label: 'Explorar' },
-                { id: 'comunidades', label: 'Comunidades' },
+                { id: 'explorar', label: 'Explorar' },
               ].map(({ id, label, customIcon }) => {
                 const navItem = NAV.find(n => n.id === id)
                 const active = !showProfile && tab === id
@@ -734,17 +746,19 @@ export default function App() {
                   </button>
                 )
               })}
-              {/* Anuncios — bottom item instead of "Más" */}
-              {(() => { const active = !showProfile && tab === 'anuncios'; const icon = NAV.find(n=>n.id==='anuncios')?.icon; return (
-                <button onClick={() => { setShowProfile(false); setShowMoreDrawer(false); setTab('anuncios') }} style={{
-                  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  justifyContent: 'center', gap: 4, border: 'none', background: 'none', cursor: 'pointer', position: 'relative',
-                }}>
-                  {icon?.(active)}
-                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>Anuncios</span>
-                  {active && <div style={{ position: 'absolute', top: 0, left: '15%', right: '15%', height: 2, background: C.green, borderRadius: '0 0 2px 2px' }} />}
-                </button>
-              )})()}
+              {/* Más — drawer with Comunidades, Anuncios, Ranking, Contactos, Perfil */}
+              <button onClick={() => setShowMoreDrawer(d => !d)} style={{
+                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                justifyContent: 'center', gap: 4, border: 'none', background: 'none', cursor: 'pointer', position: 'relative',
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={showMoreDrawer ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="5" cy="12" r="1" fill={showMoreDrawer ? C.green : C.textDim}/>
+                  <circle cx="12" cy="12" r="1" fill={showMoreDrawer ? C.green : C.textDim}/>
+                  <circle cx="19" cy="12" r="1" fill={showMoreDrawer ? C.green : C.textDim}/>
+                </svg>
+                <span style={{ fontSize: 9, fontWeight: showMoreDrawer ? 700 : 400, color: showMoreDrawer ? C.green : C.textDim }}>Más</span>
+                {showMoreDrawer && <div style={{ position: 'absolute', top: 0, left: '15%', right: '15%', height: 2, background: C.green, borderRadius: '0 0 2px 2px' }} />}
+              </button>
             </>
           ) : (
             // Default skin

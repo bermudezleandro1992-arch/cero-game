@@ -9,10 +9,7 @@ import { saveSoundSettings } from '../lib/sounds'
 import LegalPage from './LegalPage'
 import IdentityVerification from '../components/IdentityVerification'
 import BotApiPage from './BotApiPage'
-import { setLayoutSkin } from '../App'
-
-const SKIN_KEY = 'app_layout_skin'
-function getSkinLocal() { try { return localStorage.getItem(SKIN_KEY) || 'default' } catch { return 'default' } }
+import { setLayoutSkin, getSkin as getSkinLocal } from '../lib/layoutSkin'
 
 function Spinner() {
   return (
