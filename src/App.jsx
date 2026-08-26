@@ -612,7 +612,7 @@ export default function App() {
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'
-            ? <PerfilPage onClose={() => setTab('chats')} />
+            ? <PerfilPage onClose={() => setTab('chats')} initialTab="perfil" />
             : tab === 'llamadas'
             ? <LlamadasPage />
             : tab === 'estados'
