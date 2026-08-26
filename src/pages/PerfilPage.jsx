@@ -923,9 +923,9 @@ function SettingsRow({ icon, label, desc, onClick, danger, value, noArrow }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function PerfilPage({ onClose, onGoVip }) {
+export default function PerfilPage({ onClose, onGoVip, initialTab }) {
   const { profile, fetchProfile } = useAuthStore()
-  const [tab, setTab] = useState('menu')
+  const [tab, setTab] = useState(initialTab || 'menu')
   const [showBots, setShowBots] = useState(false)
   const [stats, setStats] = useState(null)
   const [history, setHistory] = useState([])
