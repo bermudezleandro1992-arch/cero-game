@@ -176,6 +176,19 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
   useEffect(() => { setFilter(initialFilter || 'todos') }, [initialFilter])
   const [showFab, setShowFab] = useState(false)
+
+  // Ctrl+Alt+N → nuevo chat
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.ctrlKey && e.altKey && e.key === 'n') {
+        e.preventDefault()
+        setNewGroupType('group')
+        setShowNewGroup(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
   const [showAddContact, setShowAddContact] = useState(false)
   const [addContactQuery, setAddContactQuery] = useState('')
   const [addContactResults, setAddContactResults] = useState([])
@@ -365,65 +378,60 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
               NexoTribu
             </span>
           </div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {/* Ordenar */}
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {/* Nuevo chat — Ctrl+Alt+N */}
+            <button
+              title="Nuevo chat (Ctrl+Alt+N)"
+              onClick={() => { setNewGroupType('group'); setShowNewGroup(true) }}
+              style={{ width: 34, height: 34, borderRadius: '50%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                <line x1="12" y1="8" x2="12" y2="14"/><line x1="9" y1="11" x2="15" y2="11"/>
+              </svg>
+            </button>
+
+            {/* 3 puntos — menú contextual */}
             <div style={{ position: 'relative' }}>
-              <button onClick={e => { e.stopPropagation(); setShowSortMenu(v => !v) }} title="Ordenar" style={{
-                width: 32, height: 32, borderRadius: '50%', background: showSortMenu ? `${C.green}22` : C.panel2,
-                border: `1px solid ${showSortMenu ? C.green + '55' : C.border}`, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={showSortMenu ? C.green : C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="7" y2="18"/>
+              <button
+                onClick={e => { e.stopPropagation(); setShowSortMenu(v => !v) }}
+                style={{ width: 34, height: 34, borderRadius: '50%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill={C.text2}>
+                  <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
                 </svg>
               </button>
               {showSortMenu && (
                 <div onClick={e => e.stopPropagation()} style={{
-                  position: 'absolute', right: 0, top: 38, zIndex: 100,
+                  position: 'absolute', right: 0, top: 38, zIndex: 200,
                   background: C.panel, border: `1px solid ${C.border}`,
-                  borderRadius: 12, overflow: 'hidden', minWidth: 170,
+                  borderRadius: 10, overflow: 'hidden', minWidth: 210,
                   boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
                 }}>
-                  {[['recientes','🕐 Más recientes'],['no_leidos','🔵 No leídos primero'],['az','🔤 A-Z']].map(([id, label]) => (
-                    <div key={id} onClick={() => { setSortOrder(id); setShowSortMenu(false) }} style={{
-                      padding: '10px 14px', cursor: 'pointer', fontSize: 13,
-                      color: sortOrder === id ? C.green : C.text,
-                      fontWeight: sortOrder === id ? 700 : 400,
-                      background: sortOrder === id ? `${C.green}10` : 'transparent',
-                      borderBottom: `1px solid ${C.border}22`,
+                  {[
+                    { label: 'Nuevo grupo', action: () => { setNewGroupType('group'); setShowNewGroup(true) } },
+                    { label: 'Mensajes destacados', action: () => {} },
+                    { label: 'Seleccionar chats', action: () => { setSelectMode(true); setSelected(new Set()) } },
+                    { label: 'Marcar todos como leídos', action: async () => {
+                      await supabase.from('conversation_members').update({ unread: 0 }).eq('user_id', profile?.id)
+                    }},
+                    { divider: true },
+                    { label: 'Cerrar sesión', action: signOut, danger: true },
+                  ].map((item, i) => item.divider ? (
+                    <div key={i} style={{ height: 1, background: C.border, margin: '4px 0' }} />
+                  ) : (
+                    <button key={i} onClick={() => { setShowSortMenu(false); item.action() }} style={{
+                      width: '100%', padding: '11px 16px', border: 'none', background: 'none',
+                      cursor: 'pointer', textAlign: 'left', fontSize: 14,
+                      color: item.danger ? '#ef4444' : C.text,
                     }}
                       onMouseEnter={e => e.currentTarget.style.background = C.panel2}
-                      onMouseLeave={e => e.currentTarget.style.background = sortOrder === id ? `${C.green}10` : 'transparent'}
-                    >{label} {sortOrder === id ? '✓' : ''}</div>
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    >{item.label}</button>
                   ))}
                 </div>
               )}
             </div>
-            {/* Seleccionar / cancelar */}
-            <button onClick={() => { setSelectMode(s => !s); setSelected(new Set()) }} title={selectMode ? 'Cancelar selección' : 'Seleccionar chats'} style={{
-              width: 32, height: 32, borderRadius: '50%', cursor: 'pointer',
-              background: selectMode ? C.green : C.panel2,
-              border: `1px solid ${selectMode ? C.green : C.border}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              {selectMode
-                ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="4" height="4" rx="1"/><rect x="3" y="11" width="4" height="4" rx="1"/><rect x="3" y="17" width="4" height="4" rx="1"/><line x1="10" y1="7" x2="21" y2="7"/><line x1="10" y1="13" x2="21" y2="13"/><line x1="10" y1="19" x2="21" y2="19"/></svg>
-              }
-            </button>
-            <button onClick={() => onProfileClick?.()} title="Mi perfil" style={{
-              width: 32, height: 32, borderRadius: '50%', background: C.panel2,
-              border: `1px solid ${C.border}`, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-              </svg>
-            </button>
-            <button onClick={signOut} style={{
-              background: 'none', border: `1px solid ${C.border}`, cursor: 'pointer',
-              color: C.textDim, fontSize: 11, padding: '4px 10px', borderRadius: 8,
-            }}>Salir</button>
           </div>
         </div>
 
@@ -845,30 +853,6 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
         </div>
       )}
 
-      {/* ── FAB ── */}
-      <div style={{ position: 'absolute', bottom: 20, right: 16, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, zIndex: 30 }}>
-        {showFab && (
-          <>
-            <FabItem label="Nuevo grupo" icon="👥" onClick={() => { setShowFab(false); setNewGroupType('group'); setShowNewGroup(true) }} />
-            <FabItem label="Agregar contacto" icon="➕" onClick={() => { setShowFab(false); setShowAddContact(true); setAddContactQuery(''); setAddContactResults([]) }} />
-            <FabItem label="Nuevo chat" icon="💬" onClick={() => { setShowFab(false); document.querySelector('input[placeholder*="Buscar"]')?.focus() }} />
-          </>
-        )}
-        <button
-          onClick={e => { e.stopPropagation(); setShowFab(v => !v) }}
-          style={{
-            width: 50, height: 50, borderRadius: '50%',
-            background: C.green, border: 'none', cursor: 'pointer',
-            boxShadow: `0 4px 20px ${C.green}55`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transform: showFab ? 'rotate(45deg)' : 'none',
-            transition: 'transform .2s, box-shadow .2s',
-          }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M12 5v14M5 12h14" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round"/>
-          </svg>
-        </button>
-      </div>
 
       {/* Barra de selección */}
       {selectMode && (
