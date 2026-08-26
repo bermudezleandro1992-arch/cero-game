@@ -1217,7 +1217,6 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
                   // Delete community-level data
                   await supabase.from('announcements').delete().eq('conversation_id', communityId)
                   await supabase.from('community_requests').delete().eq('community_id', communityId)
-                  await supabase.from('group_roles').delete().eq('conversation_id', communityId)
                   await supabase.from('conversation_members').delete().eq('conversation_id', communityId)
                   await supabase.from('messages').delete().eq('conversation_id', communityId)
                   await supabase.from('conversations').delete().eq('id', communityId)
