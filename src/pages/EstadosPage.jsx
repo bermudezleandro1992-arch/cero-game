@@ -98,7 +98,7 @@ function EstadoViewer({ groups, startGroupIdx, onClose, myId }) {
     if (!estado) return
     const { data } = await supabase
       .from('estado_views')
-      .select('viewer_id, viewed_at, profiles!estado_views_viewer_id_fkey(display_name, username, avatar_url)')
+      .select('viewer_id, viewed_at, users!estado_views_viewer_id_fkey(display_name, username, avatar_url)')
       .eq('estado_id', estado.id)
     setViews(data || [])
     setShowViews(true)
@@ -173,13 +173,13 @@ function EstadoViewer({ groups, startGroupIdx, onClose, myId }) {
           {views.map(v => (
             <div key={v.viewer_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px' }}>
               <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.border, overflow: 'hidden', flexShrink: 0 }}>
-                {v.profiles?.avatar_url
-                  ? <img src={v.profiles.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+                {v.users?.avatar_url
+                  ? <img src={v.users?.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
                   : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 16 }}>👤</div>
                 }
               </div>
               <div>
-                <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>{v.profiles?.display_name || 'Usuario'}</div>
+                <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>{v.users?.display_name || 'Usuario'}</div>
                 <div style={{ color: C.textDim, fontSize: 11 }}>{timeAgo(v.viewed_at)}</div>
               </div>
             </div>
@@ -445,7 +445,7 @@ export default function EstadosPage() {
     // Estados de contactos (otros usuarios activos — simplificado)
     const { data: others } = await supabase
       .from('estados')
-      .select('*, profiles!estados_user_id_fkey(id, display_name, username, avatar_url)')
+      .select('*, users!estados_user_id_fkey(id, display_name, username, avatar_url)')
       .neq('user_id', profile.id)
       .gt('expires_at', now)
       .order('created_at', { ascending: false })
@@ -456,7 +456,7 @@ export default function EstadosPage() {
     const grouped = {}
     ;(others || []).forEach(e => {
       const uid = e.user_id
-      if (!grouped[uid]) grouped[uid] = { ...e.profiles, items: [] }
+      if (!grouped[uid]) grouped[uid] = { ...e.users, items: [] }
       grouped[uid].items.push(e)
     })
     setContactEstados(Object.values(grouped))
