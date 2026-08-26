@@ -1005,7 +1005,7 @@ function EstadisticasTab({ communityId }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // Configuración Tab
 // ══════════════════════════════════════════════════════════════════════════════
-function ConfiguracionTab({ communityId, communityName, toast, onCommunityDeleted }) {
+function ConfiguracionTab({ communityId, communityName, toast, onCommunityDeleted, onGoVip }) {
   const [cfg, setCfg] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1128,9 +1128,12 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
                 <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{pCfg.label}</div>
                 <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>Capacidad: hasta {pCfg.members} miembros</div>
               </div>
-              <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 8, background: `${C.green}20`, color: C.green }}>
-                {plan === 'free' ? 'Actualizar' : 'Activo'}
-              </span>
+              {plan === 'free'
+                ? <button onClick={onGoVip} style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: C.green, color: '#000', border: 'none', cursor: 'pointer' }}>
+                    ⭐ Actualizar
+                  </button>
+                : <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 8, background: `${C.green}20`, color: C.green }}>Activo</span>
+              }
             </div>
           )
         })()}
@@ -1581,7 +1584,7 @@ function AnunciosTab({ communityId, profile, toast }) {
 
 // Main CEOPanel
 // ══════════════════════════════════════════════════════════════════════════════
-export default function CEOPanel({ community, onBack, onCommunityDeleted }) {
+export default function CEOPanel({ community, onBack, onCommunityDeleted, onGoVip }) {
   const { profile } = useAuthStore()
   const [tab, setTab] = useState('dashboard')
   const [showCreateTorneo, setShowCreateTorneo] = useState(false)
@@ -1723,6 +1726,7 @@ export default function CEOPanel({ community, onBack, onCommunityDeleted }) {
             communityName={community?.name || ''}
             toast={showToast}
             onCommunityDeleted={onCommunityDeleted || onBack}
+            onGoVip={onGoVip}
           />
         )}
       </div>
