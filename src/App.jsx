@@ -530,18 +530,20 @@ export default function App() {
 
             {/* Perfil con avatar */}
             <div style={{}}>
-              <button onClick={() => setShowProfile(true)} style={{
-                width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
-                justifyContent: 'center', gap: 4, border: 'none',
-                background: showProfile ? `${C.green}12` : 'none', cursor: 'pointer', padding: '14px 0',
-                borderLeft: `3px solid ${showProfile ? C.green : 'transparent'}`, transition: 'background .15s',
-              }}>
-                {profile?.avatar_url
-                  ? <img src={profile.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${showProfile ? C.green : C.border}` }} />
-                  : NAV.find(n=>n.id==='perfil')?.icon(showProfile)
-                }
-                <span style={{ fontSize: 9, fontWeight: showProfile ? 700 : 400, color: showProfile ? C.green : C.textDim }}>Perfil</span>
-              </button>
+              {(() => { const active = !showProfile && tab === 'perfil'; return (
+                <button onClick={() => { setShowProfile(false); setTab('perfil') }} style={{
+                  width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  justifyContent: 'center', gap: 4, border: 'none',
+                  background: active ? `${C.green}12` : 'none', cursor: 'pointer', padding: '14px 0',
+                  borderLeft: `3px solid ${active ? C.green : 'transparent'}`, transition: 'background .15s',
+                }}>
+                  {profile?.avatar_url
+                    ? <img src={profile.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${active ? C.green : C.border}` }} />
+                    : NAV.find(n=>n.id==='perfil')?.icon(active)
+                  }
+                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>Perfil</span>
+                </button>
+              )})()}
             </div>
           </nav>
         ) : (
@@ -703,17 +705,17 @@ export default function App() {
             ].map(({ id, icon, label }) => (
               <button key={id} onClick={() => {
                 setShowMoreDrawer(false)
-                if (id === '__perfil__') { setShowProfile(true) }
-                else { setShowProfile(false); setTab(id) }
+                setShowProfile(false)
+                setTab(id === '__perfil__' ? 'perfil' : id)
               }} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 16,
                 padding: '14px 24px', border: 'none', background: 'none',
                 cursor: 'pointer', textAlign: 'left',
-                borderLeft: `3px solid ${(id === '__perfil__' ? showProfile : tab === id && !showProfile) ? C.green : 'transparent'}`,
+                borderLeft: `3px solid ${tab === (id === '__perfil__' ? 'perfil' : id) && !showProfile ? C.green : 'transparent'}`,
               }}>
                 <span style={{ fontSize: 22, width: 28, textAlign: 'center' }}>{icon}</span>
                 <span style={{
-                  color: (id === '__perfil__' ? showProfile : tab === id && !showProfile) ? C.green : C.text,
+                  color: tab === (id === '__perfil__' ? 'perfil' : id) && !showProfile ? C.green : C.text,
                   fontWeight: 600, fontSize: 15,
                 }}>{label}</span>
               </button>
