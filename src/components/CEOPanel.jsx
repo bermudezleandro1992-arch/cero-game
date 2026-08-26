@@ -296,7 +296,6 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
       .select('id, name, tournament_status, created_at, max_members, game, tournament_format')
       .eq('community_id', communityId)
       .in('group_type', ['tournament', 'liga'])
-      .neq('tournament_status', 'eliminado')
       .order('created_at', { ascending: false })
     setTorneos(data || [])
     setLoading(false)
@@ -331,8 +330,8 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
       await supabase.from('conversations').delete().eq('id', id)
       const { data: stillThere } = await supabase.from('conversations').select('id').eq('id', id).maybeSingle()
       if (stillThere) {
-        // RLS blocked hard delete — soft-delete instead
-        const { error: updErr } = await supabase.from('conversations').update({ tournament_status: 'eliminado' }).eq('id', id)
+        // RLS blocked hard delete — detach from community so it disappears from all lists
+        const { error: updErr } = await supabase.from('conversations').update({ community_id: null }).eq('id', id)
         if (updErr) throw new Error('Sin permisos para eliminar este torneo.')
       }
 
