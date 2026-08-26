@@ -18,6 +18,22 @@ function timeAgo(ts) {
 }
 
 const GAMES = ['eFootball', 'FC 26', 'FC 25', 'FIFA', 'Warzone', 'Fortnite', 'Free Fire', 'Otro']
+
+// Límites de anuncios por plan (publicados en los últimos 30 días)
+const ANN_LIMITS = {
+  free:        1,   // 1 activo en total
+  member:      1,
+  vip:         5,
+  ceo:         20,
+  com_starter: 20,
+  com_elite:   999,
+  organizador: 10,
+  admin:       999,
+  superadmin:  999,
+}
+function annLimit(role) {
+  return ANN_LIMITS[role] ?? (role ? 999 : 1)
+}
 const CATEGORIES = [
   { id: 'all',     label: 'Todo',      emoji: '📢' },
   { id: 'torneo',  label: 'Torneos',   emoji: '🏆' },
@@ -106,6 +122,28 @@ function NewAnnouncementForm({ onClose, onCreate }) {
     if (!title.trim()) return
     setSaving(true)
     try {
+      // Verificar límite de anuncios por plan
+      const role = profile?.role || profile?.plan || 'member'
+      const limit = annLimit(role)
+      if (limit < 999) {
+        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+        const { count } = await supabase
+          .from('announcements')
+          .select('id', { count: 'exact', head: true })
+          .eq('author_id', profile.id)
+          .gte('created_at', since)
+        if ((count || 0) >= limit) {
+          const planName = role === 'free' || role === 'member' ? 'Gratis' : role.toUpperCase()
+          alert(
+            limit === 1
+              ? `Los usuarios Gratuitos solo pueden tener 1 anuncio activo.\nEliminá el anterior para publicar uno nuevo.\n\n⭐ Actualizá a VIP para publicar hasta 5 anuncios por mes.`
+              : `Llegaste al límite de ${limit} anuncios por mes para el plan ${planName}.\n\nUpgrade a PRO Elite para publicar sin límites.`
+          )
+          setSaving(false)
+          return
+        }
+      }
+
       let image_url = null
       if (imageFile) {
         image_url = await uploadImage(imageFile, profile.id)
@@ -285,6 +323,23 @@ function NewAnnouncementForm({ onClose, onCreate }) {
               <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>Aparece primero en la comunidad (máx. 3 fijados)</div>
             </div>
           </label>
+
+          {/* Cuota del plan */}
+          {(() => {
+            const role = profile?.role || profile?.plan || 'member'
+            const limit = annLimit(role)
+            const isFree = limit === 1
+            const isUnlimited = limit >= 999
+            if (isUnlimited) return null
+            return (
+              <div style={{ padding: '8px 12px', background: isFree ? '#f59e0b14' : `${C.green}10`, borderRadius: 10, border: `1px solid ${isFree ? '#f59e0b33' : C.green + '33'}`, fontSize: 12, color: isFree ? '#f59e0b' : C.green }}>
+                {isFree
+                  ? '⚠️ Plan Gratuito: 1 anuncio activo. Eliminá el anterior para publicar uno nuevo. Actualizá a VIP para hasta 5/mes.'
+                  : `✓ Plan ${role.toUpperCase()}: hasta ${limit} anuncios por mes.`
+                }
+              </div>
+            )
+          })()}
 
           {/* Submit */}
           <button type="submit" disabled={saving || !title.trim() || !selectedCommunity} style={{
@@ -516,20 +571,12 @@ export default function AnnouncementsPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Can publish: must be CEO/admin/organizador/moderador role, or own/admin a community
+  // Can publish: roles con plan pago o que administran una comunidad
   useEffect(() => {
     if (!profile?.id) return
-    const role = profile.role || 'member'
-    if (['superadmin', 'admin', 'ceo', 'comunidad', 'organizador', 'moderador'].includes(role)) {
-      setCanPublish(true); return
-    }
-    // VIP also can publish if they manage a community
-    supabase
-      .from('group_roles')
-      .select('conversation_id', { count: 'exact', head: true })
-      .eq('user_id', profile.id)
-      .in('role', ['owner', 'admin', 'organizador'])
-      .then(({ count }) => setCanPublish((count || 0) > 0))
+    const role = profile.role || profile.plan || 'member'
+    // Todos pueden publicar (gratis con límite de 1, pago con límites más altos)
+    setCanPublish(true)
   }, [profile?.id, profile?.role])
 
   // Realtime — new announcements
