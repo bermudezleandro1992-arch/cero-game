@@ -106,7 +106,7 @@ const NAV = [
 ]
 
 // ── CEO Panel Picker — selects a community then opens CEOPanel ─────────────────
-function CEOPanelPicker({ onBack }) {
+function CEOPanelPicker({ onBack, onGoVip }) {
   const { profile } = useAuthStore()
   const [communities, setCommunities] = useState([])
   const [loading, setLoading] = useState(true)
@@ -132,6 +132,7 @@ function CEOPanelPicker({ onBack }) {
       community={{ ...selected, myRole: 'admin' }}
       onBack={() => setSelected(null)}
       onCommunityDeleted={() => { setSelected(null); setReloadKey(k => k + 1) }}
+      onGoVip={onGoVip}
     />
   )
 
@@ -554,7 +555,7 @@ export default function App() {
             : tab === 'panel-organizador'
             ? <OrganizadorPanelPicker onBack={() => setTab('chats')} />
             : tab === 'panel-ceo'
-            ? <CEOPanelPicker onBack={() => setTab('chats')} />
+            ? <CEOPanelPicker onBack={() => setTab('chats')} onGoVip={() => setTab('vip')} />
             : <ChatListPage onProfileClick={() => { setShowProfile(false); setTab('perfil') }} />
           }
         </div>
