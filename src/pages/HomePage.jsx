@@ -2,10 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { C } from '../theme'
-import { setLayoutSkin } from '../App'
-
-const SKIN_KEY = 'app_layout_skin'
-function getSkin() { try { return localStorage.getItem(SKIN_KEY) || 'default' } catch { return 'default' } }
+import { setLayoutSkin, getSkin } from '../lib/layoutSkin'
 
 const SKINS_CFG = [
   { id: 'default', label: 'NexoTribu', desc: 'Navegación clásica con panel lateral', icon: '🟢' },
