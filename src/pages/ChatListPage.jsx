@@ -358,18 +358,8 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
         {/* Top bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {/* Logo icon */}
-            <div style={{
-              width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-              background: `linear-gradient(135deg, ${C.greenDk} 0%, ${C.green}66 100%)`,
-              border: `1px solid ${C.green}40`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: `0 0 12px ${C.green}22`,
-            }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill={C.green} stroke="none">
-                <path d="M13 2L4.5 13.5H11L10 22L20.5 10H14L13 2Z"/>
-              </svg>
-            </div>
+            {/* Logo */}
+            <img src="/logo.svg" alt="NexoTribu" width="28" height="28" style={{ borderRadius: 8, flexShrink: 0 }} />
             <span style={{ color: C.text, fontWeight: 800, fontSize: 17, letterSpacing: '-0.3px' }}>
               NexoTribu
             </span>
