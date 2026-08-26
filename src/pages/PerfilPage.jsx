@@ -49,6 +49,9 @@ const PLAN_CFG = {
   ceo:       { label: 'CEO',        color: '#a855f7', icon: '👑' },
 }
 
+const VIP_EXCLUSIVE_THEMES = new Set(['ocean', 'purple', 'fire', 'nature'])
+const VIP_PLANS = new Set(['vip', 'pro', 'superadmin', 'admin', 'ceo'])
+
 // ── Preferencias Tab ─────────────────────────────────────────────────────────
 const SOUND_OPTIONS = {
   message:       { label: 'Mensaje de chat',      options: ['msg-default.mp3','msg-soft.mp3','msg-electro.mp3','msg-pop.mp3'] },
@@ -60,7 +63,7 @@ const SOUND_OPTIONS = {
 
 const DEFAULT_SOUNDS = { message:'msg-default.mp3', community:'comm-default.mp3', torneo:'torneo-default.mp3', ringtone:'ring-default.mp3', video_ringtone:'video-ring-default.mp3', vibration:true }
 
-function PreferenciasTab({ profile }) {
+function PreferenciasTab({ profile, onGoVip }) {
   const { themeId, setTheme } = useTheme()
   const [sounds, setSounds] = useState(DEFAULT_SOUNDS)
   const [savingSound, setSavingSound] = useState(false)
@@ -106,21 +109,33 @@ function PreferenciasTab({ profile }) {
           {themeId === 'system' && <span style={{ marginLeft: 'auto', color: C.green, fontSize: 18 }}>✓</span>}
         </button>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
-          {Object.values(THEMES).map(t => (
-            <button key={t.id} onClick={() => changeTheme(t.id)} style={{
-              padding: '12px 8px', borderRadius: 12, border: `2px solid ${themeId === t.id ? t.green : C.border}`,
-              background: t.bg, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-              boxShadow: themeId === t.id ? `0 0 0 1px ${t.green}` : 'none',
-            }}>
-              <span style={{ fontSize: 22 }}>{t.emoji}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: t.text }}>{t.label}</span>
-              <div style={{ display: 'flex', gap: 3 }}>
-                {[t.bg, t.panel, t.green, t.red].map((c, i) => (
-                  <div key={i} style={{ width: 12, height: 12, borderRadius: 3, background: c }} />
-                ))}
-              </div>
-            </button>
-          ))}
+          {Object.values(THEMES).map(t => {
+            const isVipOnly = VIP_EXCLUSIVE_THEMES.has(t.id)
+            const hasVip = VIP_PLANS.has(profile?.plan)
+            const locked = isVipOnly && !hasVip
+            return (
+              <button key={t.id} onClick={() => locked ? onGoVip?.() : changeTheme(t.id)} style={{
+                padding: '12px 8px', borderRadius: 12, border: `2px solid ${themeId === t.id ? t.green : C.border}`,
+                background: t.bg, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                boxShadow: themeId === t.id ? `0 0 0 1px ${t.green}` : 'none',
+                position: 'relative', opacity: locked ? 0.75 : 1,
+              }}>
+                {locked && (
+                  <div style={{ position: 'absolute', inset: 0, borderRadius: 10, background: 'rgba(0,0,0,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                    <span style={{ fontSize: 18 }}>⭐</span>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: '#f59e0b', letterSpacing: '0.5px' }}>VIP</span>
+                  </div>
+                )}
+                <span style={{ fontSize: 22 }}>{t.emoji}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: t.text }}>{t.label}</span>
+                <div style={{ display: 'flex', gap: 3 }}>
+                  {[t.bg, t.panel, t.green, t.red].map((c, i) => (
+                    <div key={i} style={{ width: 12, height: 12, borderRadius: 3, background: c }} />
+                  ))}
+                </div>
+              </button>
+            )
+          })}
         </div>
       </section>
 
@@ -1042,7 +1057,7 @@ export default function PerfilPage({ onClose, onGoVip }) {
       {tab === 'cuenta' && showBots && (
         <BotApiPage onBack={() => setShowBots(false)} />
       )}
-      {tab === 'preferencias' && <PreferenciasTab profile={profile} />}
+      {tab === 'preferencias' && <PreferenciasTab profile={profile} onGoVip={onGoVip} />}
       {tab === 'identidad' && (
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <IdentityVerification profile={profile} />
