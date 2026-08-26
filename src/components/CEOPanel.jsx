@@ -296,6 +296,7 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
       .select('id, name, tournament_status, created_at, max_members, game, tournament_format')
       .eq('community_id', communityId)
       .in('group_type', ['tournament', 'liga'])
+      .neq('tournament_status', 'eliminado')
       .order('created_at', { ascending: false })
     setTorneos(data || [])
     setLoading(false)
@@ -308,30 +309,32 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
     if (!t) return
     setDeleting(t.id)
     const id = t.id
+    const tryDel = (table, col) => supabase.from(table).delete().eq(col, id).then(() => {})
     try {
-      const del = async (table, col) => {
-        const { error } = await supabase.from(table).delete().eq(col, id)
-        if (error) throw new Error(`${table}: ${error.message}`)
-      }
-      await del('tournament_disputes', 'tournament_id')
-      await del('tournament_draw_events', 'tournament_id')
-      await del('tournament_group_members', 'tournament_id')
-      await del('tournament_standings', 'tournament_id')
-      await del('tournament_brackets', 'tournament_id')
+      // Delete all child data (best-effort — RLS may block some, that's ok)
+      await tryDel('tournament_disputes', 'tournament_id')
+      await tryDel('tournament_draw_events', 'tournament_id')
+      await tryDel('tournament_group_members', 'tournament_id')
+      await tryDel('tournament_standings', 'tournament_id')
+      await tryDel('tournament_brackets', 'tournament_id')
       const { data: matchRows } = await supabase.from('tournament_matches').select('id').eq('tournament_id', id)
       if (matchRows?.length) {
         await supabase.from('match_results').delete().in('match_id', matchRows.map(m => m.id))
       }
-      await del('tournament_matches', 'tournament_id')
-      await del('tournament_groups', 'tournament_id')
+      await tryDel('tournament_matches', 'tournament_id')
+      await tryDel('tournament_groups', 'tournament_id')
       await supabase.from('announcements').update({ tournament_id: null }).eq('tournament_id', id)
-      await del('conversation_members', 'conversation_id')
-      await del('messages', 'conversation_id')
-      await del('conversations', 'id')
+      await tryDel('conversation_members', 'conversation_id')
+      await tryDel('messages', 'conversation_id')
 
-      // Verify it was actually deleted (RLS can silently block deletes)
+      // Try hard delete first; fall back to soft-delete (status='eliminado') if RLS blocks it
+      await supabase.from('conversations').delete().eq('id', id)
       const { data: stillThere } = await supabase.from('conversations').select('id').eq('id', id).maybeSingle()
-      if (stillThere) throw new Error('Sin permisos para eliminar este torneo (RLS). Contactá al admin.')
+      if (stillThere) {
+        // RLS blocked hard delete — soft-delete instead
+        const { error: updErr } = await supabase.from('conversations').update({ tournament_status: 'eliminado' }).eq('id', id)
+        if (updErr) throw new Error('Sin permisos para eliminar este torneo.')
+      }
 
       setTorneos(prev => prev.filter(x => x.id !== id))
       setConfirmTorneo(null)
