@@ -608,7 +608,7 @@ export default function App() {
           {showProfile
             ? <ProfileSheet onClose={() => { setShowProfile(false); setOpenVipDirect(false) }} />
             : tab === 'inicio'
-            ? <HomePage onGoTorneos={() => setTab('comunidades')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} onGoCuenta={() => setTab('perfil')} onGoPanelCeo={() => setTab('panel-ceo')} />
+            ? <HomePage onGoTorneos={() => setTab('comunidades')} onGoRanking={() => setTab('ranking')} onGoExplorar={() => setTab('explorar')} onGoAnuncios={() => setTab('anuncios')} onGoCuenta={() => setTab('perfil')} onGoPanelCeo={() => setTab('panel-ceo')} onGoChats={() => setTab('chats')} onGoContactos={() => setTab('contactos')} />
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'

@@ -2,6 +2,15 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { C } from '../theme'
+import { setLayoutSkin } from '../App'
+
+const SKIN_KEY = 'app_layout_skin'
+function getSkin() { try { return localStorage.getItem(SKIN_KEY) || 'default' } catch { return 'default' } }
+
+const SKINS_CFG = [
+  { id: 'default', label: 'NexoTribu', desc: 'Navegación clásica con panel lateral', icon: '🟢' },
+  { id: 'whatsapp', label: 'Estilo Mensajero', desc: 'Diseño moderno tipo mensajería', icon: '💬' },
+]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -426,103 +435,53 @@ function StatsStrip({ torneos, comunidades, ranking }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function HomePage({ onGoTorneos, onGoRanking, onGoExplorar, onGoAnuncios, onGoCuenta, onGoPanelCeo }) {
+export default function HomePage({ onGoTorneos, onGoRanking, onGoExplorar, onGoAnuncios, onGoCuenta, onGoPanelCeo, onGoChats, onGoContactos }) {
   const { profile } = useAuthStore()
-  const [torneos,    setTorneos]    = useState([])
+  const [torneos,  setTorneos]  = useState([])
   const [comunidades, setComunidades] = useState([])
-  const [ranking,    setRanking]    = useState([])
-  const [anuncios,   setAnuncios]   = useState([])
-  const [loading,    setLoading]    = useState(true)
+  const [ranking,  setRanking]  = useState([])
+  const [loading,  setLoading]  = useState(true)
+  const [skin,     setSkinState] = useState(getSkin)
+
+  useEffect(() => {
+    const h = () => setSkinState(getSkin())
+    window.addEventListener('skinchange', h)
+    return () => window.removeEventListener('skinchange', h)
+  }, [])
 
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const [{ data: t }, { data: c }, { data: m }, { data: a }] = await Promise.all([
-        // Torneos activos con conteo de participantes
-        supabase
-          .from('conversations')
-          .select('id, name, game, tournament_format, tournament_status, max_participants')
-          .in('group_type', ['tournament', 'liga'])
-          .in('tournament_status', ['inscripcion', 'en_curso'])
-          .eq('is_public', true)
-          .order('created_at', { ascending: false })
-          .limit(10),
-
-        // Comunidades públicas
-        supabase
-          .from('conversations')
-          .select('id, name, description, avatar_url')
-          .eq('group_type', 'community')
-          .eq('is_public', true)
-          .order('created_at', { ascending: false })
-          .limit(8),
-
-        // Matches finalizados para ranking
-        supabase
-          .from('tournament_matches')
-          .select('winner_id')
-          .eq('status', 'finalizado')
-          .not('winner_id', 'is', null),
-
-        // Últimos anuncios
-        supabase
-          .from('announcements')
-          .select('id, title, content, created_at, author:author_id(id, display_name, avatar_url), community:conversation_id(id, name)')
-          .order('created_at', { ascending: false })
-          .limit(4),
+      const [{ data: t }, { data: c }, { data: m }] = await Promise.all([
+        supabase.from('conversations').select('id, tournament_status').in('group_type', ['tournament', 'liga']).in('tournament_status', ['inscripcion', 'en_curso']).eq('is_public', true),
+        supabase.from('conversations').select('id').eq('group_type', 'community').eq('is_public', true),
+        supabase.from('tournament_matches').select('winner_id').eq('status', 'finalizado').not('winner_id', 'is', null),
       ])
+      setTorneos(t || [])
+      setComunidades(c || [])
 
-      // Torneos: enrich con conteo real de participantes
-      if (t?.length) {
-        const ids = t.map(x => x.id)
-        const { data: members } = await supabase
-          .from('conversation_members')
-          .select('conversation_id')
-          .in('conversation_id', ids)
-        const countMap = {}
-        ;(members || []).forEach(m => { countMap[m.conversation_id] = (countMap[m.conversation_id] || 0) + 1 })
-        setTorneos(t.map(x => ({ ...x, participant_count: countMap[x.id] || 0 })))
-      }
-
-      // Comunidades: enrich con member count y ordenar por popularidad
-      if (c?.length) {
-        const ids = c.map(x => x.id)
-        const { data: members } = await supabase
-          .from('conversation_members')
-          .select('conversation_id')
-          .in('conversation_id', ids)
-        const countMap = {}
-        ;(members || []).forEach(m => { countMap[m.conversation_id] = (countMap[m.conversation_id] || 0) + 1 })
-        setComunidades(c.map(x => ({ ...x, member_count: countMap[x.id] || 0 })).sort((a, b) => b.member_count - a.member_count))
-      }
-
-      // Ranking: agregar victorias y obtener perfiles
       if (m?.length) {
         const wins = {}
         m.forEach(r => { wins[r.winner_id] = (wins[r.winner_id] || 0) + 1 })
         const top5 = Object.entries(wins).sort((a, b) => b[1] - a[1]).slice(0, 5)
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, display_name, avatar_url')
-          .in('id', top5.map(([id]) => id))
-        setRanking(top5.map(([id, w], i) => ({
-          rank: i + 1, wins: w,
-          ...(profiles?.find(p => p.id === id) || { id }),
-        })))
+        const { data: profiles } = await supabase.from('profiles').select('id, display_name, avatar_url').in('id', top5.map(([id]) => id))
+        setRanking(top5.map(([id, w], i) => ({ rank: i + 1, wins: w, ...(profiles?.find(p => p.id === id) || { id }) })))
       }
-
-      setAnuncios(a || [])
       setLoading(false)
     }
     load()
   }, [])
 
+  const ACTION_CARDS = [
+    { icon: '🌐', color: '#8b5cf6', label: 'Creá tu comunidad', desc: 'Armá el espacio de tu tribu con canales, anuncios y configuración propia.', cta: 'Explorar', onClick: onGoExplorar },
+    { icon: '💬', color: C.green,   label: 'Chateá con amigos', desc: 'Mensajes directos, grupos y llamadas de audio y video ilimitadas.', cta: 'Ir a Chats', onClick: onGoChats },
+    { icon: '👥', color: '#00b0ff', label: 'Agregá contactos', desc: 'Encontrá jugadores, agregá amigos y construí tu red de contactos.', cta: 'Contactos', onClick: onGoContactos },
+    { icon: '🏆', color: '#f59e0b', label: 'Explorá torneos', desc: 'Participá en torneos y ligas con brackets automáticos y resultados en vivo.', cta: 'Explorar', onClick: onGoTorneos },
+  ]
+
   return (
     <div style={{ height: '100%', overflowY: 'auto', background: C.bg }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg) } }
-        .home-scroll::-webkit-scrollbar { display: none }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
 
       <Hero profile={profile} onGoTorneos={onGoTorneos} onGoExplorar={onGoExplorar} />
 
@@ -530,74 +489,69 @@ export default function HomePage({ onGoTorneos, onGoRanking, onGoExplorar, onGoA
         <PromoBanner profile={profile} onGoCuenta={onGoCuenta} onGoExplorar={onGoExplorar} onGoPanelCeo={onGoPanelCeo} />
       </div>
 
-      <div style={{ padding: '24px 16px 40px', maxWidth: 960, margin: '0 auto' }}>
-        <style>{`
-          .home-grid { display: flex; flex-direction: column; gap: 32px; }
-          .home-two-col { display: grid; grid-template-columns: 1fr; gap: 32px; }
-          @media (min-width: 760px) {
-            .home-two-col { grid-template-columns: 1fr 1fr; }
-          }
-        `}</style>
+      <div style={{ padding: '20px 16px 48px', maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
-        <div className="home-grid">
-          {/* Stats */}
-          {!loading && <StatsStrip torneos={torneos} comunidades={comunidades} ranking={ranking} />}
+        {/* Stats */}
+        <StatsStrip torneos={torneos} comunidades={comunidades} ranking={ranking} />
 
-          {/* Torneos destacados — full width */}
-          <section>
-            <SectionTitle icon="🏆" label="Torneos Destacados" action="Ver todos" onAction={onGoTorneos} />
-            {loading ? <Spinner /> : torneos.length === 0 ? (
-              <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', padding: '28px 0' }}>No hay torneos activos</div>
-            ) : (
-              <div className="home-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6 }}>
-                {torneos.map(t => (
-                  <TorneoCard key={t.id} torneo={t} onClick={onGoTorneos} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* 2-col: Comunidades + Ranking */}
-          <div className="home-two-col">
-            <section>
-              <SectionTitle icon="🌐" label="Comunidades" action="Explorar" onAction={onGoExplorar} />
-              {loading ? <Spinner /> : comunidades.length === 0 ? (
-                <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', padding: '28px 0' }}>Sin comunidades aún</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {comunidades.slice(0, 4).map(c => (
-                    <ComunidadCard key={c.id} comunidad={c} />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section>
-              <SectionTitle icon="📊" label="Ranking Global" action="Ver completo" onAction={onGoRanking} />
-              {loading ? <Spinner /> : ranking.length === 0 ? (
-                <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', padding: '28px 0' }}>Sin datos de ranking aún</div>
-              ) : (
-                <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
-                  {ranking.map(p => (
-                    <RankRow key={p.id} rank={p.rank} player={p} isMe={p.id === profile?.id} />
-                  ))}
-                </div>
-              )}
-            </section>
+        {/* Action cards */}
+        <section>
+          <div style={{ color: C.textDim, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 12 }}>¿Qué querés hacer?</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+            {ACTION_CARDS.map(card => (
+              <button key={card.label} onClick={card.onClick} style={{
+                background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14,
+                padding: '14px', textAlign: 'left', cursor: 'pointer', transition: 'border-color .15s',
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = `${card.color}66`}
+                onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+              >
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: `${card.color}18`, border: `1px solid ${card.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{card.icon}</div>
+                <div style={{ color: C.text, fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{card.label}</div>
+                <div style={{ color: C.textDim, fontSize: 11, lineHeight: 1.5 }}>{card.desc}</div>
+                <span style={{ marginTop: 2, color: card.color, fontSize: 11, fontWeight: 800 }}>{card.cta} →</span>
+              </button>
+            ))}
           </div>
+        </section>
 
-          {/* Anuncios */}
-          {(anuncios.length > 0 || loading) && (
-            <section>
-              <SectionTitle icon="📢" label="Últimos Anuncios" action="Ver todos" onAction={onGoAnuncios} />
-              {loading ? <Spinner /> : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
-                  {anuncios.map(a => <AnuncioCard key={a.id} anuncio={a} />)}
-                </div>
-              )}
-            </section>
+        {/* Ranking compact */}
+        <section>
+          <SectionTitle icon="📊" label="Ranking Global" action="Ver completo" onAction={onGoRanking} />
+          {loading ? <Spinner /> : ranking.length === 0 ? (
+            <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', padding: '24px 0' }}>Sin datos de ranking aún</div>
+          ) : (
+            <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
+              {ranking.map(p => <RankRow key={p.id} rank={p.rank} player={p} isMe={p.id === profile?.id} />)}
+            </div>
           )}
-        </div>
+        </section>
+
+        {/* Skin selector */}
+        <section>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <div style={{ flex: 1, height: 1, background: C.border }} />
+            <span style={{ color: C.textDim, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase' }}>Apariencia</span>
+            <div style={{ flex: 1, height: 1, background: C.border }} />
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {SKINS_CFG.map(s => (
+              <button key={s.id} onClick={() => { setLayoutSkin(s.id); setSkinState(s.id) }} style={{
+                flex: 1, padding: '14px', borderRadius: 14, cursor: 'pointer', textAlign: 'left',
+                background: skin === s.id ? `${C.green}12` : C.panel,
+                border: `2px solid ${skin === s.id ? C.green : C.border}`,
+                transition: 'all .15s',
+              }}>
+                <div style={{ fontSize: 24, marginBottom: 6 }}>{s.icon}</div>
+                <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{s.label}</div>
+                <div style={{ color: C.textDim, fontSize: 11, marginTop: 3, lineHeight: 1.4 }}>{s.desc}</div>
+                {skin === s.id && <div style={{ marginTop: 6, color: C.green, fontSize: 11, fontWeight: 800 }}>✓ Activo</div>}
+              </button>
+            ))}
+          </div>
+        </section>
+
       </div>
     </div>
   )
