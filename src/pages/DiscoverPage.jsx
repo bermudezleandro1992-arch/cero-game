@@ -512,20 +512,6 @@ export default function DiscoverPage() {
           </div>
         </div>
 
-        {/* Tab bar */}
-        <div style={{ display: 'flex', padding: '0 16px' }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              flex: 1, background: 'none', border: 'none', cursor: 'pointer',
-              padding: '8px 0', fontSize: 12, fontWeight: 600,
-              color: tab === t.id ? C.green : C.textDim,
-              borderBottom: `2px solid ${tab === t.id ? C.green : 'transparent'}`,
-              transition: 'color .15s, border-color .15s',
-            }}>
-              {t.emoji} {t.label}
-            </button>
-          ))}
-        </div>
 
         {/* Filtros de torneos */}
         {showTournamentFilters && (
