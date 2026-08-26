@@ -329,6 +329,10 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
       await del('messages', 'conversation_id')
       await del('conversations', 'id')
 
+      // Verify it was actually deleted (RLS can silently block deletes)
+      const { data: stillThere } = await supabase.from('conversations').select('id').eq('id', id).maybeSingle()
+      if (stillThere) throw new Error('Sin permisos para eliminar este torneo (RLS). Contactá al admin.')
+
       setTorneos(prev => prev.filter(x => x.id !== id))
       setConfirmTorneo(null)
       toast('Torneo eliminado ✓', 'ok')
@@ -1566,7 +1570,7 @@ function AnunciosTab({ communityId, profile, toast }) {
 
 // Main CEOPanel
 // ══════════════════════════════════════════════════════════════════════════════
-export default function CEOPanel({ community, onBack }) {
+export default function CEOPanel({ community, onBack, onCommunityDeleted }) {
   const { profile } = useAuthStore()
   const [tab, setTab] = useState('dashboard')
   const [showCreateTorneo, setShowCreateTorneo] = useState(false)
@@ -1707,7 +1711,7 @@ export default function CEOPanel({ community, onBack }) {
             communityId={communityId}
             communityName={community?.name || ''}
             toast={showToast}
-            onCommunityDeleted={onBack}
+            onCommunityDeleted={onCommunityDeleted || onBack}
           />
         )}
       </div>
