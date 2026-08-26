@@ -430,13 +430,75 @@ function AvatarRing({ avatarUrl, hasActive, size = 52, onClick }) {
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
+// ── Privacy Settings Panel ────────────────────────────────────────────────────
+const PRIVACY_OPTIONS = [
+  { id: 'contacts',        label: 'Mis contactos',          desc: 'Se comparte con todos tus contactos.' },
+  { id: 'contacts_except', label: 'Mis contactos, excepto…', desc: 'Comparte con tus contactos, excepto los seleccionados.' },
+  { id: 'only',            label: 'Solo compartir con…',    desc: 'Solo comparte con los contactos seleccionados.' },
+]
+
+function PrivacyPanel({ onClose }) {
+  const [selected, setSelected] = useState(() => {
+    try { return localStorage.getItem('estado_privacy') || 'contacts' } catch { return 'contacts' }
+  })
+
+  function save(id) {
+    setSelected(id)
+    try { localStorage.setItem('estado_privacy', id) } catch {}
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 8500, background: C.bg, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4 }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <div style={{ color: C.text, fontWeight: 700, fontSize: 16 }}>Privacidad de estados</div>
+      </div>
+
+      <div style={{ padding: '20px 20px 8px', color: C.textDim, fontSize: 13 }}>
+        ¿Quién puede ver mis estados?
+      </div>
+
+      <div style={{ flex: 1, padding: '0 12px' }}>
+        {PRIVACY_OPTIONS.map(opt => (
+          <button key={opt.id} onClick={() => save(opt.id)} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 16,
+            padding: '14px 8px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left',
+            borderBottom: `1px solid ${C.border}`,
+          }}>
+            {/* Radio */}
+            <div style={{
+              width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+              border: `2px solid ${selected === opt.id ? C.green : C.textDim}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {selected === opt.id && <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.green }} />}
+            </div>
+            <div>
+              <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>{opt.label}</div>
+              <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>{opt.desc}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding: '16px 20px 24px', color: C.textDim, fontSize: 12, lineHeight: 1.5 }}>
+        Los cambios se aplican a los estados que publiques de ahora en adelante.
+      </div>
+    </div>
+  )
+}
+
 export default function EstadosPage() {
   const { profile } = useAuthStore()
   const [myEstados, setMyEstados] = useState([])
   const [contactEstados, setContactEstados] = useState([])
   const [loading, setLoading] = useState(true)
   const [showComposer, setShowComposer] = useState(false)
+  const [showPrivacy, setShowPrivacy] = useState(false)
   const [viewerData, setViewerData] = useState(null) // { groups, startIdx }
+  const privacy = (() => { try { return localStorage.getItem('estado_privacy') || 'contacts' } catch { return 'contacts' } })()
 
   async function load() {
     if (!profile?.id) return
@@ -493,9 +555,18 @@ export default function EstadosPage() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
       {/* Header */}
-      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '14px 20px', flexShrink: 0 }}>
-        <div style={{ color: C.text, fontWeight: 700, fontSize: 18 }}>Estados</div>
-        <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>Actualizaciones de tus contactos</div>
+      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '14px 20px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ color: C.text, fontWeight: 700, fontSize: 18 }}>Estados</div>
+          <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>Actualizaciones de tus contactos</div>
+        </div>
+        <button onClick={() => setShowPrivacy(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/>
+          </svg>
+          <span style={{ fontSize: 9, fontWeight: 600 }}>Privacidad</span>
+        </button>
       </div>
 
       {loading ? (
@@ -507,7 +578,15 @@ export default function EstadosPage() {
 
           {/* Mi estado */}
           <div style={{ padding: '16px 16px 8px', borderBottom: `1px solid ${C.border}` }}>
-            <div style={{ color: C.textDim, fontSize: 11, fontWeight: 600, letterSpacing: '1px', marginBottom: 12 }}>MI ESTADO</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ color: C.textDim, fontSize: 11, fontWeight: 600, letterSpacing: '1px' }}>MI ESTADO</div>
+              <button onClick={() => setShowPrivacy(true)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 20, padding: '3px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 10 }}>🔒</span>
+                <span style={{ color: C.textDim, fontSize: 10, fontWeight: 600 }}>
+                  {PRIVACY_OPTIONS.find(o => o.id === privacy)?.label || 'Mis contactos'}
+                </span>
+              </button>
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ position: 'relative' }}>
                 <AvatarRing
@@ -598,6 +677,9 @@ export default function EstadosPage() {
           )}
         </div>
       )}
+
+      {/* Privacy panel */}
+      {showPrivacy && <PrivacyPanel onClose={() => setShowPrivacy(false)} />}
 
       {/* Composer */}
       {showComposer && (
