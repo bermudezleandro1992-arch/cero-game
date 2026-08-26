@@ -325,7 +325,6 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
       await del('tournament_matches', 'tournament_id')
       await del('tournament_groups', 'tournament_id')
       await supabase.from('announcements').update({ tournament_id: null }).eq('tournament_id', id)
-      await del('group_roles', 'conversation_id')
       await del('conversation_members', 'conversation_id')
       await del('messages', 'conversation_id')
       await del('conversations', 'id')
