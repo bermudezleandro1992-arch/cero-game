@@ -114,9 +114,19 @@ function EstadoViewer({ groups, startGroupIdx, onClose, myId }) {
       display: 'flex', flexDirection: 'column',
     }}>
       {/* Header */}
-      <div style={{ position: 'relative', zIndex: 10, background: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)' }}>
+      <div style={{ position: 'relative', zIndex: 10, background: 'linear-gradient(to bottom, rgba(0,0,0,0.75), transparent)' }}>
         <ProgressBar count={group.items.length} current={itemIdx} duration={DISPLAY_SECS} onNext={next} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 14px 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 14px 12px' }}>
+          {/* Botón volver — siempre visible */}
+          <button onClick={onClose} style={{
+            background: 'rgba(0,0,0,0.4)', border: 'none', cursor: 'pointer',
+            color: '#fff', width: 36, height: 36, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+          </button>
           <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: C.border, flexShrink: 0 }}>
             {group.avatar_url
               ? <img src={group.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
@@ -130,9 +140,8 @@ function EstadoViewer({ groups, startGroupIdx, onClose, myId }) {
             </div>
           </div>
           {isOwn && (
-            <button onClick={loadViews} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.8)', fontSize: 20, padding: 4 }}>👁️</button>
+            <button onClick={loadViews} style={{ background: 'rgba(0,0,0,0.4)', border: 'none', cursor: 'pointer', color: '#fff', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>👁️</button>
           )}
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 22, padding: 4 }}>✕</button>
         </div>
       </div>
 
