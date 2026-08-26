@@ -1222,8 +1222,13 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
                   }
 
                   // Delete community-level data (best-effort each)
+                  // First get announcement IDs so we can delete likes by announcement_id
+                  const { data: annRows } = await supabase.from('announcements').select('id').eq('conversation_id', communityId)
+                  if (annRows?.length) {
+                    const annIds = annRows.map(a => a.id)
+                    await supabase.from('announcement_likes').delete().in('announcement_id', annIds).then(() => {})
+                  }
                   await tryDel('announcements', 'conversation_id', communityId)
-                  await tryDel('announcement_likes', 'conversation_id', communityId)
                   await tryDel('community_requests', 'community_id', communityId)
                   await tryDel('conversation_members', 'conversation_id', communityId)
                   await tryDel('messages', 'conversation_id', communityId)
