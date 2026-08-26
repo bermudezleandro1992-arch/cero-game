@@ -995,30 +995,6 @@ function EmptyState() {
           ))}
         </div>
 
-        {/* Skin selector */}
-        <div style={{ marginTop: 28 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-            <div style={{ flex: 1, height: 1, background: C.border }} />
-            <span style={{ color: C.textDim, fontSize: 11, fontWeight: 600, letterSpacing: '1px' }}>APARIENCIA</span>
-            <div style={{ flex: 1, height: 1, background: C.border }} />
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            {SKINS.map(s => (
-              <button key={s.id} onClick={() => setLayoutSkin(s.id)} style={{
-                flex: 1, padding: '12px 14px', borderRadius: 14, cursor: 'pointer', textAlign: 'left',
-                background: skin === s.id ? `${C.green}12` : C.panel,
-                border: `2px solid ${skin === s.id ? C.green : C.border}`,
-                transition: 'all .15s',
-              }}>
-                <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
-                <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{s.label}</div>
-                <div style={{ color: C.textDim, fontSize: 11, marginTop: 2, lineHeight: 1.4 }}>{s.desc}</div>
-                {skin === s.id && <div style={{ marginTop: 6, color: C.green, fontSize: 11, fontWeight: 800 }}>✓ Activo</div>}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Tagline */}
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: `${C.textDim}88`, letterSpacing: '0.5px' }}>
           Seleccioná una conversación para comenzar
