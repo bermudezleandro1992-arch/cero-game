@@ -9,6 +9,7 @@ export const useChatStore = create((set, get) => ({
   loadingMessages: false,
   topics: [],
   activeTopicId: null,
+  subChannelMap: {}, // subChannelId → communityConvId
 
   setActiveConversation: (conv) => set({ activeConversation: conv, messages: [], topics: [], activeTopicId: null }),
   setActiveTopic: (topicId) => set({ activeTopicId: topicId }),
@@ -221,6 +222,10 @@ export const useChatStore = create((set, get) => ({
           communityUnread[c.id] = total
         }
 
+        // Build sub-channel → community map for realtime updates
+        const subChannelMap = {}
+        subChannels?.forEach(ch => { subChannelMap[ch.id] = ch.community_id })
+
         conversations.forEach(c => {
           if (!c.isCommunity) return
           if (communityLastMsg[c.id]) {
@@ -228,6 +233,8 @@ export const useChatStore = create((set, get) => ({
             c.unread = (communityUnread[c.id] || 0) + (c.unread || 0)
           }
         })
+
+        set(state => ({ subChannelMap: { ...state.subChannelMap, ...subChannelMap } }))
       }
     }
 
@@ -262,16 +269,19 @@ export const useChatStore = create((set, get) => ({
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         const msg = payload.new
         set(state => {
-          const idx = state.conversations.findIndex(c => c.id === msg.conversation_id)
+          // Resolve the conversation to update — may be a community parent via sub-channel
+          const communityId = state.subChannelMap[msg.conversation_id]
+          const targetId = communityId || msg.conversation_id
+
+          const idx = state.conversations.findIndex(c => c.id === targetId)
           if (idx === -1) return state
+
           const isActive = state.activeConversation?.id === msg.conversation_id
           const isOwn = msg.sender_id === userId
-          // Play sound and show notification for incoming messages
           if (!isOwn) {
             sounds.msgReceived()
-            // Browser notification when tab is hidden/minimized
             if (document.visibilityState !== 'visible' && Notification.permission === 'granted') {
-              const conv = state.conversations.find(c => c.id === msg.conversation_id)
+              const conv = state.conversations[idx]
               const convName = conv?.name || 'NexoTribu'
               const body = msg.type === 'image' ? '📷 Imagen' : msg.type === 'audio' ? '🎵 Audio' : (msg.content || '').slice(0, 80)
               try {
@@ -279,14 +289,14 @@ export const useChatStore = create((set, get) => ({
                   body,
                   icon: '/icon-192.png',
                   badge: '/icon-192.png',
-                  tag: `msg-${msg.conversation_id}`,
+                  tag: `msg-${targetId}`,
                   silent: false,
                 })
               } catch {}
             }
           }
           const updated = state.conversations.map(c => {
-            if (c.id !== msg.conversation_id) return c
+            if (c.id !== targetId) return c
             return {
               ...c,
               lastMessage: msg,
