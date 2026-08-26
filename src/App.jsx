@@ -476,8 +476,6 @@ export default function App() {
               { id: 'estados',     label: 'Estados',    icon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.green:C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> },
               { id: 'explorar',    label: 'Explorar',   icon: NAV.find(n=>n.id==='explorar')?.icon },
               { id: 'comunidades', label: 'Comunidades',icon: NAV.find(n=>n.id==='comunidades')?.icon },
-              { id: 'ranking',     label: 'Ranking',    icon: NAV.find(n=>n.id==='ranking')?.icon },
-              { id: 'contactos',   label: 'Contactos',  icon: NAV.find(n=>n.id==='contactos')?.icon },
             ].map(({ id, label, icon }) => {
               const active = !showProfile && tab === id
               return (
@@ -514,8 +512,24 @@ export default function App() {
               </button>
             )})()}
 
-            {/* Bottom: Perfil con avatar */}
+            {/* Bottom: Ranking + Perfil */}
             <div style={{ marginTop: 'auto' }}>
+              {/* Ranking — como "Contenido multimedia" en WhatsApp */}
+              {(() => { const active = !showProfile && tab === 'ranking'; return (
+                <button onClick={() => { setShowProfile(false); setTab('ranking') }} style={{
+                  width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  justifyContent: 'center', gap: 4, border: 'none',
+                  background: active ? `${C.green}12` : 'none', cursor: 'pointer', padding: '12px 0',
+                  borderLeft: `3px solid ${active ? C.green : 'transparent'}`, transition: 'background .15s',
+                }}>
+                  {NAV.find(n=>n.id==='ranking')?.icon(active)}
+                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>Ranking</span>
+                </button>
+              )})()}
+            </div>
+
+            {/* Perfil con avatar */}
+            <div style={{}}>
               <button onClick={() => setShowProfile(true)} style={{
                 width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
                 justifyContent: 'center', gap: 4, border: 'none',
@@ -676,8 +690,6 @@ export default function App() {
               ...(layoutSkin === 'whatsapp' ? [
                 { id: 'comunidades',       icon: '🌐', label: 'Comunidades' },
                 { id: 'anuncios',          icon: '📢', label: 'Anuncios' },
-                { id: 'ranking',           icon: '🏆', label: 'Ranking' },
-                { id: 'contactos',         icon: '👥', label: 'Contactos' },
                 { id: '__perfil__',        icon: '👤', label: 'Perfil' },
               ] : [
                 { id: 'contactos',         icon: '👥', label: 'Contactos' },
