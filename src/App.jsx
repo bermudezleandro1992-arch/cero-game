@@ -111,32 +111,29 @@ function CEOPanelPicker({ onBack }) {
   const [communities, setCommunities] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     async function load() {
+      setLoading(true)
       const { data: owned } = await supabase
         .from('conversations')
         .select('id, name, description, avatar_url')
         .eq('group_type', 'community')
         .eq('created_by', profile.id)
-      const { data: roles } = await supabase
-        .from('group_roles')
-        .select('conversation_id')
-        .eq('user_id', profile.id)
-        .in('role', ['owner', 'admin'])
-      const extraIds = (roles || []).map(r => r.conversation_id).filter(id => !(owned || []).find(o => o.id === id))
-      let extra = []
-      if (extraIds.length) {
-        const { data } = await supabase.from('conversations').select('id, name, description, avatar_url').in('id', extraIds)
-        extra = data || []
-      }
-      setCommunities([...(owned || []), ...extra])
+      setCommunities(owned || [])
       setLoading(false)
     }
     load()
-  }, [profile?.id])
+  }, [profile?.id, reloadKey])
 
-  if (selected) return <CEOPanel community={{ ...selected, myRole: 'admin' }} onBack={() => setSelected(null)} />
+  if (selected) return (
+    <CEOPanel
+      community={{ ...selected, myRole: 'admin' }}
+      onBack={() => setSelected(null)}
+      onCommunityDeleted={() => { setSelected(null); setReloadKey(k => k + 1) }}
+    />
+  )
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
