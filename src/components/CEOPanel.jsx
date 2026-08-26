@@ -1186,44 +1186,49 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
                 if (!communityName || deleteConfirmText !== communityName) return
                 setDeletingCommunity(true)
                 try {
-                  // 1. Sub-channels (conversations with community_id = communityId)
+                  // Best-effort delete helper — RLS policies on some tables cause 500s, we skip and continue
+                  const tryDel = (table, col, val) =>
+                    supabase.from(table).delete().eq(col, val).then(() => {})
+
+                  // Get all sub-conversations (channels, tournaments, ligas)
                   const { data: subChans } = await supabase.from('conversations').select('id').eq('community_id', communityId)
                   const subIds = (subChans || []).map(c => c.id)
-                  // Also include all tournament/liga ids under this community
-                  const { data: tornIds } = await supabase.from('conversations').select('id').eq('community_id', communityId).in('group_type', ['tournament', 'liga'])
-                  const torneoIds = (tornIds || []).map(c => c.id)
 
-                  // Delete tournament data for each torneo
+                  // Cascade-delete tournament data for every tournament/liga
+                  const torneoIds = subIds // all sub-convs; tournament-only tables will just no-op on non-tournament ids
                   for (const tid of torneoIds) {
-                    await supabase.from('tournament_disputes').delete().eq('tournament_id', tid)
-                    await supabase.from('tournament_draw_events').delete().eq('tournament_id', tid)
-                    await supabase.from('tournament_group_members').delete().eq('tournament_id', tid)
-                    await supabase.from('tournament_standings').delete().eq('tournament_id', tid)
-                    await supabase.from('tournament_brackets').delete().eq('tournament_id', tid)
+                    await tryDel('tournament_disputes', 'tournament_id', tid)
+                    await tryDel('tournament_draw_events', 'tournament_id', tid)
+                    await tryDel('tournament_group_members', 'tournament_id', tid)
+                    await tryDel('tournament_standings', 'tournament_id', tid)
+                    await tryDel('tournament_brackets', 'tournament_id', tid)
                     const { data: mIds } = await supabase.from('tournament_matches').select('id').eq('tournament_id', tid)
                     if (mIds?.length) await supabase.from('match_results').delete().in('match_id', mIds.map(m => m.id))
-                    await supabase.from('tournament_matches').delete().eq('tournament_id', tid)
-                    await supabase.from('tournament_groups').delete().eq('tournament_id', tid)
+                    await tryDel('tournament_matches', 'tournament_id', tid)
+                    await tryDel('tournament_groups', 'tournament_id', tid)
                   }
 
-                  // Delete all sub-channel data
-                  const allSubIds = [...new Set([...subIds])]
-                  for (const sid of allSubIds) {
-                    await supabase.from('conversation_members').delete().eq('conversation_id', sid)
-                    await supabase.from('messages').delete().eq('conversation_id', sid)
-                    await supabase.from('conversations').delete().eq('id', sid)
+                  // Delete all sub-channel members/messages/conversations
+                  for (const sid of subIds) {
+                    await tryDel('conversation_members', 'conversation_id', sid)
+                    await tryDel('messages', 'conversation_id', sid)
+                    await tryDel('conversations', 'id', sid)
                   }
 
-                  // Delete community-level data
-                  await supabase.from('announcements').delete().eq('conversation_id', communityId)
-                  await supabase.from('community_requests').delete().eq('community_id', communityId)
-                  await supabase.from('conversation_members').delete().eq('conversation_id', communityId)
-                  await supabase.from('messages').delete().eq('conversation_id', communityId)
-                  await supabase.from('conversations').delete().eq('id', communityId)
+                  // Delete community-level data (best-effort each)
+                  await tryDel('announcements', 'conversation_id', communityId)
+                  await tryDel('announcement_likes', 'conversation_id', communityId)
+                  await tryDel('community_requests', 'community_id', communityId)
+                  await tryDel('conversation_members', 'conversation_id', communityId)
+                  await tryDel('messages', 'conversation_id', communityId)
+
+                  // Final: delete the community conversation itself (this one must succeed)
+                  const { error: delErr } = await supabase.from('conversations').delete().eq('id', communityId)
+                  if (delErr) throw new Error(delErr.message)
 
                   onCommunityDeleted?.()
                 } catch (e) {
-                  toast('Error: ' + e.message, 'error')
+                  toast('Error al eliminar: ' + e.message, 'error')
                   setDeletingCommunity(false)
                 }
               }}
