@@ -1233,9 +1233,13 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
                   await tryDel('conversation_members', 'conversation_id', communityId)
                   await tryDel('messages', 'conversation_id', communityId)
 
-                  // Final: delete the community conversation itself (this one must succeed)
-                  const { error: delErr } = await supabase.from('conversations').delete().eq('id', communityId)
-                  if (delErr) throw new Error(delErr.message)
+                  // Final: delete the community conversation itself
+                  await supabase.from('conversations').delete().eq('id', communityId)
+                  // Verify deletion — RLS silently blocks without throwing
+                  const { data: stillExists } = await supabase.from('conversations').select('id').eq('id', communityId).maybeSingle()
+                  if (stillExists) {
+                    throw new Error('RLS: sin permiso para eliminar esta comunidad. Pedile al admin que agregue la política DELETE en Supabase.')
+                  }
 
                   onCommunityDeleted?.()
                 } catch (e) {
