@@ -8,12 +8,12 @@ const PLAN_DURATIONS = {
   free:        [24],
   member:      [24],
   vip:         [6, 12, 24],
+  ceo:         [6, 12, 24, 48],      // CEO = creadores de comunidades
   com_starter: [6, 12, 24, 48],
   com_elite:   [6, 12, 24, 48, 72],
-  ceo:         [6, 12, 24, 48, 72],
   organizador: [6, 12, 24, 48],
   admin:       [6, 12, 24, 48, 72],
-  superadmin:  [6, 12, 24, 48, 72],
+  superadmin:  [6, 12, 24, 48, 72],  // superadmin = vos
 }
 
 function getPlanDurations(profile) {
