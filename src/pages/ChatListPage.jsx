@@ -332,6 +332,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   if (showNewGroup) return <NewGroupPage initialType={newGroupType} onBack={() => setShowNewGroup(false)} onCreated={handleGroupCreated} />
 
   const filtered = (search ? [] : conversations.filter(c => {
+    if (filter === 'noleidos')    return (c.unread || 0) > 0
     if (filter === 'chats')       return !c.isGroup && !c.isCommunity
     if (filter === 'directos')    return !c.isGroup && !c.isCommunity
     if (filter === 'grupos')      return c.isGroup && !c.isCommunity
@@ -452,32 +453,53 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
           </div>
         </div>
 
-        {/* Filter tabs */}
+        {/* Filter tabs — estilo WhatsApp */}
         {!search && (
           <div style={{
-            display: 'flex', gap: 5, padding: '8px 12px 8px',
+            display: 'flex', gap: 6, padding: '8px 12px',
             borderTop: `1px solid ${C.border}`, overflowX: 'auto',
+            alignItems: 'center',
           }}>
             {[
-              ['todos','Todos','💬'],
-              ['chats','Chats','👤'],
-              ['grupos','Grupos','👥'],
-              ['comunidades','Comunidades','🌐'],
-              ['torneos','Torneos','🏆'],
-              ['ligas','Ligas','⚽'],
-              ['amigo','Amigos','🤝'],
-            ].map(([id, label, icon]) => (
+              ['todos',    'Todos'],
+              ['noleidos', 'No leídos'],
+              ['grupos',   'Grupos'],
+            ].map(([id, label]) => {
+              const active = filter === id
+              return (
+                <button key={id} onClick={() => setFilter(id)} style={{
+                  background: active ? C.green : C.panel2,
+                  border: 'none', borderRadius: 20, cursor: 'pointer',
+                  padding: '5px 14px',
+                  color: active ? '#fff' : C.text2,
+                  fontSize: 13, fontWeight: active ? 700 : 500,
+                  transition: 'all .15s',
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                }}>{label}</button>
+              )
+            })}
+            {/* + para más filtros */}
+            <button onClick={() => setFilter('mas')} style={{
+              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+              background: filter === 'mas' ? C.green : C.panel2,
+              border: `1px solid ${filter === 'mas' ? C.green : C.border}`,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: filter === 'mas' ? '#fff' : C.textDim, fontSize: 18, fontWeight: 700,
+              transition: 'all .15s',
+            }}>+</button>
+            {/* Sub-filtros extra — aparecen cuando se toca + */}
+            {filter === 'mas' && [
+              ['comunidades','Comunidades'],
+              ['torneos','Torneos'],
+              ['ligas','Ligas'],
+              ['amigo','Amigos'],
+            ].map(([id, label]) => (
               <button key={id} onClick={() => setFilter(id)} style={{
-                background: filter === id ? `${C.green}18` : C.panel2,
-                border: `1px solid ${filter === id ? C.green + '55' : C.border}`,
-                borderRadius: 20, cursor: 'pointer',
-                padding: '5px 11px',
-                color: filter === id ? C.green : C.textDim,
-                fontSize: 12, fontWeight: filter === id ? 700 : 500,
-                transition: 'all .15s',
-                display: 'flex', alignItems: 'center', gap: 4,
-                whiteSpace: 'nowrap', flexShrink: 0,
-              }}><span style={{ fontSize: 13 }}>{icon}</span>{label}</button>
+                background: C.panel2, border: `1px solid ${C.border}`,
+                borderRadius: 20, cursor: 'pointer', padding: '5px 14px',
+                color: C.text2, fontSize: 13, fontWeight: 500,
+                whiteSpace: 'nowrap', flexShrink: 0, transition: 'all .15s',
+              }}>{label}</button>
             ))}
           </div>
         )}
