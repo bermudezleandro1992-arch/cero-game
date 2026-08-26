@@ -242,14 +242,34 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
   useEffect(() => { load() }, [load])
 
   async function handleDelete(t) {
-    if (!window.confirm(`¿Eliminar torneo "${t.name}"? Esta acción no se puede deshacer.`)) return
+    if (!window.confirm(`¿Eliminar "${t.name}"?\n\nSe eliminarán todos los datos: partidos, brackets, grupos, sorteos y mensajes.\n\nEsta acción no se puede deshacer.`)) return
     setDeleting(t.id)
-    await supabase.from('conversation_members').delete().eq('conversation_id', t.id)
-    await supabase.from('messages').delete().eq('conversation_id', t.id)
-    const { error } = await supabase.from('conversations').delete().eq('id', t.id)
+    try {
+      // Cascade: eliminate all related data before the conversation
+      const id = t.id
+      await supabase.from('tournament_disputes').delete().eq('tournament_id', id)
+      await supabase.from('tournament_draw_events').delete().eq('tournament_id', id)
+      await supabase.from('tournament_group_members').delete().eq('tournament_id', id)
+      await supabase.from('tournament_standings').delete().eq('tournament_id', id)
+      await supabase.from('tournament_brackets').delete().eq('tournament_id', id)
+      // match results → matches
+      const { data: matchIds } = await supabase.from('tournament_matches').select('id').eq('tournament_id', id)
+      if (matchIds?.length) {
+        const ids = matchIds.map(m => m.id)
+        await supabase.from('match_results').delete().in('match_id', ids)
+      }
+      await supabase.from('tournament_matches').delete().eq('tournament_id', id)
+      await supabase.from('tournament_groups').delete().eq('tournament_id', id)
+      await supabase.from('announcements').update({ tournament_id: null }).eq('tournament_id', id)
+      await supabase.from('conversation_members').delete().eq('conversation_id', id)
+      await supabase.from('messages').delete().eq('conversation_id', id)
+      await supabase.from('conversations').delete().eq('id', id)
+      toast('Torneo eliminado ✓', 'ok')
+      load()
+    } catch (e) {
+      toast('Error: ' + e.message, 'error')
+    }
     setDeleting(null)
-    if (error) toast('Error al eliminar: ' + error.message, 'error')
-    else { toast('Torneo eliminado', 'ok'); load() }
   }
 
   if (loading) return <Spinner />
@@ -905,11 +925,14 @@ function EstadisticasTab({ communityId }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // Configuración Tab
 // ══════════════════════════════════════════════════════════════════════════════
-function ConfiguracionTab({ communityId, toast }) {
+function ConfiguracionTab({ communityId, communityName, toast, onCommunityDeleted }) {
   const [cfg, setCfg] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [deletingCommunity, setDeletingCommunity] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [showDeleteZone, setShowDeleteZone] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -1055,6 +1078,102 @@ function ConfiguracionTab({ communityId, toast }) {
       }}>
         {saving ? 'Guardando...' : 'Guardar cambios'}
       </button>
+
+      {/* ── Zona de peligro ── */}
+      <div style={{ marginTop: 24, borderTop: `1px solid #ef444430`, paddingTop: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showDeleteZone ? 14 : 0 }}>
+          <div>
+            <div style={{ color: '#ef4444', fontWeight: 700, fontSize: 13 }}>⚠️ Zona de peligro</div>
+            <div style={{ color: C.textDim, fontSize: 11, marginTop: 2 }}>Eliminar la comunidad es permanente e irreversible.</div>
+          </div>
+          <button onClick={() => { setShowDeleteZone(s => !s); setDeleteConfirmText('') }} style={{
+            padding: '7px 14px', background: 'none', border: '1px solid #ef444460',
+            borderRadius: 8, color: '#ef4444', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+          }}>
+            {showDeleteZone ? 'Cancelar' : 'Eliminar comunidad'}
+          </button>
+        </div>
+
+        {showDeleteZone && (
+          <div style={{ background: '#ef444408', border: '1px solid #ef444430', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ color: C.text, fontSize: 13, lineHeight: 1.6 }}>
+              Se eliminarán <strong>permanentemente</strong>: todos los canales, mensajes, torneos, ligas, grupos, partidos, anuncios y miembros de <strong style={{ color: '#ef4444' }}>{communityName}</strong>.
+            </div>
+            <div>
+              <div style={{ color: C.textDim, fontSize: 11, marginBottom: 6 }}>
+                Escribí <strong style={{ color: C.text }}>{communityName}</strong> para confirmar:
+              </div>
+              <input
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value)}
+                placeholder={communityName}
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: C.bg, border: `1px solid ${deleteConfirmText === communityName ? '#ef4444' : C.border}`,
+                  borderRadius: 8, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none',
+                }}
+              />
+            </div>
+            <button
+              disabled={deleteConfirmText !== communityName || deletingCommunity}
+              onClick={async () => {
+                if (deleteConfirmText !== communityName) return
+                setDeletingCommunity(true)
+                try {
+                  // 1. Sub-channels (conversations with community_id = communityId)
+                  const { data: subChans } = await supabase.from('conversations').select('id').eq('community_id', communityId)
+                  const subIds = (subChans || []).map(c => c.id)
+                  // Also include all tournament/liga ids under this community
+                  const { data: tornIds } = await supabase.from('conversations').select('id').eq('community_id', communityId).in('group_type', ['tournament', 'liga'])
+                  const torneoIds = (tornIds || []).map(c => c.id)
+
+                  // Delete tournament data for each torneo
+                  for (const tid of torneoIds) {
+                    await supabase.from('tournament_disputes').delete().eq('tournament_id', tid)
+                    await supabase.from('tournament_draw_events').delete().eq('tournament_id', tid)
+                    await supabase.from('tournament_group_members').delete().eq('tournament_id', tid)
+                    await supabase.from('tournament_standings').delete().eq('tournament_id', tid)
+                    await supabase.from('tournament_brackets').delete().eq('tournament_id', tid)
+                    const { data: mIds } = await supabase.from('tournament_matches').select('id').eq('tournament_id', tid)
+                    if (mIds?.length) await supabase.from('match_results').delete().in('match_id', mIds.map(m => m.id))
+                    await supabase.from('tournament_matches').delete().eq('tournament_id', tid)
+                    await supabase.from('tournament_groups').delete().eq('tournament_id', tid)
+                  }
+
+                  // Delete all sub-channel data
+                  const allSubIds = [...new Set([...subIds])]
+                  for (const sid of allSubIds) {
+                    await supabase.from('conversation_members').delete().eq('conversation_id', sid)
+                    await supabase.from('messages').delete().eq('conversation_id', sid)
+                    await supabase.from('conversations').delete().eq('id', sid)
+                  }
+
+                  // Delete community-level data
+                  await supabase.from('announcements').delete().eq('conversation_id', communityId)
+                  await supabase.from('community_requests').delete().eq('community_id', communityId)
+                  await supabase.from('group_roles').delete().eq('conversation_id', communityId)
+                  await supabase.from('conversation_members').delete().eq('conversation_id', communityId)
+                  await supabase.from('messages').delete().eq('conversation_id', communityId)
+                  await supabase.from('conversations').delete().eq('id', communityId)
+
+                  onCommunityDeleted?.()
+                } catch (e) {
+                  toast('Error: ' + e.message, 'error')
+                  setDeletingCommunity(false)
+                }
+              }}
+              style={{
+                padding: '11px', background: deleteConfirmText === communityName && !deletingCommunity ? '#ef4444' : C.border,
+                color: deleteConfirmText === communityName && !deletingCommunity ? '#fff' : C.textDim,
+                border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: deleteConfirmText === communityName ? 'pointer' : 'default',
+                transition: 'all .15s',
+              }}
+            >
+              {deletingCommunity ? 'Eliminando...' : '🗑️ Eliminar comunidad para siempre'}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1515,7 +1634,12 @@ export default function CEOPanel({ community, onBack }) {
           <ReferidosPanel communityId={communityId} />
         )}
         {tab === 'config' && (
-          <ConfiguracionTab communityId={communityId} toast={showToast} />
+          <ConfiguracionTab
+            communityId={communityId}
+            communityName={community?.name || ''}
+            toast={showToast}
+            onCommunityDeleted={onBack}
+          />
         )}
       </div>
 
