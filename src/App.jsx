@@ -472,10 +472,12 @@ export default function App() {
             {/* WhatsApp skin: Chats, Llamadas, Estados, Explorar(Canales), Comunidades | divider | Anuncios | bottom: Perfil */}
             {[
               { id: 'chats',       label: 'Chats',      icon: NAV.find(n=>n.id==='chats')?.icon },
-              { id: 'llamadas',    label: 'Llamadas',   icon: NAV.find(n=>n.id==='llamadas')?.icon || ((a) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.green:C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.5a16 16 0 0 0 5.55 5.55l.96-.96a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>) },
+              { id: 'llamadas',    label: 'Llamadas',   icon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.green:C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.5a16 16 0 0 0 5.55 5.55l.96-.96a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg> },
               { id: 'estados',     label: 'Estados',    icon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.green:C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> },
-              { id: 'explorar',    label: 'Explorar',    icon: NAV.find(n=>n.id==='explorar')?.icon },
+              { id: 'explorar',    label: 'Explorar',   icon: NAV.find(n=>n.id==='explorar')?.icon },
               { id: 'comunidades', label: 'Comunidades',icon: NAV.find(n=>n.id==='comunidades')?.icon },
+              { id: 'ranking',     label: 'Ranking',    icon: NAV.find(n=>n.id==='ranking')?.icon },
+              { id: 'contactos',   label: 'Contactos',  icon: NAV.find(n=>n.id==='contactos')?.icon },
             ].map(({ id, label, icon }) => {
               const active = !showProfile && tab === id
               return (
@@ -483,15 +485,15 @@ export default function App() {
                   width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
                   justifyContent: 'center', gap: 4, border: 'none',
                   background: active ? `${C.green}12` : 'none',
-                  cursor: 'pointer', padding: '14px 0', position: 'relative',
+                  cursor: 'pointer', padding: '12px 0', position: 'relative',
                   borderLeft: `3px solid ${active ? C.green : 'transparent'}`,
                   transition: 'background .15s',
                 }}>
                   {id === 'chats' && totalUnread > 0 && (
-                    <span style={{ position: 'absolute', top: 10, right: '12%', minWidth: 16, height: 16, borderRadius: 8, padding: '0 4px', background: C.green, color: C.bg, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{totalUnread > 99 ? '99+' : totalUnread}</span>
+                    <span style={{ position: 'absolute', top: 8, right: '12%', minWidth: 16, height: 16, borderRadius: 8, padding: '0 4px', background: C.green, color: C.bg, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{totalUnread > 99 ? '99+' : totalUnread}</span>
                   )}
                   {icon(active)}
-                  <span style={{ fontSize: 10, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>{label}</span>
+                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>{label}</span>
                 </button>
               )
             })}
@@ -504,15 +506,15 @@ export default function App() {
               <button onClick={() => { setShowProfile(false); setTab('anuncios') }} style={{
                 width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
                 justifyContent: 'center', gap: 4, border: 'none',
-                background: active ? `${C.green}12` : 'none', cursor: 'pointer', padding: '14px 0',
+                background: active ? `${C.green}12` : 'none', cursor: 'pointer', padding: '12px 0',
                 borderLeft: `3px solid ${active ? C.green : 'transparent'}`, transition: 'background .15s',
               }}>
                 {icon?.(active)}
-                <span style={{ fontSize: 10, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>Anuncios</span>
+                <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>Anuncios</span>
               </button>
             )})()}
 
-            {/* Bottom: Perfil */}
+            {/* Bottom: Perfil con avatar */}
             <div style={{ marginTop: 'auto' }}>
               <button onClick={() => setShowProfile(true)} style={{
                 width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -520,8 +522,11 @@ export default function App() {
                 background: showProfile ? `${C.green}12` : 'none', cursor: 'pointer', padding: '14px 0',
                 borderLeft: `3px solid ${showProfile ? C.green : 'transparent'}`, transition: 'background .15s',
               }}>
-                {NAV.find(n=>n.id==='perfil')?.icon(showProfile)}
-                <span style={{ fontSize: 10, fontWeight: showProfile ? 700 : 400, color: showProfile ? C.green : C.textDim }}>Perfil</span>
+                {profile?.avatar_url
+                  ? <img src={profile.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${showProfile ? C.green : C.border}` }} />
+                  : NAV.find(n=>n.id==='perfil')?.icon(showProfile)
+                }
+                <span style={{ fontSize: 9, fontWeight: showProfile ? 700 : 400, color: showProfile ? C.green : C.textDim }}>Perfil</span>
               </button>
             </div>
           </nav>
@@ -883,7 +888,19 @@ function Splash() {
   )
 }
 
+const SKINS = [
+  { id: 'default', label: 'NexoTribu', desc: 'Barra lateral con íconos y navegación clásica', icon: '🟢' },
+  { id: 'whatsapp', label: 'Estilo Mensajero', desc: 'Diseño inspirado en apps de mensajería modernas', icon: '💬' },
+]
+
 function EmptyState() {
+  const [skin, setSkinState] = useState(getSkin)
+  useEffect(() => {
+    const h = () => setSkinState(getSkin())
+    window.addEventListener('skinchange', h)
+    return () => window.removeEventListener('skinchange', h)
+  }, [])
+
   const steps = [
     { icon: '🌐', title: 'Creá tu comunidad', desc: 'Armá el espacio de tu tribu con canales, anuncios y configuración propia.' },
     { icon: '👥', title: 'Sumá a tu gente', desc: 'Compartí el link de invitación y reuní a todos en un solo lugar.' },
@@ -964,8 +981,32 @@ function EmptyState() {
           ))}
         </div>
 
+        {/* Skin selector */}
+        <div style={{ marginTop: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <div style={{ flex: 1, height: 1, background: C.border }} />
+            <span style={{ color: C.textDim, fontSize: 11, fontWeight: 600, letterSpacing: '1px' }}>APARIENCIA</span>
+            <div style={{ flex: 1, height: 1, background: C.border }} />
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {SKINS.map(s => (
+              <button key={s.id} onClick={() => setLayoutSkin(s.id)} style={{
+                flex: 1, padding: '12px 14px', borderRadius: 14, cursor: 'pointer', textAlign: 'left',
+                background: skin === s.id ? `${C.green}12` : C.panel,
+                border: `2px solid ${skin === s.id ? C.green : C.border}`,
+                transition: 'all .15s',
+              }}>
+                <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
+                <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{s.label}</div>
+                <div style={{ color: C.textDim, fontSize: 11, marginTop: 2, lineHeight: 1.4 }}>{s.desc}</div>
+                {skin === s.id && <div style={{ marginTop: 6, color: C.green, fontSize: 11, fontWeight: 800 }}>✓ Activo</div>}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Tagline */}
-        <p style={{ textAlign: 'center', marginTop: 28, fontSize: 11, color: `${C.textDim}88`, letterSpacing: '0.5px' }}>
+        <p style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: `${C.textDim}88`, letterSpacing: '0.5px' }}>
           Seleccioná una conversación para comenzar
         </p>
       </div>

@@ -9,6 +9,10 @@ import { saveSoundSettings } from '../lib/sounds'
 import LegalPage from './LegalPage'
 import IdentityVerification from '../components/IdentityVerification'
 import BotApiPage from './BotApiPage'
+import { setLayoutSkin } from '../App'
+
+const SKIN_KEY = 'app_layout_skin'
+function getSkinLocal() { try { return localStorage.getItem(SKIN_KEY) || 'default' } catch { return 'default' } }
 
 function Spinner() {
   return (
@@ -897,10 +901,34 @@ function LegalTab() {
   return <LegalPage />
 }
 
+// ── Settings item row ─────────────────────────────────────────────────────────
+function SettingsRow({ icon, label, desc, onClick, danger, value, noArrow }) {
+  return (
+    <button onClick={onClick} style={{
+      width: '100%', display: 'flex', alignItems: 'center', gap: 16,
+      padding: '14px 20px', background: 'none', border: 'none', cursor: onClick ? 'pointer' : 'default',
+      textAlign: 'left', transition: 'background .12s',
+    }}
+      onMouseEnter={e => { if (onClick) e.currentTarget.style.background = `${C.border}44` }}
+      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+    >
+      <div style={{ fontSize: 20, width: 28, textAlign: 'center', flexShrink: 0 }}>{icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: danger ? '#ef4444' : C.text, fontWeight: 600, fontSize: 14 }}>{label}</div>
+        {desc && <div style={{ color: C.textDim, fontSize: 12, marginTop: 1 }}>{desc}</div>}
+      </div>
+      {value && <span style={{ color: C.textDim, fontSize: 13, marginRight: 4 }}>{value}</span>}
+      {!noArrow && onClick && (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      )}
+    </button>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function PerfilPage({ onClose, onGoVip }) {
   const { profile, fetchProfile } = useAuthStore()
-  const [tab, setTab] = useState('perfil')
+  const [tab, setTab] = useState('menu')
   const [showBots, setShowBots] = useState(false)
   const [stats, setStats] = useState(null)
   const [history, setHistory] = useState([])
@@ -913,7 +941,14 @@ export default function PerfilPage({ onClose, onGoVip }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [skin, setSkinState] = useState(getSkinLocal)
   const fileRef = useRef()
+
+  useEffect(() => {
+    const h = () => setSkinState(getSkinLocal())
+    window.addEventListener('skinchange', h)
+    return () => window.removeEventListener('skinchange', h)
+  }, [])
 
   useEffect(() => {
     if (!profile) return
@@ -1002,45 +1037,302 @@ export default function PerfilPage({ onClose, onGoVip }) {
   if (!profile) return <Spinner />
 
   const plan = PLAN_CFG[profile.role] || PLAN_CFG.free
-  const TABS = [
-    { id: 'perfil', label: 'Perfil', icon: '👤' },
-    { id: 'cuenta', label: 'Cuenta', icon: '💳' },
-    { id: 'preferencias', label: 'Preferencias', icon: '⚙️' },
-    { id: 'identidad', label: 'Identidad', icon: '🪪' },
-    { id: 'referidos', label: 'Referidos', icon: '🔗' },
-    { id: 'legal', label: 'Legal', icon: '📋' },
+
+  function goBack() { setTab('menu'); setEditing(false); setShowBots(false) }
+
+  const SKINS_CFG = [
+    { id: 'default', label: 'NexoTribu', icon: '🟢' },
+    { id: 'whatsapp', label: 'Estilo Mensajero', icon: '💬' },
   ]
+
+  const subHeader = (title) => (
+    <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+      <button onClick={goBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4, display: 'flex' }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      </button>
+      <span style={{ color: C.text, fontWeight: 700, fontSize: 16 }}>{title}</span>
+    </div>
+  )
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
 
-      {/* Header */}
-      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-        {onClose && (
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4, display: 'flex' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 5l-7 7 7 7"/>
-            </svg>
-          </button>
-        )}
-        <span style={{ color: C.text, fontWeight: 700, fontSize: 16 }}>Mi Perfil</span>
-        <div style={{ flex: 1 }} />
-        {tab === 'perfil' && (
-          <button onClick={() => setEditing(e => !e)} style={{
-            padding: '6px 14px', background: editing ? C.border : `${C.green}20`,
-            color: editing ? C.text : C.green, border: `1px solid ${editing ? C.border : C.green + '40'}`,
-            borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-          }}>
-            {editing ? 'Cancelar' : 'Editar'}
-          </button>
-        )}
-      </div>
+      {/* Sub-page: Perfil */}
+      {tab === 'perfil' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Perfil')}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ padding: 16, maxWidth: 640, margin: '0 auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => fileRef.current?.click()}>
+                  <div style={{ width: 90, height: 90, borderRadius: '50%', background: C.border, overflow: 'hidden', border: `3px solid ${C.green}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>
+                    {profile.avatar_url ? <img src={profile.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : '👤'}
+                    {uploading && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}><div style={{ width: 22, height: 22, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .7s linear infinite' }} /></div>}
+                  </div>
+                  <div style={{ position: 'absolute', bottom: 2, right: 2, width: 28, height: 28, borderRadius: '50%', background: C.green, color: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, border: `2px solid ${C.bg}`, pointerEvents: 'none' }}>📷</div>
+                  <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => uploadAvatar(e.target.files[0])} />
+                </div>
+                {editing ? (
+                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <input value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} placeholder="Nombre visible" style={{ width: '100%', padding: '10px 12px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 15, fontWeight: 700, boxSizing: 'border-box' }} />
+                    <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value.replace(/^@/, '') }))} placeholder="@usuario" style={{ width: '100%', padding: '10px 12px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, color: C.textDim, fontSize: 14, boxSizing: 'border-box' }} />
+                    <textarea value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} placeholder="Bio (opcional)" rows={2} style={{ width: '100%', padding: '10px 12px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
+                    <button onClick={saveProfile} disabled={saving} style={{ width: '100%', padding: '12px', background: C.green, color: C.bg, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+                      {saving ? 'Guardando...' : 'Guardar cambios'}
+                    </button>
+                    <button onClick={() => setEditing(false)} style={{ width: '100%', padding: '11px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, color: C.textDim, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ color: C.text, fontSize: 20, fontWeight: 900 }}>{profile.username ? `@${profile.username}` : profile.display_name || 'Sin nombre'}</div>
+                    {profile.display_name && profile.username && <div style={{ color: C.textDim, fontSize: 13, marginTop: 2 }}>{profile.display_name}</div>}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 6 }}>
+                      <span style={{ background: `${plan.color}20`, color: plan.color, border: `1px solid ${plan.color}40`, borderRadius: 20, padding: '3px 12px', fontSize: 11, fontWeight: 700 }}>{plan.icon} {plan.label}</span>
+                    </div>
+                    {profile.bio && <div style={{ color: C.textDim, fontSize: 12, marginTop: 8, lineHeight: 1.6, maxWidth: 320 }}>{profile.bio}</div>}
+                    <button onClick={() => setEditing(true)} style={{ marginTop: 12, padding: '8px 20px', background: `${C.green}18`, border: `1px solid ${C.green}40`, borderRadius: 20, color: C.green, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Editar perfil</button>
+                  </div>
+                )}
+              </div>
+              {stats && (
+                <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+                  <StatCard label="Partidos" value={stats.total} color={C.textDim} />
+                  <StatCard label="Victorias" value={stats.wins} color={C.green} />
+                  <StatCard label="Derrotas" value={stats.losses} color="#ef4444" />
+                  <StatCard label="Ratio" value={`${stats.ratio}%`} color="#f59e0b" />
+                </div>
+              )}
+              <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 14 }}>Historial de partidos</div>
+              {loadingHistory ? <Spinner /> : history.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: C.textDim }}><div style={{ fontSize: 36, marginBottom: 10 }}>⚽</div><div>Sin partidos jugados aún</div></div>
+              ) : history.map(match => {
+                const isP1 = match.player1?.id === profile.id
+                const opp = isP1 ? match.player2 : match.player1
+                const won = match.winner_id === profile.id
+                const myScore = isP1 ? match.score1 : match.score2
+                const oppScore = isP1 ? match.score2 : match.score1
+                return (
+                  <div key={match.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', background: C.panel, border: `1px solid ${won ? C.green + '30' : '#ef444430'}`, borderRadius: 10, marginBottom: 8, borderLeft: `3px solid ${won ? C.green : '#ef4444'}` }}>
+                    <span style={{ fontSize: 18 }}>{won ? '✅' : '❌'}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>vs <span style={{ color: C.textDim }}>{opp?.display_name || '?'}</span></div>
+                      {match.conversation?.name && <div style={{ color: C.textDim, fontSize: 10, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.conversation.name}</div>}
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ color: won ? C.green : '#ef4444', fontWeight: 800, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>{myScore ?? '?'} — {oppScore ?? '?'}</div>
+                      <div style={{ color: C.textDim, fontSize: 10 }}>{new Date(match.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short' })}</div>
+                    </div>
+                  </div>
+                )
+              })}
+              <div style={{ marginTop: 24, border: `1px solid #ef444430`, borderRadius: 14, overflow: 'hidden' }}>
+                <div style={{ background: '#ef444410', padding: '10px 16px', color: '#ef4444', fontWeight: 800, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' }}>⚠️ Zona de peligro</div>
+                <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button onClick={() => setShowDeleteModal('suspend')} style={{ padding: '11px 14px', background: 'none', border: `1px solid #f59e0b40`, borderRadius: 10, color: '#f59e0b', fontWeight: 700, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>⏸ Suspender mi cuenta temporalmente</button>
+                  <button onClick={() => setShowDeleteModal('delete')} style={{ padding: '11px 14px', background: 'none', border: `1px solid #ef444440`, borderRadius: 10, color: '#ef4444', fontWeight: 700, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>🗑️ Eliminar mi cuenta permanentemente</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Tab bar */}
-      <div style={{ display: 'flex', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: 'auto' }}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{
+      {/* Sub-page: Cuenta */}
+      {tab === 'cuenta' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Cuenta')}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {!showBots
+              ? <CuentaTab profile={profile} onGoVip={onGoVip} onGoBots={() => setShowBots(true)} onGoIdentidad={() => setTab('identidad')} onPlanActivated={() => fetchProfile(profile.id)} />
+              : <BotApiPage onBack={() => setShowBots(false)} />
+            }
+          </div>
+        </div>
+      )}
+
+      {/* Sub-page: Chats (Preferencias) */}
+      {tab === 'preferencias' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Chats')}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <PreferenciasTab profile={profile} onGoVip={onGoVip} />
+          </div>
+        </div>
+      )}
+
+      {/* Sub-page: Apariencia (skin) */}
+      {tab === 'apariencia' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Apariencia')}
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+            <div style={{ color: C.textDim, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Skin de la interfaz</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {SKINS_CFG.map(s => (
+                <button key={s.id} onClick={() => { setLayoutSkin(s.id); setSkinState(s.id) }} style={{
+                  display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
+                  background: skin === s.id ? `${C.green}12` : C.panel,
+                  border: `2px solid ${skin === s.id ? C.green : C.border}`,
+                  borderRadius: 14, cursor: 'pointer', textAlign: 'left', width: '100%',
+                }}>
+                  <span style={{ fontSize: 28 }}>{s.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{s.label}</div>
+                    {skin === s.id && <div style={{ color: C.green, fontSize: 12, marginTop: 2 }}>✓ Activo</div>}
+                  </div>
+                  {skin === s.id && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-page: Identidad */}
+      {tab === 'identidad' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Identidad')}
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+            <IdentityVerification profile={profile} />
+          </div>
+        </div>
+      )}
+
+      {/* Sub-page: Referidos */}
+      {tab === 'referidos' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Referidos')}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <ReferidosTab profile={profile} />
+          </div>
+        </div>
+      )}
+
+      {/* Sub-page: Legal */}
+      {tab === 'legal' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Legal')}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <LegalPage />
+          </div>
+        </div>
+      )}
+
+      {/* Main menu — WhatsApp settings style */}
+      {tab === 'menu' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {/* Header */}
+          <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '14px 20px', flexShrink: 0 }}>
+            <span style={{ color: C.text, fontWeight: 800, fontSize: 18 }}>Ajustes</span>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {/* User card */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 14, padding: '18px 20px',
+              borderBottom: `1px solid ${C.border}`, cursor: 'pointer',
+            }} onClick={() => setTab('perfil')}>
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <div style={{ width: 62, height: 62, borderRadius: '50%', background: C.border, overflow: 'hidden', border: `2px solid ${C.green}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>
+                  {profile.avatar_url ? <img src={profile.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : '👤'}
+                </div>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: C.text, fontWeight: 800, fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {profile.username ? `@${profile.username}` : profile.display_name || 'Sin nombre'}
+                </div>
+                <div style={{ color: C.textDim, fontSize: 13, marginTop: 2 }}>{profile.bio || 'Escribe algo sobre vos...'}</div>
+                <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, background: `${plan.color}18`, border: `1px solid ${plan.color}35`, borderRadius: 20, padding: '2px 10px' }}>
+                  <span style={{ color: plan.color, fontSize: 11, fontWeight: 800 }}>{plan.icon} {plan.label}</span>
+                </div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+
+            {/* Settings sections */}
+            <div style={{ padding: '8px 0' }}>
+
+              {/* Sección principal */}
+              <div style={{ background: C.panel, borderRadius: 0, marginBottom: 8 }}>
+                <SettingsRow icon="👤" label="Perfil" desc="Nombre, foto del perfil, bio" onClick={() => setTab('perfil')} />
+                <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
+                <SettingsRow icon="💳" label="Cuenta" desc="Suscripción, seguridad, información" onClick={() => setTab('cuenta')} />
+                <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
+                <SettingsRow icon="🔒" label="Privacidad" desc="Contactos bloqueados, mensajes temporales" onClick={() => {}} />
+              </div>
+
+              {/* Sección personalización */}
+              <div style={{ background: C.panel, borderRadius: 0, marginBottom: 8 }}>
+                <SettingsRow icon="💬" label="Chats" desc="Temas, fondo, sonidos, notificaciones" onClick={() => setTab('preferencias')} />
+                <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
+                <SettingsRow icon="🎨" label="Apariencia" desc="Elige el estilo visual de la app" onClick={() => setTab('apariencia')} value={SKINS_CFG.find(s => s.id === skin)?.label} />
+                <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
+                <SettingsRow icon="⌨️" label="Atajos del teclado" desc="Acciones rápidas" onClick={() => {}} />
+              </div>
+
+              {/* Sección identidad y comunidad */}
+              <div style={{ background: C.panel, borderRadius: 0, marginBottom: 8 }}>
+                <SettingsRow icon="🪪" label="Identidad" desc="Verificación de identidad" onClick={() => setTab('identidad')} />
+                <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
+                <SettingsRow icon="🔗" label="Referidos" desc="Tu código y beneficios" onClick={() => setTab('referidos')} />
+              </div>
+
+              {/* Sección soporte */}
+              <div style={{ background: C.panel, borderRadius: 0, marginBottom: 8 }}>
+                <SettingsRow icon="❓" label="Ayuda y comentarios" desc="Centro de ayuda, contáctanos" onClick={() => {}} />
+                <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
+                <SettingsRow icon="📋" label="Legal" desc="Política de privacidad, términos" onClick={() => setTab('legal')} />
+              </div>
+
+              {/* Cerrar sesión */}
+              <div style={{ background: C.panel, borderRadius: 0, marginBottom: 24 }}>
+                <SettingsRow icon="🚪" label="Cerrar sesión" danger onClick={() => supabase.auth.signOut()} noArrow />
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
+
+      {/* Modal eliminar/suspender */}
+      {showDeleteModal && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 18, padding: 24, width: '100%', maxWidth: 380 }}>
+            {showDeleteModal === 'suspend' ? (
+              <>
+                <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>⏸</div>
+                <div style={{ color: C.text, fontWeight: 800, fontSize: 17, textAlign: 'center', marginBottom: 8 }}>Suspender cuenta</div>
+                <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 1.6 }}>Tu cuenta quedará inactiva. Podrás reactivarla contactando al soporte.</div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setShowDeleteModal(false)} style={{ flex: 1, padding: '11px', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                  <button onClick={suspendAccount} style={{ flex: 1, padding: '11px', background: '#f59e0b', border: 'none', borderRadius: 10, color: '#000', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Suspender</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>🗑️</div>
+                <div style={{ color: '#ef4444', fontWeight: 800, fontSize: 17, textAlign: 'center', marginBottom: 8 }}>Eliminar cuenta</div>
+                <div style={{ color: C.textDim, fontSize: 13, textAlign: 'center', marginBottom: 16, lineHeight: 1.6 }}>Esta acción es <strong style={{ color: '#ef4444' }}>permanente e irreversible</strong>.</div>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ color: C.textDim, fontSize: 12, marginBottom: 6 }}>Escribí <strong style={{ color: C.text }}>eliminar</strong> para confirmar:</div>
+                  <input value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder="eliminar" style={{ width: '100%', padding: '10px 12px', background: C.bg, border: `1px solid #ef444440`, borderRadius: 10, color: C.text, fontSize: 14, boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => { setShowDeleteModal(false); setDeleteConfirm('') }} style={{ flex: 1, padding: '11px', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                  <button onClick={deleteAccount} disabled={deleteConfirm.toLowerCase() !== 'eliminar' || deleting} style={{ flex: 1, padding: '11px', background: deleteConfirm.toLowerCase() === 'eliminar' ? '#ef4444' : C.border, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 13, cursor: deleteConfirm.toLowerCase() === 'eliminar' ? 'pointer' : 'not-allowed', opacity: deleting ? 0.6 : 1 }}>
+                    {deleting ? 'Eliminando...' : 'Eliminar'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      , document.body)}
+    </div>
+  )
+}
             flex: 1, minWidth: 60, padding: '9px 4px', border: 'none', background: 'none', cursor: 'pointer',
             borderBottom: `2px solid ${tab === t.id ? C.green : 'transparent'}`,
             color: tab === t.id ? C.green : C.textDim,
