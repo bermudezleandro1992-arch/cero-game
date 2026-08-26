@@ -216,6 +216,67 @@ function DashboardTab({ communityId, onViewTorneo, onGoTab, onNewTorneo }) {
   )
 }
 
+// ── Confirm Delete Modal ──────────────────────────────────────────────────────
+function ConfirmDeleteModal({ torneo, onConfirm, onCancel, deleting }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9000,
+      background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+    }} onClick={onCancel}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: C.panel, borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480,
+        padding: '24px 20px 36px', display: 'flex', flexDirection: 'column', gap: 16,
+        borderTop: '3px solid #ef4444',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 42, marginBottom: 8 }}>🗑️</div>
+          <div style={{ color: C.text, fontWeight: 800, fontSize: 17, marginBottom: 6 }}>
+            Eliminar torneo
+          </div>
+          <div style={{
+            color: C.green, fontWeight: 700, fontSize: 15,
+            background: `${C.green}12`, borderRadius: 10, padding: '6px 14px', display: 'inline-block',
+          }}>
+            {torneo.name}
+          </div>
+        </div>
+
+        <div style={{ background: '#ef444410', border: '1px solid #ef444430', borderRadius: 12, padding: '12px 14px' }}>
+          <div style={{ color: '#ef4444', fontWeight: 700, fontSize: 12, marginBottom: 6 }}>⚠️ Se eliminarán permanentemente</div>
+          <div style={{ color: C.textDim, fontSize: 12, lineHeight: 1.7 }}>
+            • Partidos, brackets y grupos<br/>
+            • Tabla de posiciones y sorteos<br/>
+            • Disputas y mensajes del canal<br/>
+            • Todos los participantes inscriptos
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onCancel} disabled={deleting} style={{
+            flex: 1, padding: '13px', background: C.panel2, border: `1px solid ${C.border}`,
+            borderRadius: 12, color: C.textDim, fontWeight: 700, fontSize: 14, cursor: 'pointer',
+          }}>
+            Cancelar
+          </button>
+          <button onClick={onConfirm} disabled={deleting} style={{
+            flex: 1.3, padding: '13px', background: deleting ? C.border : '#ef4444',
+            border: 'none', borderRadius: 12, color: deleting ? C.textDim : '#fff',
+            fontWeight: 800, fontSize: 14, cursor: deleting ? 'default' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}>
+            {deleting ? (
+              <>
+                <div style={{ width: 14, height: 14, border: '2px solid #ffffff40', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+                Eliminando…
+              </>
+            ) : 'Sí, eliminar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // Torneos Tab
 // ══════════════════════════════════════════════════════════════════════════════
@@ -223,6 +284,7 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
   const [torneos, setTorneos] = useState([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(null)
+  const [confirmTorneo, setConfirmTorneo] = useState(null)
   const [localCreate, setLocalCreate] = useState(false)
   const isCreating = showCreate || localCreate
   function closeCreate() { onHideCreate?.(); setLocalCreate(false) }
@@ -241,33 +303,38 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
 
   useEffect(() => { load() }, [load])
 
-  async function handleDelete(t) {
-    if (!window.confirm(`¿Eliminar "${t.name}"?\n\nSe eliminarán todos los datos: partidos, brackets, grupos, sorteos y mensajes.\n\nEsta acción no se puede deshacer.`)) return
+  async function doDelete() {
+    const t = confirmTorneo
+    if (!t) return
     setDeleting(t.id)
+    const id = t.id
     try {
-      // Cascade: eliminate all related data before the conversation
-      const id = t.id
-      await supabase.from('tournament_disputes').delete().eq('tournament_id', id)
-      await supabase.from('tournament_draw_events').delete().eq('tournament_id', id)
-      await supabase.from('tournament_group_members').delete().eq('tournament_id', id)
-      await supabase.from('tournament_standings').delete().eq('tournament_id', id)
-      await supabase.from('tournament_brackets').delete().eq('tournament_id', id)
-      // match results → matches
-      const { data: matchIds } = await supabase.from('tournament_matches').select('id').eq('tournament_id', id)
-      if (matchIds?.length) {
-        const ids = matchIds.map(m => m.id)
-        await supabase.from('match_results').delete().in('match_id', ids)
+      const del = async (table, col) => {
+        const { error } = await supabase.from(table).delete().eq(col, id)
+        if (error) throw new Error(`${table}: ${error.message}`)
       }
-      await supabase.from('tournament_matches').delete().eq('tournament_id', id)
-      await supabase.from('tournament_groups').delete().eq('tournament_id', id)
+      await del('tournament_disputes', 'tournament_id')
+      await del('tournament_draw_events', 'tournament_id')
+      await del('tournament_group_members', 'tournament_id')
+      await del('tournament_standings', 'tournament_id')
+      await del('tournament_brackets', 'tournament_id')
+      const { data: matchRows } = await supabase.from('tournament_matches').select('id').eq('tournament_id', id)
+      if (matchRows?.length) {
+        await supabase.from('match_results').delete().in('match_id', matchRows.map(m => m.id))
+      }
+      await del('tournament_matches', 'tournament_id')
+      await del('tournament_groups', 'tournament_id')
       await supabase.from('announcements').update({ tournament_id: null }).eq('tournament_id', id)
-      await supabase.from('conversation_members').delete().eq('conversation_id', id)
-      await supabase.from('messages').delete().eq('conversation_id', id)
-      await supabase.from('conversations').delete().eq('id', id)
+      await del('group_roles', 'conversation_id')
+      await del('conversation_members', 'conversation_id')
+      await del('messages', 'conversation_id')
+      await del('conversations', 'id')
+
+      setTorneos(prev => prev.filter(x => x.id !== id))
+      setConfirmTorneo(null)
       toast('Torneo eliminado ✓', 'ok')
-      load()
     } catch (e) {
-      toast('Error: ' + e.message, 'error')
+      toast('Error al eliminar: ' + e.message, 'error')
     }
     setDeleting(null)
   }
@@ -276,6 +343,14 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
 
   return (
     <>
+    {confirmTorneo && (
+      <ConfirmDeleteModal
+        torneo={confirmTorneo}
+        onConfirm={doDelete}
+        onCancel={() => { if (!deleting) setConfirmTorneo(null) }}
+        deleting={!!deleting}
+      />
+    )}
     {isCreating && (
       <CreateTorneoModal
         defaultCommunityId={communityId}
@@ -314,7 +389,7 @@ function TorneosTab({ communityId, profile, onViewTorneo, toast, showCreate, onH
               }}>
                 Ver
               </button>
-              <button onClick={() => handleDelete(t)} disabled={deleting === t.id} style={{
+              <button onClick={() => setConfirmTorneo(t)} disabled={deleting === t.id} style={{
                 flex: 1, padding: '9px 8px', background: 'none', border: 'none', color: '#ef4444',
                 fontSize: 12, fontWeight: 700, cursor: 'pointer',
                 opacity: deleting === t.id ? 0.5 : 1,
@@ -932,7 +1007,6 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [deletingCommunity, setDeletingCommunity] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
-  const [showDeleteZone, setShowDeleteZone] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -1081,43 +1155,36 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
 
       {/* ── Zona de peligro ── */}
       <div style={{ marginTop: 24, borderTop: `1px solid #ef444430`, paddingTop: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showDeleteZone ? 14 : 0 }}>
-          <div>
-            <div style={{ color: '#ef4444', fontWeight: 700, fontSize: 13 }}>⚠️ Zona de peligro</div>
-            <div style={{ color: C.textDim, fontSize: 11, marginTop: 2 }}>Eliminar la comunidad es permanente e irreversible.</div>
-          </div>
-          <button onClick={() => { setShowDeleteZone(s => !s); setDeleteConfirmText('') }} style={{
-            padding: '7px 14px', background: 'none', border: '1px solid #ef444460',
-            borderRadius: 8, color: '#ef4444', fontWeight: 700, fontSize: 12, cursor: 'pointer',
-          }}>
-            {showDeleteZone ? 'Cancelar' : 'Eliminar comunidad'}
-          </button>
+        <div style={{ color: '#ef4444', fontWeight: 800, fontSize: 14, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          ⚠️ Zona de peligro
         </div>
 
-        {showDeleteZone && (
-          <div style={{ background: '#ef444408', border: '1px solid #ef444430', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ color: C.text, fontSize: 13, lineHeight: 1.6 }}>
-              Se eliminarán <strong>permanentemente</strong>: todos los canales, mensajes, torneos, ligas, grupos, partidos, anuncios y miembros de <strong style={{ color: '#ef4444' }}>{communityName}</strong>.
+        <div style={{ background: '#ef444408', border: '1px solid #ef444430', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <div style={{ color: C.text, fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🗑️ Eliminar comunidad</div>
+            <div style={{ color: C.textDim, fontSize: 12, lineHeight: 1.6 }}>
+              Se eliminarán <strong style={{ color: C.text }}>permanentemente</strong> todos los canales, mensajes, torneos, ligas, grupos, partidos, anuncios y miembros de <strong style={{ color: '#ef4444' }}>{communityName || 'esta comunidad'}</strong>.
             </div>
-            <div>
-              <div style={{ color: C.textDim, fontSize: 11, marginBottom: 6 }}>
-                Escribí <strong style={{ color: C.text }}>{communityName}</strong> para confirmar:
-              </div>
-              <input
-                value={deleteConfirmText}
-                onChange={e => setDeleteConfirmText(e.target.value)}
-                placeholder={communityName}
-                style={{
-                  width: '100%', boxSizing: 'border-box',
-                  background: C.bg, border: `1px solid ${deleteConfirmText === communityName ? '#ef4444' : C.border}`,
-                  borderRadius: 8, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none',
-                }}
-              />
+          </div>
+          <div>
+            <div style={{ color: C.textDim, fontSize: 11, marginBottom: 6 }}>
+              Escribí <strong style={{ color: C.text }}>{communityName || '…'}</strong> para confirmar:
             </div>
+            <input
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              placeholder={communityName || 'Nombre de la comunidad'}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: C.bg, border: `1px solid ${deleteConfirmText === communityName && communityName ? '#ef4444' : C.border}`,
+                borderRadius: 8, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none',
+              }}
+            />
+          </div>
             <button
-              disabled={deleteConfirmText !== communityName || deletingCommunity}
+              disabled={!communityName || deleteConfirmText !== communityName || deletingCommunity}
               onClick={async () => {
-                if (deleteConfirmText !== communityName) return
+                if (!communityName || deleteConfirmText !== communityName) return
                 setDeletingCommunity(true)
                 try {
                   // 1. Sub-channels (conversations with community_id = communityId)
@@ -1163,18 +1230,17 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
                 }
               }}
               style={{
-                padding: '11px', background: deleteConfirmText === communityName && !deletingCommunity ? '#ef4444' : C.border,
-                color: deleteConfirmText === communityName && !deletingCommunity ? '#fff' : C.textDim,
-                border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: deleteConfirmText === communityName ? 'pointer' : 'default',
+                padding: '11px', background: communityName && deleteConfirmText === communityName && !deletingCommunity ? '#ef4444' : C.border,
+                color: communityName && deleteConfirmText === communityName && !deletingCommunity ? '#fff' : C.textDim,
+                border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: communityName && deleteConfirmText === communityName ? 'pointer' : 'default',
                 transition: 'all .15s',
               }}
             >
               {deletingCommunity ? 'Eliminando...' : '🗑️ Eliminar comunidad para siempre'}
             </button>
           </div>
-        )}
+        </div>
       </div>
-    </div>
   )
 }
 
