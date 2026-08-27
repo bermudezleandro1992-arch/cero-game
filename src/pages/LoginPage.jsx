@@ -13,7 +13,77 @@ const FEATURES = [
   { icon: '🤖', title: 'Bots y API', desc: 'Automatizá con bots propios o conectá tu sistema.' },
 ]
 
+function ApkModal({ onClose, apkUrl }) {
+  const url = apkUrl || APK_URL
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      padding: '0 0 env(safe-area-inset-bottom)',
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#1a2530', border: '1px solid rgba(255,255,255,.1)',
+        borderRadius: '20px 20px 0 0', padding: '24px 20px 32px',
+        width: '100%', maxWidth: 480,
+      }}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,.2)', margin: '0 auto 20px' }} />
+        <div style={{ fontSize: 36, textAlign: 'center', marginBottom: 12 }}>📱</div>
+        <h2 style={{ color: '#fff', fontWeight: 800, fontSize: 18, textAlign: 'center', margin: '0 0 8px' }}>
+          Instalar NexoTribu en Android
+        </h2>
+        <p style={{ color: 'rgba(255,255,255,.6)', fontSize: 13, textAlign: 'center', margin: '0 0 20px', lineHeight: 1.6 }}>
+          La app no está en Play Store todavía, así que Android puede mostrar una advertencia al instalarla. Es completamente seguro — te explicamos cómo hacerlo.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+          {[
+            { n: '1', t: 'Descargá el APK', d: 'Tocá el botón de abajo. El archivo se descarga en tu carpeta de Descargas.' },
+            { n: '2', t: 'Abrí el archivo', d: 'Desde Descargas, tocá el archivo .apk para abrirlo.' },
+            { n: '3', t: 'Permitir instalación', d: 'Android te pregunta si confiás en la fuente. Tocá "Configuración" → activá "Permitir de esta fuente" → volvé atrás e instalá.' },
+            { n: '4', t: '¡Listo!', d: 'NexoTribu aparece en tu pantalla de inicio como cualquier otra app.' },
+          ].map(s => (
+            <div key={s.n} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%', background: '#00b894',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 800, fontSize: 13, color: '#fff', flexShrink: 0, marginTop: 1,
+              }}>{s.n}</div>
+              <div>
+                <div style={{ color: '#fff', fontWeight: 700, fontSize: 13, marginBottom: 2 }}>{s.t}</div>
+                <div style={{ color: 'rgba(255,255,255,.55)', fontSize: 12, lineHeight: 1.5 }}>{s.d}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ background: 'rgba(0,184,148,.12)', border: '1px solid rgba(0,184,148,.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 20 }}>
+          <p style={{ color: 'rgba(0,184,148,1)', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+            🔒 <strong>100% seguro:</strong> el APK es oficial de NexoTribu. Android avisa porque no viene de Play Store, pero eso no significa que sea peligroso.
+          </p>
+        </div>
+
+        <a href={url} onClick={onClose} style={{
+          display: 'block', width: '100%', padding: '14px',
+          background: '#00b894', borderRadius: 12, textAlign: 'center',
+          color: '#fff', fontWeight: 800, fontSize: 15, textDecoration: 'none',
+          boxShadow: '0 4px 20px rgba(0,184,148,.4)',
+        }}>
+          ⬇️ Descargar APK Android
+        </a>
+        <button onClick={onClose} style={{
+          width: '100%', marginTop: 10, padding: '11px',
+          background: 'transparent', border: '1px solid rgba(255,255,255,.15)',
+          borderRadius: 12, color: 'rgba(255,255,255,.5)', fontSize: 14, cursor: 'pointer',
+        }}>
+          Cancelar
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function AuthForm({ isNative, updateAvailable, newVersion, apkUrl }) {
+  const [showApkModal, setShowApkModal] = useState(false)
   const [email, setEmail]           = useState('')
   const [password, setPassword]     = useState('')
   const [name, setName]             = useState('')
@@ -122,21 +192,25 @@ function AuthForm({ isNative, updateAvailable, newVersion, apkUrl }) {
         </a>
       )}
       {!isNative && (
-        <a href={APK_URL} style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          background: `${C.green}12`, border: `1px solid ${C.green}33`,
-          borderRadius: 12, padding: '10px 14px', marginBottom: 16, textDecoration: 'none', transition: 'background .15s',
-        }}
-          onMouseEnter={e => e.currentTarget.style.background = `${C.green}22`}
-          onMouseLeave={e => e.currentTarget.style.background = `${C.green}12`}
-        >
-          <span style={{ fontSize: 18 }}>📱</span>
-          <div style={{ flex: 1 }}>
-            <p style={{ margin: 0, color: C.green, fontWeight: 700, fontSize: 12 }}>Descargar APK Android</p>
-            <p style={{ margin: 0, color: C.textDim, fontSize: 11, marginTop: 1 }}>Instalá la app nativa · última versión</p>
-          </div>
-          <span style={{ color: C.green }}>⬇️</span>
-        </a>
+        <>
+          <button type="button" onClick={() => setShowApkModal(true)} style={{
+            display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+            background: `${C.green}12`, border: `1px solid ${C.green}33`,
+            borderRadius: 12, padding: '10px 14px', marginBottom: 16,
+            cursor: 'pointer', transition: 'background .15s', textAlign: 'left',
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = `${C.green}22`}
+            onMouseLeave={e => e.currentTarget.style.background = `${C.green}12`}
+          >
+            <span style={{ fontSize: 18 }}>📱</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, color: C.green, fontWeight: 700, fontSize: 12 }}>Descargar APK Android</p>
+              <p style={{ margin: 0, color: C.textDim, fontSize: 11, marginTop: 1 }}>Instalá la app nativa · última versión</p>
+            </div>
+            <span style={{ color: C.green }}>⬇️</span>
+          </button>
+          {showApkModal && <ApkModal onClose={() => setShowApkModal(false)} apkUrl={apkUrl} />}
+        </>
       )}
 
       {/* Mode label */}
