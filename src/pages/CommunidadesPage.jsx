@@ -32,7 +32,7 @@ export default function CommunidadesPage() {
 
   // Use already-loaded conversations from chatStore — no extra query needed
   const communities = conversations.filter(c =>
-    c.group_type === 'community' || c.group_type === 'group'
+    c.group_type === 'community' && c.name
   )
   const participating = conversations.filter(c =>
     c.group_type === 'tournament' || c.group_type === 'liga'

@@ -661,7 +661,14 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
   useEffect(() => { if (activeTab === 'brackets') loadMatches() }, [activeTab, item.id])
 
   async function handleJoin() {
-    await supabase.from('conversation_members').upsert({ conversation_id: item.id, user_id: myId }, { onConflict: 'conversation_id,user_id' })
+    const { data, error } = await supabase.rpc('join_tournament', { p_tournament_id: item.id })
+    if (error || data?.ok === false) {
+      const msg = data?.error || error?.message || 'Error al inscribirse'
+      if (msg === 'inscripciones_cerradas') alert('Las inscripciones están cerradas')
+      else if (msg === 'torneo_lleno') alert('El torneo está lleno')
+      else alert(msg)
+      return
+    }
     await loadParticipants()
     await reloadItem()
   }
@@ -1366,7 +1373,14 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
 
   async function handleJoin(convId) {
     if (!profile?.id) return
-    await supabase.from('conversation_members').upsert({ conversation_id: convId, user_id: profile.id }, { onConflict: 'conversation_id,user_id' })
+    const { data, error } = await supabase.rpc('join_tournament', { p_tournament_id: convId })
+    if (error || data?.ok === false) {
+      const msg = data?.error || error?.message || 'Error al inscribirse'
+      if (msg === 'inscripciones_cerradas') alert('Las inscripciones están cerradas')
+      else if (msg === 'torneo_lleno') alert('El torneo está lleno')
+      else alert(msg)
+      return
+    }
     load()
   }
 
