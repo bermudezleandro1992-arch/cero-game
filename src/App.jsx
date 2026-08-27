@@ -19,6 +19,8 @@ import CommunidadesPage from './pages/CommunidadesPage'
 import AnnouncementsPage from './pages/AnnouncementsPage'
 import AdminPage from './pages/AdminPage'
 import AdminGate from './components/AdminGate'
+import SoporteUserPage from './pages/SoporteUserPage'
+import SoporteStaffPage from './pages/SoporteStaffPage'
 import InviteJoinPage from './pages/InviteJoinPage'
 import HomePage from './pages/HomePage'
 import RankingPage from './pages/RankingPage'
@@ -496,6 +498,7 @@ export default function App() {
     (c.group_type === 'community' || c.group_type === 'group') && c.created_by === profile?.id
   ) || ['ceo','com_starter','com_elite','superadmin','admin'].includes(profile?.role)
   const isOrganizador = ['organizador','superadmin','admin'].includes(profile?.role)
+  const isStaff = ['superadmin','admin','moderador'].includes(profile?.role)
 
   return (
     <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', fontFamily: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
@@ -594,6 +597,21 @@ export default function App() {
                 </button>
               )})()}
 
+              {/* Soporte Staff — solo staff */}
+              {isStaff && (() => { const active = !showProfile && tab === 'soporte-staff'; return (
+                <button onClick={() => { setShowProfile(false); setTab('soporte-staff'); setActiveConversation(null) }} style={{
+                  width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  justifyContent: 'center', gap: 4, border: 'none',
+                  background: active ? '#f59e0b12' : 'none', cursor: 'pointer', padding: '12px 0',
+                  borderLeft: `3px solid ${active ? '#f59e0b' : 'transparent'}`, transition: 'background .15s',
+                }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#f59e0b' : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                  </svg>
+                  <span className="slfa-nav-tooltip">Soporte Staff</span>
+                </button>
+              )})()}
+
               {/* Ranking — como "Contenido multimedia" en WhatsApp */}
               {(() => { const active = !showProfile && tab === 'ranking'; return (
                 <button onClick={() => { setShowProfile(false); setTab('ranking') }} style={{
@@ -684,6 +702,23 @@ export default function App() {
             </button>
           )}
 
+          {/* Soporte Staff — solo staff */}
+          {isStaff && (
+            <button onClick={() => { setShowProfile(false); setTab('soporte-staff'); setActiveConversation(null) }} style={{
+              width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', gap: 4, border: 'none',
+              background: tab === 'soporte-staff' ? '#f59e0b12' : 'none',
+              cursor: 'pointer', padding: '14px 0',
+              borderLeft: `3px solid ${tab === 'soporte-staff' ? '#f59e0b' : 'transparent'}`,
+              transition: 'background .15s',
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={tab === 'soporte-staff' ? '#f59e0b' : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+              </svg>
+              <span style={{ fontSize: 10, fontWeight: tab === 'soporte-staff' ? 700 : 400, color: tab === 'soporte-staff' ? '#f59e0b' : C.textDim }}>Soporte</span>
+            </button>
+          )}
+
           {/* Admin Panel — solo superadmin/admin */}
           {['superadmin','admin'].includes(profile?.role) && (
             <button onClick={() => { setShowProfile(false); setTab('admin'); setActiveConversation(null) }} style={{
@@ -712,7 +747,7 @@ export default function App() {
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'
-            ? <PerfilPage key={perfilInitialTab} onClose={() => { setTab('chats'); setPerfilInitialTab('menu') }} initialTab={perfilInitialTab} onOpenSupport={openSupportChat} />
+            ? <PerfilPage key={perfilInitialTab} onClose={() => { setTab('chats'); setPerfilInitialTab('menu') }} initialTab={perfilInitialTab} onOpenSupport={() => { setTab('soporte-user'); setShowProfile(false) }} />
             : tab === 'llamadas'
             ? <LlamadasPage />
             : tab === 'estados'
@@ -729,6 +764,10 @@ export default function App() {
             ? <DiscoverPage />
             : tab === 'anuncios'
             ? <AnnouncementsPage />
+            : tab === 'soporte-user'
+            ? <SoporteUserPage onBack={() => setTab('chats')} onTicketCreated={() => {}} />
+            : tab === 'soporte-staff'
+            ? <SoporteStaffPage onBack={() => setTab('chats')} />
             : tab === 'admin'
             ? <AdminGate profile={profile}><AdminPage onBack={() => setTab('chats')} /></AdminGate>
             : tab === 'panel-organizador'
@@ -778,6 +817,7 @@ export default function App() {
                 { id: 'anuncios',          icon: '📢', label: 'Anuncios' },
                 ...(isCommunityOwner ? [{ id: 'panel-ceo', icon: '⭐', label: 'Panel CEO' }] : []),
                 ...(isOrganizador ? [{ id: 'panel-organizador', icon: '🎯', label: 'Panel Organizador' }] : []),
+                ...(isStaff ? [{ id: 'soporte-staff', icon: '🎧', label: 'Soporte Staff' }] : []),
                 { id: '__perfil__',        icon: '👤', label: 'Perfil' },
               ] : [
                 { id: 'contactos',         icon: '👥', label: 'Contactos' },
@@ -785,6 +825,7 @@ export default function App() {
                 { id: 'anuncios',          icon: '📢', label: 'Anuncios' },
                 ...(isCommunityOwner ? [{ id: 'panel-ceo', icon: '⭐', label: 'Panel CEO' }] : []),
                 ...(isOrganizador ? [{ id: 'panel-organizador', icon: '🎯', label: 'Panel Organizador' }] : []),
+                ...(isStaff ? [{ id: 'soporte-staff', icon: '🎧', label: 'Soporte Staff' }] : []),
               ]),
             ].map(({ id, icon, label }) => (
               <button key={id} onClick={() => {
