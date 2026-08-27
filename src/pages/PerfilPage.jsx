@@ -2172,8 +2172,18 @@ export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport
               </div>
 
               {/* Cerrar sesión */}
-              <div style={{ background: C.panel, borderRadius: 0, marginBottom: 24 }}>
+              <div style={{ background: C.panel, borderRadius: 0, marginBottom: 8 }}>
                 <SettingsRow icon="🚪" label="Cerrar sesión" danger onClick={() => supabase.auth.signOut()} noArrow />
+              </div>
+
+              {/* ⚠️ Zona sensible */}
+              <div style={{ marginBottom: 6, marginTop: 8, paddingLeft: 20 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#ef4444', letterSpacing: 1, textTransform: 'uppercase' }}>⚠️ Zona sensible</span>
+              </div>
+              <div style={{ background: C.panel, borderRadius: 0, marginBottom: 24, border: `1px solid #ef444430` }}>
+                <SettingsRow icon="⏸" label="Suspender cuenta" desc="Desactivá tu cuenta temporalmente" danger onClick={() => setShowDeleteModal('suspend')} noArrow />
+                <div style={{ height: 1, background: '#ef444425', margin: '0 20px 0 64px' }} />
+                <SettingsRow icon="🗑️" label="Eliminar cuenta" desc="Borrá todos tus datos permanentemente" danger onClick={() => setShowDeleteModal('delete')} noArrow />
               </div>
 
             </div>
