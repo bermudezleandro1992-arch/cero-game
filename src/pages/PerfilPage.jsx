@@ -64,15 +64,72 @@ const SOUND_OPTIONS = {
 
 const DEFAULT_SOUNDS = { message:'msg-default.mp3', community:'comm-default.mp3', torneo:'torneo-default.mp3', ringtone:'ring-default.mp3', video_ringtone:'video-ring-default.mp3', vibration:true }
 
+const UPLOAD_QUALITY_OPTIONS = [
+  { id: 'default', label: 'Estándar', desc: 'Comprimida, más rápida' },
+  { id: 'hd',      label: 'HD',       desc: '720p / buena calidad' },
+  { id: 'fullhd',  label: 'Full HD',  desc: '1080p / alta calidad' },
+  { id: '4k',      label: '4K',       desc: 'Ultra HD — más espacio' },
+  { id: '8k',      label: '8K',       desc: 'Máxima calidad posible' },
+]
+
+function Toggle({ on, onChange }) {
+  return (
+    <div onClick={() => onChange(!on)} style={{
+      width: 44, height: 26, borderRadius: 13, position: 'relative', cursor: 'pointer', flexShrink: 0,
+      background: on ? C.green : C.border, transition: 'background .2s',
+    }}>
+      <div style={{
+        position: 'absolute', top: 3, width: 20, height: 20, borderRadius: '50%', background: '#fff',
+        transition: 'left .2s', left: on ? 21 : 3,
+      }} />
+    </div>
+  )
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div style={{ color: C.textDim, fontSize: 11, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', padding: '16px 16px 6px' }}>
+      {children}
+    </div>
+  )
+}
+
+function SettingsBlock({ children }) {
+  return (
+    <div style={{ background: C.panel, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
+      {children}
+    </div>
+  )
+}
+
+function Row({ label, desc, right, onClick, noBorder }) {
+  return (
+    <div onClick={onClick} style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '13px 16px', cursor: onClick ? 'pointer' : 'default',
+      borderBottom: noBorder ? 'none' : `1px solid ${C.border}22`,
+      gap: 12,
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: C.text, fontSize: 14 }}>{label}</div>
+        {desc && <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>{desc}</div>}
+      </div>
+      {right}
+    </div>
+  )
+}
+
 function PreferenciasTab({ profile, onGoVip }) {
   const { themeId, setTheme } = useTheme()
   const [sounds, setSounds] = useState(DEFAULT_SOUNDS)
   const [savingSound, setSavingSound] = useState(false)
+  const [uploadQuality, setUploadQuality] = useState(() => localStorage.getItem('uploadQuality') || 'default')
+  const [chatPrefs, setChatPrefs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('chatPrefs') || '{}') } catch { return {} }
+  })
 
   useEffect(() => {
-    if (profile?.sound_settings) {
-      setSounds({ ...DEFAULT_SOUNDS, ...profile.sound_settings })
-    }
+    if (profile?.sound_settings) setSounds({ ...DEFAULT_SOUNDS, ...profile.sound_settings })
   }, [profile?.sound_settings])
 
   async function saveSound(key, val) {
@@ -89,107 +146,175 @@ function PreferenciasTab({ profile, onGoVip }) {
     await supabase.from('users').update({ theme: id }).eq('id', profile.id)
   }
 
-  return (
-    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Temas */}
-      <section>
-        <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 12 }}>🎨 Tema</div>
-        {/* Seguir sistema */}
-        <button onClick={() => changeTheme('system')} style={{
-          width: '100%', padding: '12px 16px', borderRadius: 12, marginBottom: 10,
-          border: `2px solid ${themeId === 'system' ? C.green : C.border}`,
-          background: themeId === 'system' ? `${C.green}12` : C.panel,
-          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12,
-          boxShadow: themeId === 'system' ? `0 0 0 1px ${C.green}` : 'none',
-        }}>
-          <span style={{ fontSize: 22 }}>🖥</span>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>Seguir tema del sistema</div>
-            <div style={{ color: C.textDim, fontSize: 11, marginTop: 2 }}>Cambia automáticamente según tu OS</div>
-          </div>
-          {themeId === 'system' && <span style={{ marginLeft: 'auto', color: C.green, fontSize: 18 }}>✓</span>}
-        </button>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
-          {Object.values(THEMES).map(t => {
-            const isVipOnly = VIP_EXCLUSIVE_THEMES.has(t.id)
-            const hasVip = VIP_PLANS.has(profile?.plan)
-            const locked = isVipOnly && !hasVip
-            return (
-              <button key={t.id} onClick={() => locked ? onGoVip?.() : changeTheme(t.id)} style={{
-                padding: '12px 8px', borderRadius: 12, border: `2px solid ${themeId === t.id ? t.green : C.border}`,
-                background: t.bg, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                boxShadow: themeId === t.id ? `0 0 0 1px ${t.green}` : 'none',
-                position: 'relative', opacity: locked ? 0.75 : 1,
-              }}>
-                {locked && (
-                  <div style={{ position: 'absolute', inset: 0, borderRadius: 10, background: 'rgba(0,0,0,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-                    <span style={{ fontSize: 18 }}>⭐</span>
-                    <span style={{ fontSize: 9, fontWeight: 800, color: '#f59e0b', letterSpacing: '0.5px' }}>VIP</span>
-                  </div>
-                )}
-                <span style={{ fontSize: 22 }}>{t.emoji}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: t.text }}>{t.label}</span>
-                <div style={{ display: 'flex', gap: 3 }}>
-                  {[t.bg, t.panel, t.green, t.red].map((c, i) => (
-                    <div key={i} style={{ width: 12, height: 12, borderRadius: 3, background: c }} />
-                  ))}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </section>
+  function setChatPref(key, val) {
+    const updated = { ...chatPrefs, [key]: val }
+    setChatPrefs(updated)
+    localStorage.setItem('chatPrefs', JSON.stringify(updated))
+  }
 
-      {/* Sonidos */}
-      <section>
-        <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 4 }}>
-          🔊 Sonidos {savingSound && <span style={{ color: C.textDim, fontSize: 11, fontWeight: 400 }}>Guardando…</span>}
+  function setQuality(id) {
+    setUploadQuality(id)
+    localStorage.setItem('uploadQuality', id)
+  }
+
+  const cp = chatPrefs
+
+  return (
+    <div style={{ paddingBottom: 32 }}>
+
+      {/* ── Pantalla ── */}
+      <SectionLabel>Pantalla</SectionLabel>
+      <SettingsBlock>
+        {/* Tema — inline selector oscuro/claro/sistema */}
+        <div style={{ padding: '13px 16px', borderBottom: `1px solid ${C.border}22` }}>
+          <div style={{ color: C.text, fontSize: 14, marginBottom: 10 }}>Estilo</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[
+              { id: 'system', label: 'Sistema', icon: '🖥' },
+              { id: 'dark',   label: 'Oscuro',  icon: '🌙' },
+              { id: 'light',  label: 'Claro',   icon: '☀️' },
+            ].map(opt => {
+              // map to actual theme ids
+              const themeMap = { system: 'system', dark: 'dark', light: 'light' }
+              const isActive = themeId === themeMap[opt.id]
+              return (
+                <button key={opt.id} onClick={() => changeTheme(themeMap[opt.id])} style={{
+                  flex: 1, padding: '10px 6px', borderRadius: 10,
+                  border: `2px solid ${isActive ? C.green : C.border}`,
+                  background: isActive ? `${C.green}12` : C.panel2,
+                  cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                }}>
+                  <span style={{ fontSize: 20 }}>{opt.icon}</span>
+                  <span style={{ color: isActive ? C.green : C.textDim, fontSize: 11, fontWeight: isActive ? 700 : 500 }}>{opt.label}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {Object.entries(SOUND_OPTIONS).map(([key, cfg]) => (
-            <div key={key} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <span style={{ color: C.text, fontSize: 13, fontWeight: 600, flex: 1 }}>{cfg.label}</span>
+
+        {/* Más temas */}
+        <div style={{ padding: '13px 16px', borderBottom: `1px solid ${C.border}22` }}>
+          <div style={{ color: C.text, fontSize: 14, marginBottom: 10 }}>Color</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8 }}>
+            {Object.values(THEMES).map(t => {
+              const isVipOnly = VIP_EXCLUSIVE_THEMES.has(t.id)
+              const hasVip = VIP_PLANS.has(profile?.plan)
+              const locked = isVipOnly && !hasVip
+              const isActive = themeId === t.id
+              return (
+                <button key={t.id} onClick={() => locked ? onGoVip?.() : changeTheme(t.id)} style={{
+                  padding: '10px 6px', borderRadius: 10, border: `2px solid ${isActive ? t.green : C.border}`,
+                  background: t.bg, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  position: 'relative', opacity: locked ? 0.8 : 1,
+                }}>
+                  {locked && (
+                    <div style={{ position: 'absolute', inset: 0, borderRadius: 8, background: 'rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                      <span style={{ fontSize: 14 }}>⭐</span>
+                      <span style={{ fontSize: 9, fontWeight: 800, color: '#f59e0b' }}>VIP</span>
+                    </div>
+                  )}
+                  <span style={{ fontSize: 18 }}>{t.emoji}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: t.text }}>{t.label}</span>
+                  <div style={{ display: 'flex', gap: 2 }}>
+                    {[t.bg, t.panel, t.green, t.red].map((c, i) => (
+                      <div key={i} style={{ width: 10, height: 10, borderRadius: 2, background: c }} />
+                    ))}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Fondo del chat */}
+        <Row
+          label="Fondo"
+          desc={cp.chatBg ? 'Personalizado' : 'Predeterminado'}
+          noBorder
+          right={
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {cp.chatBg && (
+                <button onClick={() => setChatPref('chatBg', null)} style={{ fontSize: 11, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}>Quitar</button>
+              )}
+              <label style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${C.border}`, color: C.text, fontSize: 13, cursor: 'pointer', background: C.panel2 }}>
+                Cambiar
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  const reader = new FileReader()
+                  reader.onload = ev => { setChatPref('chatBg', ev.target.result); localStorage.setItem('chatBg', ev.target.result) }
+                  reader.readAsDataURL(file)
+                }} />
+              </label>
+            </div>
+          }
+        />
+      </SettingsBlock>
+
+      {/* ── Ajustes de chats ── */}
+      <SectionLabel>Ajustes de chats</SectionLabel>
+      <SettingsBlock>
+        {/* Calidad de subida */}
+        <div style={{ padding: '13px 16px', borderBottom: `1px solid ${C.border}22` }}>
+          <div style={{ color: C.text, fontSize: 14, marginBottom: 10 }}>Calidad de subida de archivos</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {UPLOAD_QUALITY_OPTIONS.map((opt, i) => (
+              <button key={opt.id} onClick={() => setQuality(opt.id)} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 12px', borderRadius: 10,
+                border: `1.5px solid ${uploadQuality === opt.id ? C.green : C.border}`,
+                background: uploadQuality === opt.id ? `${C.green}10` : C.panel2,
+                cursor: 'pointer', textAlign: 'left',
+              }}>
+                <div>
+                  <span style={{ color: C.text, fontSize: 13, fontWeight: uploadQuality === opt.id ? 700 : 400 }}>{opt.label}</span>
+                  <span style={{ color: C.textDim, fontSize: 11, marginLeft: 8 }}>{opt.desc}</span>
+                </div>
+                {uploadQuality === opt.id && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <Row label="Corrección ortográfica" desc="Revisa mientras escribís" right={<Toggle on={cp.spellcheck !== false} onChange={v => setChatPref('spellcheck', v)} />} />
+        <Row label="Reemplazar texto con emojis" desc="El emoji reemplaza texto específico" right={<Toggle on={!!cp.emojiReplace} onChange={v => setChatPref('emojiReplace', v)} />} />
+        <Row label="Enter para enviar" desc="Se enviará al presionar Enter" noBorder right={<Toggle on={cp.enterToSend !== false} onChange={v => setChatPref('enterToSend', v)} />} />
+      </SettingsBlock>
+
+      {/* ── Sonidos ── */}
+      <SectionLabel>Sonidos {savingSound && <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>Guardando…</span>}</SectionLabel>
+      <SettingsBlock>
+        {Object.entries(SOUND_OPTIONS).map(([key, cfg], i, arr) => (
+          <Row key={key} label={cfg.label} noBorder={i === arr.length - 1}
+            right={
               <select value={sounds[key] || cfg.options[0]} onChange={e => saveSound(key, e.target.value)}
-                style={{ padding: '4px 8px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 12, cursor: 'pointer', maxWidth: 180 }}>
+                style={{ padding: '4px 8px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 12, cursor: 'pointer', maxWidth: 160 }}>
                 {cfg.options.map(o => <option key={o} value={o}>{o.replace('.mp3','').replace(/-/g,' ')}</option>)}
               </select>
-            </div>
-          ))}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, cursor: 'pointer' }}>
-            <input type="checkbox" checked={sounds.vibration} onChange={e => saveSound('vibration', e.target.checked)} style={{ width: 16, height: 16, accentColor: C.green, cursor: 'pointer' }} />
-            <span style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>📳 Vibración</span>
-          </label>
-        </div>
-      </section>
+            }
+          />
+        ))}
+        <Row label="Vibración" noBorder right={<Toggle on={sounds.vibration !== false} onChange={v => saveSound('vibration', v)} />} />
+      </SettingsBlock>
 
-      {/* Notificaciones */}
-      <section>
-        <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 12 }}>🔔 Notificaciones</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {[
-            ['notif_messages',    '💬 Nuevos mensajes'],
-            ['notif_calls',       '📞 Llamadas entrantes'],
-            ['notif_torneos',     '🏆 Torneos en mis comunidades'],
-            ['notif_resultados',  '⚽ Resultados de partidos'],
-            ['notif_anuncios',    '📢 Anuncios de CEO/Organizador'],
-            ['notif_solicitudes', '🔔 Solicitudes de unión (admins)'],
-            ['notif_partidos',    '⏰ Recordatorio de próximo partido'],
-          ].map(([key, label]) => (
-            <label key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, cursor: 'pointer' }}>
-              <span style={{ color: C.text, fontSize: 13, fontWeight: 500 }}>{label}</span>
-              <div onClick={() => saveSound(key, sounds[key] === false ? true : false)} style={{
-                width: 42, height: 24, borderRadius: 12, position: 'relative', cursor: 'pointer', flexShrink: 0,
-                background: sounds[key] === false ? C.border : C.green, transition: 'background .2s',
-              }}>
-                <div style={{
-                  position: 'absolute', top: 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left .2s',
-                  left: sounds[key] === false ? 2 : 18,
-                }} />
-              </div>
-            </label>
-          ))}
-        </div>
-      </section>
+      {/* ── Notificaciones ── */}
+      <SectionLabel>Notificaciones</SectionLabel>
+      <SettingsBlock>
+        {[
+          ['notif_messages',    'Nuevos mensajes'],
+          ['notif_calls',       'Llamadas entrantes'],
+          ['notif_torneos',     'Torneos en mis comunidades'],
+          ['notif_resultados',  'Resultados de partidos'],
+          ['notif_anuncios',    'Anuncios de CEO/Organizador'],
+          ['notif_solicitudes', 'Solicitudes de unión'],
+          ['notif_partidos',    'Recordatorio de próximo partido'],
+        ].map(([key, label], i, arr) => (
+          <Row key={key} label={label} noBorder={i === arr.length - 1}
+            right={<Toggle on={sounds[key] !== false} onChange={v => saveSound(key, v)} />}
+          />
+        ))}
+      </SettingsBlock>
+
     </div>
   )
 }
