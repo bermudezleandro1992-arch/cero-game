@@ -59,6 +59,11 @@ function getOrCreateChannel(userId) {
 export function usePresence(userId) {
   useEffect(() => {
     if (!userId) return
+    // Respect showOnline privacy setting
+    try {
+      const priv = JSON.parse(localStorage.getItem('privacySettings') || '{}')
+      if (priv.showOnline === false) return
+    } catch {}
 
     async function updateSeen() {
       await supabase.from('users')
