@@ -53,7 +53,7 @@ function UserMsg({ text }) {
   )
 }
 
-export default function SoporteUserPage({ onBack, onTicketCreated }) {
+export default function SoporteUserPage({ onBack, onTicketCreated, onViewTickets }) {
   const { profile } = useAuthStore()
   const [step, setStep] = useState('categories') // categories | faq | describe | submitting | success
   const [category, setCategory] = useState(null)
@@ -218,12 +218,15 @@ export default function SoporteUserPage({ onBack, onTicketCreated }) {
               <div style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: 1, marginBottom: 4 }}>TICKET CREADO</div>
               <div style={{ fontSize: 28, fontWeight: 900, color: C.text, letterSpacing: -1 }}>{ticket.ticket_number || ticket.ticket_no}</div>
               <div style={{ fontSize: 12, color: C.textDim, marginTop: 6, lineHeight: 1.5 }}>
-                Un agente de soporte va a revisar tu caso y te va a responder en el chat. Podés ver el estado de tu ticket en <strong>Perfil → Mis tickets</strong>.
+                Un agente te va a responder a la brevedad. Para ver el estado de tu ticket tocá <strong>"Ver mis tickets"</strong> aquí abajo.
               </div>
             </div>
             <BotMsg text="¿Hay algo más en lo que pueda ayudarte?" delay={800} />
-            <div style={{ marginTop: 12, display: 'flex', gap: 8 }} ref={bottomRef}>
-              <button onClick={onBack} style={{ flex: 1, padding: '10px', borderRadius: 20, border: `1.5px solid ${C.green}`, background: 'transparent', color: C.green, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }} ref={bottomRef}>
+              <button onClick={onViewTickets} style={{ width: '100%', padding: '11px', borderRadius: 20, border: 'none', background: C.green, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                Ver mis tickets →
+              </button>
+              <button onClick={onBack} style={{ width: '100%', padding: '10px', borderRadius: 20, border: `1.5px solid ${C.border}`, background: 'transparent', color: C.textDim, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                 Volver al inicio
               </button>
             </div>
