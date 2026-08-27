@@ -1,6 +1,16 @@
 import { initAppWindow } from './lib/appStartup'
 initAppWindow()
 
+// Apply font size preference before React mounts
+;(() => {
+  try {
+    const prefs = JSON.parse(localStorage.getItem('generalPrefs') || '{}')
+    const map = { 'Pequeño': '13px', 'Normal': '15px', 'Grande': '17px', 'Extra grande': '20px' }
+    const size = map[prefs.fontSize] || '15px'
+    document.documentElement.style.setProperty('--app-font-size', size)
+  } catch {}
+})()
+
 // Catch crashes before React mounts (module errors, etc.)
 window.addEventListener('error', (e) => {
   const div = document.getElementById('pre-react-error')

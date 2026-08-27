@@ -6,11 +6,14 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+:root { --app-font-size: 15px; }
+
 html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: var(--app-font-size);
   background: var(--c-bg, #0a0a0f);
   color: var(--c-text, #FFFFFF);
 }

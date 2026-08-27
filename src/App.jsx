@@ -413,6 +413,38 @@ export default function App() {
     return () => { listener.then(h => h.remove()) }
   }, [activeConversation, showProfile, tab])
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    function onKey(e) {
+      const tag = document.activeElement?.tagName
+      const editing = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable
+      if (e.key === 'Escape') { setActiveConversation(null); return }
+      if (editing) return
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') { e.preventDefault(); setShowProfile(false); setTab('perfil'); setActiveConversation(null) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Open support chat
+  async function openSupportChat() {
+    try {
+      const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'support_group_id').maybeSingle()
+      const supportId = cfg?.value
+      if (!supportId) { alert('Chat de soporte no configurado aún.'); return }
+      const { data: conv } = await supabase.from('conversations').select('*, members:conversation_members(*, users(*))').eq('id', supportId).maybeSingle()
+      if (!conv) { alert('No se pudo cargar el chat de soporte.'); return }
+      // Ensure current user is a member
+      const isMember = conv.members?.some(m => m.user_id === profile?.id)
+      if (!isMember) {
+        await supabase.from('conversation_members').insert({ conversation_id: supportId, user_id: profile?.id, role: 'jugador' })
+      }
+      setActiveConversation({ ...conv, isGroup: conv.is_group })
+      setTab('chats')
+      setShowProfile(false)
+    } catch { alert('Error al abrir soporte.') }
+  }
+
   // Open VipPage directly from anywhere via custom event
   const [openVipDirect, setOpenVipDirect] = useState(false)
   useEffect(() => {
@@ -666,7 +698,7 @@ export default function App() {
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'
-            ? <PerfilPage onClose={() => setTab('chats')} initialTab="menu" />
+            ? <PerfilPage onClose={() => setTab('chats')} initialTab="menu" onOpenSupport={openSupportChat} />
             : tab === 'llamadas'
             ? <LlamadasPage />
             : tab === 'estados'

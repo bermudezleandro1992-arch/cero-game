@@ -1492,22 +1492,55 @@ const FAQ = [
   { q: '¿Puedo recuperar mensajes borrados?', a: 'Los usuarios VIP pueden ver el contenido de mensajes eliminados (excepto los borrados por SuperAdmin).' },
 ]
 
-function AyudaTab({ profile, onToast }) {
+function AyudaTab({ profile, onToast, onOpenSupport }) {
   const [openFaq, setOpenFaq] = useState(null)
   const [feedback, setFeedback] = useState('')
   const [sent, setSent] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [stars, setStars] = useState(0)
+  const [ratingDone, setRatingDone] = useState(false)
 
   async function sendFeedback() {
     if (!feedback.trim()) return
-    await supabase.from('messages').insert({
-      conversation_id: null,
-      sender_id: profile?.id,
-      content: `[FEEDBACK] ${feedback}`,
-      type: 'system',
-    }).catch(() => {})
-    setSent(true)
-    setFeedback('')
-    onToast('¡Gracias! Tu comentario fue enviado.')
+    setSending(true)
+    try {
+      // Get or create support group
+      const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'support_group_id').maybeSingle()
+      const supportId = cfg?.value
+      if (supportId) {
+        await supabase.from('messages').insert({
+          conversation_id: supportId,
+          sender_id: profile?.id,
+          content: `📝 Feedback de ${profile?.display_name || 'usuario'}: ${feedback}`,
+          type: 'text',
+        })
+      }
+      setSent(true)
+      setFeedback('')
+      onToast('¡Gracias! Tu comentario fue enviado al equipo.')
+    } catch {
+      onToast('Error al enviar. Intentá de nuevo.')
+    }
+    setSending(false)
+  }
+
+  async function handleRating(n) {
+    setStars(n)
+    await new Promise(r => setTimeout(r, 300))
+    setRatingDone(true)
+    try {
+      const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'support_group_id').maybeSingle()
+      const supportId = cfg?.value
+      if (supportId) {
+        await supabase.from('messages').insert({
+          conversation_id: supportId,
+          sender_id: profile?.id,
+          content: `⭐ Calificación de ${profile?.display_name || 'usuario'}: ${'★'.repeat(n)}${'☆'.repeat(5-n)} (${n}/5)`,
+          type: 'text',
+        })
+      }
+    } catch {}
+    onToast(`¡Gracias por tu ${n >= 4 ? '⭐ calificación!' : 'opinión!'}`)
   }
 
   return (
@@ -1516,10 +1549,21 @@ function AyudaTab({ profile, onToast }) {
       {/* Acciones rápidas */}
       <SectionLabel>Soporte</SectionLabel>
       <SettingsBlock>
-        <Row label="Contáctanos" desc="Chateá con el equipo de soporte" onClick={() => onToast('Próximamente — soporte en vivo')}
+        <Row label="Contáctanos" desc="Chateá con el equipo de soporte" onClick={onOpenSupport}
           right={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>} />
-        <Row label="Calificar la aplicación" desc="¿Te gusta NexoTribu? ¡Dejanos tu opinión!" noBorder onClick={() => onToast('¡Gracias por tu apoyo! Próximamente en las tiendas de apps.')}
-          right={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>} />
+        <Row label="Calificar la aplicación" desc="¿Te gusta NexoTribu? ¡Dejanos tu opinión!" noBorder onClick={() => {}}
+          right={
+            ratingDone
+              ? <span style={{ color: C.green, fontSize: 13, fontWeight: 700 }}>{'★'.repeat(stars)} ¡Gracias!</span>
+              : <div style={{ display: 'flex', gap: 4 }}>
+                  {[1,2,3,4,5].map(n => (
+                    <button key={n} onClick={e => { e.stopPropagation(); handleRating(n) }} style={{
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                      fontSize: 22, color: n <= stars ? '#f59e0b' : C.textDim, lineHeight: 1,
+                    }}>{n <= stars ? '★' : '☆'}</button>
+                  ))}
+                </div>
+          } />
       </SettingsBlock>
 
       {/* Enviar comentarios */}
@@ -1643,7 +1687,16 @@ function GeneralTab() {
     const updated = { ...prefs, [key]: val }
     setPrefs(updated)
     localStorage.setItem('generalPrefs', JSON.stringify(updated))
+    if (key === 'fontSize') applyFontSize(val)
   }
+
+  const FONT_SIZE_MAP = { 'Pequeño': '13px', 'Normal': '15px', 'Grande': '17px', 'Extra grande': '20px' }
+
+  function applyFontSize(label) {
+    document.documentElement.style.setProperty('--app-font-size', FONT_SIZE_MAP[label] || '15px')
+  }
+
+  useEffect(() => { applyFontSize(prefs.fontSize || 'Normal') }, [])
 
   const FONT_SIZES = ['Pequeño', 'Normal', 'Grande', 'Extra grande']
   const LANGUAGES = ['Español', 'English', 'Português']
@@ -1696,7 +1749,7 @@ function GeneralTab() {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function PerfilPage({ onClose, onGoVip, initialTab }) {
+export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport }) {
   const { profile, fetchProfile } = useAuthStore()
   const [tab, setTab] = useState(initialTab || 'menu')
   const [showBots, setShowBots] = useState(false)
@@ -2023,7 +2076,7 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
       {tab === 'ayuda' && (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           {subHeader('Ayuda y comentarios')}
-          <AyudaTab profile={profile} onToast={setToast} />
+          <AyudaTab profile={profile} onToast={setToast} onOpenSupport={onOpenSupport} />
         </div>
       )}
 
