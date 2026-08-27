@@ -1039,7 +1039,7 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
 
   const SKINS_CFG = [
     { id: 'default', label: 'NexoTribu', icon: '🟢' },
-    { id: 'whatsapp', label: 'Estilo Mensajero', icon: '💬' },
+    { id: 'whatsapp', label: 'Estilo NexoTribu', icon: '💬' },
   ]
 
   const subHeader = (title) => (
