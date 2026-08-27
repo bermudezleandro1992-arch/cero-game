@@ -1,5 +1,5 @@
-const VERSION = '1.9.0'
-const CACHE = `mimensajero-${VERSION}`
+const VERSION = '2.0.0'
+const CACHE = `nexotribu-${VERSION}`
 const SHELL = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon.svg']
 
 self.addEventListener('install', e => {
