@@ -57,7 +57,7 @@ export default function SoporteStaffPage({ onBack }) {
     setLoading(true)
     let q = supabase
       .from('support_tickets')
-      .select(`*, user:users!support_tickets_user_id_fkey(id,display_name,username,avatar_url,role), agent:users!support_tickets_assigned_to_fkey(id,display_name,username)`)
+      .select(`*, user:profiles!support_tickets_user_id_fkey(id,display_name,username,avatar_url,role), agent:profiles!support_tickets_agent_id_fkey(id,display_name,username)`)
       .order('created_at', { ascending: false })
     if (filter !== 'all') q = q.eq('status', filter)
     const { data } = await q
@@ -72,7 +72,7 @@ export default function SoporteStaffPage({ onBack }) {
     setMsgLoading(true)
     const { data } = await supabase
       .from('messages')
-      .select('*, sender:users!messages_sender_id_fkey(id,display_name,username,avatar_url)')
+      .select('*, sender:profiles!messages_sender_id_fkey(id,display_name,username,avatar_url)')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true })
       .limit(200)
@@ -102,7 +102,7 @@ export default function SoporteStaffPage({ onBack }) {
     if (!selected) return
     const { error } = await supabase.rpc('take_support_ticket', { p_ticket_id: selected.id })
     if (!error) {
-      setSelected(prev => ({ ...prev, status: 'in_progress', assigned_to: profile.id, agent: { id: profile.id, display_name: profile.display_name, username: profile.username } }))
+      setSelected(prev => ({ ...prev, status: 'in_progress', agent_id: profile.id, agent: { id: profile.id, display_name: profile.display_name, username: profile.username } }))
       loadTickets()
     }
   }
@@ -130,7 +130,7 @@ export default function SoporteStaffPage({ onBack }) {
 
   async function addQuickReply() {
     if (!newQR.title.trim() || !newQR.content.trim()) return
-    const { data } = await supabase.from('ticket_quick_replies').insert({ title: newQR.title, content: newQR.content, created_by: profile.id }).select().single()
+    const { data } = await supabase.from('ticket_quick_replies').insert({ title: newQR.title, body: newQR.content, created_by: profile.id }).select().single()
     if (data) { setQuickReplies(prev => [...prev, data]); setNewQR({ title: '', content: '' }); setAddingQR(false) }
   }
 
@@ -159,7 +159,7 @@ export default function SoporteStaffPage({ onBack }) {
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* LEFT: Ticket list */}
-        <div style={{ width: selected ? '0' : '100%', minWidth: selected ? 0 : '100%', display: 'flex', flexDirection: 'column', borderRight: `1px solid ${C.border}`, overflow: 'hidden', transition: 'all .2s', '@media(min-width:768px)': { width: 320, minWidth: 320 } }}
+        <div style={{ width: selected ? '0' : '100%', minWidth: selected ? 0 : '100%', display: 'flex', flexDirection: 'column', borderRight: `1px solid ${C.border}`, overflow: 'hidden', transition: 'all .2s' }}
           className="soporte-list">
 
           {/* Filter tabs */}
@@ -324,9 +324,9 @@ export default function SoporteStaffPage({ onBack }) {
                     {quickReplies.length === 0 && !addingQR && <div style={{ padding: '12px', color: C.textDim, fontSize: 12, textAlign: 'center' }}>No hay respuestas guardadas aún.</div>}
                     {quickReplies.map(r => (
                       <div key={r.id} style={{ padding: '8px 12px', borderBottom: `1px solid ${C.border}22`, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                        <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => { setInput(r.content); setShowQR(false); inputRef.current?.focus() }}>
+                        <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => { setInput(r.body); setShowQR(false); inputRef.current?.focus() }}>
                           <div style={{ fontWeight: 600, fontSize: 12, color: C.text }}>{r.title}</div>
-                          <div style={{ fontSize: 11, color: C.textDim, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.content}</div>
+                          <div style={{ fontSize: 11, color: C.textDim, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.body}</div>
                         </div>
                         <button onClick={() => deleteQR(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 14, padding: 0, flexShrink: 0 }}>🗑</button>
                       </div>
