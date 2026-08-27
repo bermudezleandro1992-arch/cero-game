@@ -174,7 +174,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
       }
     }
     setCreating(false)
-    onCreated(convId, groupName.trim(), selected)
+    onCreated(convId, groupName.trim(), selected, groupType)
   }
 
   function toggleGame(gameId) {

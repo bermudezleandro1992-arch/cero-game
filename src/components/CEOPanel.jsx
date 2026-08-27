@@ -706,9 +706,8 @@ function MiembrosTab({ communityId, profile, toast }) {
     setLoading(true)
     const { data } = await supabase
       .from('conversation_members')
-      .select('user_id, role, joined_at, users(id, display_name, avatar_url)')
+      .select('user_id, role, users(id, display_name, avatar_url)')
       .eq('conversation_id', communityId)
-      .order('joined_at', { ascending: false })
     setMembers(data || [])
     setLoading(false)
   }, [communityId])
@@ -1019,6 +1018,7 @@ const cfgInputStyle = {
 }
 
 function ConfiguracionTab({ communityId, communityName, toast, onCommunityDeleted, onGoVip }) {
+  const { profile } = useAuthStore()
   const [cfg, setCfg] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1121,19 +1121,24 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
       </CfgField>
       <CfgField label="Plan de comunidad">
         {(() => {
-          const plan = cfg.plan || 'free'
-          const pCfg = PLAN_LIMITS[plan] || PLAN_LIMITS.free
+          const role = profile?.role || 'member'
+          const planKey = ['superadmin','admin','ceo'].includes(role) ? 'elite'
+            : ['comunidad'].includes(role) ? 'elite'
+            : ['vip'].includes(role) ? 'pro'
+            : cfg?.plan || 'free'
+          const pCfg = PLAN_LIMITS[planKey] || PLAN_LIMITS.free
+          const isFree = planKey === 'free'
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.panel, borderRadius: 8, border: `1px solid ${C.border}` }}>
               <div>
                 <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{pCfg.label}</div>
                 <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>Capacidad: hasta {pCfg.members} miembros</div>
               </div>
-              {plan === 'free'
-                ? <button onClick={onGoVip} style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: C.green, color: '#000', border: 'none', cursor: 'pointer' }}>
+              {isFree
+                ? <button onClick={() => { window.location.hash = '#/perfil/vip' }} style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: C.green, color: '#000', border: 'none', cursor: 'pointer' }}>
                     ⭐ Actualizar
                   </button>
-                : <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 8, background: `${C.green}20`, color: C.green }}>Activo</span>
+                : <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 8, background: `${C.green}20`, color: C.green }}>✓ Activo</span>
               }
             </div>
           )

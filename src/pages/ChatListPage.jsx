@@ -276,9 +276,14 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
     fetchConversations(profile.id)
   }
 
-  function handleGroupCreated(convId, name, members) {
+  function handleGroupCreated(convId, name, members, type) {
     setShowNewGroup(false)
-    setActiveConversation({ id: convId, name, isGroup: true, members })
+    const isCommunity = type === 'community'
+    setActiveConversation({
+      id: convId, name, isGroup: true, members,
+      group_type: type || 'group',
+      isCommunity,
+    })
     fetchConversations(profile.id)
   }
 
@@ -648,7 +653,9 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
               {/* Avatar */}
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 {isGroup
-                  ? <GroupAvatar members={conv.members || []} size={50} isCommunity={isCommunity} />
+                  ? (conv.avatar_url
+                      ? <img src={conv.avatar_url} alt={name} style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                      : <GroupAvatar members={conv.members || []} size={50} isCommunity={isCommunity} />)
                   : storyUserIds.has(conv.user?.id)
                     ? (
                       <div

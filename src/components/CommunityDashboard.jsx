@@ -494,19 +494,12 @@ function MiembrosTab({ communityId, ownerId, isAdmin, myId }) {
 
   const loadMembers = useCallback(async () => {
     setLoading(true)
-    // Two-step: get member rows, then fetch user profiles
-    const { data: mData } = await supabase
+    const { data } = await supabase
       .from('conversation_members')
-      .select('user_id, role')
+      .select('user_id, role, users(id, display_name, username, avatar_url)')
       .eq('conversation_id', communityId)
       .limit(200)
-    const ids = (mData || []).map(r => r.user_id)
-    if (!ids.length) { setMembers([]); setLoading(false); return }
-    const { data: uData } = await supabase
-      .from('users').select('id, display_name, username, avatar_url').in('id', ids)
-    const uMap = {}
-    ;(uData || []).forEach(u => { uMap[u.id] = u })
-    setMembers((mData || []).map(m => ({ ...m, users: uMap[m.user_id] })).filter(m => m.users))
+    setMembers((data || []).filter(m => m.users))
     setLoading(false)
   }, [communityId])
 
@@ -633,7 +626,7 @@ function MiembrosTab({ communityId, ownerId, isAdmin, myId }) {
 }
 
 // ── CEO Panel ─────────────────────────────────────────────────────────────────
-function CeoPanel({ community, profile }) {
+function CeoPanel({ community, profile, onAvisoPublished }) {
   const { setActiveConversation } = useChatStore()
   const [channels, setChannels] = useState([])
   const [loadingCh, setLoadingCh] = useState(true)
@@ -682,18 +675,12 @@ function CeoPanel({ community, profile }) {
 
   async function loadMembers() {
     setLoadingM(true)
-    const { data: mData } = await supabase
+    const { data } = await supabase
       .from('conversation_members')
-      .select('user_id, role')
+      .select('user_id, role, users(id, display_name, username, avatar_url)')
       .eq('conversation_id', community.id)
       .limit(200)
-    const ids = (mData || []).map(r => r.user_id)
-    if (!ids.length) { setMembers([]); setLoadingM(false); return }
-    const { data: uData } = await supabase
-      .from('users').select('id, display_name, username, avatar_url').in('id', ids)
-    const uMap = {}
-    ;(uData || []).forEach(u => { uMap[u.id] = u })
-    setMembers((mData || []).map(m => ({ ...m, users: uMap[m.user_id] })).filter(m => m.users))
+    setMembers(data || [])
     setLoadingM(false)
   }
 
@@ -750,6 +737,7 @@ function CeoPanel({ community, profile }) {
     })
     setAvisoTitle(''); setAvisoBody(''); setPublishingAviso(false); setAvisoDone(true)
     setTimeout(() => setAvisoDone(false), 3000)
+    if (onAvisoPublished) onAvisoPublished()
   }
 
   const whoCanSendLabel = { everyone: 'Todos', members: 'Miembros', moderators: 'Moderadores', admins: 'Solo admins' }
@@ -1081,7 +1069,7 @@ export default function CommunityDashboard({ community, onBack }) {
           <ChannelsTab community={community} profile={profile} isAdmin={isAdmin} />
         )}
         {tab === 'ceo' && isAdmin && (
-          <CeoPanel community={community} profile={profile} />
+          <CeoPanel community={community} profile={profile} onAvisoPublished={loadData} />
         )}
       </div>
 
