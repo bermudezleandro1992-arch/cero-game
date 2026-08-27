@@ -431,14 +431,12 @@ export default function App() {
     try {
       const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'support_group_id').maybeSingle()
       const supportId = cfg?.value
-      if (!supportId) { alert('Chat de soporte no configurado aún.'); return }
-      const { data: conv } = await supabase.from('conversations').select('*, members:conversation_members(*, users(*))').eq('id', supportId).maybeSingle()
+      if (!supportId) { alert('Chat de soporte no configurado aún. Ejecutá el Script 03 en Supabase.'); return }
+      const { data: conv } = await supabase.from('conversations').select('*').eq('id', supportId).maybeSingle()
       if (!conv) { alert('No se pudo cargar el chat de soporte.'); return }
-      // Ensure current user is a member
-      const isMember = conv.members?.some(m => m.user_id === profile?.id)
-      if (!isMember) {
-        await supabase.from('conversation_members').insert({ conversation_id: supportId, user_id: profile?.id, role: 'jugador' })
-      }
+      // Ensure current user is a member (upsert without role column)
+      await supabase.from('conversation_members')
+        .upsert({ conversation_id: supportId, user_id: profile?.id }, { onConflict: 'conversation_id,user_id', ignoreDuplicates: true })
       setActiveConversation({ ...conv, isGroup: conv.is_group })
       setTab('chats')
       setShowProfile(false)
@@ -781,7 +779,7 @@ export default function App() {
             ].map(({ id, icon, label }) => (
               <button key={id} onClick={() => {
                 setShowMoreDrawer(false)
-                if (id === '__perfil__') { setShowProfile(true) }
+                if (id === '__perfil__') { setShowProfile(false); setTab('perfil'); setActiveConversation(null) }
                 else { setShowProfile(false); setTab(id) }
               }} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 16,
