@@ -1492,6 +1492,62 @@ const FAQ = [
   { q: '¿Puedo recuperar mensajes borrados?', a: 'Los usuarios VIP pueden ver el contenido de mensajes eliminados (excepto los borrados por SuperAdmin).' },
 ]
 
+const TICKET_STATUS = {
+  open:        { label: 'Abierto',   color: '#f59e0b' },
+  in_progress: { label: 'En curso',  color: '#3b82f6' },
+  closed:      { label: 'Cerrado',   color: '#6b7280' },
+}
+
+function MisTickets({ profile }) {
+  const [tickets, setTickets] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!profile?.id) return
+    supabase
+      .from('support_tickets')
+      .select('id, ticket_no, title, status, category, created_at')
+      .eq('user_id', profile.id)
+      .order('created_at', { ascending: false })
+      .limit(20)
+      .then(({ data }) => { setTickets(data || []); setLoading(false) })
+  }, [profile?.id])
+
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+      <div style={{ width: 20, height: 20, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+    </div>
+  )
+
+  if (tickets.length === 0) return (
+    <div style={{ padding: '20px 16px', textAlign: 'center', color: C.textDim, fontSize: 13 }}>
+      No tenés tickets abiertos aún.
+    </div>
+  )
+
+  return (
+    <div style={{ background: C.panel, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
+      {tickets.map((t, i) => {
+        const s = TICKET_STATUS[t.status] || TICKET_STATUS.open
+        return (
+          <div key={t.id} style={{ padding: '11px 16px', borderBottom: i < tickets.length - 1 ? `1px solid ${C.border}22` : 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{t.ticket_no}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: s.color, background: `${s.color}18`, borderRadius: 5, padding: '1px 7px' }}>{s.label}</span>
+              </div>
+              <div style={{ color: C.textDim, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title || t.category}</div>
+            </div>
+            <div style={{ fontSize: 11, color: C.textDim, flexShrink: 0 }}>
+              {new Date(t.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function AyudaTab({ profile, onToast, onOpenSupport }) {
   const [openFaq, setOpenFaq] = useState(null)
   const [feedback, setFeedback] = useState('')
@@ -1545,6 +1601,10 @@ function AyudaTab({ profile, onToast, onOpenSupport }) {
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 40 }}>
+
+      {/* Mis tickets */}
+      <SectionLabel>Mis tickets</SectionLabel>
+      <MisTickets profile={profile} />
 
       {/* Acciones rápidas */}
       <SectionLabel>Soporte</SectionLabel>
