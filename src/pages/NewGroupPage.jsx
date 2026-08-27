@@ -94,6 +94,11 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
   const [searching, setSearching] = useState(false)
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState(null)
+  // Member roles (for community/clan creation)
+  const [memberRoles, setMemberRoles] = useState({}) // { userId: 'admin'|'moderador'|'member' }
+  // Clan-specific fields
+  const [clanTag, setClanTag] = useState('')
+  const [clanRecruitment, setClanRecruitment] = useState('open') // open | invite_only | closed
 
   async function searchUsers(q) {
     if (!q.trim()) { setSearchResults([]); return }
@@ -120,16 +125,17 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
     if (groupType === 'group' && selected.length === 0) return
     setCreating(true)
     const memberIds = selected.map(u => u.id)
+    const dbGroupType = groupType === 'clan' ? 'group' : groupType
     const convId = await createGroup(
       groupName.trim(),
       memberIds,
       profile.id,
-      groupType,
+      dbGroupType,
       description.trim(),
       joinMode === 'public'
     )
-    if (convId && groupType === 'community') {
-      await supabase.from('conversations').update({
+    if (convId && (groupType === 'community' || groupType === 'clan')) {
+      const updatePayload = {
         tags:             selectedGames,
         torneos_enabled:  torneosEnabled,
         ligas_enabled:    ligasEnabled,
@@ -138,24 +144,43 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
         rules:            rules.trim() || null,
         join_mode:        joinMode,
         permissions,
-      }).eq('id', convId)
+      }
+      if (groupType === 'clan') {
+        updatePayload.group_type = 'clan'
+        updatePayload.clan_tag   = clanTag.trim().toUpperCase() || null
+        updatePayload.join_mode  = clanRecruitment
+      }
+      await supabase.from('conversations').update(updatePayload).eq('id', convId)
 
-      // Crear canales por defecto
-      for (const ch of DEFAULT_CHANNELS) {
-        const { data: channel } = await supabase.from('conversations').insert({
-          name:        ch.name,
-          type:        'channel',
-          community_id: convId,
-          created_by:  profile.id,
-          description: ch.description,
-          permissions: { ...permissions, who_can_send: ch.who_can_send },
-        }).select('id').single()
-        if (channel) {
-          await supabase.from('conversation_members').insert({
-            conversation_id: channel.id,
-            user_id: profile.id,
-            role: 'owner',
-          })
+      // Assign custom roles to members
+      for (const user of selected) {
+        const role = memberRoles[user.id]
+        if (role && role !== 'member') {
+          await supabase.from('conversation_members')
+            .update({ role })
+            .eq('conversation_id', convId)
+            .eq('user_id', user.id)
+        }
+      }
+
+      // Crear canales por defecto (solo comunidades)
+      if (groupType === 'community') {
+        for (const ch of DEFAULT_CHANNELS) {
+          const { data: channel } = await supabase.from('conversations').insert({
+            name:        ch.name,
+            type:        'channel',
+            community_id: convId,
+            created_by:  profile.id,
+            description: ch.description,
+            permissions: { ...permissions, who_can_send: ch.who_can_send },
+          }).select('id').single()
+          if (channel) {
+            await supabase.from('conversation_members').insert({
+              conversation_id: channel.id,
+              user_id: profile.id,
+              role: 'owner',
+            })
+          }
         }
       }
     }
@@ -184,7 +209,9 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
   }
 
   const isCommunity = groupType === 'community'
-  const canProceedStep1 = isCommunity || selected.length > 0
+  const isClan = groupType === 'clan'
+  const isGroupOrClan = isCommunity || isClan
+  const canProceedStep1 = isGroupOrClan || selected.length > 0
 
   return (
     <div style={{
@@ -207,7 +234,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
         </button>
         <div style={{ flex: 1 }}>
           <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>
-            {step === 1 ? 'Nuevo grupo / comunidad' : isCommunity ? 'Nueva comunidad' : 'Nuevo grupo'}
+            {step === 1 ? 'Nuevo grupo / comunidad' : isCommunity ? 'Nueva comunidad' : isClan ? 'Nuevo Clan ⚔️' : 'Nuevo grupo'}
           </h2>
           {step === 1 && (
             <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>
@@ -234,8 +261,9 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
           {/* Type selector at top of step 1 */}
           <div style={{ padding: '12px 16px', background: C.panel2, borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 8, flexShrink: 0 }}>
             {[
-              { value: 'group', label: 'Grupo', icon: '👥' },
+              { value: 'group',     label: 'Grupo',     icon: '👥' },
               { value: 'community', label: 'Comunidad', icon: '🌐' },
+              { value: 'clan',      label: 'Clan',      icon: '⚔️' },
             ].map(opt => (
               <button key={opt.value} onClick={() => setGroupType(opt.value)} style={{
                 flex: 1, padding: '8px 10px', borderRadius: 10, border: `1.5px solid`,
@@ -251,11 +279,11 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             ))}
           </div>
 
-          {/* Community tip */}
-          {isCommunity && (
+          {/* Community/Clan tip */}
+          {isGroupOrClan && (
             <div style={{ padding: '10px 16px', background: `${C.green}0A`, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
               <p style={{ margin: 0, fontSize: 12, color: C.green }}>
-                🌐 Las comunidades pueden empezar vacías. Podés agregar miembros ahora o después.
+                {isClan ? '⚔️ El clan puede empezar vacío. Podés invitar jugadores ahora o después.' : '🌐 Las comunidades pueden empezar vacías. Podés agregar miembros ahora o después.'}
               </p>
             </div>
           )}
@@ -349,30 +377,46 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             )}
             {searchResults.map(u => {
               const isSel = selected.find(s => s.id === u.id)
+              const ROLE_OPTS = isClan
+                ? [{ v: 'member', l: 'Miembro' }, { v: 'moderador', l: 'Co-líder' }, { v: 'admin', l: 'Líder' }]
+                : [{ v: 'member', l: 'Miembro' }, { v: 'moderador', l: 'Moderador' }, { v: 'admin', l: 'Admin' }]
               return (
-                <button key={u.id} onClick={() => toggleUser(u)} style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 16px', background: isSel ? `${C.green}0C` : 'none',
-                  border: 'none', borderBottom: `1px solid ${C.border}22`,
-                  cursor: 'pointer', textAlign: 'left', transition: 'background .15s',
-                }}>
-                  <div style={{
-                    width: 46, height: 46, borderRadius: '50%', flexShrink: 0,
-                    background: isSel ? C.green : avatarColor(u.id),
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 16, fontWeight: 700, color: isSel ? C.bg : '#fff',
-                    transition: 'background .15s',
+                <div key={u.id} style={{ borderBottom: `1px solid ${C.border}22` }}>
+                  <button onClick={() => toggleUser(u)} style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 16px', background: isSel ? `${C.green}0C` : 'none',
+                    border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background .15s',
                   }}>
-                    {isSel
-                      ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-                      : u.display_name.slice(0, 2).toUpperCase()
-                    }
-                  </div>
-                  <div>
-                    <p style={{ margin: 0, color: C.text, fontWeight: 600, fontSize: 14 }}>{u.display_name}</p>
-                    <p style={{ margin: '2px 0 0', color: C.textDim, fontSize: 12 }}>@{u.username}</p>
-                  </div>
-                </button>
+                    <div style={{
+                      width: 46, height: 46, borderRadius: '50%', flexShrink: 0,
+                      background: isSel ? C.green : avatarColor(u.id),
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 16, fontWeight: 700, color: isSel ? C.bg : '#fff',
+                      transition: 'background .15s',
+                    }}>
+                      {isSel
+                        ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                        : u.display_name.slice(0, 2).toUpperCase()
+                      }
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, color: C.text, fontWeight: 600, fontSize: 14 }}>{u.display_name}</p>
+                      <p style={{ margin: '2px 0 0', color: C.textDim, fontSize: 12 }}>@{u.username}</p>
+                    </div>
+                  </button>
+                  {isSel && isGroupOrClan && (
+                    <div style={{ display: 'flex', gap: 6, padding: '0 16px 10px 74px' }}>
+                      {ROLE_OPTS.map(ro => (
+                        <button key={ro.v} onClick={() => setMemberRoles(r => ({ ...r, [u.id]: ro.v }))} style={{
+                          padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                          border: `1.5px solid ${(memberRoles[u.id] || 'member') === ro.v ? C.green : C.border}`,
+                          background: (memberRoles[u.id] || 'member') === ro.v ? `${C.green}20` : C.panel2,
+                          color: (memberRoles[u.id] || 'member') === ro.v ? C.green : C.textDim,
+                        }}>{ro.l}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
@@ -383,7 +427,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 24px', gap: 22 }}>
 
           {/* Plan info card */}
-          {isCommunity && (() => {
+          {(isCommunity || isClan) && (() => {
             const role = profile?.role || 'member'
             const roleCfg = getRoleCfg(role)
             const plan = planLabel(role)
@@ -477,11 +521,11 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
           {/* Name */}
           <div style={{ width: '100%' }}>
             <label style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
-              {isCommunity ? 'Nombre de la comunidad' : 'Nombre del grupo'}
+              {isCommunity ? 'Nombre de la comunidad' : isClan ? 'Nombre del Clan' : 'Nombre del grupo'}
             </label>
             <input
               type="text"
-              placeholder={isCommunity ? 'Ej: eFootball Argentina' : 'Ej: Equipo Relámpago ⚡'}
+              placeholder={isCommunity ? 'Ej: eFootball Argentina' : isClan ? 'Ej: Thunder Clan ⚡' : 'Ej: Equipo Relámpago ⚡'}
               value={groupName}
               onChange={e => setGroupName(e.target.value)}
               maxLength={50} autoFocus
@@ -494,6 +538,57 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             />
             <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{groupName.length}/50</p>
           </div>
+
+          {/* Clan tag */}
+          {isClan && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                Tag del Clan (2-5 letras)
+              </label>
+              <input
+                type="text"
+                placeholder="Ej: TDT, ARG, CQAS"
+                value={clanTag}
+                onChange={e => setClanTag(e.target.value.toUpperCase().slice(0, 5))}
+                maxLength={5}
+                style={{
+                  width: '100%', background: 'transparent',
+                  border: 'none', borderBottom: `1.5px solid ${C.green}`,
+                  color: C.text, fontSize: 20, padding: '6px 0 10px',
+                  outline: 'none', textAlign: 'center', boxSizing: 'border-box', fontWeight: 800,
+                  letterSpacing: 4,
+                }}
+              />
+              <p style={{ textAlign: 'center', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>Se mostrará como [{clanTag || 'TAG'}] en tu perfil</p>
+            </div>
+          )}
+
+          {/* Clan recruitment */}
+          {isClan && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                Reclutamiento
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { v: 'open',        icon: '🟢', l: 'Abierto',    d: 'Cualquiera puede unirse' },
+                  { v: 'invite_only', icon: '📨', l: 'Invitación', d: 'Solo con invitación' },
+                  { v: 'closed',      icon: '🔒', l: 'Cerrado',    d: 'No se aceptan miembros' },
+                ].map(opt => (
+                  <button key={opt.v} onClick={() => setClanRecruitment(opt.v)} style={{
+                    flex: 1, padding: '10px 6px', borderRadius: 12, border: `2px solid`,
+                    borderColor: clanRecruitment === opt.v ? C.green : C.border,
+                    background: clanRecruitment === opt.v ? `${C.green}0D` : C.panel,
+                    cursor: 'pointer', textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 18, marginBottom: 3 }}>{opt.icon}</div>
+                    <p style={{ margin: '0 0 2px', color: clanRecruitment === opt.v ? C.green : C.text, fontWeight: 700, fontSize: 12 }}>{opt.l}</p>
+                    <p style={{ margin: 0, color: C.textDim, fontSize: 10 }}>{opt.d}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Description */}
           <div style={{ width: '100%' }}>
@@ -767,7 +862,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             }
           </button>
           <p style={{ margin: '-16px 0 0', fontSize: 12, color: C.textDim }}>
-            {isCommunity ? 'Crear comunidad' : 'Crear grupo'}
+            {isCommunity ? 'Crear comunidad' : isClan ? 'Crear clan' : 'Crear grupo'}
           </p>
         </div>
       )}
