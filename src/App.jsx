@@ -439,7 +439,8 @@ export default function App() {
       }
       // Fallback: direct query
       const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'support_group_id').maybeSingle()
-      const supportId = cfg?.value
+      const raw = cfg?.value
+      const supportId = typeof raw === 'string' ? raw.replace(/^"|"$/g, '') : raw
       if (!supportId) { alert('Chat de soporte no configurado aún. Ejecutá el Script 03 en Supabase.'); return }
       const { data: conv } = await supabase.from('conversations').select('*').eq('id', supportId).maybeSingle()
       if (!conv) { alert('No se pudo cargar el chat de soporte.'); return }
