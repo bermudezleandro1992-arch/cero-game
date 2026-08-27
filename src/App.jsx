@@ -445,6 +445,12 @@ export default function App() {
   const showChat = !!activeConversation
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0)
 
+  // Derived visibility flags for sidebar panels
+  const isCommunityOwner = conversations.some(c =>
+    (c.group_type === 'community' || c.group_type === 'group') && c.created_by === profile?.id
+  ) || ['ceo','com_starter','com_elite','superadmin','admin'].includes(profile?.role)
+  const isOrganizador = ['organizador','superadmin','admin'].includes(profile?.role)
+
   return (
     <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', fontFamily: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
       <UpdateBanner />
@@ -572,33 +578,37 @@ export default function App() {
               </button>
             )
           })}
-          {/* Panel Organizador */}
-          <button onClick={() => { setShowProfile(false); setTab('panel-organizador'); setActiveConversation(null) }} style={{
-            width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', gap: 4, border: 'none', marginTop: 'auto',
-            background: tab === 'panel-organizador' ? `${C.green}12` : 'none',
-            cursor: 'pointer', padding: '14px 0',
-            borderLeft: `3px solid ${tab === 'panel-organizador' ? C.green : 'transparent'}`,
-            transition: 'background .15s',
-          }}>
-            <span style={{ fontSize: 18 }}>🎯</span>
-            <span style={{ fontSize: 9, fontWeight: tab === 'panel-organizador' ? 700 : 400, color: tab === 'panel-organizador' ? C.green : C.textDim }}>Organiz.</span>
-          </button>
+          {/* Panel Organizador — solo organizadores */}
+          {isOrganizador && (
+            <button onClick={() => { setShowProfile(false); setTab('panel-organizador'); setActiveConversation(null) }} style={{
+              width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', gap: 4, border: 'none', marginTop: 'auto',
+              background: tab === 'panel-organizador' ? `${C.green}12` : 'none',
+              cursor: 'pointer', padding: '14px 0',
+              borderLeft: `3px solid ${tab === 'panel-organizador' ? C.green : 'transparent'}`,
+              transition: 'background .15s',
+            }}>
+              <span style={{ fontSize: 18 }}>🎯</span>
+              <span style={{ fontSize: 9, fontWeight: tab === 'panel-organizador' ? 700 : 400, color: tab === 'panel-organizador' ? C.green : C.textDim }}>Organiz.</span>
+            </button>
+          )}
 
-          {/* CEO Panel — visible para cualquier usuario con comunidades */}
-          <button onClick={() => { setShowProfile(false); setTab('panel-ceo'); setActiveConversation(null) }} style={{
-            width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', gap: 4, border: 'none', marginTop: 'auto',
-            background: tab === 'panel-ceo' ? `${C.green}12` : 'none',
-            cursor: 'pointer', padding: '14px 0',
-            borderLeft: `3px solid ${tab === 'panel-ceo' ? C.green : 'transparent'}`,
-            transition: 'background .15s',
-          }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={tab === 'panel-ceo' ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-            </svg>
-            <span style={{ fontSize: 10, fontWeight: tab === 'panel-ceo' ? 700 : 400, color: tab === 'panel-ceo' ? C.green : C.textDim }}>CEO</span>
-          </button>
+          {/* CEO Panel — solo dueños de comunidades o rol ceo/admin/superadmin */}
+          {isCommunityOwner && (
+            <button onClick={() => { setShowProfile(false); setTab('panel-ceo'); setActiveConversation(null) }} style={{
+              width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', gap: 4, border: 'none', marginTop: isCommunityOwner && !isOrganizador ? 'auto' : 0,
+              background: tab === 'panel-ceo' ? `${C.green}12` : 'none',
+              cursor: 'pointer', padding: '14px 0',
+              borderLeft: `3px solid ${tab === 'panel-ceo' ? C.green : 'transparent'}`,
+              transition: 'background .15s',
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={tab === 'panel-ceo' ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+              <span style={{ fontSize: 10, fontWeight: tab === 'panel-ceo' ? 700 : 400, color: tab === 'panel-ceo' ? C.green : C.textDim }}>CEO</span>
+            </button>
+          )}
 
           {/* Admin Panel — solo superadmin/admin */}
           {['superadmin','admin'].includes(profile?.role) && (
@@ -697,10 +707,8 @@ export default function App() {
                 { id: 'contactos',         icon: '👥', label: 'Contactos' },
                 { id: 'explorar',          icon: '🔭', label: 'Explorar' },
                 { id: 'anuncios',          icon: '📢', label: 'Anuncios' },
-                ...(['superadmin','admin'].includes(profile?.role) ? [
-                  { id: 'panel-ceo',       icon: '⭐', label: 'Panel CEO' },
-                ] : []),
-                { id: 'panel-organizador', icon: '🎯', label: 'Panel Organizador' },
+                ...(isCommunityOwner ? [{ id: 'panel-ceo', icon: '⭐', label: 'Panel CEO' }] : []),
+                ...(isOrganizador ? [{ id: 'panel-organizador', icon: '🎯', label: 'Panel Organizador' }] : []),
               ]),
             ].map(({ id, icon, label }) => (
               <button key={id} onClick={() => {
