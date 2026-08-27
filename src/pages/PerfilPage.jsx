@@ -197,7 +197,7 @@ function PreferenciasTab({ profile, onGoVip }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8 }}>
             {Object.values(THEMES).map(t => {
               const isVipOnly = VIP_EXCLUSIVE_THEMES.has(t.id)
-              const hasVip = VIP_PLANS.has(profile?.plan)
+              const hasVip = VIP_PLANS.has(profile?.plan) || VIP_PLANS.has(profile?.role)
               const locked = isVipOnly && !hasVip
               const isActive = themeId === t.id
               return (
