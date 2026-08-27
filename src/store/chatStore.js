@@ -250,6 +250,10 @@ export const useChatStore = create((set, get) => ({
 
   markAsRead: async (conversationId, userId) => {
     if (!conversationId || !userId) return
+    try {
+      const priv = JSON.parse(localStorage.getItem('privacySettings') || '{}')
+      if (priv.readReceipts === false) return
+    } catch {}
     const now = new Date().toISOString()
     await supabase
       .from('conversation_members')
