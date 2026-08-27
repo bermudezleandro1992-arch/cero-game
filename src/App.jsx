@@ -479,7 +479,7 @@ export default function App() {
             ].map(({ id, label, icon }) => {
               const active = !showProfile && tab === id
               return (
-                <button key={id} onClick={() => { setShowProfile(false); setTab(id) }} style={{
+                <button key={id} onClick={() => { setShowProfile(false); setTab(id); if (id !== 'chats') setActiveConversation(null) }} style={{
                   width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
                   justifyContent: 'center', gap: 4, border: 'none',
                   background: active ? `${C.green}12` : 'none',
@@ -551,7 +551,7 @@ export default function App() {
           {NAV.map(({ id, label, icon }) => {
             const active = (id === 'ajustes' ? showProfile : !showProfile && tab === id)
             return (
-              <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : (setShowProfile(false), setTab(id))} style={{
+              <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : (setShowProfile(false), setTab(id), id !== 'chats' && setActiveConversation(null))} style={{
                 width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
                 justifyContent: 'center', gap: 4, border: 'none',
                 background: active ? `${C.green}12` : 'none',
@@ -573,7 +573,7 @@ export default function App() {
             )
           })}
           {/* Panel Organizador */}
-          <button onClick={() => { setShowProfile(false); setTab('panel-organizador') }} style={{
+          <button onClick={() => { setShowProfile(false); setTab('panel-organizador'); setActiveConversation(null) }} style={{
             width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
             justifyContent: 'center', gap: 4, border: 'none', marginTop: 'auto',
             background: tab === 'panel-organizador' ? `${C.green}12` : 'none',
@@ -586,7 +586,7 @@ export default function App() {
           </button>
 
           {/* CEO Panel — visible para cualquier usuario con comunidades */}
-          <button onClick={() => { setShowProfile(false); setTab('panel-ceo') }} style={{
+          <button onClick={() => { setShowProfile(false); setTab('panel-ceo'); setActiveConversation(null) }} style={{
             width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
             justifyContent: 'center', gap: 4, border: 'none', marginTop: 'auto',
             background: tab === 'panel-ceo' ? `${C.green}12` : 'none',
@@ -602,7 +602,7 @@ export default function App() {
 
           {/* Admin Panel — solo superadmin/admin */}
           {['superadmin','admin'].includes(profile?.role) && (
-            <button onClick={() => { setShowProfile(false); setTab('admin') }} style={{
+            <button onClick={() => { setShowProfile(false); setTab('admin'); setActiveConversation(null) }} style={{
               width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', gap: 4, border: 'none',
               background: tab === 'admin' ? '#ef444412' : 'none',
@@ -1011,7 +1011,7 @@ function EmptyState() {
 
         {/* Tagline */}
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: `${C.textDim}88`, letterSpacing: '0.5px' }}>
-          Seleccioná una conversación para comenzar
+          Invitá amigos, abrí un chat o entrá a tu comunidad 🚀
         </p>
       </div>
     </div>

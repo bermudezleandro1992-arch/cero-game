@@ -929,7 +929,9 @@ export default function CommunityDashboard({ community, onBack }) {
       .then(({ data }) => { if (data?.role) setMyRole(data.role) })
   }, [profile?.id, community?.id])
 
-  const isAdmin = community.created_by === profile?.id || myRole === 'owner' || myRole === 'admin'
+  const isAdmin = community.created_by === profile?.id
+    || myRole === 'owner' || myRole === 'admin'
+    || profile?.role === 'superadmin' || profile?.role === 'admin'
   const TABS = isAdmin
     ? [...BASE_TABS, { id: 'ceo', label: 'CEO', emoji: '⚙️' }]
     : BASE_TABS
