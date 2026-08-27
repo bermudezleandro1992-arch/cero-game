@@ -666,7 +666,7 @@ export default function App() {
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'
-            ? <PerfilPage onClose={() => setTab('chats')} initialTab="perfil" />
+            ? <PerfilPage onClose={() => setTab('chats')} initialTab="menu" />
             : tab === 'llamadas'
             ? <LlamadasPage />
             : tab === 'estados'

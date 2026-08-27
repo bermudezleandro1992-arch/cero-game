@@ -1360,6 +1360,126 @@ function AyudaTab({ profile, onToast }) {
   )
 }
 
+const ATAJOS = [
+  { section: 'Chats', items: [
+    { keys: ['Ctrl','N'], desc: 'Nuevo chat' },
+    { keys: ['Ctrl','Shift','['], desc: 'Chat anterior' },
+    { keys: ['Ctrl','Shift',']'], desc: 'Chat siguiente' },
+    { keys: ['Ctrl','Shift','U'], desc: 'Marcar como no leído' },
+    { keys: ['Ctrl','Shift','M'], desc: 'Silenciar / activar' },
+    { keys: ['Ctrl','Backspace'], desc: 'Eliminar chat' },
+    { keys: ['Ctrl','Shift','E'], desc: 'Archivar chat' },
+    { keys: ['Ctrl','Shift','P'], desc: 'Fijar / desfijar chat' },
+    { keys: ['Ctrl','F'], desc: 'Buscar en el chat' },
+  ]},
+  { section: 'Mensajes', items: [
+    { keys: ['Enter'], desc: 'Enviar mensaje' },
+    { keys: ['Shift','Enter'], desc: 'Nueva línea' },
+    { keys: ['Ctrl','Z'], desc: 'Deshacer' },
+    { keys: ['Ctrl','B'], desc: 'Negrita' },
+    { keys: ['Ctrl','I'], desc: 'Cursiva' },
+    { keys: ['Ctrl','S'], desc: 'Tachado' },
+    { keys: ['Ctrl','E'], desc: 'Monoespaciado' },
+  ]},
+  { section: 'Llamadas', items: [
+    { keys: ['Ctrl','Alt','A'], desc: 'Nueva llamada de audio' },
+    { keys: ['Ctrl','Alt','V'], desc: 'Nueva videollamada' },
+  ]},
+  { section: 'Global', items: [
+    { keys: ['Ctrl',','], desc: 'Abrir ajustes' },
+    { keys: ['Ctrl','Alt','N'], desc: 'Nueva comunidad' },
+    { keys: ['Ctrl','Alt','F'], desc: 'Buscar chats y mensajes' },
+    { keys: ['Esc'], desc: 'Cerrar panel / modal' },
+  ]},
+]
+
+function AtajosTab() {
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 40 }}>
+      {ATAJOS.map(sec => (
+        <div key={sec.section}>
+          <SectionLabel>{sec.section}</SectionLabel>
+          <SettingsBlock>
+            {sec.items.map((item, i) => (
+              <Row key={i} noBorder={i === sec.items.length - 1}
+                label={item.desc}
+                right={
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    {item.keys.map((k, ki) => (
+                      <span key={ki} style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: C.textDim, fontFamily: 'monospace' }}>{k}</span>
+                    ))}
+                  </div>
+                }
+              />
+            ))}
+          </SettingsBlock>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function GeneralTab() {
+  const [prefs, setPrefs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('generalPrefs') || '{}') } catch { return {} }
+  })
+
+  function setPref(key, val) {
+    const updated = { ...prefs, [key]: val }
+    setPrefs(updated)
+    localStorage.setItem('generalPrefs', JSON.stringify(updated))
+  }
+
+  const FONT_SIZES = ['Pequeño', 'Normal', 'Grande', 'Extra grande']
+  const LANGUAGES = ['Español', 'English', 'Português']
+  const currentFont = prefs.fontSize || 'Normal'
+  const currentLang = prefs.language || 'Español'
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 40 }}>
+      <SectionLabel>Idioma y apariencia</SectionLabel>
+      <SettingsBlock>
+        <div style={{ padding: '13px 16px', borderBottom: `1px solid ${C.border}22` }}>
+          <div style={{ color: C.text, fontSize: 14, marginBottom: 10 }}>Idioma de la interfaz</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {LANGUAGES.map(l => (
+              <button key={l} onClick={() => setPref('language', l)} style={{
+                padding: '7px 14px', borderRadius: 20, border: `1.5px solid ${currentLang === l ? C.green : C.border}`,
+                background: currentLang === l ? `${C.green}15` : C.panel2,
+                color: currentLang === l ? C.green : C.textDim, fontWeight: 700, fontSize: 12, cursor: 'pointer',
+              }}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{ padding: '13px 16px' }}>
+          <div style={{ color: C.text, fontSize: 14, marginBottom: 10 }}>Tamaño de letra</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {FONT_SIZES.map(s => (
+              <button key={s} onClick={() => setPref('fontSize', s)} style={{
+                padding: '7px 14px', borderRadius: 20, border: `1.5px solid ${currentFont === s ? C.green : C.border}`,
+                background: currentFont === s ? `${C.green}15` : C.panel2,
+                color: currentFont === s ? C.green : C.textDim, fontWeight: 700, fontSize: 12, cursor: 'pointer',
+              }}>{s}</button>
+            ))}
+          </div>
+        </div>
+      </SettingsBlock>
+
+      <SectionLabel>Sistema</SectionLabel>
+      <SettingsBlock>
+        <Row label="Abrir al iniciar sesión" desc="Lanzar NexoTribu al encender el equipo"
+          right={<Toggle on={!!prefs.openOnStart} onChange={v => setPref('openOnStart', v)} />} />
+        <Row label="Minimizar a la bandeja" desc="Al cerrar, queda en segundo plano"
+          right={<Toggle on={!!prefs.minimizeToTray} onChange={v => setPref('minimizeToTray', v)} />} noBorder />
+      </SettingsBlock>
+
+      <div style={{ padding: '20px 16px 0', textAlign: 'center', color: C.textDim, fontSize: 11 }}>
+        Algunas opciones del sistema aplican solo a la app de escritorio.
+      </div>
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function PerfilPage({ onClose, onGoVip, initialTab }) {
   const { profile, fetchProfile } = useAuthStore()
@@ -1459,10 +1579,10 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
     if (!file) return
     setUploading(true)
     const ext = file.name.split('.').pop()
-    const path = `avatars/${profile.id}.${ext}`
-    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    if (upErr) { setToast('Error al subir imagen'); setUploading(false); return }
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+    const path = `user-avatars/${profile.id}-${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage.from('attachments').upload(path, file, { upsert: true })
+    if (upErr) { setToast('Error al subir imagen: ' + upErr.message); setUploading(false); return }
+    const { data: { publicUrl } } = supabase.storage.from('attachments').getPublicUrl(path)
     await supabase.from('users').update({ avatar_url: publicUrl + '?v=' + Date.now() }).eq('id', profile.id)
     await fetchProfile(profile.id)
     setUploading(false)
@@ -1685,6 +1805,22 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
         </div>
       )}
 
+      {/* Sub-page: Atajos */}
+      {tab === 'atajos' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Atajos del teclado')}
+          <AtajosTab />
+        </div>
+      )}
+
+      {/* Sub-page: General */}
+      {tab === 'general' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('General')}
+          <GeneralTab />
+        </div>
+      )}
+
       {/* Main menu — WhatsApp settings style */}
       {tab === 'menu' && (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -1744,6 +1880,13 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
                 <SettingsRow icon="🪪" label="Identidad" desc="Verificación de identidad" onClick={() => setTab('identidad')} />
                 <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
                 <SettingsRow icon="🔗" label="Referidos" desc="Tu código y beneficios" onClick={() => setTab('referidos')} />
+              </div>
+
+              {/* Sección sistema */}
+              <div style={{ background: C.panel, borderRadius: 0, marginBottom: 8 }}>
+                <SettingsRow icon="⚙️" label="General" desc="Idioma, tamaño de letra, inicio" onClick={() => setTab('general')} />
+                <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
+                <SettingsRow icon="⌨️" label="Atajos del teclado" desc="Todos los atajos disponibles" onClick={() => setTab('atajos')} />
               </div>
 
               {/* Sección soporte */}
