@@ -430,24 +430,24 @@ export default function App() {
   async function openSupportChat() {
     try {
       // Use RPC to bypass RLS — joins chat if not already a member
-      const { data: result, error: rpcErr } = await supabase.rpc('get_or_join_support_chat')
+      const { data: rawRpc, error: rpcErr } = await supabase.rpc('get_or_join_support_chat')
+      const result = typeof rawRpc === 'string' ? JSON.parse(rawRpc) : rawRpc
+      const stripQ = v => typeof v === 'string' ? v.replace(/^"|"$/g, '') : v
       if (!rpcErr && result?.id) {
-        const cleanId = typeof result.id === 'string' ? result.id.replace(/^"|"$/g, '') : result.id
-        setActiveConversation({ ...result, id: cleanId, isGroup: true })
+        setActiveConversation({ ...result, id: stripQ(result.id), isGroup: true })
         setTab('chats')
         setShowProfile(false)
         return
       }
       // Fallback: direct query
       const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'support_group_id').maybeSingle()
-      const raw = cfg?.value
-      const supportId = typeof raw === 'string' ? raw.replace(/^"|"$/g, '') : raw
+      const supportId = stripQ(cfg?.value)
       if (!supportId) { alert('Chat de soporte no configurado aún. Ejecutá el Script 03 en Supabase.'); return }
       const { data: conv } = await supabase.from('conversations').select('*').eq('id', supportId).maybeSingle()
       if (!conv) { alert('No se pudo cargar el chat de soporte.'); return }
       await supabase.from('conversation_members')
         .upsert({ conversation_id: supportId, user_id: profile?.id }, { onConflict: 'conversation_id,user_id', ignoreDuplicates: true })
-      setActiveConversation({ ...conv, isGroup: conv.is_group })
+      setActiveConversation({ ...conv, id: stripQ(conv.id), isGroup: conv.is_group })
       setTab('chats')
       setShowProfile(false)
     } catch { alert('Error al abrir soporte.') }
