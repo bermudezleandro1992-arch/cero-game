@@ -347,6 +347,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   const filtered = (search ? [] : conversations.filter(c => {
     if (filter === 'noleidos')    return (c.unread || 0) > 0
     if (filter === 'chats')       return !c.isGroup && !c.isCommunity
+    if (filter === 'contactos')   return !c.isGroup && !c.isCommunity
     if (filter === 'directos')    return !c.isGroup && !c.isCommunity
     if (filter === 'grupos')      return c.isGroup && !c.isCommunity
     if (filter === 'comunidades') return c.isCommunity
@@ -469,9 +470,10 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
             alignItems: 'center',
           }}>
             {[
-              ['todos',    'Todos'],
-              ['noleidos', 'No leídos'],
-              ['grupos',   'Grupos'],
+              ['todos',      'Todos'],
+              ['noleidos',   'No leídos'],
+              ['grupos',     'Grupos'],
+              ['contactos',  'Contactos'],
             ].map(([id, label]) => {
               const active = filter === id
               return (
