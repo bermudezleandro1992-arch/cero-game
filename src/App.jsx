@@ -564,8 +564,8 @@ export default function App() {
 
             {/* Perfil con avatar */}
             <div style={{}}>
-              {(() => { const active = !showProfile && tab === 'perfil'; return (
-                <button onClick={() => { setShowProfile(false); setTab('perfil') }} style={{
+              {(() => { const active = showProfile; return (
+                <button onClick={() => { setShowProfile(true); setActiveConversation(null) }} style={{
                   width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
                   justifyContent: 'center', gap: 4, border: 'none',
                   background: active ? `${C.green}12` : 'none', cursor: 'pointer', padding: '14px 0',
