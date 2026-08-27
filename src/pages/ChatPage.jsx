@@ -488,7 +488,7 @@ export default function ChatPage({ onBack }) {
     setDeleteMenuMsg(null); setLongPressMsg(null)
   }
   function deleteForAll(msgId) {
-    deleteMessage(msgId, activeConversation.id)
+    deleteMessage(msgId, activeConversation.id, profile?.role)
     setDeleteMenuMsg(null); setLongPressMsg(null)
   }
   function handleClearHistory() {

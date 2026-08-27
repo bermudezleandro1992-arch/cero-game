@@ -1005,6 +1005,19 @@ function EstadisticasTab({ communityId }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // Configuración Tab
 // ══════════════════════════════════════════════════════════════════════════════
+function CfgField({ label, children }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ color: C.textDim, fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{label}</div>
+      {children}
+    </div>
+  )
+}
+const cfgInputStyle = {
+  width: '100%', padding: '10px 12px', background: C.panel, border: `1px solid ${C.border}`,
+  borderRadius: 8, color: C.text, fontSize: 14, boxSizing: 'border-box',
+}
+
 function ConfiguracionTab({ communityId, communityName, toast, onCommunityDeleted, onGoVip }) {
   const [cfg, setCfg] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -1040,16 +1053,16 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
     if (file.size > 2 * 1024 * 1024) { toast('La imagen no debe superar 2MB', 'error'); return }
     setUploadingAvatar(true)
     const ext = file.name.split('.').pop().toLowerCase()
-    const path = `community-avatars/${communityId}.${ext}`
+    const path = `community-avatars/${communityId}-${Date.now()}.${ext}`
     const { error: upErr } = await supabase.storage
-      .from('avatars')
+      .from('attachments')
       .upload(path, file, { upsert: true, contentType: file.type })
     if (upErr) {
-      toast('Error al subir: ' + (upErr.message || JSON.stringify(upErr)), 'error')
+      toast('Error al subir foto: ' + (upErr.message || JSON.stringify(upErr)), 'error')
       setUploadingAvatar(false)
       return
     }
-    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+    const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(path)
     const publicUrl = urlData.publicUrl + '?v=' + Date.now()
     const { error: dbErr } = await supabase.from('conversations').update({ avatar_url: publicUrl }).eq('id', communityId)
     if (dbErr) { toast('Error al guardar: ' + dbErr.message, 'error') }
@@ -1074,22 +1087,10 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
 
   if (loading || !cfg) return <Spinner />
 
-  const F = ({ label, children }) => (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ color: C.textDim, fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{label}</div>
-      {children}
-    </div>
-  )
-
-  const inputStyle = {
-    width: '100%', padding: '10px 12px', background: C.panel, border: `1px solid ${C.border}`,
-    borderRadius: 8, color: C.text, fontSize: 14, boxSizing: 'border-box',
-  }
-
   return (
     <div style={{ padding: 16 }}>
       {/* Community avatar */}
-      <F label="Foto de la comunidad">
+      <CfgField label="Foto de la comunidad">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ position: 'relative', flexShrink: 0 }}>
             {cfg.avatar_url
@@ -1110,15 +1111,15 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
             <div style={{ color: C.textDim, fontSize: 11, marginTop: 6 }}>JPG, PNG o WebP · Máx. 2MB</div>
           </div>
         </div>
-      </F>
-      <F label="Nombre de la comunidad">
-        <input value={cfg.name || ''} onChange={e => setCfg(c => ({ ...c, name: e.target.value }))} style={inputStyle} />
-      </F>
-      <F label="Descripción">
+      </CfgField>
+      <CfgField label="Nombre de la comunidad">
+        <input value={cfg.name || ''} onChange={e => setCfg(c => ({ ...c, name: e.target.value }))} style={cfgInputStyle} />
+      </CfgField>
+      <CfgField label="Descripción">
         <textarea value={cfg.description || ''} onChange={e => setCfg(c => ({ ...c, description: e.target.value }))}
-          rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
-      </F>
-      <F label="Plan de comunidad">
+          rows={3} style={{ ...cfgInputStyle, resize: 'vertical' }} />
+      </CfgField>
+      <CfgField label="Plan de comunidad">
         {(() => {
           const plan = cfg.plan || 'free'
           const pCfg = PLAN_LIMITS[plan] || PLAN_LIMITS.free
@@ -1137,8 +1138,8 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
             </div>
           )
         })()}
-      </F>
-      <F label="Visibilidad">
+      </CfgField>
+      <CfgField label="Visibilidad">
         <div style={{ display: 'flex', gap: 8 }}>
           {[{ v: true, label: '🌐 Pública', desc: 'Aparece en Explorar' }, { v: false, label: '🔒 Privada', desc: 'Solo por invitación' }].map(opt => (
             <button key={String(opt.v)} onClick={() => setCfg(c => ({ ...c, is_public: opt.v }))} style={{
@@ -1152,7 +1153,7 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
             </button>
           ))}
         </div>
-      </F>
+      </CfgField>
       <button onClick={save} disabled={saving} style={{
         width: '100%', padding: '12px 16px', background: C.green, color: C.bg, border: 'none',
         borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: saving ? 'not-allowed' : 'pointer',
@@ -1238,10 +1239,13 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
 
                   // Final: delete the community conversation itself
                   await supabase.from('conversations').delete().eq('id', communityId)
-                  // Verify deletion — RLS silently blocks without throwing
+                  // If RLS blocks hard delete, soft-delete so it disappears from all lists
                   const { data: stillExists } = await supabase.from('conversations').select('id').eq('id', communityId).maybeSingle()
                   if (stillExists) {
-                    throw new Error('RLS: sin permiso para eliminar esta comunidad. Pedile al admin que agregue la política DELETE en Supabase.')
+                    const { error: softErr } = await supabase.from('conversations').update({
+                      name: '[eliminado]', group_type: 'deleted', community_id: null, is_public: false,
+                    }).eq('id', communityId)
+                    if (softErr) throw new Error('Sin permisos para eliminar esta comunidad.')
                   }
 
                   onCommunityDeleted?.()
@@ -1338,9 +1342,9 @@ function AnunciosTab({ communityId, profile, toast }) {
       if (imageFile) {
         const ext = imageFile.name.split('.').pop()
         const path = `announcements/${communityId}-${Date.now()}.${ext}`
-        const { error: upErr } = await supabase.storage.from('avatars').upload(path, imageFile, { upsert: true, contentType: imageFile.type })
+        const { error: upErr } = await supabase.storage.from('attachments').upload(path, imageFile, { upsert: true, contentType: imageFile.type })
         if (!upErr) {
-          const { data: ud } = supabase.storage.from('avatars').getPublicUrl(path)
+          const { data: ud } = supabase.storage.from('attachments').getPublicUrl(path)
           image_url = ud.publicUrl
         }
       }
