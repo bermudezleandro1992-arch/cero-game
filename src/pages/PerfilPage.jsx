@@ -1143,11 +1143,11 @@ function PrivacidadTab({ profile }) {
 
       <SectionLabel>Opciones avanzadas</SectionLabel>
       <SettingsBlock>
-        <Row label="Bloquear mensajes desconocidos" desc="Filtra mensajes de cuentas que no son contactos · Próximamente"
+        <Row label="Bloquear mensajes desconocidos" desc="Filtra mensajes de cuentas que no son tus contactos · Requiere lista de contactos"
           right={<Toggle on={!!priv.blockUnknown} onChange={v => save('blockUnknown', v)} />} />
         <Row label="Proteger IP en llamadas" desc="Las llamadas se enrutan vía servidores NexoTribu · Próximamente"
           right={<Toggle on={!!priv.protectIp} onChange={v => save('protectIp', v)} />} />
-        <Row label="Desactivar vista previa de links" desc="No se generarán vistas previas de URLs en tus chats · Próximamente" noBorder
+        <Row label="Desactivar vista previa de links" desc="No se generarán vistas previas de URLs en tus chats" noBorder
           right={<Toggle on={!!priv.noLinkPreview} onChange={v => save('noLinkPreview', v)} />} />
       </SettingsBlock>
 
