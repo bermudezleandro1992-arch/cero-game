@@ -1075,18 +1075,28 @@ function PrivacidadTab({ profile }) {
       <SectionLabel>Mensajes</SectionLabel>
       <SettingsBlock>
         <Row label="Confirmaciones de lectura" desc="Mostrar doble tilde azul al leer" right={<Toggle on={priv.readReceipts !== false} onChange={v => save('readReceipts', v)} />} />
-        <Row label="Mensajes temporales" desc="Los mensajes se borran automáticamente" noBorder
-          right={
-            <select value={priv.tempMessages || 'off'} onChange={e => save('tempMessages', e.target.value)}
-              style={{ padding: '4px 8px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 12, cursor: 'pointer' }}>
-              <option value="off">Desactivado</option>
-              <option value="24h">24 horas</option>
-              <option value="7d">7 días</option>
-              <option value="30d">30 días</option>
-              <option value="90d">90 días</option>
-            </select>
-          }
-        />
+        <div style={{ padding: '13px 16px' }}>
+          <div style={{ color: C.text, fontSize: 14, marginBottom: 2 }}>Mensajes temporales</div>
+          <div style={{ color: C.textDim, fontSize: 12, marginBottom: 10 }}>Los mensajes se borran automáticamente</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {[
+              { v: 'off', label: 'Desactivado' },
+              { v: '24h', label: '24 horas' },
+              { v: '7d',  label: '7 días' },
+              { v: '30d', label: '30 días' },
+              { v: '90d', label: '90 días' },
+            ].map(opt => {
+              const active = (priv.tempMessages || 'off') === opt.v
+              return (
+                <button key={opt.v} onClick={() => save('tempMessages', opt.v)} style={{
+                  padding: '6px 14px', borderRadius: 20, border: `1.5px solid ${active ? C.green : C.border}`,
+                  background: active ? `${C.green}18` : C.panel2, color: active ? C.green : C.textDim,
+                  fontWeight: active ? 700 : 500, fontSize: 12, cursor: 'pointer',
+                }}>{opt.label}</button>
+              )
+            })}
+          </div>
+        </div>
       </SettingsBlock>
 
       <SectionLabel>Perfil</SectionLabel>
@@ -1133,9 +1143,12 @@ function PrivacidadTab({ profile }) {
 
       <SectionLabel>Opciones avanzadas</SectionLabel>
       <SettingsBlock>
-        <Row label="Bloquear mensajes desconocidos" desc="Filtra mensajes de cuentas que no son contactos" right={<Toggle on={!!priv.blockUnknown} onChange={v => save('blockUnknown', v)} />} />
-        <Row label="Proteger IP en llamadas" desc="Las llamadas se enrutan vía servidores NexoTribu para ocultar tu IP" right={<Toggle on={!!priv.protectIp} onChange={v => save('protectIp', v)} />} />
-        <Row label="Desactivar vista previa de links" desc="No se generarán vistas previas de URLs en tus chats" noBorder right={<Toggle on={!!priv.noLinkPreview} onChange={v => save('noLinkPreview', v)} />} />
+        <Row label="Bloquear mensajes desconocidos" desc="Filtra mensajes de cuentas que no son contactos · Próximamente"
+          right={<Toggle on={!!priv.blockUnknown} onChange={v => save('blockUnknown', v)} />} />
+        <Row label="Proteger IP en llamadas" desc="Las llamadas se enrutan vía servidores NexoTribu · Próximamente"
+          right={<Toggle on={!!priv.protectIp} onChange={v => save('protectIp', v)} />} />
+        <Row label="Desactivar vista previa de links" desc="No se generarán vistas previas de URLs en tus chats · Próximamente" noBorder
+          right={<Toggle on={!!priv.noLinkPreview} onChange={v => save('noLinkPreview', v)} />} />
       </SettingsBlock>
 
     </div>
