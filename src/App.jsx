@@ -38,8 +38,17 @@ import { C } from './theme'
 import { getSkin, setLayoutSkin } from './lib/layoutSkin'
 export { setLayoutSkin }
 
+const REGLAS = [
+  'Tengo 18 años o más y lo confirmo con mi fecha de nacimiento.',
+  'No compartiré contenido ilegal, violento, sexual explícito ni spam.',
+  'Trataré a los demás miembros con respeto. El acoso y el odio están prohibidos.',
+  'No crearé cuentas falsas ni me haré pasar por otra persona.',
+  'Entiendo que el incumplimiento puede resultar en la suspensión permanente de mi cuenta.',
+]
+
 function BirthdateGate({ onDone, userId }) {
   const [birthdate, setBirthdate] = useState('')
+  const [accepted, setAccepted] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -52,7 +61,7 @@ function BirthdateGate({ onDone, userId }) {
   }
 
   async function save() {
-    if (!birthdate) return
+    if (!birthdate || !accepted) return
     const age = getAge(birthdate)
     if (age < 18) { setError('Debés tener al menos 18 años para usar NexoTribu.'); return }
     setLoading(true)
@@ -60,15 +69,23 @@ function BirthdateGate({ onDone, userId }) {
     onDone()
   }
 
+  const canSubmit = birthdate && accepted && !loading
+
   return (
-    <div style={{ minHeight:'100dvh', display:'flex', alignItems:'center', justifyContent:'center', background:'#080d12', padding:24 }}>
-      <div style={{ width:'100%', maxWidth:380, background:'#0e1419', border:'1px solid rgba(255,255,255,.08)', borderRadius:20, padding:'36px 28px' }}>
-        <div style={{ fontSize:40, textAlign:'center', marginBottom:16 }}>🔞</div>
-        <h2 style={{ color:'#fff', fontWeight:700, fontSize:20, textAlign:'center', margin:'0 0 8px' }}>Verificación de edad</h2>
-        <p style={{ color:'rgba(255,255,255,.45)', fontSize:13, textAlign:'center', margin:'0 0 24px', lineHeight:1.6 }}>
-          NexoTribu es para mayores de 18 años. Ingresá tu fecha de nacimiento para continuar.
-        </p>
-        <label style={{ fontSize:12, color:'rgba(255,255,255,.4)', display:'block', marginBottom:6 }}>
+    <div style={{ minHeight:'100dvh', display:'flex', alignItems:'center', justifyContent:'center', background:'#080d12', padding:'24px 16px', overflowY:'auto' }}>
+      <div style={{ width:'100%', maxWidth:420, background:'#0e1419', border:'1px solid rgba(255,255,255,.08)', borderRadius:20, padding:'32px 28px' }}>
+
+        {/* Header */}
+        <div style={{ textAlign:'center', marginBottom:24 }}>
+          <div style={{ fontSize:44, marginBottom:10 }}>🔞</div>
+          <h2 style={{ color:'#fff', fontWeight:700, fontSize:20, margin:'0 0 8px' }}>Verificación de edad y reglamento</h2>
+          <p style={{ color:'rgba(255,255,255,.4)', fontSize:13, margin:0, lineHeight:1.6 }}>
+            Antes de entrar a NexoTribu necesitamos confirmar que sos mayor de edad y que aceptás nuestras reglas de convivencia.
+          </p>
+        </div>
+
+        {/* Birthdate */}
+        <label style={{ fontSize:12, color:'rgba(255,255,255,.5)', display:'block', marginBottom:6, fontWeight:600, letterSpacing:'.3px', textTransform:'uppercase' }}>
           Fecha de nacimiento <span style={{ color:'#ef4444' }}>*</span>
         </label>
         <input
@@ -79,25 +96,66 @@ function BirthdateGate({ onDone, userId }) {
           style={{
             width:'100%', padding:'12px 14px', borderRadius:10, outline:'none',
             background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.12)',
-            color:'#fff', fontSize:14, boxSizing:'border-box', colorScheme:'dark',
+            color:'#fff', fontSize:14, boxSizing:'border-box', colorScheme:'dark', marginBottom:20,
           }}
         />
-        {error && <p style={{ color:'#ef4444', fontSize:12, margin:'8px 0 0', textAlign:'center' }}>{error}</p>}
+
+        {/* Reglamento */}
+        <div style={{ background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.08)', borderRadius:12, padding:'16px', marginBottom:16 }}>
+          <div style={{ color:'#00d278', fontWeight:700, fontSize:12, letterSpacing:'.5px', textTransform:'uppercase', marginBottom:12 }}>
+            📋 Reglamento de NexoTribu
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {REGLAS.map((r, i) => (
+              <div key={i} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+                <div style={{
+                  width:20, height:20, borderRadius:'50%', background:'rgba(0,210,120,.15)',
+                  border:'1px solid rgba(0,210,120,.3)', display:'flex', alignItems:'center', justifyContent:'center',
+                  flexShrink:0, fontSize:10, color:'#00d278', fontWeight:700, marginTop:1,
+                }}>{i + 1}</div>
+                <span style={{ color:'rgba(255,255,255,.6)', fontSize:12, lineHeight:1.6 }}>{r}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Accept checkbox */}
+        <label style={{ display:'flex', alignItems:'flex-start', gap:12, cursor:'pointer', padding:'4px 0', marginBottom:16 }}>
+          <div onClick={() => setAccepted(a => !a)} style={{
+            width:20, height:20, borderRadius:5, flexShrink:0, marginTop:1,
+            background: accepted ? '#00d278' : 'rgba(255,255,255,.05)',
+            border: `2px solid ${accepted ? '#00d278' : 'rgba(255,255,255,.2)'}`,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            transition:'all .15s', cursor:'pointer',
+          }}>
+            {accepted && <svg width="11" height="11" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          </div>
+          <span style={{ color:'rgba(255,255,255,.7)', fontSize:13, lineHeight:1.5 }}>
+            Confirmo que tengo 18 años o más y acepto el reglamento y los{' '}
+            <span style={{ color:'#00d278', fontWeight:600 }}>Términos de Uso</span>
+            {' '}de NexoTribu.
+          </span>
+        </label>
+
+        {error && <p style={{ color:'#ef4444', fontSize:12, margin:'0 0 12px', textAlign:'center' }}>{error}</p>}
+
         <button
           onClick={save}
-          disabled={!birthdate || loading}
+          disabled={!canSubmit}
           style={{
-            width:'100%', marginTop:20, padding:'13px', borderRadius:12,
-            background: birthdate && !loading ? '#00d278' : 'rgba(255,255,255,.1)',
-            border:'none', cursor: birthdate && !loading ? 'pointer' : 'default',
-            color: birthdate && !loading ? '#fff' : 'rgba(255,255,255,.3)',
+            width:'100%', padding:'14px', borderRadius:12,
+            background: canSubmit ? '#00d278' : 'rgba(255,255,255,.08)',
+            border:'none', cursor: canSubmit ? 'pointer' : 'default',
+            color: canSubmit ? '#fff' : 'rgba(255,255,255,.25)',
             fontSize:14, fontWeight:700, transition:'all .2s',
+            boxShadow: canSubmit ? '0 4px 20px rgba(0,210,120,.35)' : 'none',
           }}
         >
-          {loading ? '...' : 'Confirmar y entrar →'}
+          {loading ? 'Guardando...' : 'Confirmar y entrar a NexoTribu →'}
         </button>
-        <p style={{ color:'rgba(255,255,255,.2)', fontSize:11, textAlign:'center', marginTop:16, lineHeight:1.5 }}>
-          Tu fecha de nacimiento solo se usa para verificar tu edad. No se comparte con nadie.
+
+        <p style={{ color:'rgba(255,255,255,.15)', fontSize:11, textAlign:'center', marginTop:14, lineHeight:1.5 }}>
+          Tu fecha de nacimiento solo se usa para verificar tu edad.
         </p>
       </div>
     </div>
