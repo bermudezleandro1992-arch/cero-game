@@ -44,7 +44,7 @@ const GAME_CONFIG = {
       { id: 'divisions_only', label: 'Solo modo Divisiones' },
       { id: 'no_sbcs', label: 'Sin cartas SBC/Evolutions' },
     ],
-    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+    formatos: ['Eliminación directa', 'Fase de grupos', 'Bracket completo', 'Grupos + Playoffs', 'Copa (eliminatoria)', 'Sistema Suizo'],
   },
   fc26: {
     plataformas: ['PS5', 'PS4', 'Xbox Series X/S', 'Xbox One', 'PC (EA App)'],
@@ -56,7 +56,7 @@ const GAME_CONFIG = {
       { id: 'custom_tactics', label: 'Tácticas libres' },
       { id: 'divisions_only', label: 'Solo modo Divisiones' },
     ],
-    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+    formatos: ['Eliminación directa', 'Fase de grupos', 'Bracket completo', 'Grupos + Playoffs', 'Copa (eliminatoria)', 'Sistema Suizo'],
   },
   fc25: {
     plataformas: ['PS5', 'PS4', 'Xbox Series X/S', 'Xbox One', 'PC (EA App)'],
@@ -67,7 +67,7 @@ const GAME_CONFIG = {
       { id: 'handicap', label: 'Sin Handicap' },
       { id: 'custom_tactics', label: 'Tácticas libres' },
     ],
-    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+    formatos: ['Eliminación directa', 'Fase de grupos', 'Bracket completo', 'Grupos + Playoffs', 'Copa (eliminatoria)', 'Sistema Suizo'],
   },
   efootball: {
     plataformas: ['PS5', 'PS4', 'Xbox Series X/S', 'Xbox One', 'PC (Steam)', 'Mobile (iOS/Android)'],
@@ -80,7 +80,7 @@ const GAME_CONFIG = {
       { id: 'same_nation', label: 'Solo jugadores de misma nación' },
       { id: 'squad_cost', label: 'Límite de costo de plantel' },
     ],
-    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+    formatos: ['Eliminación directa', 'Fase de grupos', 'Bracket completo', 'Grupos + Playoffs', 'Copa (eliminatoria)', 'Sistema Suizo'],
   },
   cs2: {
     plataformas: ['PC (Steam)'],
@@ -166,7 +166,21 @@ const GAME_CONFIG = {
   },
 }
 
-const FORMATS = ['1vs1', '2vs2', 'Equipos', 'Liga', 'Copa', 'Bracket', 'Grupos + Playoffs']
+const FORMATS_TORNEO = [
+  'Eliminación directa',
+  'Fase de grupos',
+  'Bracket completo',
+  'Grupos + Playoffs',
+  'Copa (eliminatoria)',
+  'Sistema Suizo',
+]
+
+const FORMATS_GUERRA = [
+  'Eliminación directa',
+  'Grupos + Final',
+  'Liga de clanes',
+  'Copa eliminatoria',
+]
 
 // ── Plan check — community plan free for all during beta ─────────────────────
 function usePlan(profile) {
@@ -610,7 +624,7 @@ function TournamentsList({ profile }) {
   const [tMaxPl,       setTMaxPl]       = useState('16')
   const [tDeadline,    setTDeadline]    = useState('')
   const [tStartDate,   setTStartDate]   = useState('')
-  const [tFormat,      setTFormat]      = useState('1vs1')
+  const [tFormat,      setTFormat]      = useState('Eliminación directa')
   const [tPlataforma,  setTPlataforma]  = useState('')
   const [tModo,        setTModo]        = useState('')
   const [tTiempo,      setTTiempo]      = useState('')
@@ -635,7 +649,7 @@ function TournamentsList({ profile }) {
 
   function resetCreate() {
     setTType('tournament'); setTGameId('fc26'); setTName(''); setTMaxPl('16')
-    setTDeadline(''); setTStartDate(''); setTFormat('1vs1'); setTPlataforma(''); setTModo('')
+    setTDeadline(''); setTStartDate(''); setTFormat('Eliminación directa'); setTPlataforma(''); setTModo('')
     setTTiempo(''); setTExtras([]); setTMapas([]); setTNivelMax('')
     setTDivision(''); setTRondas(''); setTPerspectiva(''); setTReglas('')
     setTCommunityId(''); setTEntryFee(''); setTIsPublic(true); setTMode('1vs1')
@@ -657,6 +671,13 @@ function TournamentsList({ profile }) {
     const seen = new Set()
     setMyCommunities(comms.filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true }))
   }
+
+  // Reset format when type changes so it's always valid
+  useEffect(() => {
+    if (tType === 'liga') setTFormat('Todos contra todos')
+    else if (tType === 'guerra') setTFormat('Eliminación directa')
+    else setTFormat('Eliminación directa')
+  }, [tType])
 
   function toggleExtra(id) {
     setTExtras(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -962,24 +983,108 @@ function TournamentsList({ profile }) {
               style={inp} />
           </div>
 
-          {/* Plataforma + Formato */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {gameCfg.plataformas && (
-              <div>
-                <p style={labelSt}>Plataforma</p>
-                <select value={tPlataforma} onChange={e => setTPlataforma(e.target.value)} style={inp}>
-                  <option value="">Todas</option>
-                  {gameCfg.plataformas.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-            )}
+          {/* Plataforma */}
+          {gameCfg.plataformas && (
             <div>
-              <p style={labelSt}>Formato</p>
-              <select value={tFormat} onChange={e => setTFormat(e.target.value)} style={inp}>
-                {(gameCfg.formatos || FORMATS).map(f => <option key={f} value={f}>{f}</option>)}
+              <p style={labelSt}>Plataforma</p>
+              <select value={tPlataforma} onChange={e => setTPlataforma(e.target.value)} style={inp}>
+                <option value="">Todas las plataformas</option>
+                {gameCfg.plataformas.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
-          </div>
+          )}
+
+          {/* Formato — solo para Torneo y Guerra */}
+          {tType !== 'liga' && (
+            <div>
+              <p style={labelSt}>Formato del torneo</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(tType === 'guerra' ? FORMATS_GUERRA : (gameCfg.formatos || FORMATS_TORNEO)).map(f => (
+                  <button key={f} onClick={() => setTFormat(f)} type="button" style={{
+                    padding: '10px 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontWeight: 600, fontSize: 13,
+                    background: tFormat === f ? `${C.green}18` : C.panel,
+                    border: `1.5px solid ${tFormat === f ? C.green : C.border}`,
+                    color: tFormat === f ? C.green : C.text,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                    <div style={{
+                      width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                      background: tFormat === f ? C.green : 'transparent',
+                      border: `2px solid ${tFormat === f ? C.green : C.textDim}`,
+                    }} />
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Estructura de Liga — solo para Liga */}
+          {tType === 'liga' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Sistema de puntos */}
+              <div>
+                <p style={labelSt}>Sistema de competencia</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {['Todos contra todos', 'Conferencias (grupos)', 'Por puntos con playoff final', 'Copa Liga (fase regular + final)'].map(f => (
+                    <button key={f} onClick={() => setTFormat(f)} type="button" style={{
+                      padding: '10px 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontWeight: 600, fontSize: 13,
+                      background: tFormat === f ? `${C.green}18` : C.panel,
+                      border: `1.5px solid ${tFormat === f ? C.green : C.border}`,
+                      color: tFormat === f ? C.green : C.text,
+                      display: 'flex', alignItems: 'center', gap: 10,
+                    }}>
+                      <div style={{
+                        width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                        background: tFormat === f ? C.green : 'transparent',
+                        border: `2px solid ${tFormat === f ? C.green : C.textDim}`,
+                      }} />
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Partidos */}
+              <div>
+                <p style={labelSt}>Partidos por enfrentamiento</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {['Solo ida', 'Ida y vuelta'].map(m => (
+                    <button key={m} onClick={() => setTModo(m)} style={{
+                      flex: 1, padding: '10px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 13,
+                      background: tModo === m ? `${C.green}20` : C.panel,
+                      border: `1.5px solid ${tModo === m ? C.green : C.border}`,
+                      color: tModo === m ? C.green : C.textDim,
+                    }}>{m}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Ascensos/Descensos */}
+              <div>
+                <p style={labelSt}>Ascensos y Descensos</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {['Sin ascenso/descenso', 'Con ascenso', 'Con ascenso y descenso'].map(m => (
+                    <button key={m} onClick={() => setTDivisionLiga(m)} style={{
+                      flex: 1, padding: '8px 6px', borderRadius: 10, cursor: 'pointer', fontWeight: 600, fontSize: 11, textAlign: 'center',
+                      background: tDivisionLiga === m ? `${C.green}20` : C.panel,
+                      border: `1.5px solid ${tDivisionLiga === m ? C.green : C.border}`,
+                      color: tDivisionLiga === m ? C.green : C.textDim,
+                    }}>{m}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Temporada + Jornadas */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <p style={labelSt}>Temporada</p>
+                  <input value={tTemporada} onChange={e => setTTemporada(e.target.value)} placeholder="Ej: 2025 · S1" style={inp} />
+                </div>
+                <div>
+                  <p style={labelSt}>Nº de Jornadas</p>
+                  <input value={tJornadas} onChange={e => setTJornadas(e.target.value)} type="number" min="1" placeholder="Ej: 10" style={inp} />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Modo + Tiempo (FC/eFootball) */}
           {(gameCfg.modos || gameCfg.tiempos) && (
@@ -1136,25 +1241,6 @@ function TournamentsList({ profile }) {
             </div>
           )}
 
-          {/* Liga: campos específicos */}
-          {tType === 'liga' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div>
-                  <p style={labelSt}>Temporada</p>
-                  <input value={tTemporada} onChange={e => setTTemporada(e.target.value)} placeholder="Ej: 2025 · S1" style={inp} />
-                </div>
-                <div>
-                  <p style={labelSt}>Nº de Jornadas</p>
-                  <input value={tJornadas} onChange={e => setTJornadas(e.target.value)} type="number" min="1" placeholder="Ej: 10" style={inp} />
-                </div>
-              </div>
-              <div>
-                <p style={labelSt}>División</p>
-                <input value={tDivisionLiga} onChange={e => setTDivisionLiga(e.target.value)} placeholder="Ej: Primera División, Serie A..." style={inp} />
-              </div>
-            </div>
-          )}
 
           {/* Comunidad */}
           <div>
