@@ -25,43 +25,19 @@ const TYPE_CFG = {
 
 export default function CommunidadesPage() {
   const { profile } = useAuthStore()
-  const { setActiveConversation } = useChatStore()
+  const { conversations, setActiveConversation } = useChatStore()
 
   const [tab, setTab] = useState('community')
-  const [communities, setCommunities] = useState([])
-  const [participating, setParticipating] = useState([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    if (!profile?.id) return
-    setLoading(true)
-
-    async function load() {
-      const { data: memberships } = await supabase
-        .from('conversation_members')
-        .select('conversation_id, role')
-        .eq('user_id', profile.id)
-
-      if (!memberships?.length) {
-        setCommunities([]); setParticipating([]); setLoading(false); return
-      }
-
-      const convIds = memberships.map(m => m.conversation_id)
-      const roleMap = Object.fromEntries(memberships.map(m => [m.conversation_id, m.role]))
-
-      const { data: convs } = await supabase
-        .from('conversations')
-        .select('id, name, description, avatar_url, group_type, game, tags, created_at, member_count, torneos_enabled, ligas_enabled, created_by')
-        .in('id', convIds)
-
-      const rows = (convs || []).map(c => ({ ...c, myRole: roleMap[c.id] }))
-      setCommunities(rows.filter(r => r.group_type === 'community' || r.group_type === 'group'))
-      setParticipating(rows.filter(r => r.group_type === 'tournament' || r.group_type === 'liga'))
-      setLoading(false)
-    }
-    load()
-  }, [profile?.id])
+  // Use already-loaded conversations from chatStore — no extra query needed
+  const communities = conversations.filter(c =>
+    c.group_type === 'community' || c.group_type === 'group'
+  )
+  const participating = conversations.filter(c =>
+    c.group_type === 'tournament' || c.group_type === 'liga'
+  )
+  const loading = false
 
   function openConv(conv) {
     const isCommunity = conv.group_type === 'community'
