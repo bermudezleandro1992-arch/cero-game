@@ -455,7 +455,7 @@ function ConfirmDialog({ open, title, message, onConfirm, onCancel, confirmLabel
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatPage({ onBack }) {
   const { profile } = useAuthStore()
-  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage, topics, activeTopicId, fetchTopics, createTopic, setActiveTopic, fetchConversations } = useChatStore()
+  const { activeConversation, messages, conversations, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage, topics, activeTopicId, fetchTopics, createTopic, setActiveTopic, fetchConversations } = useChatStore()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -1000,9 +1000,18 @@ export default function ChatPage({ onBack }) {
     setRecording(false); setRecLocked(false); setRecCancelling(false); setRecDuration(0)
   }
 
+  const _privBlock = (() => { try { return JSON.parse(localStorage.getItem('privacySettings') || '{}') } catch { return {} } })()
+  const knownUserIds = (() => {
+    if (!_privBlock.blockUnknown || !isGroup) return null
+    const ids = new Set([profile?.id])
+    conversations?.forEach(c => {
+      if (!c.isGroup) c.members?.forEach(m => m?.id && ids.add(m.id))
+    })
+    return ids
+  })()
   const filteredMessages = searchQuery
-    ? messages.filter(m => !deletedForMe.has(m.id) && m.content?.toLowerCase?.().includes(searchQuery.toLowerCase()))
-    : messages.filter(m => !deletedForMe.has(m.id))
+    ? messages.filter(m => !deletedForMe.has(m.id) && m.content?.toLowerCase?.().includes(searchQuery.toLowerCase()) && (!knownUserIds || m.sender_id === profile?.id || knownUserIds.has(m.sender_id)))
+    : messages.filter(m => !deletedForMe.has(m.id) && (!knownUserIds || m.sender_id === profile?.id || knownUserIds.has(m.sender_id)))
   const grouped = groupByDate(filteredMessages)
   const memberMap = {}
   activeConversation?.members?.forEach(m => { if (m) memberMap[m.id] = m })
