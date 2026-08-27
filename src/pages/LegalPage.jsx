@@ -288,18 +288,20 @@ export default function LegalPage({ onBack }) {
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
 
-      {/* Header */}
-      <div style={{
-        background: C.panel, borderBottom: `1px solid ${C.border}`,
-        padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
-      }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 5l-7 7 7 7"/>
-          </svg>
-        </button>
-        <span style={{ color: C.text, fontWeight: 700, fontSize: 17 }}>Legal y Privacidad</span>
-      </div>
+      {/* Header — only shown when used standalone (onBack provided) */}
+      {onBack && (
+        <div style={{
+          background: C.panel, borderBottom: `1px solid ${C.border}`,
+          padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+        }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+          </button>
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 17 }}>Legal y Privacidad</span>
+        </div>
+      )}
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px 40px' }}>

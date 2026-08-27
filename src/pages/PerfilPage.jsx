@@ -1255,7 +1255,6 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
                 <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
                 <SettingsRow icon="💳" label="Cuenta" desc="Suscripción, seguridad, información" onClick={() => setTab('cuenta')} />
                 <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
-                <SettingsRow icon="🔒" label="Privacidad" desc="Contactos bloqueados, mensajes temporales" onClick={() => {}} />
               </div>
 
               {/* Sección personalización */}
@@ -1263,8 +1262,6 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
                 <SettingsRow icon="💬" label="Chats" desc="Temas, fondo, sonidos, notificaciones" onClick={() => setTab('preferencias')} />
                 <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
                 <SettingsRow icon="🎨" label="Apariencia" desc="Elige el estilo visual de la app" onClick={() => setTab('apariencia')} value={SKINS_CFG.find(s => s.id === skin)?.label} />
-                <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
-                <SettingsRow icon="⌨️" label="Atajos del teclado" desc="Acciones rápidas" onClick={() => {}} />
               </div>
 
               {/* Sección identidad y comunidad */}
@@ -1276,7 +1273,7 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
 
               {/* Sección soporte */}
               <div style={{ background: C.panel, borderRadius: 0, marginBottom: 8 }}>
-                <SettingsRow icon="❓" label="Ayuda y comentarios" desc="Centro de ayuda, contáctanos" onClick={() => {}} />
+                <SettingsRow icon="❓" label="Ayuda y comentarios" desc="Centro de ayuda, contáctanos" onClick={() => setToast('Próximamente — estamos trabajando en el centro de ayuda')} />
                 <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
                 <SettingsRow icon="📋" label="Legal" desc="Política de privacidad, términos" onClick={() => setTab('legal')} />
               </div>
