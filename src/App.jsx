@@ -432,7 +432,8 @@ export default function App() {
       // Use RPC to bypass RLS — joins chat if not already a member
       const { data: result, error: rpcErr } = await supabase.rpc('get_or_join_support_chat')
       if (!rpcErr && result?.id) {
-        setActiveConversation({ ...result, isGroup: true })
+        const cleanId = typeof result.id === 'string' ? result.id.replace(/^"|"$/g, '') : result.id
+        setActiveConversation({ ...result, id: cleanId, isGroup: true })
         setTab('chats')
         setShowProfile(false)
         return
