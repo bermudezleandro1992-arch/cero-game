@@ -543,7 +543,7 @@ export default function App() {
                     <span style={{ position: 'absolute', top: 8, right: '12%', minWidth: 16, height: 16, borderRadius: 8, padding: '0 4px', background: C.green, color: C.bg, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{totalUnread > 99 ? '99+' : totalUnread}</span>
                   )}
                   {icon(active)}
-                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>{label}</span>
+                  <span className="slfa-nav-tooltip">{label}</span>
                 </button>
               )
             })}
@@ -560,7 +560,7 @@ export default function App() {
                 borderLeft: `3px solid ${active ? C.green : 'transparent'}`, transition: 'background .15s',
               }}>
                 {icon?.(active)}
-                <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>Anuncios</span>
+                <span className="slfa-nav-tooltip">Anuncios</span>
               </button>
             )})()}
 
@@ -575,7 +575,7 @@ export default function App() {
                   borderLeft: `3px solid ${active ? C.green : 'transparent'}`, transition: 'background .15s',
                 }}>
                   <span style={{ fontSize: 18 }}>🎯</span>
-                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>Organiz.</span>
+                  <span className="slfa-nav-tooltip">Organizador</span>
                 </button>
               )})()}
 
@@ -590,7 +590,7 @@ export default function App() {
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                   </svg>
-                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>CEO</span>
+                  <span className="slfa-nav-tooltip">Panel CEO</span>
                 </button>
               )})()}
 
@@ -603,7 +603,7 @@ export default function App() {
                   borderLeft: `3px solid ${active ? C.green : 'transparent'}`, transition: 'background .15s',
                 }}>
                   {NAV.find(n=>n.id==='ranking')?.icon(active)}
-                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>Ranking</span>
+                  <span className="slfa-nav-tooltip">Ranking</span>
                 </button>
               )})()}
             </div>
@@ -621,7 +621,7 @@ export default function App() {
                     ? <img src={profile.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${active ? C.green : C.border}` }} />
                     : NAV.find(n=>n.id==='perfil')?.icon(active)
                   }
-                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>Perfil</span>
+                  <span className="slfa-nav-tooltip">Perfil</span>
                 </button>
               )})()}
             </div>
@@ -941,6 +941,32 @@ export default function App() {
             display: flex; flex-direction: column;
             width: 68px; flex-shrink: 0;
             background: var(--c-panel); border-right: 1px solid var(--c-border);
+          }
+          /* Tooltip on hover — hide labels, show as tooltip */
+          .slfa-nav-tooltip {
+            position: absolute;
+            left: 72px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: ${C.panel2};
+            color: ${C.text};
+            border: 1px solid ${C.border};
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity .15s;
+            z-index: 999;
+            box-shadow: 0 2px 8px rgba(0,0,0,.25);
+          }
+          .slfa-side-nav button {
+            position: relative;
+          }
+          .slfa-side-nav button:hover .slfa-nav-tooltip {
+            opacity: 1;
           }
           .slfa-left, .slfa-right {
             position: relative !important;
