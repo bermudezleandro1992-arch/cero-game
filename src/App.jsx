@@ -38,6 +38,72 @@ import { C } from './theme'
 import { getSkin, setLayoutSkin } from './lib/layoutSkin'
 export { setLayoutSkin }
 
+function BirthdateGate({ onDone, userId }) {
+  const [birthdate, setBirthdate] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  function getAge(d) {
+    const dob = new Date(d), today = new Date()
+    let age = today.getFullYear() - dob.getFullYear()
+    const m = today.getMonth() - dob.getMonth()
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--
+    return age
+  }
+
+  async function save() {
+    if (!birthdate) return
+    const age = getAge(birthdate)
+    if (age < 18) { setError('Debés tener al menos 18 años para usar NexoTribu.'); return }
+    setLoading(true)
+    await supabase.from('users').update({ birth_date: birthdate }).eq('id', userId)
+    onDone()
+  }
+
+  return (
+    <div style={{ minHeight:'100dvh', display:'flex', alignItems:'center', justifyContent:'center', background:'#080d12', padding:24 }}>
+      <div style={{ width:'100%', maxWidth:380, background:'#0e1419', border:'1px solid rgba(255,255,255,.08)', borderRadius:20, padding:'36px 28px' }}>
+        <div style={{ fontSize:40, textAlign:'center', marginBottom:16 }}>🔞</div>
+        <h2 style={{ color:'#fff', fontWeight:700, fontSize:20, textAlign:'center', margin:'0 0 8px' }}>Verificación de edad</h2>
+        <p style={{ color:'rgba(255,255,255,.45)', fontSize:13, textAlign:'center', margin:'0 0 24px', lineHeight:1.6 }}>
+          NexoTribu es para mayores de 18 años. Ingresá tu fecha de nacimiento para continuar.
+        </p>
+        <label style={{ fontSize:12, color:'rgba(255,255,255,.4)', display:'block', marginBottom:6 }}>
+          Fecha de nacimiento <span style={{ color:'#ef4444' }}>*</span>
+        </label>
+        <input
+          type="date"
+          value={birthdate}
+          onChange={e => { setBirthdate(e.target.value); setError('') }}
+          max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+          style={{
+            width:'100%', padding:'12px 14px', borderRadius:10, outline:'none',
+            background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.12)',
+            color:'#fff', fontSize:14, boxSizing:'border-box', colorScheme:'dark',
+          }}
+        />
+        {error && <p style={{ color:'#ef4444', fontSize:12, margin:'8px 0 0', textAlign:'center' }}>{error}</p>}
+        <button
+          onClick={save}
+          disabled={!birthdate || loading}
+          style={{
+            width:'100%', marginTop:20, padding:'13px', borderRadius:12,
+            background: birthdate && !loading ? '#00d278' : 'rgba(255,255,255,.1)',
+            border:'none', cursor: birthdate && !loading ? 'pointer' : 'default',
+            color: birthdate && !loading ? '#fff' : 'rgba(255,255,255,.3)',
+            fontSize:14, fontWeight:700, transition:'all .2s',
+          }}
+        >
+          {loading ? '...' : 'Confirmar y entrar →'}
+        </button>
+        <p style={{ color:'rgba(255,255,255,.2)', fontSize:11, textAlign:'center', marginTop:16, lineHeight:1.5 }}>
+          Tu fecha de nacimiento solo se usa para verificar tu edad. No se comparte con nadie.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ── Nav icons ─────────────────────────────────────────────────────────────────
 const NAV = [
   {
@@ -484,6 +550,8 @@ export default function App() {
   const needsSetup = !profile.display_name || profile.display_name === 'Usuario'
     || profile.display_name.startsWith('user_') || !profile.username || profile.username.startsWith('user_')
   if (needsSetup) return <ProfileSheet onClose={() => fetchProfile(user.id)} forceSetup />
+
+  if (!profile.birth_date) return <BirthdateGate onDone={() => fetchProfile(user.id)} userId={user.id} />
 
   function goBack() {
     setActiveConversation(null)
