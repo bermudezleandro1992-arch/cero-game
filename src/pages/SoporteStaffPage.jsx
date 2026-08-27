@@ -57,7 +57,7 @@ export default function SoporteStaffPage({ onBack }) {
     setLoading(true)
     let q = supabase
       .from('support_tickets')
-      .select(`*, user:profiles!support_tickets_user_id_fkey(id,display_name,username,avatar_url,role), agent:profiles!support_tickets_agent_id_fkey(id,display_name,username)`)
+      .select(`*, user:users!support_tickets_user_id_fkey(id,display_name,username,avatar_url,role), agent:users!support_tickets_agent_id_fkey(id,display_name,username)`)
       .order('created_at', { ascending: false })
     if (filter !== 'all') q = q.eq('status', filter)
     const { data } = await q
@@ -72,7 +72,7 @@ export default function SoporteStaffPage({ onBack }) {
     setMsgLoading(true)
     const { data } = await supabase
       .from('messages')
-      .select('*, sender:profiles!messages_sender_id_fkey(id,display_name,username,avatar_url)')
+      .select('*, sender:users!messages_sender_id_fkey(id,display_name,username,avatar_url)')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true })
       .limit(200)
