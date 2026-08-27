@@ -38,18 +38,34 @@ const FILTER_TABS = [
 ]
 
 const TYPE_CFG = {
-  tournament: { label: 'Torneo', icon: '🏆', color: '#f59e0b' },
-  liga:       { label: 'Liga',   icon: '🥇', color: '#3b82f6' },
+  tournament: { label: 'Torneo',          icon: '🏆', color: '#f59e0b' },
+  liga:       { label: 'Liga',            icon: '📋', color: '#3b82f6' },
+  guerra:     { label: 'Guerra de Clanes', icon: '⚔️', color: '#ef4444' },
 }
 
-const FORMATS = [
+const FORMATS_TORNEO = [
   { id: 'eliminatorias',   label: 'Eliminación directa' },
   { id: 'bracket',         label: 'Bracket completo' },
   { id: 'grupos',          label: 'Fase de grupos' },
   { id: 'grupos_playoffs', label: 'Grupos + Playoffs' },
-  { id: 'copa',            label: 'Copa' },
-  { id: 'todos_todos',     label: 'Liga todos vs todos' },
+  { id: 'copa',            label: 'Copa (eliminatoria)' },
+  { id: 'suizo',           label: 'Sistema Suizo' },
 ]
+
+const FORMATS_LIGA = [
+  { id: 'todos_todos',  label: 'Todos contra todos (1 vuelta)' },
+  { id: 'ida_vuelta',   label: 'Ida y vuelta (2 vueltas)' },
+  { id: 'liga_playoffs',label: 'Liga + Playoffs finales' },
+]
+
+const FORMATS_GUERRA = [
+  { id: 'eliminatorias', label: 'Eliminación directa' },
+  { id: 'grupos_final',  label: 'Grupos + Final' },
+  { id: 'liga_clanes',   label: 'Liga de clanes' },
+]
+
+// Keep old FORMATS for backward compat in cards
+const FORMATS = FORMATS_TORNEO
 
 const SIZES = [4, 8, 16, 32, 64]
 
@@ -204,30 +220,50 @@ export function CreateTorneoModal({ onClose, onCreated, defaultCommunityId, onVi
 function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () => window.dispatchEvent(new CustomEvent('open-vip-page')) }) {
   const { profile } = useAuthStore()
   const sub = useSubscription(profile?.id)
-  const [name,       setName]       = useState('')
-  const [type,       setType]       = useState('tournament')
-  const [format,     setFormat]     = useState('eliminatorias')
-  const [maxPl,      setMaxPl]      = useState(Math.min(8, sub.limits.jugadores))
+  const [name,        setName]        = useState('')
+  const [type,        setType]        = useState('tournament')
+  const [format,      setFormat]      = useState('eliminatorias')
+  const [maxPl,       setMaxPl]       = useState(Math.min(8, sub.limits.jugadores))
   const [communityId, setCommunityId] = useState(defaultCommunityId || '')
-  const [isPublic,   setIsPublic]   = useState(true)
-  const [game,       setGame]       = useState('')
+  const [isPublic,    setIsPublic]    = useState(true)
+  const [game,        setGame]        = useState('')
   const [communities, setCommunities] = useState([])
-  const [busy,       setBusy]       = useState(false)
-  const [err,        setErr]        = useState('')
+  const [busy,        setBusy]        = useState(false)
+  const [err,         setErr]         = useState('')
   const [upgradeReason, setUpgradeReason] = useState(null)
+  // Liga extras
+  const [ligaJornadas,    setLigaJornadas]    = useState('')
+  const [ligaAscensos,    setLigaAscensos]    = useState(false)
+  const [ligaTemporada,   setLigaTemporada]   = useState('')
+  // Guerra extras
+  const [guerraMode,      setGuerraMode]      = useState('3vs3')
 
   // Sync maxPl with plan limits when plan loads
   useEffect(() => {
     setMaxPl(prev => Math.min(prev, sub.limits.jugadores))
   }, [sub.limits.jugadores])
 
+  // Reset format when type changes
   useEffect(() => {
+    if (type === 'liga')    setFormat('todos_todos')
+    else if (type === 'guerra') setFormat('eliminatorias')
+    else                   setFormat('eliminatorias')
+  }, [type])
+
+  // Load only communities where the user is admin/owner/ceo
+  useEffect(() => {
+    if (!profile?.id) return
     supabase
-      .from('conversations')
-      .select('id, name')
-      .eq('group_type', 'community')
-      .then(({ data }) => setCommunities(data || []))
-  }, [])
+      .from('conversation_members')
+      .select('conversation_id, role, conversations(id, name, group_type)')
+      .eq('user_id', profile.id)
+      .in('role', ['owner', 'ceo', 'admin'])
+      .then(({ data }) => {
+        const comms = (data || []).map(r => r.conversations).filter(c => c && c.group_type === 'community')
+        const seen = new Set()
+        setCommunities(comms.filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true }))
+      })
+  }, [profile?.id])
 
   const availableSizes = SIZES.filter(n => n <= sub.limits.jugadores)
 
@@ -242,7 +278,7 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
         .insert({
           name: name.trim(),
           is_group: true,
-          group_type: type,
+          group_type: type === 'guerra' ? 'tournament' : type,
           tournament_status: 'inscripcion',
           tournament_format: format,
           max_participants: maxPl,
@@ -250,6 +286,7 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
           created_by: profile.id,
           game: game || null,
           ...(communityId ? { community_id: communityId } : {}),
+          ...(type === 'liga' && ligaTemporada ? { description: `Temporada: ${ligaTemporada}` } : {}),
         })
         .select('id')
         .single()
@@ -345,13 +382,83 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
             <input style={inp} placeholder="Ej: Copa Latinoamérica #1" value={name} onChange={e => setName(e.target.value)} maxLength={60} />
           </div>
 
-          {/* Formato */}
-          <div>
-            <label style={lbl}>Formato</label>
-            <select style={{ ...inp, appearance: 'none' }} value={format} onChange={e => setFormat(e.target.value)}>
-              {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
-            </select>
-          </div>
+          {/* Formato — varía según tipo */}
+          {type !== 'liga' && (
+            <div>
+              <label style={lbl}>Formato</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(type === 'guerra' ? FORMATS_GUERRA : FORMATS_TORNEO).map(f => (
+                  <button key={f.id} onClick={() => setFormat(f.id)} style={{
+                    padding: '10px 14px', borderRadius: 10, border: `1px solid ${format === f.id ? C.green : C.border}`,
+                    background: format === f.id ? `${C.green}15` : C.panel,
+                    color: format === f.id ? C.green : C.text,
+                    fontWeight: format === f.id ? 700 : 500, fontSize: 13,
+                    cursor: 'pointer', textAlign: 'left',
+                  }}>{format === f.id ? '✓ ' : ''}{f.label}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Liga: sistema de competencia */}
+          {type === 'liga' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={lbl}>Sistema de competencia</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {FORMATS_LIGA.map(f => (
+                    <button key={f.id} onClick={() => setFormat(f.id)} style={{
+                      padding: '10px 14px', borderRadius: 10, border: `1px solid ${format === f.id ? '#3b82f6' : C.border}`,
+                      background: format === f.id ? '#3b82f615' : C.panel,
+                      color: format === f.id ? '#3b82f6' : C.text,
+                      fontWeight: format === f.id ? 700 : 500, fontSize: 13,
+                      cursor: 'pointer', textAlign: 'left',
+                    }}>{format === f.id ? '✓ ' : ''}{f.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={lbl}>Temporada (opcional)</label>
+                  <input style={inp} placeholder="Ej: 2025/01" value={ligaTemporada} onChange={e => setLigaTemporada(e.target.value)} maxLength={20} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={lbl}>Jornadas</label>
+                  <input style={inp} type="number" placeholder="Ej: 10" value={ligaJornadas} onChange={e => setLigaJornadas(e.target.value)} min={1} max={99} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: C.panel, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                <div>
+                  <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>Ascensos / Descensos</div>
+                  <div style={{ color: C.textDim, fontSize: 11 }}>Activá si hay divisiones con ascenso y descenso</div>
+                </div>
+                <button onClick={() => setLigaAscensos(a => !a)} style={{
+                  width: 46, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
+                  background: ligaAscensos ? '#3b82f6' : C.border, position: 'relative', transition: 'background .2s', flexShrink: 0,
+                }}>
+                  <span style={{ position: 'absolute', top: 3, left: ligaAscensos ? 23 : 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left .2s', display: 'block' }} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Guerra: modo */}
+          {type === 'guerra' && (
+            <div>
+              <label style={lbl}>Modo de guerra</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['2vs2','3vs3','4vs4','5vs5'].map(m => (
+                  <button key={m} onClick={() => setGuerraMode(m)} style={{
+                    padding: '8px 16px', borderRadius: 20,
+                    border: `1px solid ${guerraMode === m ? '#ef4444' : C.border}`,
+                    background: guerraMode === m ? '#ef444415' : C.panel,
+                    color: guerraMode === m ? '#ef4444' : C.textDim,
+                    fontWeight: guerraMode === m ? 700 : 500, fontSize: 13, cursor: 'pointer',
+                  }}>{m}</button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Tamaño */}
           <div>

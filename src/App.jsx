@@ -447,8 +447,14 @@ export default function App() {
 
   // Open VipPage directly from anywhere via custom event
   const [openVipDirect, setOpenVipDirect] = useState(false)
+  const [perfilInitialTab, setPerfilInitialTab] = useState('menu')
   useEffect(() => {
-    const handler = () => { setShowProfile(true); setOpenVipDirect(true) }
+    const handler = () => {
+      setShowProfile(false)
+      setTab('perfil')
+      setActiveConversation(null)
+      setPerfilInitialTab('cuenta')
+    }
     window.addEventListener('open-vip-page', handler)
     return () => window.removeEventListener('open-vip-page', handler)
   }, [])
@@ -698,7 +704,7 @@ export default function App() {
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'
-            ? <PerfilPage onClose={() => setTab('chats')} initialTab="menu" onOpenSupport={openSupportChat} />
+            ? <PerfilPage key={perfilInitialTab} onClose={() => { setTab('chats'); setPerfilInitialTab('menu') }} initialTab={perfilInitialTab} onOpenSupport={openSupportChat} />
             : tab === 'llamadas'
             ? <LlamadasPage />
             : tab === 'estados'
