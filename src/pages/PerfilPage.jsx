@@ -283,17 +283,36 @@ function PreferenciasTab({ profile, onGoVip }) {
       {/* ── Sonidos ── */}
       <SectionLabel>Sonidos</SectionLabel>
       <SettingsBlock>
-        {Object.entries(SOUND_OPTIONS).map(([key, cfg], i, arr) => (
-          <Row key={key} label={cfg.label} noBorder={i === arr.length - 1}
-            right={
-              <select value={sounds[key] || cfg.options[0]} onChange={e => saveSound(key, e.target.value)}
-                style={{ padding: '4px 8px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 12, cursor: 'pointer', maxWidth: 160 }}>
-                {cfg.options.map(o => <option key={o} value={o}>{o.replace('.mp3','').replace(/-/g,' ')}</option>)}
-              </select>
-            }
-          />
-        ))}
-        <Row label="Vibración" noBorder right={<Toggle on={sounds.vibration !== false} onChange={v => saveSound('vibration', v)} />} />
+        {Object.entries(SOUND_OPTIONS).map(([key, cfg], i, arr) => {
+          const current = sounds[key] || cfg.options[0]
+          const pretty = n => n.replace('.mp3','').replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())
+          return (
+            <div key={key} style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.border}22` : 'none', padding: '12px 16px' }}>
+              <div style={{ color: C.text, fontSize: 14, marginBottom: 8 }}>{cfg.label}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {cfg.options.map(o => {
+                  const active = current === o
+                  return (
+                    <button key={o} onClick={() => saveSound(key, o)} style={{
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      padding: '5px 12px', borderRadius: 20,
+                      border: `1.5px solid ${active ? C.green : C.border}`,
+                      background: active ? `${C.green}18` : C.panel2,
+                      color: active ? C.green : C.textDim,
+                      fontSize: 12, fontWeight: active ? 700 : 500, cursor: 'pointer',
+                    }}>
+                      {active && <svg width="10" height="10" viewBox="0 0 24 24" fill={C.green}><polygon points="5,3 19,12 5,21"/></svg>}
+                      {pretty(o)}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+        <div style={{ padding: '13px 16px' }}>
+          <Row label="Vibración" noBorder right={<Toggle on={sounds.vibration !== false} onChange={v => saveSound('vibration', v)} />} />
+        </div>
       </SettingsBlock>
 
       {/* ── Notificaciones ── */}
@@ -1046,6 +1065,117 @@ function SettingsRow({ icon, label, desc, onClick, danger, value, noArrow }) {
   )
 }
 
+// ── Contact Picker Sheet ──────────────────────────────────────────────────────
+function ContactPickerSheet({ mode, selectedIds, onConfirm, onClose }) {
+  const { profile } = useAuthStore()
+  const [contacts, setContacts] = useState([])
+  const [search, setSearch] = useState('')
+  const [picked, setPicked] = useState(new Set(selectedIds || []))
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      // Get DM conversations and extract the other participant
+      const { data } = await supabase
+        .from('conversation_members')
+        .select('conversation_id, conversations!inner(id, is_group), user_id')
+        .eq('conversations.is_group', false)
+      if (!data) { setLoading(false); return }
+      const convIds = [...new Set(data.filter(r => r.user_id === profile?.id).map(r => r.conversation_id))]
+      if (!convIds.length) { setLoading(false); return }
+      const otherUserIds = [...new Set(
+        data.filter(r => convIds.includes(r.conversation_id) && r.user_id !== profile?.id).map(r => r.user_id)
+      )]
+      if (!otherUserIds.length) { setLoading(false); return }
+      const { data: users } = await supabase.from('users').select('id, display_name, avatar_url').in('id', otherUserIds)
+      setContacts(users || [])
+      setLoading(false)
+    }
+    load()
+  }, [profile?.id])
+
+  const filtered = contacts.filter(c => c.display_name?.toLowerCase().includes(search.toLowerCase()))
+  const title = mode === 'except' ? 'Mis contactos, excepto…' : 'Solo compartir con…'
+  const countLabel = mode === 'except'
+    ? `${picked.size} contacto${picked.size !== 1 ? 's' : ''} excluido${picked.size !== 1 ? 's' : ''}`
+    : `${picked.size} contacto${picked.size !== 1 ? 's' : ''} seleccionado${picked.size !== 1 ? 's' : ''}`
+
+  function toggle(id) {
+    setPicked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', background: C.bg }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text, padding: 4, display: 'flex' }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <div style={{ flex: 1, fontWeight: 700, fontSize: 17, color: C.text }}>{title}</div>
+        <button onClick={() => onConfirm([...picked])} style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          width: 32, height: 32, borderRadius: '50%',
+          background: C.green, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </button>
+      </div>
+      {/* Search */}
+      <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.panel2, borderRadius: 24, padding: '8px 14px', border: `1px solid ${C.border}` }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar un nombre o número"
+            style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 14 }} autoFocus />
+        </div>
+      </div>
+      {/* List */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {loading && <div style={{ padding: 32, textAlign: 'center', color: C.textDim }}>Cargando contactos…</div>}
+        {!loading && filtered.length === 0 && <div style={{ padding: 32, textAlign: 'center', color: C.textDim }}>No hay contactos</div>}
+        {!loading && filtered.length > 0 && (
+          <>
+            <div style={{ padding: '8px 16px 4px', color: C.textDim, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Contactos</div>
+            {filtered.map(c => {
+              const sel = picked.has(c.id)
+              return (
+                <button key={c.id} onClick={() => toggle(c.id)} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left',
+                  borderBottom: `1px solid ${C.border}22`,
+                }}>
+                  {c.avatar_url
+                    ? <img src={c.avatar_url} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                    : <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.panel2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{c.display_name?.slice(0,2).toUpperCase() || '?'}</div>
+                  }
+                  <div style={{ flex: 1, color: C.text, fontSize: 14, fontWeight: 500 }}>{c.display_name}</div>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: 6, border: `2px solid ${sel ? C.green : C.textDim}`,
+                    background: sel ? C.green : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    {sel && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
+                  </div>
+                </button>
+              )
+            })}
+          </>
+        )}
+      </div>
+      {/* Footer */}
+      <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}`, background: C.panel, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <span style={{ color: C.textDim, fontSize: 13 }}>{countLabel}</span>
+        <button onClick={() => onConfirm([...picked])} style={{
+          background: C.green, border: 'none', borderRadius: '50%', width: 48, height: 48,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+        }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </button>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 // ── Privacidad Tab ────────────────────────────────────────────────────────────
 const VIP_ROLES = new Set(['vip','ceo','com_starter','com_elite','superadmin','admin','organizador'])
 
@@ -1053,6 +1183,7 @@ function PrivacidadTab({ profile }) {
   const [priv, setPriv] = useState(() => {
     try { return JSON.parse(localStorage.getItem('privacySettings') || '{}') } catch { return {} }
   })
+  const [pickerMode, setPickerMode] = useState(null) // 'except' | 'only' | null
 
   async function save(key, val) {
     const updated = { ...priv, [key]: val }
@@ -1111,26 +1242,54 @@ function PrivacidadTab({ profile }) {
           { id: 'contacts', label: 'Mis contactos', desc: 'Se comparte con todos tus contactos' },
           { id: 'except',   label: 'Mis contactos, excepto…', desc: 'Comparte con tus contactos, excepto los seleccionados' },
           { id: 'only',     label: 'Solo compartir con…', desc: 'Solo comparte con los contactos seleccionados' },
-        ].map((opt, i, arr) => (
-          <button key={opt.id} onClick={() => save('estadoPrivacy', opt.id)} style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 16,
-            padding: '13px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left',
-            borderBottom: i < arr.length - 1 ? `1px solid ${C.border}22` : 'none',
-          }}>
-            <div style={{
-              width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-              border: `2px solid ${(priv.estadoPrivacy || 'contacts') === opt.id ? C.green : C.textDim}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+        ].map((opt, i, arr) => {
+          const selected = (priv.estadoPrivacy || 'contacts') === opt.id
+          const hasPicker = opt.id === 'except' || opt.id === 'only'
+          const count = (priv[`estado_${opt.id}_ids`] || []).length
+          return (
+            <button key={opt.id} onClick={() => {
+              save('estadoPrivacy', opt.id)
+              if (hasPicker) setPickerMode(opt.id)
+            }} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 16,
+              padding: '13px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left',
+              borderBottom: i < arr.length - 1 ? `1px solid ${C.border}22` : 'none',
             }}>
-              {(priv.estadoPrivacy || 'contacts') === opt.id && <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.green }} />}
-            </div>
-            <div>
-              <div style={{ color: C.text, fontSize: 14 }}>{opt.label}</div>
-              <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>{opt.desc}</div>
-            </div>
-          </button>
-        ))}
+              <div style={{
+                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                border: `2px solid ${selected ? C.green : C.textDim}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {selected && <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.green }} />}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: C.text, fontSize: 14 }}>{opt.label}</div>
+                <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>
+                  {hasPicker && count > 0 ? `${count} contacto${count !== 1 ? 's' : ''}` : opt.desc}
+                </div>
+              </div>
+              {hasPicker && selected && (
+                <span onClick={e => { e.stopPropagation(); setPickerMode(opt.id) }} style={{
+                  fontSize: 11, color: C.green, fontWeight: 700, padding: '4px 10px',
+                  border: `1px solid ${C.green}40`, borderRadius: 12,
+                }}>Editar</span>
+              )}
+            </button>
+          )
+        })}
       </SettingsBlock>
+
+      {pickerMode && (
+        <ContactPickerSheet
+          mode={pickerMode}
+          selectedIds={priv[`estado_${pickerMode}_ids`] || []}
+          onConfirm={ids => {
+            save(`estado_${pickerMode}_ids`, ids)
+            setPickerMode(null)
+          }}
+          onClose={() => setPickerMode(null)}
+        />
+      )}
 
       {isVip && (
         <>
@@ -1224,19 +1383,41 @@ function NotificacionesTab({ profile }) {
 // ── Video y Voz Tab ───────────────────────────────────────────────────────────
 function VideoVozTab() {
   const [devices, setDevices] = useState({ cameras: [], mics: [], speakers: [] })
+  const [permGranted, setPermGranted] = useState(false)
   const [sel, setSel] = useState(() => {
     try { return JSON.parse(localStorage.getItem('avDevices') || '{}') } catch { return {} }
   })
 
-  useEffect(() => {
-    navigator.mediaDevices?.enumerateDevices?.().then(list => {
+  async function loadDevices() {
+    try {
+      const list = await navigator.mediaDevices.enumerateDevices()
+      const hasLabels = list.some(d => d.label)
+      if (!hasLabels) return false
       setDevices({
         cameras:  list.filter(d => d.kind === 'videoinput'),
         mics:     list.filter(d => d.kind === 'audioinput'),
         speakers: list.filter(d => d.kind === 'audiooutput'),
       })
-    }).catch(() => {})
-  }, [])
+      setPermGranted(true)
+      return true
+    } catch { return false }
+  }
+
+  async function requestPermission() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+      stream.getTracks().forEach(t => t.stop())
+      await loadDevices()
+    } catch {
+      try {
+        const s2 = await navigator.mediaDevices.getUserMedia({ audio: true })
+        s2.getTracks().forEach(t => t.stop())
+        await loadDevices()
+      } catch {}
+    }
+  }
+
+  useEffect(() => { loadDevices() }, [])
 
   function pick(key, val) {
     const updated = { ...sel, [key]: val }
@@ -1244,35 +1425,57 @@ function VideoVozTab() {
     localStorage.setItem('avDevices', JSON.stringify(updated))
   }
 
-  function DeviceSelect({ label, list, stateKey }) {
+  function DeviceRow({ label, list, stateKey, noBorder }) {
+    const current = sel[stateKey] || 'default'
+    const allOptions = [{ deviceId: 'default', label: 'Predeterminado' }, ...list]
     return (
-      <div style={{ padding: '13px 16px', borderBottom: `1px solid ${C.border}22` }}>
-        <div style={{ color: C.textDim, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>{label}</div>
-        <select value={sel[stateKey] || 'default'} onChange={e => pick(stateKey, e.target.value)}
-          style={{ width: '100%', padding: '10px 12px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, cursor: 'pointer' }}>
-          <option value="default">Dispositivo predeterminado</option>
-          {list.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || `Dispositivo ${d.deviceId.slice(0,8)}`}</option>)}
-        </select>
+      <div style={{ padding: '12px 16px', borderBottom: noBorder ? 'none' : `1px solid ${C.border}22` }}>
+        <div style={{ color: C.text, fontSize: 14, marginBottom: 8, fontWeight: 500 }}>{label}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {allOptions.map(d => {
+            const active = current === d.deviceId
+            const name = d.label || (d.deviceId === 'default' ? 'Predeterminado' : `Dispositivo ${d.deviceId.slice(0,6)}`)
+            return (
+              <button key={d.deviceId} onClick={() => pick(stateKey, d.deviceId)} style={{
+                padding: '5px 12px', borderRadius: 20,
+                border: `1.5px solid ${active ? C.green : C.border}`,
+                background: active ? `${C.green}18` : C.panel2,
+                color: active ? C.green : C.textDim,
+                fontSize: 12, fontWeight: active ? 700 : 500, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                {active && <svg width="10" height="10" viewBox="0 0 24 24" fill={C.green}><polygon points="5,3 19,12 5,21"/></svg>}
+                {name}
+              </button>
+            )
+          })}
+        </div>
       </div>
     )
   }
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 32 }}>
+      {!permGranted && (
+        <div style={{ margin: '16px', padding: '16px', background: C.panel, borderRadius: 12, border: `1px solid ${C.border}`, textAlign: 'center' }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>🎙️</div>
+          <div style={{ color: C.text, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Permiso de dispositivos</div>
+          <div style={{ color: C.textDim, fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>Para ver y seleccionar tu cámara y micrófono, necesitamos acceso a tus dispositivos.</div>
+          <button onClick={requestPermission} style={{
+            padding: '10px 24px', borderRadius: 24, background: C.green, border: 'none',
+            color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+          }}>Permitir acceso</button>
+        </div>
+      )}
       <SectionLabel>Cámara</SectionLabel>
       <SettingsBlock>
-        <DeviceSelect label="Cámara" list={devices.cameras} stateKey="camera" />
+        <DeviceRow label="Cámara" list={devices.cameras} stateKey="camera" noBorder />
       </SettingsBlock>
       <SectionLabel>Audio</SectionLabel>
       <SettingsBlock>
-        <DeviceSelect label="Micrófono" list={devices.mics} stateKey="mic" />
-        <DeviceSelect label="Altavoces / Auriculares" list={devices.speakers} stateKey="speaker" />
+        <DeviceRow label="Micrófono" list={devices.mics} stateKey="mic" />
+        <DeviceRow label="Altavoces / Auriculares" list={devices.speakers} stateKey="speaker" noBorder />
       </SettingsBlock>
-      <div style={{ padding: '12px 16px' }}>
-        <div style={{ color: C.textDim, fontSize: 12, lineHeight: 1.6 }}>
-          Para acceder a tus dispositivos, el navegador puede pedir permiso de cámara y micrófono la primera vez que hagas una llamada.
-        </div>
-      </div>
     </div>
   )
 }
@@ -1735,21 +1938,28 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
           <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
             <div style={{ color: C.textDim, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Skin de la interfaz</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {SKINS_CFG.map(s => (
-                <button key={s.id} onClick={() => { setLayoutSkin(s.id); setSkinState(s.id) }} style={{
-                  display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
-                  background: skin === s.id ? `${C.green}12` : C.panel,
-                  border: `2px solid ${skin === s.id ? C.green : C.border}`,
-                  borderRadius: 14, cursor: 'pointer', textAlign: 'left', width: '100%',
-                }}>
-                  <span style={{ fontSize: 28 }}>{s.icon}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{s.label}</div>
-                    {skin === s.id && <div style={{ color: C.green, fontSize: 12, marginTop: 2 }}>✓ Activo</div>}
-                  </div>
-                  {skin === s.id && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
-                </button>
-              ))}
+              {SKINS_CFG.map(s => {
+                const locked = s.id === 'default'
+                const active = skin === s.id
+                return (
+                  <button key={s.id} onClick={() => { if (!locked) { setLayoutSkin(s.id); setSkinState(s.id) } }} style={{
+                    display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
+                    background: active ? `${C.green}12` : locked ? `${C.border}30` : C.panel,
+                    border: `2px solid ${active ? C.green : C.border}`,
+                    borderRadius: 14, cursor: locked ? 'default' : 'pointer', textAlign: 'left', width: '100%',
+                    opacity: locked ? 0.5 : 1,
+                  }}>
+                    <span style={{ fontSize: 28 }}>{s.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: locked ? C.textDim : C.text, fontWeight: 700, fontSize: 14 }}>{s.label}</div>
+                      {active && !locked && <div style={{ color: C.green, fontSize: 12, marginTop: 2 }}>✓ Activo</div>}
+                      {locked && <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>🔒 No disponible</div>}
+                    </div>
+                    {active && !locked && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
+                    {locked && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>
