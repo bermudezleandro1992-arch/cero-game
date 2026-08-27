@@ -37,21 +37,35 @@ export default function CommunidadesPage() {
     if (!profile?.id) return
     setLoading(true)
 
-    supabase
-      .from('conversation_members')
-      .select('conversation_id, role, conversations(id, name, description, avatar_url, group_type, game, tags, created_at, member_count, torneos_enabled, ligas_enabled)')
-      .eq('user_id', profile.id)
-      .then(({ data }) => {
-        const rows = (data || []).map(r => ({ ...r.conversations, myRole: r.role })).filter(Boolean)
-        setCommunities(rows.filter(r => r.group_type === 'community' || r.group_type === 'group'))
-        setParticipating(rows.filter(r => r.group_type === 'tournament' || r.group_type === 'liga'))
-        setLoading(false)
-      })
+    async function load() {
+      const { data: memberships } = await supabase
+        .from('conversation_members')
+        .select('conversation_id, role')
+        .eq('user_id', profile.id)
+
+      if (!memberships?.length) {
+        setCommunities([]); setParticipating([]); setLoading(false); return
+      }
+
+      const convIds = memberships.map(m => m.conversation_id)
+      const roleMap = Object.fromEntries(memberships.map(m => [m.conversation_id, m.role]))
+
+      const { data: convs } = await supabase
+        .from('conversations')
+        .select('id, name, description, avatar_url, group_type, game, tags, created_at, member_count, torneos_enabled, ligas_enabled')
+        .in('id', convIds)
+
+      const rows = (convs || []).map(c => ({ ...c, myRole: roleMap[c.id] }))
+      setCommunities(rows.filter(r => r.group_type === 'community' || r.group_type === 'group'))
+      setParticipating(rows.filter(r => r.group_type === 'tournament' || r.group_type === 'liga'))
+      setLoading(false)
+    }
+    load()
   }, [profile?.id])
 
   function openConv(conv) {
     const isCommunity = conv.group_type === 'community'
-    setActiveConversation({ ...conv, isCommunity, isGroup: !isCommunity })
+    setActiveConversation({ ...conv, isCommunity, isGroup: conv.group_type === 'group' })
   }
 
   const filtered = (tab === 'community' ? communities : participating).filter(r => {

@@ -33,7 +33,7 @@ function formatCount(n) {
 
 export default function DiscoverPage() {
   const { profile } = useAuthStore()
-  const { fetchConversations } = useChatStore()
+  const { fetchConversations, setActiveConversation } = useChatStore()
 
   const [communities, setCommunities] = useState([])
   const [loading, setLoading] = useState(true)
@@ -125,7 +125,11 @@ export default function DiscoverPage() {
   }
 
   if (showCreate) {
-    return <NewGroupPage initialType="community" onBack={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load() }} />
+    return <NewGroupPage initialType="community" onBack={() => setShowCreate(false)} onCreated={(convId, name) => {
+      setShowCreate(false)
+      load()
+      if (convId) setActiveConversation({ id: convId, name, group_type: 'community', isCommunity: true })
+    }} />
   }
 
   return (
