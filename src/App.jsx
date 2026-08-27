@@ -765,7 +765,7 @@ export default function App() {
             : tab === 'anuncios'
             ? <AnnouncementsPage />
             : tab === 'soporte-user'
-            ? <SoporteUserPage onBack={() => setTab('chats')} onTicketCreated={() => {}} />
+            ? <SoporteUserPage onBack={() => setTab('chats')} onTicketCreated={() => {}} onViewTickets={() => { setPerfilInitialTab('ayuda'); setTab('perfil') }} />
             : tab === 'soporte-staff'
             ? <SoporteStaffPage onBack={() => setTab('chats')} />
             : tab === 'admin'
