@@ -518,8 +518,36 @@ export default function App() {
               </button>
             )})()}
 
-            {/* Bottom: Ranking + Perfil */}
+            {/* Bottom: CEO + Organizador + Ranking + Perfil */}
             <div style={{ marginTop: 'auto' }}>
+              {/* Panel Organizador */}
+              {isOrganizador && (() => { const active = !showProfile && tab === 'panel-organizador'; return (
+                <button onClick={() => { setShowProfile(false); setTab('panel-organizador'); setActiveConversation(null) }} style={{
+                  width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  justifyContent: 'center', gap: 4, border: 'none',
+                  background: active ? `${C.green}12` : 'none', cursor: 'pointer', padding: '12px 0',
+                  borderLeft: `3px solid ${active ? C.green : 'transparent'}`, transition: 'background .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>🎯</span>
+                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>Organiz.</span>
+                </button>
+              )})()}
+
+              {/* Panel CEO */}
+              {isCommunityOwner && (() => { const active = !showProfile && tab === 'panel-ceo'; return (
+                <button onClick={() => { setShowProfile(false); setTab('panel-ceo'); setActiveConversation(null) }} style={{
+                  width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  justifyContent: 'center', gap: 4, border: 'none',
+                  background: active ? `${C.green}12` : 'none', cursor: 'pointer', padding: '12px 0',
+                  borderLeft: `3px solid ${active ? C.green : 'transparent'}`, transition: 'background .15s',
+                }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? C.green : C.textDim }}>CEO</span>
+                </button>
+              )})()}
+
               {/* Ranking — como "Contenido multimedia" en WhatsApp */}
               {(() => { const active = !showProfile && tab === 'ranking'; return (
                 <button onClick={() => { setShowProfile(false); setTab('ranking') }} style={{
