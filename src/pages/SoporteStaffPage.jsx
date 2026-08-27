@@ -57,7 +57,7 @@ export default function SoporteStaffPage({ onBack }) {
     setLoading(true)
     let q = supabase
       .from('support_tickets')
-      .select(`*, user:users!support_tickets_user_id_fkey(id,display_name,username,avatar_url,role), agent:users!support_tickets_agent_id_fkey(id,display_name,username)`)
+      .select(`*, user:users!support_tickets_user_id_fkey(id,display_name,username,avatar_url,role), agent:users!support_tickets_assigned_to_fkey(id,display_name,username)`)
       .order('created_at', { ascending: false })
     if (filter !== 'all') q = q.eq('status', filter)
     const { data } = await q
@@ -102,7 +102,7 @@ export default function SoporteStaffPage({ onBack }) {
     if (!selected) return
     const { error } = await supabase.rpc('take_support_ticket', { p_ticket_id: selected.id })
     if (!error) {
-      setSelected(prev => ({ ...prev, status: 'in_progress', agent_id: profile.id, agent: { id: profile.id, display_name: profile.display_name, username: profile.username } }))
+      setSelected(prev => ({ ...prev, status: 'in_progress', assigned_to: profile.id, agent: { id: profile.id, display_name: profile.display_name, username: profile.username } }))
       loadTickets()
     }
   }
@@ -111,7 +111,7 @@ export default function SoporteStaffPage({ onBack }) {
     if (!selected || !closeNote.trim()) return
     const { error } = await supabase.rpc('close_support_ticket', { p_ticket_id: selected.id, p_note: closeNote.trim() })
     if (!error) {
-      setSelected(prev => ({ ...prev, status: 'closed', close_note: closeNote }))
+      setSelected(prev => ({ ...prev, status: 'closed', staff_note: closeNote }))
       setShowClose(false)
       setCloseNote('')
       loadTickets()
@@ -200,7 +200,7 @@ export default function SoporteStaffPage({ onBack }) {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontWeight: 800, color: C.text, fontSize: 13 }}>{t.ticket_number}</span>
+                      <span style={{ fontWeight: 800, color: C.text, fontSize: 13 }}>{t.ticket_no}</span>
                       <span style={{ fontSize: 10, fontWeight: 700, color: s.color, background: s.bg, borderRadius: 6, padding: '2px 7px' }}>{s.label}</span>
                     </div>
                     <span style={{ fontSize: 10, color: C.textDim }}>{timeAgo(t.created_at)}</span>
@@ -210,7 +210,7 @@ export default function SoporteStaffPage({ onBack }) {
                     <span style={{ color: C.text, fontSize: 12, fontWeight: 600 }}>{t.user?.display_name || t.user?.username || 'Usuario'}</span>
                     <span style={{ fontSize: 11, color: C.textDim }}>{c.icon} {c.label}</span>
                   </div>
-                  {t.subject && <div style={{ color: C.textDim, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.subject}</div>}
+                  {t.title && <div style={{ color: C.textDim, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>}
                   {t.agent && <div style={{ fontSize: 11, color: '#3b82f6', marginTop: 4 }}>👤 {t.agent.display_name || t.agent.username}</div>}
                 </div>
               )
@@ -227,7 +227,7 @@ export default function SoporteStaffPage({ onBack }) {
                 <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
                 </button>
-                <span style={{ fontWeight: 800, color: C.text, fontSize: 15 }}>{selected.ticket_number}</span>
+                <span style={{ fontWeight: 800, color: C.text, fontSize: 15 }}>{selected.ticket_no}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: STATUS[selected.status]?.color, background: STATUS[selected.status]?.bg, borderRadius: 6, padding: '2px 8px' }}>{STATUS[selected.status]?.label}</span>
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                   {selected.status === 'open' && (
@@ -291,9 +291,9 @@ export default function SoporteStaffPage({ onBack }) {
                   </div>
                 )
               })}
-              {selected.close_note && (
+              {selected.staff_note && (
                 <div style={{ margin: '8px 0', padding: '10px 14px', background: '#6b728018', border: `1px solid #6b728040`, borderRadius: 10, fontSize: 12, color: C.textDim }}>
-                  <span style={{ fontWeight: 700, color: C.text }}>Ticket cerrado:</span> {selected.close_note}
+                  <span style={{ fontWeight: 700, color: C.text }}>Ticket cerrado:</span> {selected.staff_note}
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -361,7 +361,7 @@ export default function SoporteStaffPage({ onBack }) {
       {showClose && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20 }}>
           <div style={{ background: C.panel, borderRadius: 16, padding: 24, maxWidth: 420, width: '100%', border: `1px solid ${C.border}` }}>
-            <div style={{ fontWeight: 800, fontSize: 17, color: C.text, marginBottom: 4 }}>Cerrar ticket {selected?.ticket_number}</div>
+            <div style={{ fontWeight: 800, fontSize: 17, color: C.text, marginBottom: 4 }}>Cerrar ticket {selected?.ticket_no}</div>
             <div style={{ color: C.textDim, fontSize: 13, marginBottom: 16 }}>Agregá una nota de resolución antes de cerrar.</div>
             <textarea
               value={closeNote}

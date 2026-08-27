@@ -216,7 +216,7 @@ export default function SoporteUserPage({ onBack, onTicketCreated }) {
             <BotMsg text="¡Gracias! Tu consulta fue recibida correctamente." delay={300} />
             <div style={{ margin: '12px 0 4px 42px', background: `${C.green}15`, border: `1.5px solid ${C.green}40`, borderRadius: 14, padding: '16px' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: 1, marginBottom: 4 }}>TICKET CREADO</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: C.text, letterSpacing: -1 }}>{ticket.ticket_number}</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: C.text, letterSpacing: -1 }}>{ticket.ticket_number || ticket.ticket_no}</div>
               <div style={{ fontSize: 12, color: C.textDim, marginTop: 6, lineHeight: 1.5 }}>
                 Un agente de soporte va a revisar tu caso y te va a responder en el chat. Podés ver el estado de tu ticket en <strong>Perfil → Mis tickets</strong>.
               </div>
