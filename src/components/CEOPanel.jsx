@@ -1031,7 +1031,7 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
       setLoading(true)
       const { data } = await supabase
         .from('conversations')
-        .select('name, description, avatar_url, is_public, plan')
+        .select('name, description, avatar_url, is_public, plan, rules')
         .eq('id', communityId)
         .single()
       setCfg(data || {})
@@ -1078,6 +1078,7 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
         name: cfg.name,
         description: cfg.description,
         is_public: cfg.is_public,
+        rules: cfg.rules || null,
       })
       .eq('id', communityId)
     setSaving(false)
@@ -1143,6 +1144,16 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
             </div>
           )
         })()}
+      </CfgField>
+      <CfgField label="Reglas de la comunidad">
+        <textarea
+          value={cfg.rules || ''}
+          onChange={e => setCfg(c => ({ ...c, rules: e.target.value }))}
+          rows={4}
+          placeholder="Ej: 1. Respeto entre miembros&#10;2. No spam ni publicidad&#10;3. Resultados deben enviarse con captura&#10;4. Fair play siempre"
+          style={{ ...cfgInputStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }}
+        />
+        <div style={{ textAlign: 'right', fontSize: 11, color: C.textDim, marginTop: 4 }}>{(cfg.rules || '').length}/1000</div>
       </CfgField>
       <CfgField label="Visibilidad">
         <div style={{ display: 'flex', gap: 8 }}>
