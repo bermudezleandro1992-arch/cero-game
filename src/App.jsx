@@ -564,8 +564,8 @@ export default function App() {
 
             {/* Perfil con avatar */}
             <div style={{}}>
-              {(() => { const active = !showProfile && tab === 'perfil'; return (
-                <button onClick={() => { setShowProfile(false); setTab('perfil'); setActiveConversation(null) }} style={{
+              {(() => { const active = showProfile; return (
+                <button onClick={() => { setShowProfile(true); setActiveConversation(null) }} style={{
                   width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
                   justifyContent: 'center', gap: 4, border: 'none',
                   background: active ? `${C.green}12` : 'none', cursor: 'pointer', padding: '14px 0',
@@ -743,8 +743,8 @@ export default function App() {
             ].map(({ id, icon, label }) => (
               <button key={id} onClick={() => {
                 setShowMoreDrawer(false)
-                setShowProfile(false)
-                setTab(id === '__perfil__' ? 'perfil' : id)
+                if (id === '__perfil__') { setShowProfile(true) }
+                else { setShowProfile(false); setTab(id) }
               }} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 16,
                 padding: '14px 24px', border: 'none', background: 'none',
