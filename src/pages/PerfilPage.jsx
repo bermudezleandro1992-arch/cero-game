@@ -281,7 +281,7 @@ function PreferenciasTab({ profile, onGoVip }) {
       </SettingsBlock>
 
       {/* ── Sonidos ── */}
-      <SectionLabel>Sonidos {savingSound && <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>Guardando…</span>}</SectionLabel>
+      <SectionLabel>Sonidos</SectionLabel>
       <SettingsBlock>
         {Object.entries(SOUND_OPTIONS).map(([key, cfg], i, arr) => (
           <Row key={key} label={cfg.label} noBorder={i === arr.length - 1}
