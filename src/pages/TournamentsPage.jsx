@@ -585,8 +585,7 @@ function ConfirmDialog({ dialog, onClose }) {
 const TYPE_CFG = {
   tournament: { icon: '🏆', label: 'Torneo' },
   liga:       { icon: '📋', label: 'Liga' },
-  clan:       { icon: '⚔️', label: 'Clanes' },
-  bracket:    { icon: '🔱', label: 'Bracket' },
+  guerra:     { icon: '⚔️', label: 'Guerra de Clanes' },
 }
 
 function TournamentsList({ profile }) {
@@ -601,32 +600,62 @@ function TournamentsList({ profile }) {
   const [confirmDialog, setConfirmDialog] = useState(null)
   const [managingTournament, setManagingTournament] = useState(null)
 
+  // My communities (admin/owner only)
+  const [myCommunities, setMyCommunities] = useState([])
+
   // Create form state
-  const [tType,       setTType]       = useState('tournament')
-  const [tGameId,     setTGameId]     = useState('fc26')
-  const [tName,       setTName]       = useState('')
-  const [tMaxPl,      setTMaxPl]      = useState('16')
-  const [tDeadline,   setTDeadline]   = useState('')
-  const [tFormat,     setTFormat]     = useState('1vs1')
-  const [tPlataforma, setTPlataforma] = useState('')
-  const [tModo,       setTModo]       = useState('')
-  const [tTiempo,     setTTiempo]     = useState('')
-  const [tExtras,     setTExtras]     = useState([])
-  const [tMapas,      setTMapas]      = useState([])
-  const [tNivelMax,   setTNivelMax]   = useState('')
-  const [tDivision,   setTDivision]   = useState('')
-  const [tRondas,     setTRondas]     = useState('')
-  const [tPerspectiva,setTPerspectiva]= useState('')
-  const [tReglas,     setTReglas]     = useState('')
+  const [tType,        setTType]        = useState('tournament')
+  const [tGameId,      setTGameId]      = useState('fc26')
+  const [tName,        setTName]        = useState('')
+  const [tMaxPl,       setTMaxPl]       = useState('16')
+  const [tDeadline,    setTDeadline]    = useState('')
+  const [tStartDate,   setTStartDate]   = useState('')
+  const [tFormat,      setTFormat]      = useState('1vs1')
+  const [tPlataforma,  setTPlataforma]  = useState('')
+  const [tModo,        setTModo]        = useState('')
+  const [tTiempo,      setTTiempo]      = useState('')
+  const [tExtras,      setTExtras]      = useState([])
+  const [tMapas,       setTMapas]       = useState([])
+  const [tNivelMax,    setTNivelMax]    = useState('')
+  const [tDivision,    setTDivision]    = useState('')
+  const [tRondas,      setTRondas]      = useState('')
+  const [tPerspectiva, setTPerspectiva] = useState('')
+  const [tReglas,      setTReglas]      = useState('')
+  const [tCommunityId, setTCommunityId] = useState('')
+  const [tEntryFee,    setTEntryFee]    = useState('')
+  const [tIsPublic,    setTIsPublic]    = useState(true)
+  const [tMode,        setTMode]        = useState('1vs1')        // guerra de clanes: 2vs2 / 3vs3
+  // Liga-specific
+  const [tTemporada,   setTTemporada]   = useState('')
+  const [tJornadas,    setTJornadas]    = useState('')
+  const [tDivisionLiga,setTDivisionLiga]= useState('')
 
   const gameCfg = GAME_CONFIG[tGameId] || GAME_CONFIG.otro
   const gameInfo = GAME_CATALOG.find(g => g.id === tGameId) || GAME_CATALOG[GAME_CATALOG.length - 1]
 
   function resetCreate() {
     setTType('tournament'); setTGameId('fc26'); setTName(''); setTMaxPl('16')
-    setTDeadline(''); setTFormat('1vs1'); setTPlataforma(''); setTModo('')
+    setTDeadline(''); setTStartDate(''); setTFormat('1vs1'); setTPlataforma(''); setTModo('')
     setTTiempo(''); setTExtras([]); setTMapas([]); setTNivelMax('')
     setTDivision(''); setTRondas(''); setTPerspectiva(''); setTReglas('')
+    setTCommunityId(''); setTEntryFee(''); setTIsPublic(true); setTMode('1vs1')
+    setTTemporada(''); setTJornadas(''); setTDivisionLiga('')
+  }
+
+  async function loadMyCommunities() {
+    if (!profile?.id) return
+    // Load communities where I am admin, owner or ceo
+    const { data } = await supabase
+      .from('conversation_members')
+      .select('conversation_id, role, conversations(id, name, group_type)')
+      .eq('user_id', profile.id)
+      .in('role', ['owner', 'ceo', 'admin'])
+    const comms = (data || [])
+      .map(r => r.conversations)
+      .filter(c => c && c.group_type === 'community' && c.name)
+    // deduplicate
+    const seen = new Set()
+    setMyCommunities(comms.filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true }))
   }
 
   function toggleExtra(id) {
@@ -637,7 +666,7 @@ function TournamentsList({ profile }) {
     setTMapas(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
   }
 
-  useEffect(() => { loadTournaments() }, [profile?.id])
+  useEffect(() => { loadTournaments(); loadMyCommunities() }, [profile?.id])
 
   async function loadTournaments() {
     setLoading(true)
@@ -691,7 +720,7 @@ function TournamentsList({ profile }) {
       const parts = [
         typeLabel,
         gameInfo.label,
-        tFormat,
+        tType === 'guerra' ? `${tMode}` : tFormat,
         tPlataforma,
         tModo,
         tTiempo,
@@ -701,8 +730,14 @@ function TournamentsList({ profile }) {
         tPerspectiva,
         tMapas.length > 0 ? `Mapas: ${tMapas.join(', ')}` : '',
         tExtras.length > 0 ? tExtras.map(id => gameCfg.extras?.find(e => e.id === id)?.label).filter(Boolean).join(' · ') : '',
-        `Hasta ${tMaxPl} jugadores`,
-        tDeadline ? `Cierre: ${tDeadline}` : '',
+        `Hasta ${tMaxPl} ${tType === 'guerra' ? 'clanes' : 'jugadores'}`,
+        tEntryFee ? `Entrada: ${tEntryFee}` : '',
+        tTemporada ? `Temporada: ${tTemporada}` : '',
+        tJornadas ? `${tJornadas} jornadas` : '',
+        tDivisionLiga ? `Div. ${tDivisionLiga}` : '',
+        tStartDate ? `Inicio: ${tStartDate}` : '',
+        tDeadline ? `Cierre inscripción: ${tDeadline}` : '',
+        !tIsPublic ? 'Privado' : '',
         tReglas ? `Reglamento: ${tReglas}` : '',
       ].filter(Boolean)
       const desc = parts.join(' · ')
@@ -718,12 +753,16 @@ function TournamentsList({ profile }) {
       if (rpcErr) throw rpcErr
 
       // store structured fields in new columns
-      await supabase.from('conversations').update({
+      const updatePayload = {
         game:             tGameId,
-        format:           tFormat,
+        format:           tType === 'guerra' ? `Guerra ${tMode}` : tFormat,
         max_participants: parseInt(tMaxPl) || null,
         registration_deadline: tDeadline ? new Date(tDeadline).toISOString() : null,
-      }).eq('id', convId)
+        is_public:        tIsPublic,
+      }
+      if (tCommunityId) updatePayload.community_id = tCommunityId
+      if (tStartDate)   updatePayload.start_date = new Date(tStartDate).toISOString()
+      await supabase.from('conversations').update(updatePayload).eq('id', convId)
 
       await supabase.from('topics').insert([
         { conversation_id: convId, name: 'Anuncios',   emoji: '📢', topic_type: 'announcements', position: 0 },
@@ -1065,16 +1104,10 @@ function TournamentsList({ profile }) {
             </div>
           )}
 
-          {/* Jugadores + Fecha */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div>
-              <p style={labelSt}>Máx. participantes</p>
-              <input value={tMaxPl} onChange={e => setTMaxPl(e.target.value)} type="number" min="2" max={maxPlayers} style={inp} />
-            </div>
-            <div>
-              <p style={labelSt}>Fecha de cierre</p>
-              <input value={tDeadline} onChange={e => setTDeadline(e.target.value)} type="date" style={inp} />
-            </div>
+          {/* Jugadores */}
+          <div>
+            <p style={labelSt}>Máx. {tType === 'guerra' ? 'clanes' : 'participantes'}</p>
+            <input value={tMaxPl} onChange={e => setTMaxPl(e.target.value)} type="number" min="2" max={maxPlayers} style={inp} />
           </div>
 
           {/* Reglamento */}
@@ -1084,6 +1117,94 @@ function TournamentsList({ profile }) {
               placeholder="Ej: Prohibido el uso de glitches. Los resultados deben enviarse con captura de pantalla dentro de las 24hs. En caso de desconexión se repite el partido. Faltas: 1er aviso → advertencia, 2da → descalificación..."
               rows={4}
               style={{ ...inp, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }} />
+          </div>
+
+          {/* Guerra de Clanes: modo equipo */}
+          {tType === 'guerra' && (
+            <div>
+              <p style={labelSt}>⚔️ Modo de Guerra</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {['2vs2', '3vs3', '4vs4', '5vs5'].map(m => (
+                  <button key={m} onClick={() => setTMode(m)} style={{
+                    flex: 1, padding: '9px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 13,
+                    background: tMode === m ? `${C.green}20` : C.panel,
+                    border: `1.5px solid ${tMode === m ? C.green : C.border}`,
+                    color: tMode === m ? C.green : C.textDim,
+                  }}>{m}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Liga: campos específicos */}
+          {tType === 'liga' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <p style={labelSt}>Temporada</p>
+                  <input value={tTemporada} onChange={e => setTTemporada(e.target.value)} placeholder="Ej: 2025 · S1" style={inp} />
+                </div>
+                <div>
+                  <p style={labelSt}>Nº de Jornadas</p>
+                  <input value={tJornadas} onChange={e => setTJornadas(e.target.value)} type="number" min="1" placeholder="Ej: 10" style={inp} />
+                </div>
+              </div>
+              <div>
+                <p style={labelSt}>División</p>
+                <input value={tDivisionLiga} onChange={e => setTDivisionLiga(e.target.value)} placeholder="Ej: Primera División, Serie A..." style={inp} />
+              </div>
+            </div>
+          )}
+
+          {/* Comunidad */}
+          <div>
+            <p style={labelSt}>Comunidad</p>
+            <select value={tCommunityId} onChange={e => setTCommunityId(e.target.value)} style={inp}>
+              <option value="">Sin comunidad (libre)</option>
+              {myCommunities.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {myCommunities.length === 0 && (
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: C.textDim }}>No sos admin de ninguna comunidad aún.</p>
+            )}
+          </div>
+
+          {/* Fecha inicio + Cierre inscripciones */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div>
+              <p style={labelSt}>Fecha de inicio</p>
+              <input value={tStartDate} onChange={e => setTStartDate(e.target.value)} type="date" style={inp} />
+            </div>
+            <div>
+              <p style={labelSt}>Cierre de inscripción</p>
+              <input value={tDeadline} onChange={e => setTDeadline(e.target.value)} type="date" style={inp} />
+            </div>
+          </div>
+
+          {/* Entrada + Público/Privado */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div>
+              <p style={labelSt}>Entrada / Costo</p>
+              <input value={tEntryFee} onChange={e => setTEntryFee(e.target.value)} placeholder="Ej: Gratis, $500, 10 monedas" style={inp} />
+            </div>
+            <div>
+              <p style={labelSt}>Visibilidad</p>
+              <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                <button onClick={() => setTIsPublic(true)} style={{
+                  flex: 1, padding: '10px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 12,
+                  background: tIsPublic ? `${C.green}20` : C.panel,
+                  border: `1.5px solid ${tIsPublic ? C.green : C.border}`,
+                  color: tIsPublic ? C.green : C.textDim,
+                }}>🌐 Público</button>
+                <button onClick={() => setTIsPublic(false)} style={{
+                  flex: 1, padding: '10px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 12,
+                  background: !tIsPublic ? `#8b5cf620` : C.panel,
+                  border: `1.5px solid ${!tIsPublic ? '#8b5cf6' : C.border}`,
+                  color: !tIsPublic ? '#8b5cf6' : C.textDim,
+                }}>🔒 Privado</button>
+              </div>
+            </div>
           </div>
 
           {/* Submit */}
