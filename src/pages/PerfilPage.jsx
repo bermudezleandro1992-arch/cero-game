@@ -172,7 +172,6 @@ function PreferenciasTab({ profile, onGoVip }) {
             {[
               { id: 'system', label: 'Sistema', icon: '🖥' },
               { id: 'dark',   label: 'Oscuro',  icon: '🌙' },
-              { id: 'light',  label: 'Claro',   icon: '☀️' },
             ].map(opt => {
               // map to actual theme ids
               const themeMap = { system: 'system', dark: 'dark', light: 'light' }
