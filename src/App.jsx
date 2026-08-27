@@ -564,8 +564,8 @@ export default function App() {
 
             {/* Perfil con avatar */}
             <div style={{}}>
-              {(() => { const active = showProfile; return (
-                <button onClick={() => { setShowProfile(true); setActiveConversation(null) }} style={{
+              {(() => { const active = !showProfile && tab === 'perfil'; return (
+                <button onClick={() => { setShowProfile(false); setTab('perfil'); setActiveConversation(null) }} style={{
                   width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
                   justifyContent: 'center', gap: 4, border: 'none',
                   background: active ? `${C.green}12` : 'none', cursor: 'pointer', padding: '14px 0',
@@ -583,9 +583,9 @@ export default function App() {
         ) : (
         <nav className="slfa-side-nav">
           {NAV.map(({ id, label, icon }) => {
-            const active = (id === 'ajustes' ? showProfile : !showProfile && tab === id)
+            const active = (id === 'ajustes' ? (!showProfile && tab === 'perfil') : !showProfile && tab === id)
             return (
-              <button key={id} onClick={() => id === 'ajustes' ? setShowProfile(true) : (setShowProfile(false), setTab(id), id !== 'chats' && setActiveConversation(null))} style={{
+              <button key={id} onClick={() => id === 'ajustes' ? (setShowProfile(false), setTab('perfil'), setActiveConversation(null)) : (setShowProfile(false), setTab(id), id !== 'chats' && setActiveConversation(null))} style={{
                 width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
                 justifyContent: 'center', gap: 4, border: 'none',
                 background: active ? `${C.green}12` : 'none',
