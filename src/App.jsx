@@ -730,6 +730,8 @@ export default function App() {
               ...(layoutSkin === 'whatsapp' ? [
                 { id: 'comunidades',       icon: '🌐', label: 'Comunidades' },
                 { id: 'anuncios',          icon: '📢', label: 'Anuncios' },
+                ...(isCommunityOwner ? [{ id: 'panel-ceo', icon: '⭐', label: 'Panel CEO' }] : []),
+                ...(isOrganizador ? [{ id: 'panel-organizador', icon: '🎯', label: 'Panel Organizador' }] : []),
                 { id: '__perfil__',        icon: '👤', label: 'Perfil' },
               ] : [
                 { id: 'contactos',         icon: '👥', label: 'Contactos' },
@@ -741,8 +743,8 @@ export default function App() {
             ].map(({ id, icon, label }) => (
               <button key={id} onClick={() => {
                 setShowMoreDrawer(false)
-                setShowProfile(false)
-                setTab(id === '__perfil__' ? 'perfil' : id)
+                if (id === '__perfil__') { setShowProfile(true) }
+                else { setShowProfile(false); setTab(id) }
               }} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 16,
                 padding: '14px 24px', border: 'none', background: 'none',
