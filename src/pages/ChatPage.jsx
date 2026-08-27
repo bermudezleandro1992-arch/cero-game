@@ -1714,15 +1714,29 @@ export default function ChatPage({ onBack }) {
                 const senderRole = senderInfo?.role
                 const isReply = msg.content?.startsWith('[↩ ')
 
-                if (msg.is_deleted) return (
-                  <div key={msg.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: 4 }}>
-                    <span style={{
-                      fontSize: 12, fontStyle: 'italic', color: C.textDim,
-                      padding: '5px 12px', background: C.panel, borderRadius: 10,
-                      border: `1px solid ${C.border}`,
-                    }}>🚫 Mensaje eliminado</span>
-                  </div>
-                )
+                if (msg.is_deleted) {
+                  const _priv = (() => { try { return JSON.parse(localStorage.getItem('privacySettings') || '{}') } catch { return {} } })()
+                  const _vipRoles = new Set(['vip','ceo','com_starter','com_elite','superadmin','admin','organizador'])
+                  const _vipPlans = new Set(['vip', 'pro', 'superadmin', 'admin', 'ceo'])
+                  const isVip = _vipRoles.has(profile?.role) || _vipPlans.has(profile?.plan)
+                  const canSeeDeleted = isVip && _priv.seeDeleted !== false && msg.deleted_content
+                  return (
+                    <div key={msg.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: 4 }}>
+                      {canSeeDeleted
+                        ? <span style={{
+                            fontSize: 12, fontStyle: 'italic', color: '#d97706',
+                            padding: '5px 12px', background: '#f59e0b10', borderRadius: 10,
+                            border: '1px solid #f59e0b40',
+                          }}>🔓 {msg.deleted_content} <span style={{ fontSize: 10, opacity: 0.6 }}>(eliminado)</span></span>
+                        : <span style={{
+                            fontSize: 12, fontStyle: 'italic', color: C.textDim,
+                            padding: '5px 12px', background: C.panel, borderRadius: 10,
+                            border: `1px solid ${C.border}`,
+                          }}>🚫 Mensaje eliminado</span>
+                      }
+                    </div>
+                  )
+                }
 
                 if (isSystem) return (
                   <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', margin: '6px 0' }}>
@@ -2817,6 +2831,8 @@ function MsgBody({ msg, isMine, otherLastRead }) {
   // Highlight @mentions + link preview
   const content = msg.content || ''
   const hasUrl = URL_REGEX.test(content); URL_REGEX.lastIndex = 0
+  const _privLp = (() => { try { return JSON.parse(localStorage.getItem('privacySettings') || '{}') } catch { return {} } })()
+  const showLinkPreview = hasUrl && !_privLp.noLinkPreview
   if (content.includes('@')) {
     const parts = content.split(/(@\w[\w ]*)/g)
     return (
@@ -2828,14 +2844,14 @@ function MsgBody({ msg, isMine, otherLastRead }) {
           )}
           {time}
         </span>
-        {hasUrl && <LinkPreview text={content} />}
+        {showLinkPreview && <LinkPreview text={content} />}
       </div>
     )
   }
   return (
     <div>
       <span style={{ whiteSpace: 'pre-wrap' }}>{content}{time}</span>
-      {hasUrl && <LinkPreview text={content} />}
+      {showLinkPreview && <LinkPreview text={content} />}
     </div>
   )
 }
