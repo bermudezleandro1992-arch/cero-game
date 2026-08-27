@@ -172,6 +172,7 @@ export const useChatStore = create((set, get) => ({
         // Torneos y ligas no van en el chat list — se acceden desde la sección Torneos
         const meta = convMeta[c.id]
         if (meta?.group_type === 'tournament' || meta?.group_type === 'liga') return false
+        if (meta?.group_type === 'deleted') return false
         return true
       })
 
@@ -470,16 +471,23 @@ export const useChatStore = create((set, get) => ({
     return conv.id
   },
 
-  deleteMessage: async (messageId, conversationId) => {
-    await supabase.from('messages').update({ is_deleted: true, content: '' }).eq('id', messageId)
-    // Broadcast deletion so all participants update instantly
+  deleteMessage: async (messageId, conversationId, senderRole) => {
+    // Preserve original content for VIP visibility; wipe display content
+    const msg = get().messages.find(m => m.id === messageId)
+    const originalContent = msg?.content || ''
+    await supabase.from('messages').update({
+      is_deleted: true,
+      content: '',
+      deleted_content: senderRole === 'superadmin' ? null : originalContent,
+      deleted_by_role: senderRole || 'member',
+    }).eq('id', messageId)
     if (conversationId) {
       supabase.channel(`conv-events:${conversationId}`)
         .send({ type: 'broadcast', event: 'msg-deleted', payload: { messageId } })
     }
     set(state => ({
       messages: state.messages.map(m =>
-        m.id === messageId ? { ...m, is_deleted: true, content: '' } : m
+        m.id === messageId ? { ...m, is_deleted: true, content: '', deleted_content: senderRole === 'superadmin' ? null : originalContent, deleted_by_role: senderRole || 'member' } : m
       )
     }))
   },

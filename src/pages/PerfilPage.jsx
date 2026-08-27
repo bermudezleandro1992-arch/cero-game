@@ -1047,6 +1047,319 @@ function SettingsRow({ icon, label, desc, onClick, danger, value, noArrow }) {
   )
 }
 
+// ── Privacidad Tab ────────────────────────────────────────────────────────────
+const VIP_ROLES = new Set(['vip','ceo','com_starter','com_elite','superadmin','admin','organizador'])
+
+function PrivacidadTab({ profile }) {
+  const [priv, setPriv] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('privacySettings') || '{}') } catch { return {} }
+  })
+
+  async function save(key, val) {
+    const updated = { ...priv, [key]: val }
+    setPriv(updated)
+    localStorage.setItem('privacySettings', JSON.stringify(updated))
+    // Persist to DB for settings that have a column
+    if (key === 'showLastSeen') {
+      await supabase.from('users').update({ show_last_seen: val }).eq('id', profile.id)
+    }
+    if (key === 'estadoPrivacy') {
+      try { localStorage.setItem('estado_privacy', val) } catch {}
+    }
+  }
+
+  const isVip = VIP_ROLES.has(profile?.role) || VIP_PLANS.has(profile?.plan)
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 32 }}>
+
+      <SectionLabel>Mensajes</SectionLabel>
+      <SettingsBlock>
+        <Row label="Confirmaciones de lectura" desc="Mostrar doble tilde azul al leer" right={<Toggle on={priv.readReceipts !== false} onChange={v => save('readReceipts', v)} />} />
+        <Row label="Mensajes temporales" desc="Los mensajes se borran automáticamente" noBorder
+          right={
+            <select value={priv.tempMessages || 'off'} onChange={e => save('tempMessages', e.target.value)}
+              style={{ padding: '4px 8px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 12, cursor: 'pointer' }}>
+              <option value="off">Desactivado</option>
+              <option value="24h">24 horas</option>
+              <option value="7d">7 días</option>
+              <option value="30d">30 días</option>
+              <option value="90d">90 días</option>
+            </select>
+          }
+        />
+      </SettingsBlock>
+
+      <SectionLabel>Perfil</SectionLabel>
+      <SettingsBlock>
+        <Row label="Hora de última vez" desc="Mostrar cuándo fue tu última conexión" right={<Toggle on={priv.showLastSeen !== false} onChange={v => save('showLastSeen', v)} />} />
+        <Row label="En línea" desc="Mostrar cuando estás conectado" noBorder right={<Toggle on={priv.showOnline !== false} onChange={v => save('showOnline', v)} />} />
+      </SettingsBlock>
+
+      <SectionLabel>Estados</SectionLabel>
+      <SettingsBlock>
+        {[
+          { id: 'contacts', label: 'Mis contactos', desc: 'Se comparte con todos tus contactos' },
+          { id: 'except',   label: 'Mis contactos, excepto…', desc: 'Comparte con tus contactos, excepto los seleccionados' },
+          { id: 'only',     label: 'Solo compartir con…', desc: 'Solo comparte con los contactos seleccionados' },
+        ].map((opt, i, arr) => (
+          <button key={opt.id} onClick={() => save('estadoPrivacy', opt.id)} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 16,
+            padding: '13px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left',
+            borderBottom: i < arr.length - 1 ? `1px solid ${C.border}22` : 'none',
+          }}>
+            <div style={{
+              width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+              border: `2px solid ${(priv.estadoPrivacy || 'contacts') === opt.id ? C.green : C.textDim}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {(priv.estadoPrivacy || 'contacts') === opt.id && <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.green }} />}
+            </div>
+            <div>
+              <div style={{ color: C.text, fontSize: 14 }}>{opt.label}</div>
+              <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>{opt.desc}</div>
+            </div>
+          </button>
+        ))}
+      </SettingsBlock>
+
+      {isVip && (
+        <>
+          <SectionLabel>VIP — Mensajes borrados</SectionLabel>
+          <SettingsBlock>
+            <Row label="Ver mensajes eliminados" desc="Podés ver el contenido de mensajes borrados por otros (no de SuperAdmin)" noBorder right={<Toggle on={priv.seeDeleted !== false} onChange={v => save('seeDeleted', v)} />} />
+          </SettingsBlock>
+        </>
+      )}
+
+      <SectionLabel>Opciones avanzadas</SectionLabel>
+      <SettingsBlock>
+        <Row label="Bloquear mensajes desconocidos" desc="Filtra mensajes de cuentas que no son contactos" right={<Toggle on={!!priv.blockUnknown} onChange={v => save('blockUnknown', v)} />} />
+        <Row label="Proteger IP en llamadas" desc="Las llamadas se enrutan vía servidores NexoTribu para ocultar tu IP" right={<Toggle on={!!priv.protectIp} onChange={v => save('protectIp', v)} />} />
+        <Row label="Desactivar vista previa de links" desc="No se generarán vistas previas de URLs en tus chats" noBorder right={<Toggle on={!!priv.noLinkPreview} onChange={v => save('noLinkPreview', v)} />} />
+      </SettingsBlock>
+
+    </div>
+  )
+}
+
+// ── Notificaciones Tab ────────────────────────────────────────────────────────
+function NotificacionesTab({ profile }) {
+  const [notif, setNotif] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('notifSettings') || '{}') } catch { return {} }
+  })
+
+  function save(key, val) {
+    const updated = { ...notif, [key]: val }
+    setNotif(updated)
+    localStorage.setItem('notifSettings', JSON.stringify(updated))
+  }
+
+  const granted = typeof Notification !== 'undefined' && Notification.permission === 'granted'
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 32 }}>
+
+      {!granted && (
+        <div style={{ margin: 16, background: '#f59e0b14', border: `1px solid #f59e0b40`, borderRadius: 12, padding: '12px 16px' }}>
+          <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: 13, marginBottom: 4 }}>⚠️ Notificaciones del sistema</div>
+          <div style={{ color: C.textDim, fontSize: 12, marginBottom: 10, lineHeight: 1.5 }}>Las notificaciones están desactivadas en tu navegador. Activálas para recibir alertas.</div>
+          <button onClick={() => Notification.requestPermission()} style={{ padding: '7px 14px', background: '#f59e0b', color: '#000', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+            Activar notificaciones
+          </button>
+        </div>
+      )}
+
+      <SectionLabel>General</SectionLabel>
+      <SettingsBlock>
+        <Row label="No molestar" desc="Las notificaciones van directo al centro de notificaciones" right={<Toggle on={!!notif.doNotDisturb} onChange={v => save('doNotDisturb', v)} />} />
+        <Row label="Mostrar vista previa" desc="Muestra el texto del mensaje en la notificación" noBorder right={<Toggle on={notif.showPreview !== false} onChange={v => save('showPreview', v)} />} />
+      </SettingsBlock>
+
+      <SectionLabel>Por tipo</SectionLabel>
+      <SettingsBlock>
+        {[
+          ['notif_messages', 'Mensajes', 'Chats directos y grupos'],
+          ['notif_groups',   'Grupos',   'Actividad en grupos y comunidades'],
+          ['notif_estados',  'Estados',  'Cuando alguien publica un estado'],
+          ['notif_calls',    'Llamadas', 'Llamadas entrantes de audio y video'],
+        ].map(([key, label, desc], i, arr) => (
+          <Row key={key} label={label} desc={desc} noBorder={i === arr.length - 1}
+            right={<Toggle on={notif[key] !== false} onChange={v => save(key, v)} />}
+          />
+        ))}
+      </SettingsBlock>
+
+      <SectionLabel>Comunidades y torneos</SectionLabel>
+      <SettingsBlock>
+        {[
+          ['notif_torneos',     'Torneos en mis comunidades', null],
+          ['notif_resultados',  'Resultados de partidos', null],
+          ['notif_anuncios',    'Anuncios de CEO/Organizador', null],
+          ['notif_solicitudes', 'Solicitudes de unión', 'Solo para admins'],
+          ['notif_partidos',    'Recordatorio de partido', 'Aviso antes de tu próximo partido'],
+        ].map(([key, label, desc], i, arr) => (
+          <Row key={key} label={label} desc={desc} noBorder={i === arr.length - 1}
+            right={<Toggle on={notif[key] !== false} onChange={v => save(key, v)} />}
+          />
+        ))}
+      </SettingsBlock>
+
+    </div>
+  )
+}
+
+// ── Video y Voz Tab ───────────────────────────────────────────────────────────
+function VideoVozTab() {
+  const [devices, setDevices] = useState({ cameras: [], mics: [], speakers: [] })
+  const [sel, setSel] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('avDevices') || '{}') } catch { return {} }
+  })
+
+  useEffect(() => {
+    navigator.mediaDevices?.enumerateDevices?.().then(list => {
+      setDevices({
+        cameras:  list.filter(d => d.kind === 'videoinput'),
+        mics:     list.filter(d => d.kind === 'audioinput'),
+        speakers: list.filter(d => d.kind === 'audiooutput'),
+      })
+    }).catch(() => {})
+  }, [])
+
+  function pick(key, val) {
+    const updated = { ...sel, [key]: val }
+    setSel(updated)
+    localStorage.setItem('avDevices', JSON.stringify(updated))
+  }
+
+  function DeviceSelect({ label, list, stateKey }) {
+    return (
+      <div style={{ padding: '13px 16px', borderBottom: `1px solid ${C.border}22` }}>
+        <div style={{ color: C.textDim, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>{label}</div>
+        <select value={sel[stateKey] || 'default'} onChange={e => pick(stateKey, e.target.value)}
+          style={{ width: '100%', padding: '10px 12px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, cursor: 'pointer' }}>
+          <option value="default">Dispositivo predeterminado</option>
+          {list.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || `Dispositivo ${d.deviceId.slice(0,8)}`}</option>)}
+        </select>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 32 }}>
+      <SectionLabel>Cámara</SectionLabel>
+      <SettingsBlock>
+        <DeviceSelect label="Cámara" list={devices.cameras} stateKey="camera" />
+      </SettingsBlock>
+      <SectionLabel>Audio</SectionLabel>
+      <SettingsBlock>
+        <DeviceSelect label="Micrófono" list={devices.mics} stateKey="mic" />
+        <DeviceSelect label="Altavoces / Auriculares" list={devices.speakers} stateKey="speaker" />
+      </SettingsBlock>
+      <div style={{ padding: '12px 16px' }}>
+        <div style={{ color: C.textDim, fontSize: 12, lineHeight: 1.6 }}>
+          Para acceder a tus dispositivos, el navegador puede pedir permiso de cámara y micrófono la primera vez que hagas una llamada.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Ayuda Tab ─────────────────────────────────────────────────────────────────
+const FAQ = [
+  { q: '¿Cómo creo una comunidad?', a: 'Andá a la pestaña Explorar y tocá el botón "+" o "Crear comunidad". Elegí nombre, imagen y configurá si es pública o privada.' },
+  { q: '¿Cómo invito a alguien a mi comunidad?', a: 'Dentro de la comunidad, tocá "Miembros" y luego el botón de invitar. Podés compartir el link o buscar por usuario.' },
+  { q: '¿Qué es el Panel CEO?', a: 'Es el panel de administración de tu comunidad. Desde ahí configurás torneos, ligas, anuncios y los roles de los miembros.' },
+  { q: '¿Cómo creo un torneo?', a: 'Entrá al Panel CEO de tu comunidad, tocá "Torneos" y luego "Nuevo torneo". Configurá formato, fechas y participantes.' },
+  { q: '¿Cómo cambio mi nombre o foto de perfil?', a: 'Andá a Ajustes → Perfil. Tocá tu foto para cambiarla o editá el nombre y bio desde ahí.' },
+  { q: '¿Qué planes VIP hay?', a: 'Hay planes VIP, CEO y Organizador. Cada uno desbloquea funciones premium. Los podés ver en Ajustes → Cuenta.' },
+  { q: '¿Cómo funciona el ranking ELO?', a: 'El ranking se actualiza automáticamente según tus resultados en torneos y ligas. Más victorias = más ELO.' },
+  { q: '¿Puedo recuperar mensajes borrados?', a: 'Los usuarios VIP pueden ver el contenido de mensajes eliminados (excepto los borrados por SuperAdmin).' },
+]
+
+function AyudaTab({ profile, onToast }) {
+  const [openFaq, setOpenFaq] = useState(null)
+  const [feedback, setFeedback] = useState('')
+  const [sent, setSent] = useState(false)
+
+  async function sendFeedback() {
+    if (!feedback.trim()) return
+    await supabase.from('messages').insert({
+      conversation_id: null,
+      sender_id: profile?.id,
+      content: `[FEEDBACK] ${feedback}`,
+      type: 'system',
+    }).catch(() => {})
+    setSent(true)
+    setFeedback('')
+    onToast('¡Gracias! Tu comentario fue enviado.')
+  }
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 40 }}>
+
+      {/* Acciones rápidas */}
+      <SectionLabel>Soporte</SectionLabel>
+      <SettingsBlock>
+        <Row label="Contáctanos" desc="Chateá con el equipo de soporte" onClick={() => onToast('Próximamente — soporte en vivo')}
+          right={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>} />
+        <Row label="Calificar la aplicación" desc="¿Te gusta NexoTribu? ¡Dejanos tu opinión!" noBorder onClick={() => onToast('¡Gracias por tu apoyo! Próximamente en las tiendas de apps.')}
+          right={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>} />
+      </SettingsBlock>
+
+      {/* Enviar comentarios */}
+      <SectionLabel>Enviar comentarios</SectionLabel>
+      <div style={{ background: C.panel, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ padding: 16 }}>
+          <textarea
+            value={feedback}
+            onChange={e => setFeedback(e.target.value)}
+            placeholder="Describí el problema, sugerencia o error que encontraste…"
+            rows={4}
+            style={{ width: '100%', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, padding: '10px 12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+          />
+          <button onClick={sendFeedback} disabled={!feedback.trim() || sent} style={{
+            marginTop: 10, width: '100%', padding: '11px', background: feedback.trim() ? C.green : C.border,
+            color: '#000', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14,
+            cursor: feedback.trim() ? 'pointer' : 'not-allowed',
+          }}>
+            {sent ? '✓ Enviado' : 'Enviar'}
+          </button>
+        </div>
+      </div>
+
+      {/* FAQ */}
+      <SectionLabel>Preguntas frecuentes</SectionLabel>
+      <div style={{ background: C.panel, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
+        {FAQ.map((item, i) => (
+          <div key={i} style={{ borderBottom: i < FAQ.length - 1 ? `1px solid ${C.border}22` : 'none' }}>
+            <button onClick={() => setOpenFaq(openFaq === i ? null : i)} style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '13px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', gap: 12,
+            }}>
+              <span style={{ color: C.text, fontSize: 14 }}>{item.q}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: openFaq === i ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}>
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </button>
+            {openFaq === i && (
+              <div style={{ padding: '0 16px 14px', color: C.textDim, fontSize: 13, lineHeight: 1.6 }}>
+                {item.a}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Version */}
+      <div style={{ padding: '24px 16px 0', textAlign: 'center', color: C.textDim, fontSize: 12 }}>
+        NexoTribu · Versión 1.0.0
+      </div>
+
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function PerfilPage({ onClose, onGoVip, initialTab }) {
   const { profile, fetchProfile } = useAuthStore()
@@ -1340,6 +1653,38 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
         </div>
       )}
 
+      {/* Sub-page: Privacidad */}
+      {tab === 'privacidad' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Privacidad')}
+          <PrivacidadTab profile={profile} />
+        </div>
+      )}
+
+      {/* Sub-page: Notificaciones */}
+      {tab === 'notificaciones' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Notificaciones')}
+          <NotificacionesTab profile={profile} />
+        </div>
+      )}
+
+      {/* Sub-page: Video y Voz */}
+      {tab === 'videovoz' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Video y voz')}
+          <VideoVozTab />
+        </div>
+      )}
+
+      {/* Sub-page: Ayuda */}
+      {tab === 'ayuda' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Ayuda y comentarios')}
+          <AyudaTab profile={profile} onToast={setToast} />
+        </div>
+      )}
+
       {/* Main menu — WhatsApp settings style */}
       {tab === 'menu' && (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -1380,11 +1725,16 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
                 <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
                 <SettingsRow icon="💳" label="Cuenta" desc="Suscripción, seguridad, información" onClick={() => setTab('cuenta')} />
                 <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
+                <SettingsRow icon="🔒" label="Privacidad" desc="Confirmaciones, última vez, mensajes" onClick={() => setTab('privacidad')} />
               </div>
 
               {/* Sección personalización */}
               <div style={{ background: C.panel, borderRadius: 0, marginBottom: 8 }}>
-                <SettingsRow icon="💬" label="Chats" desc="Temas, fondo, sonidos, notificaciones" onClick={() => setTab('preferencias')} />
+                <SettingsRow icon="💬" label="Chats" desc="Temas, fondo, sonidos, calidad" onClick={() => setTab('preferencias')} />
+                <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
+                <SettingsRow icon="🔔" label="Notificaciones" desc="Mensajes, grupos, estados, llamadas" onClick={() => setTab('notificaciones')} />
+                <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
+                <SettingsRow icon="📷" label="Video y voz" desc="Cámara, micrófono, altavoces" onClick={() => setTab('videovoz')} />
                 <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
                 <SettingsRow icon="🎨" label="Apariencia" desc="Elige el estilo visual de la app" onClick={() => setTab('apariencia')} value={SKINS_CFG.find(s => s.id === skin)?.label} />
               </div>
@@ -1398,7 +1748,7 @@ export default function PerfilPage({ onClose, onGoVip, initialTab }) {
 
               {/* Sección soporte */}
               <div style={{ background: C.panel, borderRadius: 0, marginBottom: 8 }}>
-                <SettingsRow icon="❓" label="Ayuda y comentarios" desc="Centro de ayuda, contáctanos" onClick={() => setToast('Próximamente — estamos trabajando en el centro de ayuda')} />
+                <SettingsRow icon="❓" label="Ayuda y comentarios" desc="Centro de ayuda, FAQ, contacto" onClick={() => setTab('ayuda')} />
                 <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
                 <SettingsRow icon="📋" label="Legal" desc="Política de privacidad, términos" onClick={() => setTab('legal')} />
               </div>

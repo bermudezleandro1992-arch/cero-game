@@ -164,10 +164,10 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
       const ext = avatarFile.name.split('.').pop()
       const path = `community-avatars/${convId}.${ext}`
       const { data: uploadData } = await supabase.storage
-        .from('avatars')
+        .from('attachments')
         .upload(path, avatarFile, { upsert: true, contentType: avatarFile.type })
       if (uploadData) {
-        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+        const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(path)
         if (urlData?.publicUrl) {
           await supabase.from('conversations').update({ avatar_url: urlData.publicUrl }).eq('id', convId)
         }
