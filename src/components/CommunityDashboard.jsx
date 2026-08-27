@@ -915,7 +915,21 @@ function CeoPanel({ community, profile }) {
 // ── Main CommunityDashboard ───────────────────────────────────────────────────
 export default function CommunityDashboard({ community, onBack }) {
   const { profile } = useAuthStore()
-  const isAdmin = community.created_by === profile?.id
+  const [myRole, setMyRole] = useState(community.myRole || null)
+
+  useEffect(() => {
+    if (!profile?.id || !community?.id) return
+    if (myRole) return
+    supabase
+      .from('conversation_members')
+      .select('role')
+      .eq('conversation_id', community.id)
+      .eq('user_id', profile.id)
+      .single()
+      .then(({ data }) => { if (data?.role) setMyRole(data.role) })
+  }, [profile?.id, community?.id])
+
+  const isAdmin = community.created_by === profile?.id || myRole === 'owner' || myRole === 'admin'
   const TABS = isAdmin
     ? [...BASE_TABS, { id: 'ceo', label: 'CEO', emoji: '⚙️' }]
     : BASE_TABS
