@@ -52,7 +52,7 @@ export default function CommunidadesPage() {
 
       const { data: convs } = await supabase
         .from('conversations')
-        .select('id, name, description, avatar_url, group_type, game, tags, created_at, member_count, torneos_enabled, ligas_enabled')
+        .select('id, name, description, avatar_url, group_type, game, tags, created_at, member_count, torneos_enabled, ligas_enabled, created_by')
         .in('id', convIds)
 
       const rows = (convs || []).map(c => ({ ...c, myRole: roleMap[c.id] }))

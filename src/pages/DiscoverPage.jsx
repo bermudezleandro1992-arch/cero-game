@@ -128,7 +128,7 @@ export default function DiscoverPage() {
     return <NewGroupPage initialType="community" onBack={() => setShowCreate(false)} onCreated={(convId, name) => {
       setShowCreate(false)
       load()
-      if (convId) setActiveConversation({ id: convId, name, group_type: 'community', isCommunity: true })
+      if (convId) setActiveConversation({ id: convId, name, group_type: 'community', isCommunity: true, created_by: profile?.id })
     }} />
   }
 
