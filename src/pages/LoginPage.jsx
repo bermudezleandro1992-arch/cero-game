@@ -197,7 +197,11 @@ export default function LoginPage() {
           </div>
 
           <p style={{ color:'rgba(255,255,255,.2)', fontSize:10, marginTop:32, lineHeight:1.6, textAlign:'center' }}>
-            Al continuar aceptás los Términos de Uso y la Política de Privacidad de NexoTribu.
+            Al continuar aceptás los{' '}
+          <a href="/terminos.html" target="_blank" rel="noopener" style={{ color:'rgba(255,255,255,.4)' }}>Términos de Uso</a>
+          {' '}y la{' '}
+          <a href="/privacidad.html" target="_blank" rel="noopener" style={{ color:'rgba(255,255,255,.4)' }}>Política de Privacidad</a>
+          {' '}de NexoTribu.
           </p>
         </div>
       </div>

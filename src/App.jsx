@@ -132,7 +132,7 @@ function BirthdateGate({ onDone, userId }) {
           </div>
           <span style={{ color:'rgba(255,255,255,.7)', fontSize:13, lineHeight:1.5 }}>
             Confirmo que tengo 18 años o más y acepto el reglamento y los{' '}
-            <span style={{ color:'#00d278', fontWeight:600 }}>Términos de Uso</span>
+            <a href="/terminos.html" target="_blank" rel="noopener" style={{ color:'#00d278', fontWeight:600, textDecoration:'none' }}>Términos de Uso</a>
             {' '}de NexoTribu.
           </span>
         </label>
