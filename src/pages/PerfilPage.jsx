@@ -1143,7 +1143,7 @@ function PrivacidadTab({ profile }) {
 
       <SectionLabel>Opciones avanzadas</SectionLabel>
       <SettingsBlock>
-        <Row label="Bloquear mensajes desconocidos" desc="Filtra mensajes de cuentas que no son tus contactos · Requiere lista de contactos"
+        <Row label="Bloquear mensajes desconocidos" desc="Oculta mensajes en grupos de usuarios con quienes no tenés un chat directo"
           right={<Toggle on={!!priv.blockUnknown} onChange={v => save('blockUnknown', v)} />} />
         <Row label="Proteger IP en llamadas" desc="Las llamadas se enrutan vía servidores NexoTribu · Próximamente"
           right={<Toggle on={!!priv.protectIp} onChange={v => save('protectIp', v)} />} />
