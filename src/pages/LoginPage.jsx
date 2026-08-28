@@ -241,7 +241,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <a className="apk-btn" href="/NexoTribu.apk" download="NexoTribu.apk">
+          <a className="apk-btn" href="https://drive.google.com/file/d/1WvjWDxj3Dl-bkr7_YkQeJhRCEe5o2xN7/view" target="_blank" rel="noreferrer">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 17V3M7 12l5 5 5-5"/><rect x="3" y="17" width="18" height="4" rx="1"/>
             </svg>
