@@ -268,7 +268,7 @@ function TabBar({ tabs, active, onChange, visible }) {
 }
 
 // ── TORNEO: OverviewTab ───────────────────────────────────────────────────────
-function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin }) {
+function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin, onFillBots }) {
   const fillPct = data.max_participants
     ? Math.round((data.participant_count / data.max_participants) * 100)
     : null
@@ -382,6 +382,18 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
         <div style={{ textAlign: 'center', padding: '12px 0', fontSize: 13, color: C.green, fontWeight: 700 }}>
           ✅ Ya estás inscrito/a en este torneo
         </div>
+      )}
+
+      {/* Botón completar con bots (solo admin) */}
+      {isAdmin && data.status === 'inscripcion' && data.max_participants && data.participant_count < data.max_participants && (
+        <button onClick={onFillBots} style={{
+          width: '100%', padding: '12px 0', borderRadius: 14,
+          border: `1.5px dashed ${C.border}`,
+          background: 'transparent', color: C.textDim,
+          fontWeight: 700, fontSize: 13, cursor: 'pointer',
+        }}>
+          🤖 Completar con bots ({data.max_participants - data.participant_count} lugares)
+        </button>
       )}
     </div>
   )
@@ -527,6 +539,31 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
     setJoining(false)
   }
 
+  async function handleFillBots() {
+    if (!data || !isAdmin) return
+    const slots = (data.max_participants ?? 0) - (data.participant_count ?? 0)
+    if (slots <= 0) return
+    if (!window.confirm(`¿Agregar ${slots} bots para completar el torneo?`)) return
+
+    const BOT_NAMES = ['Águila FC','Boca Juniors Bot','River Plate Bot','Bayern Bot','Real Madrid Bot','Barcelona Bot','Juventus Bot','PSG Bot','Chelsea Bot','City Bot','Liverpool Bot','Atlético Bot','Inter Bot','Milan Bot','Dortmund Bot','Porto Bot','Benfica Bot','Ajax Bot','Lyon Bot','Sevilla Bot']
+    const bots = []
+    for (let i = 0; i < slots; i++) {
+      const name = BOT_NAMES[i % BOT_NAMES.length] + (i >= BOT_NAMES.length ? ` ${Math.floor(i/BOT_NAMES.length)+1}` : '')
+      const username = `bot_${tournamentId.slice(0,8)}_${i+1}`
+      bots.push({ display_name: name, username, is_bot: true, bot_type: 'tournament_filler', role: 'user' })
+    }
+
+    const { data: created, error: e1 } = await supabase.from('users').insert(bots).select('id')
+    if (e1) { alert(`Error creando bots: ${e1.message}`); return }
+
+    const members = created.map(b => ({ conversation_id: tournamentId, user_id: b.id, role: 'participant' }))
+    const { error: e2 } = await supabase.from('conversation_members').insert(members)
+    if (e2) { alert(`Error inscribiendo bots: ${e2.message}`); return }
+
+    setData(d => d ? { ...d, participant_count: d.max_participants } : d)
+    alert(`✅ ${slots} bots agregados correctamente`)
+  }
+
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 16 }}>
       {[80, 120, 200, 160].map((h, i) => (
@@ -626,6 +663,7 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
                 isAdmin={isAdmin}
                 isMember={isMember}
                 onJoin={joining ? null : handleJoin}
+                onFillBots={handleFillBots}
               />
         )}
 
