@@ -268,11 +268,12 @@ function TabBar({ tabs, active, onChange, visible }) {
 }
 
 // ── TORNEO: OverviewTab ───────────────────────────────────────────────────────
-function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete }) {
+function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin }) {
   const fillPct = data.max_participants
     ? Math.round((data.participant_count / data.max_participants) * 100)
     : null
   const phaseIdx = torneoPhaseIdx(data.status)
+  const canJoin = data.status === 'inscripcion' && profile && !isMember && (!data.max_participants || data.participant_count < data.max_participants)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -363,6 +364,23 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete }
         <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
           <p style={{ margin: '0 0 6px', fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 600 }}>Descripción / Reglas</p>
           <p style={{ margin: 0, fontSize: 13, color: C.text2, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{data.description}</p>
+        </div>
+      )}
+
+      {/* Botón inscribirse */}
+      {canJoin && (
+        <button onClick={onJoin} style={{
+          width: '100%', padding: '14px 0', borderRadius: 14, border: 'none',
+          background: `linear-gradient(135deg, ${C.greenDk}, ${C.green})`,
+          color: '#000', fontWeight: 800, fontSize: 15, cursor: 'pointer',
+          boxShadow: `0 4px 16px ${C.green}44`,
+        }}>
+          ✅ Inscribirme al torneo
+        </button>
+      )}
+      {!canJoin && isMember && data.status === 'inscripcion' && (
+        <div style={{ textAlign: 'center', padding: '12px 0', fontSize: 13, color: C.green, fontWeight: 700 }}>
+          ✅ Ya estás inscrito/a en este torneo
         </div>
       )}
     </div>
@@ -476,6 +494,8 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
+  const [isMember, setIsMember]   = useState(false)
+  const [joining, setJoining]     = useState(false)
 
   useEffect(() => {
     if (!tournamentId) return
@@ -486,6 +506,26 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
       .catch(e => setError(e?.message ?? 'Error al cargar'))
       .finally(() => setLoading(false))
   }, [tournamentId])
+
+  useEffect(() => {
+    if (!tournamentId || !profile?.id) return
+    supabase.from('conversation_members')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('conversation_id', tournamentId)
+      .eq('user_id', profile.id)
+      .then(({ count }) => setIsMember((count ?? 0) > 0))
+  }, [tournamentId, profile?.id])
+
+  async function handleJoin() {
+    if (!profile?.id || joining) return
+    setJoining(true)
+    const { error: e } = await supabase.from('conversation_members')
+      .insert({ conversation_id: tournamentId, user_id: profile.id, role: 'participant' })
+    if (e) { alert(`Error al inscribirte: ${e.message}`); setJoining(false); return }
+    setIsMember(true)
+    setData(d => d ? { ...d, participant_count: d.participant_count + 1 } : d)
+    setJoining(false)
+  }
 
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 16 }}>
@@ -584,6 +624,8 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
                 tournamentId={tournamentId}
                 profile={profile}
                 isAdmin={isAdmin}
+                isMember={isMember}
+                onJoin={joining ? null : handleJoin}
               />
         )}
 
