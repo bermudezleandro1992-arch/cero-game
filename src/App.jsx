@@ -245,8 +245,8 @@ function BirthdateGate({ onDone, userId }) {
           </div>
         </div>
 
-        {/* Accept checkbox */}
-        <div onClick={() => setAccepted(a => !a)} style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'8px 0 4px', marginBottom:4, cursor:'pointer', userSelect:'none' }}>
+        {/* Checkbox — plain text only, no links inside */}
+        <div onClick={() => setAccepted(a => !a)} style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'8px 0', marginBottom:16, cursor:'pointer', userSelect:'none' }}>
           <div style={{
             width:20, height:20, borderRadius:5, flexShrink:0, marginTop:1,
             background: accepted ? '#00d278' : 'rgba(255,255,255,.05)',
@@ -259,15 +259,6 @@ function BirthdateGate({ onDone, userId }) {
           <span style={{ color:'rgba(255,255,255,.7)', fontSize:13, lineHeight:1.6 }}>
             Confirmo que tengo 18 años o más y acepto el reglamento de NexoTribu.
           </span>
-        </div>
-        {/* Legal links — completely separate from checkbox */}
-        <div style={{ paddingLeft:32, marginBottom:16, display:'flex', gap:16 }}>
-          <button onClick={() => setModal('terminos')} style={{ background:'none', border:'none', padding:0, color:'#00d278', fontWeight:600, cursor:'pointer', fontSize:12, fontFamily:'inherit', textDecoration:'underline' }}>
-            Términos de Uso
-          </button>
-          <button onClick={() => setModal('privacidad')} style={{ background:'none', border:'none', padding:0, color:'rgba(255,255,255,.35)', fontWeight:600, cursor:'pointer', fontSize:12, fontFamily:'inherit', textDecoration:'underline' }}>
-            Política de Privacidad
-          </button>
         </div>
 
         {error && <p style={{ color:'#ef4444', fontSize:12, margin:'0 0 12px', textAlign:'center' }}>{error}</p>}
@@ -287,9 +278,14 @@ function BirthdateGate({ onDone, userId }) {
           {loading ? 'Guardando...' : 'Confirmar y entrar a NexoTribu →'}
         </button>
 
-        <p style={{ color:'rgba(255,255,255,.15)', fontSize:11, textAlign:'center', marginTop:14, lineHeight:1.5 }}>
-          Tu fecha de nacimiento solo se usa para verificar tu edad.
-        </p>
+        <div style={{ marginTop:16, display:'flex', justifyContent:'center', gap:20 }}>
+          <button type="button" onClick={() => setModal('terminos')} style={{ background:'none', border:'none', padding:0, color:'rgba(255,255,255,.3)', fontSize:11, cursor:'pointer', fontFamily:'inherit', textDecoration:'underline' }}>
+            Términos de Uso
+          </button>
+          <button type="button" onClick={() => setModal('privacidad')} style={{ background:'none', border:'none', padding:0, color:'rgba(255,255,255,.3)', fontSize:11, cursor:'pointer', fontFamily:'inherit', textDecoration:'underline' }}>
+            Política de Privacidad
+          </button>
+        </div>
       </div>
     </div>
   )
