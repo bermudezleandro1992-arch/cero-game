@@ -121,21 +121,9 @@ export const useChatStore = create((set, get) => ({
       groupMembersMap[m.conversation_id].push(m.member)
     })
 
-    // Count unread per conversation
-    const unreadEntries = await Promise.all(
-      convIds.map(async (convId) => {
-        const lastRead = lastReadMap[convId]
-        const query = supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', convId)
-          .neq('sender_id', userId)
-        if (lastRead) query.gt('created_at', lastRead)
-        const { count } = await query
-        return [convId, count || 0]
-      })
-    )
-    const unreadMap = Object.fromEntries(unreadEntries)
+    // Count unread per conversation — single RPC instead of one query per conversation
+    const { data: unreadRows } = await supabase.rpc('get_unread_counts', { p_user_id: userId })
+    const unreadMap = Object.fromEntries((unreadRows || []).map(r => [r.conversation_id, Number(r.unread_count)]))
 
     const conversations = convIds
       .map(convId => {
