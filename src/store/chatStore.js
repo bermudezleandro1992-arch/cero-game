@@ -2,6 +2,14 @@ import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 import { sounds } from '../lib/sounds'
 
+// Extract clean UUID from any string (handles embedded quotes, JSON encoding, etc.)
+const cleanUUID = v => {
+  if (!v) return v
+  const s = typeof v === 'string' ? v : String(v)
+  const m = s.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+  return m ? m[0] : s
+}
+
 export const useChatStore = create((set, get) => ({
   conversations: [],
   activeConversation: null,
@@ -12,8 +20,7 @@ export const useChatStore = create((set, get) => ({
   subChannelMap: {}, // subChannelId → communityConvId
 
   setActiveConversation: (conv) => {
-    const stripQ = s => (typeof s === 'string' ? s.replace(/^"+|"+$/g, '') : s)
-    const cleaned = conv ? { ...conv, id: stripQ(conv.id) } : conv
+    const cleaned = conv ? { ...conv, id: cleanUUID(conv.id) } : conv
     set({ activeConversation: cleaned, messages: [], topics: [], activeTopicId: null })
   },
   setActiveTopic: (topicId) => set({ activeTopicId: topicId }),
@@ -39,7 +46,8 @@ export const useChatStore = create((set, get) => ({
     return data
   },
 
-  fetchMessages: async (conversationId, topicId = null) => {
+  fetchMessages: async (rawConversationId, topicId = null) => {
+    const conversationId = cleanUUID(rawConversationId)
     set({ loadingMessages: true })
     const userId = (await supabase.auth.getUser()).data?.user?.id
 
@@ -77,8 +85,7 @@ export const useChatStore = create((set, get) => ({
     if (!memberships?.length) { set({ conversations: [] }); return }
 
     // Try to get group metadata (only available after migration 003)
-    const stripQuotes = s => (typeof s === 'string' ? s.replace(/^"+|"+$/g, '') : s)
-    const convIds0 = memberships.map(m => stripQuotes(m.conversation_id))
+    const convIds0 = memberships.map(m => cleanUUID(m.conversation_id))
     let convMeta = {}
     const { data: metaRows } = await supabase
       .from('conversations')
@@ -328,7 +335,7 @@ export const useChatStore = create((set, get) => ({
 
 
   sendMessage: async (conversationId, senderId, content, type = 'text', maxViews = null, topicId = null) => {
-    const cleanConvId = typeof conversationId === 'string' ? conversationId.replace(/^"+|"+$/g, '') : conversationId
+    const cleanConvId = cleanUUID(conversationId)
     const row = { conversation_id: cleanConvId, sender_id: senderId, content, type }
     if (maxViews) row.max_views = maxViews
     if (topicId) row.topic_id = topicId
@@ -448,7 +455,7 @@ export const useChatStore = create((set, get) => ({
         .eq('user_id', otherUserId)
         .in('conversation_id', myIds)
 
-      if (shared?.length) return shared[0].conversation_id
+      if (shared?.length) return cleanUUID(shared[0].conversation_id)
     }
 
     // Create new conversation — try with is_group first, fall back without it
