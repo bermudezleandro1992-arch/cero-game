@@ -340,7 +340,11 @@ export const useChatStore = create((set, get) => ({
     const uuidMatch = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
     if (!uuidMatch) throw new Error(`ID de conversación inválido: ${raw}`)
     const cleanConvId = uuidMatch[0]
-    const row = { conversation_id: cleanConvId, sender_id: senderId, content, type }
+    const rawSender = String(senderId ?? '')
+    const senderMatch = rawSender.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+    const cleanSenderId = senderMatch ? senderMatch[0] : rawSender
+    console.log('[sendMsg v2.3.3] conv:', cleanConvId, 'sender:', cleanSenderId, 'rawConv:', raw, 'rawSender:', rawSender)
+    const row = { conversation_id: cleanConvId, sender_id: cleanSenderId, content, type }
     if (maxViews) row.max_views = maxViews
     if (topicId) row.topic_id = topicId
     const { data, error } = await supabase
