@@ -1,7 +1,7 @@
 const SKIN_KEY = 'app_layout_skin'
 
 export function getSkin() {
-  try { return localStorage.getItem(SKIN_KEY) || 'default' } catch { return 'default' }
+  try { return localStorage.getItem(SKIN_KEY) || 'whatsapp' } catch { return 'whatsapp' }
 }
 
 export function setLayoutSkin(s) {

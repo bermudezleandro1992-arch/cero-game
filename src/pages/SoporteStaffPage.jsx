@@ -100,10 +100,22 @@ export default function SoporteStaffPage({ onBack }) {
 
   async function takeTicket() {
     if (!selected) return
-    const { error } = await supabase.rpc('take_support_ticket', { p_ticket_id: selected.id })
-    if (!error) {
-      setSelected(prev => ({ ...prev, status: 'in_progress', assigned_to: profile.id, agent: { id: profile.id, display_name: profile.display_name, username: profile.username } }))
-      loadTickets()
+    // Try RPC first, fall back to direct update
+    let ok = false
+    const { error: rpcErr } = await supabase.rpc('take_support_ticket', { p_ticket_id: selected.id })
+    if (!rpcErr) {
+      ok = true
+    } else {
+      const { error: updateErr } = await supabase
+        .from('support_tickets')
+        .update({ status: 'in_progress', assigned_to: profile.id })
+        .eq('id', selected.id)
+      if (!updateErr) ok = true
+    }
+    if (ok) {
+      const updated = { ...selected, status: 'in_progress', assigned_to: profile.id, agent: { id: profile.id, display_name: profile.display_name, username: profile.username } }
+      setSelected(updated)
+      setTickets(prev => prev.map(t => t.id === selected.id ? { ...t, status: 'in_progress', assigned_to: profile.id } : t))
     }
   }
 
@@ -159,8 +171,8 @@ export default function SoporteStaffPage({ onBack }) {
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* LEFT: Ticket list */}
-        <div style={{ width: selected ? '0' : '100%', minWidth: selected ? 0 : '100%', display: 'flex', flexDirection: 'column', borderRight: `1px solid ${C.border}`, overflow: 'hidden', transition: 'all .2s' }}
-          className="soporte-list">
+        <div style={{ display: 'flex', flexDirection: 'column', borderRight: `1px solid ${C.border}`, overflow: 'hidden', transition: 'all .2s' }}
+          className={`soporte-list${selected ? ' soporte-list--hidden' : ''}`}>
 
           {/* Filter tabs */}
           <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
@@ -220,7 +232,7 @@ export default function SoporteStaffPage({ onBack }) {
 
         {/* RIGHT: Ticket detail */}
         {selected && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }} className="soporte-detail">
             {/* Ticket header */}
             <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '10px 14px', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -357,6 +369,7 @@ export default function SoporteStaffPage({ onBack }) {
         )}
       </div>
 
+
       {/* Close ticket modal */}
       {showClose && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20 }}>
@@ -381,8 +394,17 @@ export default function SoporteStaffPage({ onBack }) {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
+        /* Mobile: full width list, hidden when ticket selected */
+        .soporte-list { width: 100%; min-width: 100%; }
+        .soporte-list--hidden { width: 0; min-width: 0; }
+        /* Desktop: fixed sidebar, always visible */
         @media (min-width: 768px) {
-          .soporte-list { width: 320px !important; min-width: 320px !important; }
+          .soporte-list { width: 300px !important; min-width: 300px !important; max-width: 300px !important; }
+          .soporte-list--hidden { width: 300px !important; min-width: 300px !important; max-width: 300px !important; }
+        }
+        @media (min-width: 1100px) {
+          .soporte-list { width: 360px !important; min-width: 360px !important; max-width: 360px !important; }
+          .soporte-list--hidden { width: 360px !important; min-width: 360px !important; max-width: 360px !important; }
         }
       `}</style>
     </div>

@@ -1924,7 +1924,6 @@ export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport
   function goBack() { setTab('menu'); setEditing(false); setShowBots(false) }
 
   const SKINS_CFG = [
-    { id: 'default', label: 'NexoTribu', icon: '🟢' },
     { id: 'whatsapp', label: 'Estilo NexoTribu', icon: '💬' },
   ]
 
