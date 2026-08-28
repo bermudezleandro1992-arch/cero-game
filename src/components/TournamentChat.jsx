@@ -20,7 +20,10 @@ function avatar(p, size = 30) {
       </div>
 }
 
-export default function TournamentChat({ tournamentId, profile }) {
+const stripQ = s => (typeof s === 'string' ? s.replace(/^"+|"+$/g, '') : s)
+
+export default function TournamentChat({ tournamentId: rawTournamentId, profile }) {
+  const tournamentId = stripQ(rawTournamentId)
   const [messages,  setMessages]  = useState([])
   const [text,      setText]      = useState('')
   const [sending,   setSending]   = useState(false)
@@ -76,7 +79,7 @@ export default function TournamentChat({ tournamentId, profile }) {
       }, payload => {
         const msg = payload.new
         if (msg.type === 'system') return
-        setMessages(prev => [...prev, msg])
+        setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
         // Cargar perfil del nuevo sender si no lo tenemos
         if (!profiles[msg.sender_id]) {
           supabase.from('users').select('id, display_name, username, avatar_url').eq('id', msg.sender_id).single()
@@ -98,13 +101,23 @@ export default function TournamentChat({ tournamentId, profile }) {
     if (isMember === false) { alert('Primero inscribite al torneo para poder chatear.'); return }
     setSending(true)
     setText('')
-    const { error } = await supabase.from('messages').insert({
+    // Optimistic update — show message immediately
+    const tempId = `tmp-${Date.now()}`
+    const tempMsg = { id: tempId, conversation_id: tournamentId, sender_id: profile.id, content: trimmed, type: 'text', created_at: new Date().toISOString() }
+    setMessages(prev => [...prev, tempMsg])
+    const { data: inserted, error } = await supabase.from('messages').insert({
       conversation_id: tournamentId,
       sender_id: profile.id,
       content: trimmed,
       type: 'text',
-    })
-    if (error) { alert(`Error al enviar: ${error.message}`); setText(trimmed) }
+    }).select('id, conversation_id, sender_id, content, type, created_at').single()
+    if (error) {
+      setMessages(prev => prev.filter(m => m.id !== tempId))
+      setText(trimmed)
+    } else if (inserted) {
+      // Replace temp with real message
+      setMessages(prev => prev.map(m => m.id === tempId ? inserted : m))
+    }
     setSending(false)
     inputRef.current?.focus()
   }
