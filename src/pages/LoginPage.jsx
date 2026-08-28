@@ -163,16 +163,23 @@ export default function LoginPage() {
         .apk-btn:hover { background:rgba(0,210,120,.08); border-color:#00d278; }
         @media (max-width:860px) {
           .login-root { flex-direction:column; overflow-y:auto; }
-          .hero { padding:36px 24px 24px; justify-content:flex-start; }
-          .form-col { width:100%; padding:28px 24px 52px; border-left:none; border-top:1px solid rgba(255,255,255,.06); justify-content:flex-start; }
-          .feat-grid { margin-top:20px; }
+          .hero { padding:32px 20px 20px; justify-content:flex-start; }
+          .form-col { width:100%; padding:24px 20px 48px; border-left:none; border-top:1px solid rgba(255,255,255,.06); justify-content:flex-start; }
+          .feat-grid { margin-top:16px; max-width:100%; }
         }
         @media (max-width:600px) {
-          .feat-grid { grid-template-columns:1fr; gap:8px; }
-          .hero { padding:24px 16px 20px; }
+          .feat-grid { grid-template-columns:1fr 1fr; gap:8px; }
+          .hero { padding:20px 16px 16px; }
           .form-col { padding:20px 16px 44px; }
-          .feat-card { padding:14px; display:flex; align-items:flex-start; gap:12px; }
-          .feat-card-icon { font-size:20px; flex-shrink:0; margin-bottom:0 !important; }
+          .feat-card { padding:12px; }
+          .feat-card-icon { font-size:18px; margin-bottom:6px !important; }
+          .glow-btn { padding:14px; font-size:14px; }
+          .apk-btn { padding:12px; font-size:13px; }
+        }
+        @media (max-width:380px) {
+          .feat-grid { grid-template-columns:1fr; }
+          .feat-card { display:flex; align-items:flex-start; gap:10px; }
+          .feat-card-icon { flex-shrink:0; margin-bottom:0 !important; }
         }
       `}</style>
 
