@@ -335,7 +335,11 @@ export const useChatStore = create((set, get) => ({
 
 
   sendMessage: async (conversationId, senderId, content, type = 'text', maxViews = null, topicId = null) => {
-    const cleanConvId = cleanUUID(conversationId)
+    // Aggressively extract UUID - handle any encoding (double-quotes, JSON-encoded, etc)
+    const raw = String(conversationId ?? '')
+    const uuidMatch = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+    if (!uuidMatch) throw new Error(`ID de conversación inválido: ${raw}`)
+    const cleanConvId = uuidMatch[0]
     const row = { conversation_id: cleanConvId, sender_id: senderId, content, type }
     if (maxViews) row.max_views = maxViews
     if (topicId) row.topic_id = topicId
