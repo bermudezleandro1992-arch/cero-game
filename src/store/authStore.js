@@ -24,7 +24,9 @@ export const useAuthStore = create((set) => ({
   },
 
   updateProfile: async (userId, updates) => {
-    const { error } = await supabase.from('users').update(updates).eq('id', userId)
+    const ALLOWED = ['display_name','avatar_url','bio','theme','sound_settings','platform','birthdate','username','status_emoji','status_text','notification_settings','privacy_settings']
+    const safe = Object.fromEntries(Object.entries(updates).filter(([k]) => ALLOWED.includes(k)))
+    const { error } = await supabase.from('users').update(safe).eq('id', userId)
     if (error) return error.message
     set(state => ({ profile: { ...state.profile, ...updates } }))
     return null
