@@ -1,4 +1,4 @@
-const VERSION = '2.1.5'
+const VERSION = '2.1.6'
 const CACHE = `nexotribu-${VERSION}`
 const SHELL = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon.svg']
 

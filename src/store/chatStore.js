@@ -73,7 +73,8 @@ export const useChatStore = create((set, get) => ({
     if (!memberships?.length) { set({ conversations: [] }); return }
 
     // Try to get group metadata (only available after migration 003)
-    const convIds0 = memberships.map(m => m.conversation_id)
+    const stripQuotes = s => (typeof s === 'string' ? s.replace(/^"+|"+$/g, '') : s)
+    const convIds0 = memberships.map(m => stripQuotes(m.conversation_id))
     let convMeta = {}
     const { data: metaRows } = await supabase
       .from('conversations')
