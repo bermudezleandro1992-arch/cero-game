@@ -136,6 +136,11 @@ function LegalModal({ initialTab, onClose }) {
 export default function LoginPage() {
   const [modal, setModal] = useState(null) // 'terminos' | 'privacidad' | null
 
+  useState(() => {
+    document.body.classList.add('allow-scroll')
+    return () => document.body.classList.remove('allow-scroll')
+  })
+
   if (modal) return <LegalModal initialTab={modal} onClose={() => setModal(null)} />
 
   async function loginGoogle() {
