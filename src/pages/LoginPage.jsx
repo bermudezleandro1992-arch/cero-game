@@ -190,7 +190,7 @@ export default function LoginPage() {
             <span style={{ color:'#00d278', fontWeight:700 }}>organizada de verdad.</span>
           </h1>
           <p style={{ color:'rgba(255,255,255,.5)', fontSize:16, margin:0, maxWidth:420, lineHeight:1.7 }}>
-            Sin grupos de WhatsApp que explotan. Sin Discord perdido en canales. NexoTribu es mensajería, torneos y bots en un solo lugar — para gamers que van en serio.
+            Mensajería, torneos, comunidades y bots. Todo lo que tu tribu necesita para organizarse y competir.
           </p>
 
           <div className="feat-grid">
