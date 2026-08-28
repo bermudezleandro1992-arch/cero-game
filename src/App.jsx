@@ -38,6 +38,126 @@ import { C } from './theme'
 import { getSkin, setLayoutSkin } from './lib/layoutSkin'
 export { setLayoutSkin }
 
+const TERMINOS_CONTENT = `
+**1. Quiénes somos**
+NexoTribu es una plataforma de mensajería y comunidades orientada al mundo gamer.
+
+**2. Elegibilidad**
+Para usar NexoTribu debés tener al menos 18 años, proporcionar información verídica y no estar suspendido previamente.
+
+**3. Tu cuenta**
+Sos responsable de toda la actividad que ocurra desde tu cuenta. No podés transferirla a terceros.
+
+**4. Conducta prohibida**
+• Contenido ilegal, violento, sexual explícito, racista o discriminatorio
+• Acoso, amenazas o intimidación a otros usuarios
+• Hacerse pasar por otra persona o entidad
+• Spam, malware o enlaces maliciosos
+• Fraude o phishing de cualquier tipo
+• Intentar acceder a datos de otros usuarios sin autorización
+• Contenido que infrinja derechos de autor
+
+**5. Contenido del usuario**
+Tu contenido sigue siendo tuyo. Nos otorgás una licencia solo para prestar el servicio. No vendemos tu contenido.
+
+**6. Suspensión y cancelación**
+NexoTribu puede suspender cuentas que violen estos términos sin previo aviso. Podés eliminar tu cuenta contactando a soporte.
+
+**7. Planes y pagos**
+Las funciones básicas son gratuitas. Los planes VIP/Pro son opcionales. Los pagos no son reembolsables salvo que la ley lo requiera.
+
+**8. Limitación de responsabilidad**
+El servicio se provee "tal cual". No garantizamos disponibilidad continua ni ausencia de errores.
+
+**9. Cambios**
+Podemos modificar estos términos y te notificaremos por email o dentro de la app.
+
+**10. Contacto**
+Soporte disponible dentro de la aplicación.
+`
+
+const PRIVACIDAD_CONTENT = `
+**1. Datos que recopilamos**
+Al registrarte: nombre, email, foto de perfil, fecha de nacimiento y país de origen.
+Al usar la app: mensajes, comunidades, actividad general y datos técnicos del dispositivo.
+
+**2. Cómo usamos tus datos**
+• Para prestar el servicio de mensajería y comunidades
+• Para verificar tu identidad y edad
+• Para enviarte notificaciones relevantes
+• Para mejorar la plataforma y detectar problemas técnicos
+• Para cumplir con obligaciones legales
+
+No vendemos tus datos personales a terceros.
+
+**3. Mensajes privados**
+Solo accesibles por los participantes de la conversación. NexoTribu puede acceder solo ante denuncia por violación de Términos o requerimiento judicial.
+
+**4. Terceros**
+• Supabase — proveedor de infraestructura y base de datos
+• Google — si iniciás sesión con Google aplica su propia política de privacidad
+• Autoridades competentes si la ley lo requiere
+
+**5. Seguridad**
+Usamos HTTPS, acceso restringido y revisiones periódicas de seguridad.
+
+**6. Retención de datos**
+Guardamos tus datos mientras tu cuenta esté activa. Al eliminarla, borramos tus datos en 30 días.
+
+**7. Tus derechos**
+Podés acceder, corregir, y solicitar eliminar tus datos en cualquier momento desde Soporte.
+
+**8. Cookies**
+Usamos localStorage para mantener tu sesión. No usamos cookies de rastreo publicitario.
+
+**9. Menores de edad**
+La plataforma es exclusiva para mayores de 18 años. Eliminamos de inmediato datos de menores.
+
+**10. Contacto**
+Soporte disponible dentro de la aplicación.
+`
+
+function LegalModal({ title, content, onClose }) {
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:200, background:'#080d12', overflowY:'auto', padding:'0 0 40px' }}>
+      {/* Header */}
+      <div style={{ position:'sticky', top:0, background:'#080d12', borderBottom:'1px solid rgba(255,255,255,.08)', padding:'14px 20px', display:'flex', alignItems:'center', gap:12, zIndex:1 }}>
+        <button onClick={onClose} style={{ background:'rgba(255,255,255,.08)', border:'none', borderRadius:8, padding:'6px 12px', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
+          ← Volver
+        </button>
+        <span style={{ color:'#fff', fontWeight:700, fontSize:15 }}>{title}</span>
+      </div>
+      {/* Content */}
+      <div style={{ maxWidth:640, margin:'0 auto', padding:'28px 20px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:24 }}>
+          <img src="/logo.svg" alt="NexoTribu" width={32} height={32} />
+          <span style={{ color:'rgba(255,255,255,.5)', fontSize:12 }}>Última actualización: agosto de 2026</span>
+        </div>
+        {content.trim().split('\n\n').map((block, i) => {
+          if (block.startsWith('**') && block.endsWith('**')) {
+            return <h2 key={i} style={{ color:'#00d278', fontSize:15, fontWeight:700, margin:'28px 0 10px', borderLeft:'3px solid #00d278', paddingLeft:12 }}>{block.replace(/\*\*/g,'')}</h2>
+          }
+          if (block.startsWith('**')) {
+            const [title, ...rest] = block.split('\n')
+            return (
+              <div key={i} style={{ marginBottom:16 }}>
+                <div style={{ color:'#00d278', fontSize:15, fontWeight:700, marginBottom:8, borderLeft:'3px solid #00d278', paddingLeft:12 }}>{title.replace(/\*\*/g,'')}</div>
+                {rest.map((line, j) => (
+                  <p key={j} style={{ color:'rgba(255,255,255,.65)', fontSize:14, margin:'0 0 6px', lineHeight:1.7, paddingLeft:15 }}>{line.startsWith('•') ? line : line}</p>
+                ))}
+              </div>
+            )
+          }
+          return <p key={i} style={{ color:'rgba(255,255,255,.65)', fontSize:14, margin:'0 0 12px', lineHeight:1.7 }}>{block}</p>
+        })}
+        <div style={{ marginTop:40, paddingTop:20, borderTop:'1px solid rgba(255,255,255,.08)', color:'rgba(255,255,255,.2)', fontSize:12, textAlign:'center' }}>
+          © 2026 NexoTribu. Todos los derechos reservados.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const REGLAS = [
   'Tengo 18 años o más y lo confirmo con mi fecha de nacimiento.',
   'No compartiré contenido ilegal, violento, sexual explícito ni spam.',
@@ -51,6 +171,10 @@ function BirthdateGate({ onDone, userId }) {
   const [accepted, setAccepted] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [modal, setModal] = useState(null) // 'terminos' | 'privacidad' | null
+
+  if (modal === 'terminos') return <LegalModal title="Términos de Uso" content={TERMINOS_CONTENT} onClose={() => setModal(null)} />
+  if (modal === 'privacidad') return <LegalModal title="Política de Privacidad" content={PRIVACIDAD_CONTENT} onClose={() => setModal(null)} />
 
   function getAge(d) {
     const dob = new Date(d), today = new Date()
@@ -132,7 +256,7 @@ function BirthdateGate({ onDone, userId }) {
           </div>
           <span style={{ color:'rgba(255,255,255,.7)', fontSize:13, lineHeight:1.5 }}>
             Confirmo que tengo 18 años o más y acepto el reglamento y los{' '}
-            <a href="/terminos.html" target="_blank" rel="noopener" style={{ color:'#00d278', fontWeight:600, textDecoration:'none' }}>Términos de Uso</a>
+            <button onClick={() => setModal('terminos')} style={{ background:'none', border:'none', padding:0, color:'#00d278', fontWeight:600, cursor:'pointer', fontSize:'inherit', fontFamily:'inherit' }}>Términos de Uso</button>
             {' '}de NexoTribu.
           </span>
         </label>
