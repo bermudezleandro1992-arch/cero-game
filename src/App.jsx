@@ -189,7 +189,9 @@ function BirthdateGate({ onDone, userId }) {
     const age = getAge(birthdate)
     if (age < 18) { setError('Debés tener al menos 18 años para usar NexoTribu.'); return }
     setLoading(true)
-    await supabase.from('users').update({ birth_date: birthdate }).eq('id', userId)
+    try {
+      await supabase.from('users').update({ birth_date: birthdate }).eq('id', userId)
+    } catch (_) { /* si falla el update igual dejamos pasar */ }
     onDone()
   }
 
@@ -733,7 +735,9 @@ export default function App() {
     || profile.display_name.startsWith('user_') || !profile.username || profile.username.startsWith('user_')
   if (needsSetup) return <ProfileSheet onClose={() => fetchProfile(user.id)} forceSetup />
 
-  if (!profile.birth_date) return <BirthdateGate onDone={() => fetchProfile(user.id)} userId={user.id} />
+  const isNewUser = !profile.birth_date && profile.created_at
+    && (Date.now() - new Date(profile.created_at).getTime()) < 10 * 60 * 1000
+  if (isNewUser) return <BirthdateGate onDone={() => fetchProfile(user.id)} userId={user.id} />
 
   function goBack() {
     setActiveConversation(null)
