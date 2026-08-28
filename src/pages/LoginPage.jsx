@@ -149,10 +149,11 @@ export default function LoginPage() {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+        html, body { margin:0; padding:0; background:#080d12; }
         * { box-sizing:border-box; }
-        .login-root { min-height:100dvh; display:flex; background:#080d12; font-family:'Inter',sans-serif; overflow-y:auto; }
-        .hero { flex:1; display:flex; flex-direction:column; justify-content:center; padding:60px 64px; position:relative; overflow:hidden; min-width:0; }
-        .form-col { width:400px; flex-shrink:0; display:flex; flex-direction:column; justify-content:center; padding:48px 40px; background:#0e1419; border-left:1px solid rgba(255,255,255,.06); }
+        .login-root { display:flex; background:#080d12; font-family:'Inter',sans-serif; }
+        .hero { flex:1; display:flex; flex-direction:column; justify-content:center; padding:60px 64px; position:relative; overflow:hidden; min-width:0; min-height:100dvh; }
+        .form-col { width:400px; flex-shrink:0; display:flex; flex-direction:column; justify-content:center; padding:48px 40px; background:#0e1419; border-left:1px solid rgba(255,255,255,.06); min-height:100dvh; }
         .feat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:32px; max-width:520px; }
         .feat-card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:14px; padding:16px; transition:border-color .2s,background .2s; }
         .feat-card:hover { border-color:rgba(0,210,120,.3); background:rgba(0,210,120,.04); }
@@ -163,23 +164,17 @@ export default function LoginPage() {
         .apk-btn:hover { background:rgba(0,210,120,.08); border-color:#00d278; }
         @media (max-width:860px) {
           .login-root { flex-direction:column; }
-          .hero { padding:32px 20px 20px; justify-content:flex-start; flex:none; }
-          .form-col { width:100%; padding:24px 20px 48px; border-left:none; border-top:1px solid rgba(255,255,255,.06); justify-content:flex-start; flex:none; }
+          .hero { min-height:auto; padding:32px 20px 24px; justify-content:flex-start; }
+          .form-col { width:100%; min-height:auto; padding:24px 20px 52px; border-left:none; border-top:1px solid rgba(255,255,255,.06); justify-content:flex-start; }
           .feat-grid { margin-top:16px; max-width:100%; }
         }
         @media (max-width:600px) {
           .feat-grid { grid-template-columns:1fr 1fr; gap:8px; }
-          .hero { padding:20px 16px 16px; }
+          .hero { padding:20px 16px 20px; }
           .form-col { padding:20px 16px 44px; }
           .feat-card { padding:12px; }
-          .feat-card-icon { font-size:18px; margin-bottom:6px !important; }
           .glow-btn { padding:14px; font-size:14px; }
           .apk-btn { padding:12px; font-size:13px; }
-        }
-        @media (max-width:380px) {
-          .feat-grid { grid-template-columns:1fr; }
-          .feat-card { display:flex; align-items:flex-start; gap:10px; }
-          .feat-card-icon { flex-shrink:0; margin-bottom:0 !important; }
         }
       `}</style>
 
