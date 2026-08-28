@@ -531,7 +531,7 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
     if (!profile?.id || joining) return
     setJoining(true)
     const { error: e } = await supabase.from('conversation_members')
-      .insert({ conversation_id: tournamentId, user_id: profile.id, role: 'participant' })
+      .insert({ conversation_id: tournamentId, user_id: profile.id })
     if (e) { alert(`Error al inscribirte: ${e.message}`); setJoining(false); return }
     setIsMember(true)
     setData(d => d ? { ...d, participant_count: d.participant_count + 1 } : d)
@@ -555,7 +555,7 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
     const { data: created, error: e1 } = await supabase.from('users').insert(bots).select('id')
     if (e1) { alert(`Error creando bots: ${e1.message}`); return }
 
-    const members = created.map(b => ({ conversation_id: tournamentId, user_id: b.id, role: 'participant' }))
+    const members = created.map(b => ({ conversation_id: tournamentId, user_id: b.id }))
     const { error: e2 } = await supabase.from('conversation_members').insert(members)
     if (e2) { alert(`Error inscribiendo bots: ${e2.message}`); return }
 
