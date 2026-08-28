@@ -100,34 +100,40 @@ export default function SoporteStaffPage({ onBack }) {
 
   async function takeTicket() {
     if (!selected) return
-    // Try RPC first, fall back to direct update
-    let ok = false
-    const { error: rpcErr } = await supabase.rpc('take_support_ticket', { p_ticket_id: selected.id })
-    if (!rpcErr) {
-      ok = true
-    } else {
-      const { error: updateErr } = await supabase
-        .from('support_tickets')
-        .update({ status: 'in_progress', assigned_to: profile.id })
-        .eq('id', selected.id)
-      if (!updateErr) ok = true
+    // Direct update — bypasses missing RPC
+    const { error } = await supabase
+      .from('support_tickets')
+      .update({ status: 'in_progress', assigned_to: profile.id })
+      .eq('id', selected.id)
+    if (error) {
+      alert(`Error al tomar el ticket: ${error.message}`)
+      return
     }
-    if (ok) {
-      const updated = { ...selected, status: 'in_progress', assigned_to: profile.id, agent: { id: profile.id, display_name: profile.display_name, username: profile.username } }
-      setSelected(updated)
-      setTickets(prev => prev.map(t => t.id === selected.id ? { ...t, status: 'in_progress', assigned_to: profile.id } : t))
+    // Ensure staff is in the support conversation so they can chat
+    if (selected.conversation_id) {
+      await supabase.from('conversation_members')
+        .upsert({ conversation_id: selected.conversation_id, user_id: profile.id }, { onConflict: 'conversation_id,user_id', ignoreDuplicates: true })
     }
+    const updated = { ...selected, status: 'in_progress', assigned_to: profile.id, agent: { id: profile.id, display_name: profile.display_name, username: profile.username } }
+    setSelected(updated)
+    setTickets(prev => prev.map(t => t.id === selected.id ? { ...t, status: 'in_progress', assigned_to: profile.id } : t))
   }
 
   async function closeTicket() {
     if (!selected || !closeNote.trim()) return
-    const { error } = await supabase.rpc('close_support_ticket', { p_ticket_id: selected.id, p_note: closeNote.trim() })
-    if (!error) {
-      setSelected(prev => ({ ...prev, status: 'closed', staff_note: closeNote }))
-      setShowClose(false)
-      setCloseNote('')
-      loadTickets()
+    // Try RPC first, fall back to direct update
+    const { error: rpcErr } = await supabase.rpc('close_support_ticket', { p_ticket_id: selected.id, p_note: closeNote.trim() })
+    if (rpcErr) {
+      const { error: updateErr } = await supabase
+        .from('support_tickets')
+        .update({ status: 'closed', staff_note: closeNote.trim() })
+        .eq('id', selected.id)
+      if (updateErr) { alert(`Error al cerrar el ticket: ${updateErr.message}`); return }
     }
+    setSelected(prev => ({ ...prev, status: 'closed', staff_note: closeNote }))
+    setShowClose(false)
+    setCloseNote('')
+    loadTickets()
   }
 
   async function sendMessage() {
