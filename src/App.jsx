@@ -246,9 +246,9 @@ function BirthdateGate({ onDone, userId }) {
         </div>
 
         {/* Accept checkbox */}
-        <label style={{ display:'flex', alignItems:'flex-start', gap:12, cursor:'pointer', padding:'4px 0', marginBottom:16 }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'4px 0', marginBottom:16 }}>
           <div onClick={() => setAccepted(a => !a)} style={{
-            width:20, height:20, borderRadius:5, flexShrink:0, marginTop:1,
+            width:20, height:20, borderRadius:5, flexShrink:0, marginTop:2,
             background: accepted ? '#00d278' : 'rgba(255,255,255,.05)',
             border: `2px solid ${accepted ? '#00d278' : 'rgba(255,255,255,.2)'}`,
             display:'flex', alignItems:'center', justifyContent:'center',
@@ -256,12 +256,16 @@ function BirthdateGate({ onDone, userId }) {
           }}>
             {accepted && <svg width="11" height="11" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
           </div>
-          <span style={{ color:'rgba(255,255,255,.7)', fontSize:13, lineHeight:1.5 }}>
-            Confirmo que tengo 18 años o más y acepto el reglamento y los{' '}
-            <button onClick={() => setModal('terminos')} style={{ background:'none', border:'none', padding:0, color:'#00d278', fontWeight:600, cursor:'pointer', fontSize:'inherit', fontFamily:'inherit' }}>Términos de Uso</button>
-            {' '}de NexoTribu.
-          </span>
-        </label>
+          <div style={{ color:'rgba(255,255,255,.7)', fontSize:13, lineHeight:1.6 }}>
+            <span onClick={() => setAccepted(a => !a)} style={{ cursor:'pointer' }}>
+              Confirmo que tengo 18 años o más y acepto el reglamento y los{' '}
+            </span>
+            <button onClick={() => setModal('terminos')} style={{ background:'none', border:'none', padding:0, color:'#00d278', fontWeight:600, cursor:'pointer', fontSize:13, fontFamily:'inherit', textDecoration:'underline' }}>
+              Términos de Uso
+            </button>
+            <span onClick={() => setAccepted(a => !a)} style={{ cursor:'pointer' }}>{' '}de NexoTribu.</span>
+          </div>
+        </div>
 
         {error && <p style={{ color:'#ef4444', fontSize:12, margin:'0 0 12px', textAlign:'center' }}>{error}</p>}
 
