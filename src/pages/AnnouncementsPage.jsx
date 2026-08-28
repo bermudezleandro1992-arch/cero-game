@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { C } from '../theme'
 import { canPublishAnnouncements } from '../lib/roles'
+import TournamentDashboard from '../components/TournamentDashboard'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(ts) {
@@ -17,6 +18,22 @@ function timeAgo(ts) {
 }
 
 const GAMES = ['eFootball', 'FC 26', 'FC 25', 'FIFA', 'Warzone', 'Fortnite', 'Free Fire', 'Otro']
+
+// Límites de anuncios por plan (publicados en los últimos 30 días)
+const ANN_LIMITS = {
+  free:        1,   // 1 activo en total
+  member:      1,
+  vip:         5,
+  ceo:         20,
+  com_starter: 20,
+  com_elite:   999,
+  organizador: 10,
+  admin:       999,
+  superadmin:  999,
+}
+function annLimit(role) {
+  return ANN_LIMITS[role] ?? (role ? 999 : 1)
+}
 const CATEGORIES = [
   { id: 'all',     label: 'Todo',      emoji: '📢' },
   { id: 'torneo',  label: 'Torneos',   emoji: '🏆' },
@@ -59,8 +76,37 @@ function NewAnnouncementForm({ onClose, onCreate }) {
   const [linkLabel, setLinkLabel] = useState('')
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
+  const [isPinned, setIsPinned] = useState(false)
   const [saving, setSaving]     = useState(false)
+  const [myCommunities, setMyCommunities] = useState([])
+  const [selectedCommunity, setSelectedCommunity] = useState('')
+  const [myTournaments, setMyTournaments] = useState([])
+  const [selectedTournament, setSelectedTournament] = useState('')
   const fileRef = useRef()
+
+  useEffect(() => {
+    if (!profile?.id) return
+    supabase
+      .from('group_roles')
+      .select('conversation_id, conversations(id, name, group_type)')
+      .eq('user_id', profile.id)
+      .in('role', ['owner', 'admin'])
+      .then(({ data }) => {
+        const convs = (data || []).map(r => r.conversations).filter(Boolean)
+        setMyCommunities(convs)
+        if (convs.length === 1) setSelectedCommunity(convs[0].id)
+      })
+    // Load user's tournaments for linking
+    supabase
+      .from('conversations')
+      .select('id, name, group_type, tournament_status')
+      .in('group_type', ['tournament', 'liga'])
+      .eq('created_by', profile.id)
+      .in('tournament_status', ['inscripcion', 'draw', 'en_curso'])
+      .order('created_at', { ascending: false })
+      .limit(20)
+      .then(({ data }) => setMyTournaments(data || []))
+  }, [profile?.id])
 
   function pickImage(e) {
     const f = e.target.files?.[0]
@@ -76,9 +122,44 @@ function NewAnnouncementForm({ onClose, onCreate }) {
     if (!title.trim()) return
     setSaving(true)
     try {
+      // Verificar límite de anuncios por plan
+      const role = profile?.role || profile?.plan || 'member'
+      const limit = annLimit(role)
+      if (limit < 999) {
+        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+        const { count } = await supabase
+          .from('announcements')
+          .select('id', { count: 'exact', head: true })
+          .eq('author_id', profile.id)
+          .gte('created_at', since)
+        if ((count || 0) >= limit) {
+          const planName = role === 'free' || role === 'member' ? 'Gratis' : role.toUpperCase()
+          alert(
+            limit === 1
+              ? `Los usuarios Gratuitos solo pueden tener 1 anuncio activo.\nEliminá el anterior para publicar uno nuevo.\n\n⭐ Actualizá a VIP para publicar hasta 5 anuncios por mes.`
+              : `Llegaste al límite de ${limit} anuncios por mes para el plan ${planName}.\n\nUpgrade a PRO Elite para publicar sin límites.`
+          )
+          setSaving(false)
+          return
+        }
+      }
+
       let image_url = null
       if (imageFile) {
         image_url = await uploadImage(imageFile, profile.id)
+      }
+      // Enforce max 3 pinned per community
+      let pinned = isPinned
+      if (pinned && selectedCommunity) {
+        const { count } = await supabase
+          .from('announcements')
+          .select('id', { count: 'exact', head: true })
+          .eq('conversation_id', selectedCommunity)
+          .eq('is_pinned', true)
+        if ((count || 0) >= 3) {
+          alert('Solo se permiten 3 anuncios fijados por comunidad. Desancla uno antes de fijar este.')
+          pinned = false
+        }
       }
       const { data, error } = await supabase.from('announcements').insert({
         author_id: profile.id,
@@ -87,9 +168,12 @@ function NewAnnouncementForm({ onClose, onCreate }) {
         image_url,
         game: game || null,
         category,
+        is_pinned: pinned,
         link_url: linkUrl.trim() || null,
         link_label: linkUrl.trim() ? (linkLabel.trim() || 'Ver más') : null,
-      }).select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url)').single()
+        conversation_id: selectedCommunity || null,
+        tournament_id: selectedTournament || null,
+      }).select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url), community:conversations!announcements_conversation_id_fkey(id, name, group_type)').single()
       if (error) throw new Error(error.message)
       onCreate(data)
     } catch (err) {
@@ -150,6 +234,25 @@ function NewAnnouncementForm({ onClose, onCreate }) {
             )}
           </div>
 
+          {/* Comunidad origen — requerido */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Comunidad *</label>
+            {myCommunities.length === 0 ? (
+              <div style={{ padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${C.border}`, color: C.textDim, fontSize: 13 }}>
+                Necesitás administrar una comunidad para publicar anuncios.
+              </div>
+            ) : (
+              <select value={selectedCommunity} onChange={e => setSelectedCommunity(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                <option value="">— Seleccionar comunidad —</option>
+                {myCommunities.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.group_type === 'community' ? '🌐' : '👥'} {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
           {/* Title */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Título *</label>
@@ -189,6 +292,20 @@ function NewAnnouncementForm({ onClose, onCreate }) {
             </div>
           </div>
 
+          {/* Link torneo */}
+          {(category === 'torneo' || category === 'liga') && myTournaments.length > 0 && (
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Vincular torneo/liga (opcional)</label>
+              <select value={selectedTournament} onChange={e => setSelectedTournament(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                <option value="">Sin vincular</option>
+                {myTournaments.map(t => (
+                  <option key={t.id} value={t.id}>{t.group_type === 'liga' ? '⚽' : '🏆'} {t.name}</option>
+                ))}
+              </select>
+              {selectedTournament && <p style={{ margin: '4px 0 0', fontSize: 11, color: C.green }}>✓ Se mostrará botón "Ver torneo →" en el anuncio</p>}
+            </div>
+          )}
+
           {/* Link */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Link externo (opcional)</label>
@@ -198,11 +315,37 @@ function NewAnnouncementForm({ onClose, onCreate }) {
             )}
           </div>
 
+          {/* Pin toggle */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${isPinned ? C.green : C.border}`, transition: 'border-color .15s' }}>
+            <input type="checkbox" checked={isPinned} onChange={e => setIsPinned(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.green, cursor: 'pointer' }} />
+            <div>
+              <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>📌 Fijar anuncio</div>
+              <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>Aparece primero en la comunidad (máx. 3 fijados)</div>
+            </div>
+          </label>
+
+          {/* Cuota del plan */}
+          {(() => {
+            const role = profile?.role || profile?.plan || 'member'
+            const limit = annLimit(role)
+            const isFree = limit === 1
+            const isUnlimited = limit >= 999
+            if (isUnlimited) return null
+            return (
+              <div style={{ padding: '8px 12px', background: isFree ? '#f59e0b14' : `${C.green}10`, borderRadius: 10, border: `1px solid ${isFree ? '#f59e0b33' : C.green + '33'}`, fontSize: 12, color: isFree ? '#f59e0b' : C.green }}>
+                {isFree
+                  ? '⚠️ Plan Gratuito: 1 anuncio activo. Eliminá el anterior para publicar uno nuevo. Actualizá a VIP para hasta 5/mes.'
+                  : `✓ Plan ${role.toUpperCase()}: hasta ${limit} anuncios por mes.`
+                }
+              </div>
+            )
+          })()}
+
           {/* Submit */}
-          <button type="submit" disabled={saving || !title.trim()} style={{
-            padding: '13px', borderRadius: 12, border: 'none', cursor: saving || !title.trim() ? 'default' : 'pointer',
-            background: saving || !title.trim() ? C.panel2 : C.green,
-            color: saving || !title.trim() ? C.textDim : C.bg,
+          <button type="submit" disabled={saving || !title.trim() || !selectedCommunity} style={{
+            padding: '13px', borderRadius: 12, border: 'none', cursor: saving || !title.trim() || !selectedCommunity ? 'default' : 'pointer',
+            background: saving || !title.trim() || !selectedCommunity ? C.panel2 : C.green,
+            color: saving || !title.trim() || !selectedCommunity ? C.textDim : C.bg,
             fontSize: 14, fontWeight: 800, transition: 'all .15s',
             boxShadow: !saving && title.trim() ? `0 4px 20px ${C.green}44` : 'none',
           }}>
@@ -216,11 +359,12 @@ function NewAnnouncementForm({ onClose, onCreate }) {
 }
 
 // ── Single announcement card ──────────────────────────────────────────────────
-function AnnouncementCard({ ann, myId, onLike, onDelete }) {
+function AnnouncementCard({ ann, myId, onLike, onDelete, onViewTournament }) {
   const cfg = CATEGORY_CFG[ann.category] || CATEGORY_CFG.general
   const liked = ann.liked_by_me
   const likeCount = ann.like_count || 0
   const isAuthor = ann.author_id === myId
+  const hasTournament = ann.tournament_id || (ann.category === 'torneo' && ann.community?.id)
 
   return (
     <div style={{
@@ -283,29 +427,55 @@ function AnnouncementCard({ ann, myId, onLike, onDelete }) {
           <p style={{ margin: '0 0 12px', color: C.text2, fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{ann.body}</p>
         )}
 
-        {/* Link button */}
-        {ann.link_url && (
-          <a
-            href={ann.link_url} target="_blank" rel="noopener noreferrer"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '9px 18px', borderRadius: 10,
-              background: C.green, color: C.bg,
-              fontSize: 13, fontWeight: 700, textDecoration: 'none',
-              marginBottom: 12,
-              boxShadow: `0 2px 10px ${C.green}44`,
-            }}
-          >
-            🔗 {ann.link_label || 'Ver más'}
-          </a>
-        )}
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: ann.link_url || ann.tournament_id ? 12 : 0 }}>
+          {ann.tournament_id && (
+            <button
+              onClick={() => onViewTournament && onViewTournament(ann.tournament_id)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '10px 20px', borderRadius: 10,
+                background: C.green, color: C.bg, border: 'none', cursor: 'pointer',
+                fontSize: 14, fontWeight: 800,
+                boxShadow: `0 2px 14px ${C.green}55`,
+              }}
+            >
+              {ann.tournament?.tournament_status === 'inscripcion'
+                ? (ann.category === 'liga' ? '⚽ Inscribirse a la liga →' : '🏆 Inscribirse al torneo →')
+                : (ann.category === 'liga' ? '⚽ Ver liga →' : '🏆 Ver torneo →')}
+            </button>
+          )}
+          {ann.link_url && (
+            <a
+              href={ann.link_url} target="_blank" rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '9px 18px', borderRadius: 10,
+                background: ann.tournament_id ? C.panel2 : C.green,
+                color: ann.tournament_id ? C.text2 : C.bg,
+                fontSize: 13, fontWeight: 700, textDecoration: 'none',
+                border: ann.tournament_id ? `1px solid ${C.border}` : 'none',
+                boxShadow: !ann.tournament_id ? `0 2px 10px ${C.green}44` : 'none',
+              }}
+            >
+              🔗 {ann.link_label || 'Ver más'}
+            </a>
+          )}
+        </div>
 
-        {/* Footer: author + time + actions */}
+        {/* Footer: author + community + time + actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
           <Avatar name={ann.author?.display_name} url={ann.author?.avatar_url} size={28} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: C.text2 }}>{ann.author?.display_name || 'Anónimo'}</span>
-            <span style={{ fontSize: 11, color: C.textDim }}> · {timeAgo(ann.created_at)}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.text2 }}>{ann.author?.display_name || 'Anónimo'}</span>
+              {ann.community && (
+                <span style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600, background: '#8b5cf614', padding: '1px 7px', borderRadius: 10 }}>
+                  {ann.community.group_type === 'community' ? '🌐' : '👥'} {ann.community.name}
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: 11, color: C.textDim }}>{timeAgo(ann.created_at)}</span>
           </div>
 
           {/* Like */}
@@ -353,12 +523,13 @@ export default function AnnouncementsPage() {
   const [likedSet, setLikedSet] = useState(new Set())
   const [likeCounts, setLikeCounts] = useState({})
   const [canPublish, setCanPublish] = useState(false)
+  const [viewingTournamentId, setViewingTournamentId] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     let q = supabase
       .from('announcements')
-      .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url)')
+      .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url), community:conversations!announcements_conversation_id_fkey(id, name, group_type), tournament:conversations!announcements_tournament_id_fkey(id, name, tournament_status, group_type)')
       .eq('is_active', true)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
@@ -400,18 +571,12 @@ export default function AnnouncementsPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Check if user can publish announcements
+  // Can publish: roles con plan pago o que administran una comunidad
   useEffect(() => {
     if (!profile?.id) return
-    // Role-based check first (ceo, admin, organizador, vip, comunidad can publish)
-    if (canPublishAnnouncements(profile)) { setCanPublish(true); return }
-    // Fallback: also allow if user owns/admins at least one group or community
-    supabase
-      .from('group_roles')
-      .select('conversation_id', { count: 'exact', head: true })
-      .eq('user_id', profile.id)
-      .in('role', ['owner', 'admin'])
-      .then(({ count }) => setCanPublish((count || 0) > 0))
+    const role = profile.role || profile.plan || 'member'
+    // Todos pueden publicar (gratis con límite de 1, pago con límites más altos)
+    setCanPublish(true)
   }, [profile?.id, profile?.role])
 
   // Realtime — new announcements
@@ -457,6 +622,24 @@ export default function AnnouncementsPage() {
     setShowForm(false)
   }
 
+  if (viewingTournamentId) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <button onClick={() => setViewingTournamentId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: 4 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+          </button>
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>Torneo</span>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <TournamentDashboard tournamentId={viewingTournamentId} profile={profile} isAdmin={false} onBack={() => setViewingTournamentId(null)} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
 
@@ -482,7 +665,7 @@ export default function AnnouncementsPage() {
             </button>
           ) : (
             <div style={{ fontSize: 11, color: C.textDim, padding: '6px 10px', borderRadius: 8, background: C.panel2, border: `1px solid ${C.border}` }}>
-              Solo organizadores
+              Solo admins de comunidades
             </div>
           )}
         </div>
@@ -545,6 +728,7 @@ export default function AnnouncementsPage() {
                 myId={profile?.id}
                 onLike={handleLike}
                 onDelete={handleDelete}
+                onViewTournament={setViewingTournamentId}
               />
             ))}
           </div>

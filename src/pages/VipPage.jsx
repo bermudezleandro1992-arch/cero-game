@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { C } from '../theme'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
@@ -12,22 +12,24 @@ const PLANS = [
     emoji: '🆓',
     color: '#6b7280',
     features: [
-      '✅ Mensajes ilimitados',
-      '✅ Chats 1 a 1',
+      '✅ Mensajes 1 a 1 ilimitados',
       '✅ Grupos hasta 50 personas',
       '✅ Archivos hasta 10 MB',
       '✅ Llamadas de audio y video',
-      '✅ Historias',
-      '❌ Sin comunidades avanzadas',
+      '✅ Historias y estados',
+      '✅ Unirse a comunidades gratis',
+      '✅ 1 torneo o liga activo a la vez',
+      '❌ Solo temas Claro y Oscuro',
+      '❌ Sin estadísticas avanzadas',
+      '❌ Sin torneos con premio en dinero',
       '❌ Sin bots personalizados',
-      '❌ Sin estadísticas',
     ],
   },
   {
     id: 'vip',
     name: 'VIP',
-    price: '$4.99',
-    priceUSD: 4.99,
+    price: '$3.99',
+    priceUSD: 3.99,
     period: 'por mes',
     emoji: '⭐',
     color: '#f59e0b',
@@ -35,61 +37,82 @@ const PLANS = [
     features: [
       '✅ Todo lo del plan Gratis',
       '✅ Grupos hasta 1.000 personas',
-      '✅ Comunidades ilimitadas',
       '✅ Archivos hasta 2 GB',
-      '✅ Bots personalizados',
-      '✅ Estadísticas de comunidades',
-      '✅ Badge VIP ⭐ visible en tu perfil',
-      '✅ Mensajes temporales avanzados',
       '✅ Canales de difusión',
-      '✅ Soporte prioritario',
+      '✅ Estadísticas avanzadas de perfil y torneos',
+      '✅ Participar en torneos con premio en dinero 💰',
+      '✅ Historial completo de partidas y rendimiento',
+      '✅ Badge VIP ⭐ en tu perfil',
+      '✅ Ranking global 🏅',
+      '✅ Hasta 3 torneos/ligas simultáneos',
+      '✅ Soporte prioritario 24/7',
+      '✅ Temas de color exclusivos 🎨 (Océano, Violeta, Fuego, Naturaleza)',
+      '✅ Acceso anticipado a nuevas funciones',
     ],
-    annual: { id: 'vip_anual', price: '$39.99', save: '33%' },
+    annual: { id: 'vip_anual', price: '$29', save: '20%' },
   },
   {
     id: 'comunidad',
-    name: 'Comunidad Pro',
-    price: '$9.99',
-    priceUSD: 9.99,
-    period: 'por mes',
+    name: 'Comunidad PRO',
+    price: '$15',
+    priceUSD: 15,
+    period: 'por mes · pagado por el CEO',
     emoji: '🏆',
     color: '#8b5cf6',
+    tiers: [
+      { label: 'Starter', price: '$15.99', priceUSD: 15.99, desc: 'Hasta 1.000 miembros', id: 'com_starter' },
+      { label: 'Elite',   price: '$29.99', priceUSD: 29.99, desc: 'Miembros ilimitados', id: 'com_elite' },
+    ],
     features: [
-      '✅ Todo lo del plan VIP',
-      '✅ Grupos hasta 10.000 personas',
-      '✅ API completa para bots',
-      '✅ Panel de administración Pro',
-      '✅ Roles y permisos avanzados',
-      '✅ Torneos y eventos integrados',
-      '✅ Estadísticas en tiempo real',
-      '✅ Sin publicidad nunca',
-      '✅ Badge especial 🏆',
+      '✅ Miembros entran GRATIS a tu comunidad',
+      '✅ Comunidad sin límite de miembros (según tier)',
+      '✅ Panel CEO completo 🎛️',
+      '✅ Roles y permisos avanzados (CEO, Org, Mod)',
+      '✅ Torneos y ligas ilimitados con premios',
+      '✅ Sorteos en vivo 🎰',
+      '✅ API completa para bots de torneos',
+      '✅ Estadísticas en tiempo real de tu comunidad',
+      '✅ Badge especial 🏆 en tu perfil',
       '✅ Acceso anticipado a novedades',
     ],
-    annual: { id: 'com_anual', price: '$79.99', save: '33%' },
+    annual: { id: 'com_anual', price: '$135', save: '25%' },
   },
 ]
+
+// Tasas de cambio fijas de respaldo (se actualizan si la API falla)
+const FALLBACK_RATES = {
+  ARS: 1580,   // Argentina
+  MXN: 17.5,   // México
+  BRL: 5.75,   // Brasil
+  COP: 4200,   // Colombia
+  CLP: 980,    // Chile
+  UYU: 42,     // Uruguay
+  PEN: 3.75,   // Perú
+  PYG: 7800,   // Paraguay
+}
 
 const PAYMENT_METHODS = [
   {
     id: 'ar_transferencia',
     label: 'Transferencia Argentina',
     emoji: '🇦🇷',
-    desc: 'CVU / Alias — cualquier banco o billetera',
+    desc: 'Pesos ARS — CVU/Alias, cualquier banco o billetera',
     color: '#74b9ff',
     available: true,
     manual: true,
-    category: 'ar',
+    currency: 'ARS',
+    currencySymbol: '$',
+    currencyLabel: 'ARS',
   },
   {
-    id: 'usd_wire',
-    label: 'USD — Wire Transfer',
-    emoji: '🇺🇸',
-    desc: 'Desde cualquier banco al exterior',
-    color: '#00b894',
+    id: 'astropay_latam',
+    label: 'AstroPay — LATAM',
+    emoji: '🌎',
+    desc: 'Colombia, Chile, Brasil, Uruguay, Perú, Paraguay + más',
+    color: '#a855f7',
     available: true,
     manual: true,
-    category: 'intl',
+    currency: null, // se elige el país dentro
   },
   {
     id: 'mxn_transfer',
@@ -99,7 +122,9 @@ const PAYMENT_METHODS = [
     color: '#e17055',
     available: true,
     manual: true,
-    category: 'intl',
+    currency: 'MXN',
+    currencySymbol: '$',
+    currencyLabel: 'MXN',
   },
   {
     id: 'crypto',
@@ -109,7 +134,27 @@ const PAYMENT_METHODS = [
     color: '#F3BA2F',
     available: true,
     manual: true,
-    category: 'crypto',
+    currency: 'USD',
+  },
+  {
+    id: 'usd_wire',
+    label: 'USD — Wire Transfer',
+    emoji: '🇺🇸',
+    desc: 'Desde cualquier banco al exterior',
+    color: '#00b894',
+    available: true,
+    manual: true,
+    currency: 'USD',
+  },
+  {
+    id: 'paypal',
+    label: 'PayPal',
+    emoji: '🅿️',
+    desc: 'Tarjeta de crédito/débito o cuenta PayPal — USD',
+    color: '#009CDE',
+    available: true,
+    direct: true,
+    currency: 'USD',
   },
   {
     id: 'mercadopago',
@@ -118,8 +163,25 @@ const PAYMENT_METHODS = [
     desc: 'Próximamente',
     color: '#009EE3',
     available: false,
-    category: 'other',
   },
+]
+
+// Links de PayPal por plan/tier
+const PAYPAL_LINKS = {
+  vip:         'https://www.paypal.com/ncp/payment/FPCGXDATUR7G6',
+  com_starter: 'https://www.paypal.com/ncp/payment/H9W3RWW496T6L',
+  com_elite:   'https://www.paypal.com/ncp/payment/MZ5MX9XK88B68',
+  donation:    'https://www.paypal.com/ncp/payment/JF3S2VLK75MZS',
+}
+
+// Países LATAM para AstroPay
+const ASTROPAY_COUNTRIES = [
+  { id: 'co', flag: '🇨🇴', name: 'Colombia',  currency: 'COP', symbol: '$',  bank: 'Nequi / Bancolombia', currencyLabel: 'COP' },
+  { id: 'cl', flag: '🇨🇱', name: 'Chile',     currency: 'CLP', symbol: '$',  bank: 'Cuenta RUT / banco',  currencyLabel: 'CLP' },
+  { id: 'br', flag: '🇧🇷', name: 'Brasil',    currency: 'BRL', symbol: 'R$', bank: 'PIX',                 currencyLabel: 'BRL' },
+  { id: 'uy', flag: '🇺🇾', name: 'Uruguay',   currency: 'UYU', symbol: '$',  bank: 'Transferencia',       currencyLabel: 'UYU' },
+  { id: 'pe', flag: '🇵🇪', name: 'Perú',      currency: 'PEN', symbol: 'S/', bank: 'Yape / Plin / banco', currencyLabel: 'PEN' },
+  { id: 'py', flag: '🇵🇾', name: 'Paraguay',  currency: 'PYG', symbol: '₲',  bank: 'Tigo Money / banco',  currencyLabel: 'PYG' },
 ]
 
 // 🇦🇷 Argentina — 2 cuentas
@@ -186,6 +248,7 @@ function Section({ label, children }) {
 export default function VipPage({ onBack }) {
   const { profile } = useAuthStore()
   const [selected, setSelected] = useState('vip')
+  const [comunidadTier, setComunidadTier] = useState(0) // index into PLANS[2].tiers
   const [annual, setAnnual] = useState(false)
   const [step, setStep] = useState('plans')   // 'plans' | 'payment' | 'manual' | 'success'
   const [payMethod, setPayMethod] = useState(null)
@@ -196,8 +259,53 @@ export default function VipPage({ onBack }) {
   const [proofFile, setProofFile] = useState(null)
   const [proofPreview, setProofPreview] = useState(null)
 
+  const [rates, setRates] = useState(FALLBACK_RATES)
+  const [ratesUpdated, setRatesUpdated] = useState(null)
+  const [latamCountry, setLatamCountry] = useState(null)
+
+  useEffect(() => {
+    fetch('https://open.er-api.com/v6/latest/USD')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.rates) {
+          setRates({
+            ARS: data.rates.ARS || FALLBACK_RATES.ARS,
+            MXN: data.rates.MXN || FALLBACK_RATES.MXN,
+            BRL: data.rates.BRL || FALLBACK_RATES.BRL,
+            COP: data.rates.COP || FALLBACK_RATES.COP,
+            CLP: data.rates.CLP || FALLBACK_RATES.CLP,
+            UYU: data.rates.UYU || FALLBACK_RATES.UYU,
+            PEN: data.rates.PEN || FALLBACK_RATES.PEN,
+            PYG: data.rates.PYG || FALLBACK_RATES.PYG,
+          })
+          setRatesUpdated(new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }))
+        }
+      })
+      .catch(() => {}) // usa fallback si falla
+  }, [])
+
+  function toLocal(usd, currency) {
+    const rate = rates[currency] || 1
+    const amount = usd * rate
+    if (amount >= 1000) return Math.round(amount).toLocaleString('es')
+    return amount.toFixed(2)
+  }
+
   const plan = PLANS.find(p => p.id === selected)
-  const planIdToSend = annual && plan?.annual ? plan.annual.id : selected
+  const activeTier = plan?.tiers ? plan.tiers[comunidadTier] : null
+  const activePriceUSD = activeTier ? activeTier.priceUSD : (plan?.priceUSD || 0)
+  const planIdToSend = annual && plan?.annual
+    ? (activeTier ? activeTier.id + '_anual' : plan.annual.id)
+    : (activeTier ? activeTier.id : selected)
+  const planUSD = annual && plan?.annual
+    ? parseFloat(plan.annual.price.replace('$', ''))
+    : activePriceUSD
+
+  function handlePayPal() {
+    const tierKey = activeTier ? activeTier.id : selected
+    const url = PAYPAL_LINKS[tierKey] || PAYPAL_LINKS[selected]
+    if (url) window.open(url, '_blank')
+  }
 
   async function handleMercadoPago() {
     setLoading(true)
@@ -311,14 +419,40 @@ export default function VipPage({ onBack }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px' }}>
 
           <Section label="Monto a pagar">
-            <div style={{ background: C.panel, border: `1px solid ${plan?.color}44`, borderRadius: 14, padding: '16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 32, fontWeight: 900, color: plan?.color }}>
-                ${annual && plan?.annual ? plan.annual.price.replace('$','') : plan?.priceUSD} USD
-              </div>
-              <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
-                {plan?.emoji} {plan?.name} {annual ? '(anual)' : '(mensual)'}
-              </div>
-            </div>
+            {(() => {
+              const pm = PAYMENT_METHODS.find(m => m.id === payMethod)
+              const activeCurrency = payMethod === 'astropay_latam' && latamCountry
+                ? latamCountry.currency
+                : pm?.currency
+              const activeSymbol = payMethod === 'astropay_latam' && latamCountry
+                ? latamCountry.symbol
+                : (activeCurrency === 'ARS' ? '$' : activeCurrency === 'MXN' ? '$' : '')
+              const activeLabel = payMethod === 'astropay_latam' && latamCountry
+                ? latamCountry.currencyLabel
+                : (pm?.currencyLabel || pm?.currency || 'USD')
+              const showLocal = activeCurrency && activeCurrency !== 'USD'
+              return (
+                <div style={{ background: C.panel, border: `1px solid ${plan?.color}44`, borderRadius: 14, padding: '16px', textAlign: 'center' }}>
+                  {showLocal ? (
+                    <>
+                      <div style={{ fontSize: 32, fontWeight: 900, color: plan?.color }}>
+                        {activeSymbol} {toLocal(planUSD, activeCurrency)} <span style={{ fontSize: 14 }}>{activeLabel}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: C.textDim, marginTop: 4 }}>
+                        ≈ ${planUSD} USD · {ratesUpdated ? `cotización ${ratesUpdated}` : 'cotización de referencia'}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 32, fontWeight: 900, color: plan?.color }}>
+                      ${planUSD} <span style={{ fontSize: 14 }}>USD</span>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 13, color: C.textDim, marginTop: 6 }}>
+                    {plan?.emoji} {plan?.name} {annual ? '(anual)' : '(mensual)'}
+                  </div>
+                </div>
+              )
+            })()}
           </Section>
 
           {/* 🇦🇷 ARGENTINA */}
@@ -344,6 +478,48 @@ export default function VipPage({ onBack }) {
               <p style={{ fontSize: 12, color: '#74b9ff', lineHeight: 1.6, marginBottom: 16 }}>
                 💡 Transferí desde Mercado Pago, Uala, Naranja X, BBVA o cualquier banco/billetera. Usá el alias o el CVU.
               </p>
+            </>
+          )}
+
+          {/* 🌎 ASTROPAY LATAM */}
+          {payMethod === 'astropay_latam' && (
+            <>
+              <Section label="Seleccioná tu país">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+                  {ASTROPAY_COUNTRIES.map(c => (
+                    <button key={c.id} onClick={() => setLatamCountry(c)} style={{
+                      padding: '10px 6px', borderRadius: 12, border: `1.5px solid ${latamCountry?.id === c.id ? '#a855f7' : C.border}`,
+                      background: latamCountry?.id === c.id ? '#a855f720' : C.panel,
+                      cursor: 'pointer', textAlign: 'center',
+                    }}>
+                      <div style={{ fontSize: 22 }}>{c.flag}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.text, marginTop: 3 }}>{c.name}</div>
+                      <div style={{ fontSize: 10, color: C.textDim }}>{c.bank}</div>
+                    </button>
+                  ))}
+                </div>
+              </Section>
+              {latamCountry && (
+                <Section label={`Instrucciones — ${latamCountry.flag} ${latamCountry.name}`}>
+                  <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 13, color: C.text, fontWeight: 700 }}>Cómo pagar vía AstroPay</p>
+                    <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: C.textDim, lineHeight: 1.8 }}>
+                      <li>Abrí AstroPay en tu dispositivo</li>
+                      <li>Cargá saldo desde {latamCountry.bank}</li>
+                      <li>Enviá el monto equivalente a <strong style={{ color: C.text }}>somoslfa</strong> (alias/usuario AstroPay)</li>
+                      <li>Subí el comprobante abajo</li>
+                    </ol>
+                    <div style={{ marginTop: 10, padding: '10px 12px', background: `#a855f715`, border: `1px solid #a855f733`, borderRadius: 10 }}>
+                      <p style={{ margin: 0, fontSize: 11, color: C.textDim }}>Monto a enviar</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 18, fontWeight: 900, color: '#a855f7' }}>
+                        {latamCountry.symbol} {toLocal(planUSD, latamCountry.currency)} {latamCountry.currencyLabel}
+                        <span style={{ fontSize: 11, fontWeight: 400, color: C.textDim, marginLeft: 8 }}>≈ ${planUSD} USD</span>
+                      </p>
+                      {ratesUpdated && <p style={{ margin: '3px 0 0', fontSize: 10, color: C.textDim }}>Cotización actualizada a las {ratesUpdated}</p>}
+                    </div>
+                  </div>
+                </Section>
+              )}
             </>
           )}
 
@@ -511,6 +687,7 @@ export default function VipPage({ onBack }) {
                   key={m.id}
                   onClick={() => {
                     if (!m.available) return
+                    if (m.direct) { setPayMethod(m.id); handlePayPal(); return }
                     setPayMethod(m.id)
                     setStep('manual')
                   }}
@@ -548,7 +725,7 @@ export default function VipPage({ onBack }) {
 
           <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', marginTop: 8 }}>
             <p style={{ margin: 0, fontSize: 11, color: C.textDim, lineHeight: 1.6 }}>
-              🔒 Pago 100% seguro. Para Mercado Pago: procesado directamente por MP, nunca guardamos tu tarjeta. Para crypto: verificación manual en menos de 24hs.
+              🔒 Pago 100% seguro. PayPal: procesado por PayPal, nunca guardamos tu tarjeta. Transferencias y crypto: verificación manual en menos de 24hs.
             </p>
           </div>
         </div>
@@ -587,7 +764,7 @@ export default function VipPage({ onBack }) {
                 color: annual === isAnnual ? C.bg : C.textDim,
                 fontSize: 12, fontWeight: 700, transition: 'all .2s',
               }}>
-                {isAnnual ? '🗓 Anual (-33%)' : 'Mensual'}
+                {isAnnual ? '🗓 Anual (-25%)' : 'Mensual'}
               </button>
             ))}
           </div>
@@ -608,7 +785,12 @@ export default function VipPage({ onBack }) {
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {PLANS.map(p => {
             const isSelected = selected === p.id
-            const displayPrice = annual && p.annual ? p.annual.price : p.price
+            const tier = p.tiers ? p.tiers[comunidadTier] : null
+            const basePrice = tier ? tier.price : p.price
+            const basePriceUSD = tier ? tier.priceUSD : (p.priceUSD || 0)
+            const displayPrice = annual && p.annual
+              ? p.annual.price
+              : basePrice
             return (
               <button
                 key={p.id}
@@ -637,10 +819,28 @@ export default function VipPage({ onBack }) {
                     <div style={{ color: p.color, fontWeight: 800, fontSize: 16 }}>{p.name}</div>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                       <span style={{ color: C.text, fontWeight: 900, fontSize: 20 }}>{displayPrice}</span>
-                      <span style={{ color: C.textDim, fontSize: 11 }}>{annual && p.annual ? 'por año' : p.period}</span>
+                      <span style={{ color: C.textDim, fontSize: 11 }}>{annual && p.annual ? 'por año' : (p.period || 'por mes')}</span>
                     </div>
                   </div>
                 </div>
+
+                {/* Tier selector for Comunidad PRO */}
+                {p.tiers && isSelected && (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }} onClick={e => e.stopPropagation()}>
+                    {p.tiers.map((t, i) => (
+                      <button key={t.id} onClick={e => { e.stopPropagation(); setComunidadTier(i) }} style={{
+                        flex: 1, padding: '8px 4px', borderRadius: 10, border: `1.5px solid ${comunidadTier === i ? p.color : C.border}`,
+                        background: comunidadTier === i ? `${p.color}20` : C.panel2, cursor: 'pointer',
+                        color: comunidadTier === i ? p.color : C.textDim, fontSize: 11, fontWeight: 700, textAlign: 'center',
+                      }}>
+                        <div>{t.label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 900, color: comunidadTier === i ? p.color : C.text }}>{t.price}/mes</div>
+                        <div style={{ fontSize: 10, fontWeight: 400, color: C.textDim, marginTop: 1 }}>{t.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {p.features.map(f => (
                     <div key={f} style={{ color: f.startsWith('❌') ? C.textDim : C.text2, fontSize: 12.5, lineHeight: 1.4 }}>{f}</div>

@@ -4,14 +4,12 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { C } from '../theme'
-import { getMaxParticipants, getRoleCfg } from '../lib/roles'
+import { getMaxParticipants, getLimits, getRoleCfg } from '../lib/roles'
+import BannerAd from '../components/BannerAd'
 import SorteoPage from './tools/SorteoPage'
-import BracketsPage from './tools/BracketsPage'
-import TablaPosicionesPage from './tools/TablaPosicionesPage'
 import VotacionesPage from './tools/VotacionesPage'
-import CargaResultadosPage from './tools/CargaResultadosPage'
 import CalendarioPage from './tools/CalendarioPage'
-import SistemaPremiosPage from './tools/SistemaPremiosPage'
+import CommunityTournamentsPanel from './CommunityTournamentsPanel'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -46,7 +44,7 @@ const GAME_CONFIG = {
       { id: 'divisions_only', label: 'Solo modo Divisiones' },
       { id: 'no_sbcs', label: 'Sin cartas SBC/Evolutions' },
     ],
-    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+    formatos: ['Eliminación directa', 'Fase de grupos', 'Bracket completo', 'Grupos + Playoffs', 'Copa (eliminatoria)', 'Sistema Suizo'],
   },
   fc26: {
     plataformas: ['PS5', 'PS4', 'Xbox Series X/S', 'Xbox One', 'PC (EA App)'],
@@ -58,7 +56,7 @@ const GAME_CONFIG = {
       { id: 'custom_tactics', label: 'Tácticas libres' },
       { id: 'divisions_only', label: 'Solo modo Divisiones' },
     ],
-    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+    formatos: ['Eliminación directa', 'Fase de grupos', 'Bracket completo', 'Grupos + Playoffs', 'Copa (eliminatoria)', 'Sistema Suizo'],
   },
   fc25: {
     plataformas: ['PS5', 'PS4', 'Xbox Series X/S', 'Xbox One', 'PC (EA App)'],
@@ -69,7 +67,7 @@ const GAME_CONFIG = {
       { id: 'handicap', label: 'Sin Handicap' },
       { id: 'custom_tactics', label: 'Tácticas libres' },
     ],
-    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+    formatos: ['Eliminación directa', 'Fase de grupos', 'Bracket completo', 'Grupos + Playoffs', 'Copa (eliminatoria)', 'Sistema Suizo'],
   },
   efootball: {
     plataformas: ['PS5', 'PS4', 'Xbox Series X/S', 'Xbox One', 'PC (Steam)', 'Mobile (iOS/Android)'],
@@ -82,7 +80,7 @@ const GAME_CONFIG = {
       { id: 'same_nation', label: 'Solo jugadores de misma nación' },
       { id: 'squad_cost', label: 'Límite de costo de plantel' },
     ],
-    formatos: ['1vs1', 'Grupos + Playoffs', 'Liga todos vs todos', 'Copa eliminación directa', 'Bracket'],
+    formatos: ['Eliminación directa', 'Fase de grupos', 'Bracket completo', 'Grupos + Playoffs', 'Copa (eliminatoria)', 'Sistema Suizo'],
   },
   cs2: {
     plataformas: ['PC (Steam)'],
@@ -168,13 +166,27 @@ const GAME_CONFIG = {
   },
 }
 
-const FORMATS = ['1vs1', '2vs2', 'Equipos', 'Liga', 'Copa', 'Bracket', 'Grupos + Playoffs']
+const FORMATS_TORNEO = [
+  'Eliminación directa',
+  'Fase de grupos',
+  'Bracket completo',
+  'Grupos + Playoffs',
+  'Copa (eliminatoria)',
+  'Sistema Suizo',
+]
+
+const FORMATS_GUERRA = [
+  'Eliminación directa',
+  'Grupos + Final',
+  'Liga de clanes',
+  'Copa eliminatoria',
+]
 
 // ── Plan check — community plan free for all during beta ─────────────────────
 function usePlan(profile) {
   const plan = profile?.plan || 'community'
   const role = profile?.role || 'member'
-  const isCommunity = plan === 'community' || plan === 'vip' || role === 'ceo' || role === 'organizador'
+  const isCommunity = plan === 'community' || plan === 'vip' || role === 'superadmin' || role === 'ceo' || role === 'organizador'
   return { isCommunity, plan, role }
 }
 
@@ -378,6 +390,8 @@ function TournamentPanel({ tournament, profile, onClose }) {
   const [tab, setTab] = useState('participantes')
   const [participants, setParticipants] = useState([])
   const [loading, setLoading] = useState(true)
+  const [starting, setStarting] = useState(false)
+  const [tStatus, setTStatus] = useState(tournament.status || 'inscripcion')
 
   useEffect(() => {
     async function load() {
@@ -392,8 +406,20 @@ function TournamentPanel({ tournament, profile, onClose }) {
     load()
   }, [tournament.id])
 
+  async function handleStart() {
+    if (participants.length < 2) { alert('Necesitás al menos 2 participantes para iniciar.'); return }
+    setStarting(true)
+    const { data, error } = await supabase.rpc('start_tournament', { p_tournament_id: tournament.id })
+    setStarting(false)
+    if (error || data?.ok === false) { alert(data?.error || error?.message || 'Error al iniciar'); return }
+    setTStatus('en_curso')
+    setTab(tournament.group_type === 'liga' ? 'liga' : 'brackets')
+  }
+
   const isCreator = tournament.created_by === profile?.id
+  const isLiga = tournament.group_type === 'liga'
   const playerNames = participants.map(p => p.users?.display_name || p.users?.username || 'Jugador')
+  const playerIds = participants.map(p => p.user_id)
 
   const TABS = [
     { id: 'participantes', icon: '👥', label: 'Jugadores' },
@@ -424,6 +450,21 @@ function TournamentPanel({ tournament, profile, onClose }) {
               <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>{tournament.description}</p>
             </div>
           </div>
+          {isCreator && tStatus === 'inscripcion' && (
+            <button
+              onClick={handleStart}
+              disabled={starting || participants.length < 2}
+              style={{
+                width: '100%', marginBottom: 8, padding: '10px',
+                background: starting || participants.length < 2 ? C.panel2 : C.green,
+                color: starting || participants.length < 2 ? C.textDim : C.bg,
+                border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14,
+                cursor: starting || participants.length < 2 ? 'default' : 'pointer',
+              }}
+            >
+              {starting ? '⏳ Iniciando...' : `🚀 Iniciar ${isLiga ? 'Liga' : 'Torneo'} (${participants.length} jugadores)`}
+            </button>
+          )}
           <div style={{ display: 'flex', gap: 0 }}>
             {TABS.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -493,12 +534,22 @@ function TournamentPanel({ tournament, profile, onClose }) {
 
           {/* Brackets */}
           {tab === 'brackets' && (
-            <BracketsPage onBack={() => setTab('participantes')} initialPlayers={playerNames} />
+            <BracketsPage
+              onBack={() => setTab('participantes')}
+              initialPlayers={playerNames}
+              tournamentId={tournament.id}
+              isOrganizer={isCreator}
+            />
           )}
 
           {/* Liga */}
           {tab === 'liga' && (
-            <TablaPosicionesPage onBack={() => setTab('participantes')} initialTeams={playerNames} />
+            <TablaPosicionesPage
+              onBack={() => setTab('participantes')}
+              initialTeams={playerNames}
+              tournamentId={tournament.id}
+              isOrganizer={isCreator}
+            />
           )}
 
           {/* Sorteo */}
@@ -548,8 +599,7 @@ function ConfirmDialog({ dialog, onClose }) {
 const TYPE_CFG = {
   tournament: { icon: '🏆', label: 'Torneo' },
   liga:       { icon: '📋', label: 'Liga' },
-  clan:       { icon: '⚔️', label: 'Clanes' },
-  bracket:    { icon: '🔱', label: 'Bracket' },
+  guerra:     { icon: '⚔️', label: 'Guerra de Clanes' },
 }
 
 function TournamentsList({ profile }) {
@@ -564,33 +614,70 @@ function TournamentsList({ profile }) {
   const [confirmDialog, setConfirmDialog] = useState(null)
   const [managingTournament, setManagingTournament] = useState(null)
 
+  // My communities (admin/owner only)
+  const [myCommunities, setMyCommunities] = useState([])
+
   // Create form state
-  const [tType,       setTType]       = useState('tournament')
-  const [tGameId,     setTGameId]     = useState('fc26')
-  const [tName,       setTName]       = useState('')
-  const [tMaxPl,      setTMaxPl]      = useState('16')
-  const [tDeadline,   setTDeadline]   = useState('')
-  const [tFormat,     setTFormat]     = useState('1vs1')
-  const [tPlataforma, setTPlataforma] = useState('')
-  const [tModo,       setTModo]       = useState('')
-  const [tTiempo,     setTTiempo]     = useState('')
-  const [tExtras,     setTExtras]     = useState([])
-  const [tMapas,      setTMapas]      = useState([])
-  const [tNivelMax,   setTNivelMax]   = useState('')
-  const [tDivision,   setTDivision]   = useState('')
-  const [tRondas,     setTRondas]     = useState('')
-  const [tPerspectiva,setTPerspectiva]= useState('')
-  const [tReglas,     setTReglas]     = useState('')
+  const [tType,        setTType]        = useState('tournament')
+  const [tGameId,      setTGameId]      = useState('fc26')
+  const [tName,        setTName]        = useState('')
+  const [tMaxPl,       setTMaxPl]       = useState('16')
+  const [tDeadline,    setTDeadline]    = useState('')
+  const [tStartDate,   setTStartDate]   = useState('')
+  const [tFormat,      setTFormat]      = useState('Eliminación directa')
+  const [tPlataforma,  setTPlataforma]  = useState('')
+  const [tModo,        setTModo]        = useState('')
+  const [tTiempo,      setTTiempo]      = useState('')
+  const [tExtras,      setTExtras]      = useState([])
+  const [tMapas,       setTMapas]       = useState([])
+  const [tNivelMax,    setTNivelMax]    = useState('')
+  const [tDivision,    setTDivision]    = useState('')
+  const [tRondas,      setTRondas]      = useState('')
+  const [tPerspectiva, setTPerspectiva] = useState('')
+  const [tReglas,      setTReglas]      = useState('')
+  const [tCommunityId, setTCommunityId] = useState('')
+  const [tEntryFee,    setTEntryFee]    = useState('')
+  const [tIsPublic,    setTIsPublic]    = useState(true)
+  const [tMode,        setTMode]        = useState('1vs1')        // guerra de clanes: 2vs2 / 3vs3
+  // Liga-specific
+  const [tTemporada,   setTTemporada]   = useState('')
+  const [tJornadas,    setTJornadas]    = useState('')
+  const [tDivisionLiga,setTDivisionLiga]= useState('')
 
   const gameCfg = GAME_CONFIG[tGameId] || GAME_CONFIG.otro
   const gameInfo = GAME_CATALOG.find(g => g.id === tGameId) || GAME_CATALOG[GAME_CATALOG.length - 1]
 
   function resetCreate() {
     setTType('tournament'); setTGameId('fc26'); setTName(''); setTMaxPl('16')
-    setTDeadline(''); setTFormat('1vs1'); setTPlataforma(''); setTModo('')
+    setTDeadline(''); setTStartDate(''); setTFormat('Eliminación directa'); setTPlataforma(''); setTModo('')
     setTTiempo(''); setTExtras([]); setTMapas([]); setTNivelMax('')
     setTDivision(''); setTRondas(''); setTPerspectiva(''); setTReglas('')
+    setTCommunityId(''); setTEntryFee(''); setTIsPublic(true); setTMode('1vs1')
+    setTTemporada(''); setTJornadas(''); setTDivisionLiga('')
   }
+
+  async function loadMyCommunities() {
+    if (!profile?.id) return
+    // Load communities where I am admin, owner or ceo
+    const { data } = await supabase
+      .from('conversation_members')
+      .select('conversation_id, role, conversations(id, name, group_type)')
+      .eq('user_id', profile.id)
+      .in('role', ['owner', 'ceo', 'admin'])
+    const comms = (data || [])
+      .map(r => r.conversations)
+      .filter(c => c && c.group_type === 'community' && c.name)
+    // deduplicate
+    const seen = new Set()
+    setMyCommunities(comms.filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true }))
+  }
+
+  // Reset format when type changes so it's always valid
+  useEffect(() => {
+    if (tType === 'liga') setTFormat('Todos contra todos')
+    else if (tType === 'guerra') setTFormat('Eliminación directa')
+    else setTFormat('Eliminación directa')
+  }, [tType])
 
   function toggleExtra(id) {
     setTExtras(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -600,36 +687,61 @@ function TournamentsList({ profile }) {
     setTMapas(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
   }
 
-  useEffect(() => { loadTournaments() }, [profile?.id])
+  useEffect(() => { loadTournaments(); loadMyCommunities() }, [profile?.id])
 
   async function loadTournaments() {
     setLoading(true)
     const { data: rows } = await supabase
       .from('conversations')
-      .select('id, name, description, created_at, created_by, group_type, status')
-      .eq('group_type', 'tournament')
+      .select('id, name, description, created_at, created_by, group_type, status, game, format, max_participants, is_public')
+      .in('group_type', ['tournament', 'liga'])
       .order('created_at', { ascending: false })
 
     if (rows) {
-      const enriched = await Promise.all(rows.map(async (t) => {
-        const { count } = await supabase.from('conversation_members')
-          .select('*', { count: 'exact', head: true }).eq('conversation_id', t.id)
-        return { ...t, memberCount: count || 0 }
-      }))
-      setTournaments(enriched)
+      // single query for all member counts
+      const ids = rows.map(r => r.id)
+      const { data: counts } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .in('conversation_id', ids)
+      const countMap = {}
+      ;(counts || []).forEach(c => { countMap[c.conversation_id] = (countMap[c.conversation_id] || 0) + 1 })
+      setTournaments(rows.map(t => ({ ...t, memberCount: countMap[t.id] || 0 })))
     }
     setLoading(false)
   }
 
   async function handleCreate() {
     if (!tName.trim()) return
+
+    // Validar límites de plan (frontend rápido + backend definitivo)
+    const limits = getLimits(profile)
+    const reqMax = parseInt(tMaxPl) || 2
+    if (reqMax > limits.maxParticipants) {
+      alert(`Tu rol (${profile?.role || 'member'}) permite máximo ${limits.maxParticipants} participantes. Reducí el número o contactá al admin.`)
+      return
+    }
+
     setCreating(true)
+    // Validación backend: límite diario y participantes
+    const { data: validation } = await supabase.rpc('validate_tournament_creation', { p_max_participants: reqMax })
+    if (validation && !validation.ok) {
+      setCreating(false)
+      if (validation.error === 'participant_limit_exceeded') {
+        alert(`Tu rol permite máximo ${validation.max_participants} participantes.`)
+      } else if (validation.error === 'daily_limit_reached') {
+        alert(`Alcanzaste el límite diario de competencias para tu rol. Volvé mañana.`)
+      } else {
+        alert('No tenés permiso para crear esta competencia.')
+      }
+      return
+    }
     try {
       const typeLabel = TYPE_CFG[tType]?.label || 'Torneo'
       const parts = [
         typeLabel,
         gameInfo.label,
-        tFormat,
+        tType === 'guerra' ? `${tMode}` : tFormat,
         tPlataforma,
         tModo,
         tTiempo,
@@ -639,20 +751,39 @@ function TournamentsList({ profile }) {
         tPerspectiva,
         tMapas.length > 0 ? `Mapas: ${tMapas.join(', ')}` : '',
         tExtras.length > 0 ? tExtras.map(id => gameCfg.extras?.find(e => e.id === id)?.label).filter(Boolean).join(' · ') : '',
-        `Hasta ${tMaxPl} jugadores`,
-        tDeadline ? `Cierre: ${tDeadline}` : '',
+        `Hasta ${tMaxPl} ${tType === 'guerra' ? 'clanes' : 'jugadores'}`,
+        tEntryFee ? `Entrada: ${tEntryFee}` : '',
+        tTemporada ? `Temporada: ${tTemporada}` : '',
+        tJornadas ? `${tJornadas} jornadas` : '',
+        tDivisionLiga ? `Div. ${tDivisionLiga}` : '',
+        tStartDate ? `Inicio: ${tStartDate}` : '',
+        tDeadline ? `Cierre inscripción: ${tDeadline}` : '',
+        !tIsPublic ? 'Privado' : '',
         tReglas ? `Reglamento: ${tReglas}` : '',
       ].filter(Boolean)
       const desc = parts.join(' · ')
 
+      const dbGroupType = tType === 'liga' ? 'liga' : 'tournament'
       const { data: convId, error: rpcErr } = await supabase.rpc('create_group_with_owner', {
         p_name:        tName.trim(),
         p_is_group:    true,
-        p_group_type:  'tournament',
+        p_group_type:  dbGroupType,
         p_description: desc,
         p_created_by:  profile.id,
       })
       if (rpcErr) throw rpcErr
+
+      // store structured fields in new columns
+      const updatePayload = {
+        game:             tGameId,
+        format:           tType === 'guerra' ? `Guerra ${tMode}` : tFormat,
+        max_participants: parseInt(tMaxPl) || null,
+        registration_deadline: tDeadline ? new Date(tDeadline).toISOString() : null,
+        is_public:        tIsPublic,
+      }
+      if (tCommunityId) updatePayload.community_id = tCommunityId
+      if (tStartDate)   updatePayload.start_date = new Date(tStartDate).toISOString()
+      await supabase.from('conversations').update(updatePayload).eq('id', convId)
 
       await supabase.from('topics').insert([
         { conversation_id: convId, name: 'Anuncios',   emoji: '📢', topic_type: 'announcements', position: 0 },
@@ -728,7 +859,11 @@ function TournamentsList({ profile }) {
       setActiveConversation({ id, isGroup: true, isTournament: true, name: tournaments.find(t => t.id === id)?.name })
       return
     }
-    await supabase.from('conversation_members').insert({ conversation_id: id, user_id: profile.id })
+    const { data, error } = await supabase.rpc('join_tournament', { p_tournament_id: id })
+    if (error || data?.ok === false) {
+      alert(data?.error || error?.message || 'Error al inscribirse')
+      return
+    }
     alert('¡Inscripto!')
     await loadTournaments()
   }
@@ -848,24 +983,108 @@ function TournamentsList({ profile }) {
               style={inp} />
           </div>
 
-          {/* Plataforma + Formato */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {gameCfg.plataformas && (
-              <div>
-                <p style={labelSt}>Plataforma</p>
-                <select value={tPlataforma} onChange={e => setTPlataforma(e.target.value)} style={inp}>
-                  <option value="">Todas</option>
-                  {gameCfg.plataformas.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-            )}
+          {/* Plataforma */}
+          {gameCfg.plataformas && (
             <div>
-              <p style={labelSt}>Formato</p>
-              <select value={tFormat} onChange={e => setTFormat(e.target.value)} style={inp}>
-                {(gameCfg.formatos || FORMATS).map(f => <option key={f} value={f}>{f}</option>)}
+              <p style={labelSt}>Plataforma</p>
+              <select value={tPlataforma} onChange={e => setTPlataforma(e.target.value)} style={inp}>
+                <option value="">Todas las plataformas</option>
+                {gameCfg.plataformas.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
-          </div>
+          )}
+
+          {/* Formato — solo para Torneo y Guerra */}
+          {tType !== 'liga' && (
+            <div>
+              <p style={labelSt}>Formato del torneo</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(tType === 'guerra' ? FORMATS_GUERRA : (gameCfg.formatos || FORMATS_TORNEO)).map(f => (
+                  <button key={f} onClick={() => setTFormat(f)} type="button" style={{
+                    padding: '10px 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontWeight: 600, fontSize: 13,
+                    background: tFormat === f ? `${C.green}18` : C.panel,
+                    border: `1.5px solid ${tFormat === f ? C.green : C.border}`,
+                    color: tFormat === f ? C.green : C.text,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                    <div style={{
+                      width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                      background: tFormat === f ? C.green : 'transparent',
+                      border: `2px solid ${tFormat === f ? C.green : C.textDim}`,
+                    }} />
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Estructura de Liga — solo para Liga */}
+          {tType === 'liga' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Sistema de puntos */}
+              <div>
+                <p style={labelSt}>Sistema de competencia</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {['Todos contra todos', 'Conferencias (grupos)', 'Por puntos con playoff final', 'Copa Liga (fase regular + final)'].map(f => (
+                    <button key={f} onClick={() => setTFormat(f)} type="button" style={{
+                      padding: '10px 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontWeight: 600, fontSize: 13,
+                      background: tFormat === f ? `${C.green}18` : C.panel,
+                      border: `1.5px solid ${tFormat === f ? C.green : C.border}`,
+                      color: tFormat === f ? C.green : C.text,
+                      display: 'flex', alignItems: 'center', gap: 10,
+                    }}>
+                      <div style={{
+                        width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                        background: tFormat === f ? C.green : 'transparent',
+                        border: `2px solid ${tFormat === f ? C.green : C.textDim}`,
+                      }} />
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Partidos */}
+              <div>
+                <p style={labelSt}>Partidos por enfrentamiento</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {['Solo ida', 'Ida y vuelta'].map(m => (
+                    <button key={m} onClick={() => setTModo(m)} style={{
+                      flex: 1, padding: '10px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 13,
+                      background: tModo === m ? `${C.green}20` : C.panel,
+                      border: `1.5px solid ${tModo === m ? C.green : C.border}`,
+                      color: tModo === m ? C.green : C.textDim,
+                    }}>{m}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Ascensos/Descensos */}
+              <div>
+                <p style={labelSt}>Ascensos y Descensos</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {['Sin ascenso/descenso', 'Con ascenso', 'Con ascenso y descenso'].map(m => (
+                    <button key={m} onClick={() => setTDivisionLiga(m)} style={{
+                      flex: 1, padding: '8px 6px', borderRadius: 10, cursor: 'pointer', fontWeight: 600, fontSize: 11, textAlign: 'center',
+                      background: tDivisionLiga === m ? `${C.green}20` : C.panel,
+                      border: `1.5px solid ${tDivisionLiga === m ? C.green : C.border}`,
+                      color: tDivisionLiga === m ? C.green : C.textDim,
+                    }}>{m}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Temporada + Jornadas */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <p style={labelSt}>Temporada</p>
+                  <input value={tTemporada} onChange={e => setTTemporada(e.target.value)} placeholder="Ej: 2025 · S1" style={inp} />
+                </div>
+                <div>
+                  <p style={labelSt}>Nº de Jornadas</p>
+                  <input value={tJornadas} onChange={e => setTJornadas(e.target.value)} type="number" min="1" placeholder="Ej: 10" style={inp} />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Modo + Tiempo (FC/eFootball) */}
           {(gameCfg.modos || gameCfg.tiempos) && (
@@ -990,16 +1209,10 @@ function TournamentsList({ profile }) {
             </div>
           )}
 
-          {/* Jugadores + Fecha */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div>
-              <p style={labelSt}>Máx. participantes</p>
-              <input value={tMaxPl} onChange={e => setTMaxPl(e.target.value)} type="number" min="2" max={maxPlayers} style={inp} />
-            </div>
-            <div>
-              <p style={labelSt}>Fecha de cierre</p>
-              <input value={tDeadline} onChange={e => setTDeadline(e.target.value)} type="date" style={inp} />
-            </div>
+          {/* Jugadores */}
+          <div>
+            <p style={labelSt}>Máx. {tType === 'guerra' ? 'clanes' : 'participantes'}</p>
+            <input value={tMaxPl} onChange={e => setTMaxPl(e.target.value)} type="number" min="2" max={maxPlayers} style={inp} />
           </div>
 
           {/* Reglamento */}
@@ -1009,6 +1222,75 @@ function TournamentsList({ profile }) {
               placeholder="Ej: Prohibido el uso de glitches. Los resultados deben enviarse con captura de pantalla dentro de las 24hs. En caso de desconexión se repite el partido. Faltas: 1er aviso → advertencia, 2da → descalificación..."
               rows={4}
               style={{ ...inp, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }} />
+          </div>
+
+          {/* Guerra de Clanes: modo equipo */}
+          {tType === 'guerra' && (
+            <div>
+              <p style={labelSt}>⚔️ Modo de Guerra</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {['2vs2', '3vs3', '4vs4', '5vs5'].map(m => (
+                  <button key={m} onClick={() => setTMode(m)} style={{
+                    flex: 1, padding: '9px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 13,
+                    background: tMode === m ? `${C.green}20` : C.panel,
+                    border: `1.5px solid ${tMode === m ? C.green : C.border}`,
+                    color: tMode === m ? C.green : C.textDim,
+                  }}>{m}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+
+          {/* Comunidad */}
+          <div>
+            <p style={labelSt}>Comunidad</p>
+            <select value={tCommunityId} onChange={e => setTCommunityId(e.target.value)} style={inp}>
+              <option value="">Sin comunidad (libre)</option>
+              {myCommunities.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {myCommunities.length === 0 && (
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: C.textDim }}>No sos admin de ninguna comunidad aún.</p>
+            )}
+          </div>
+
+          {/* Fecha inicio + Cierre inscripciones */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div>
+              <p style={labelSt}>Fecha de inicio</p>
+              <input value={tStartDate} onChange={e => setTStartDate(e.target.value)} type="date" style={inp} />
+            </div>
+            <div>
+              <p style={labelSt}>Cierre de inscripción</p>
+              <input value={tDeadline} onChange={e => setTDeadline(e.target.value)} type="date" style={inp} />
+            </div>
+          </div>
+
+          {/* Entrada + Público/Privado */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div>
+              <p style={labelSt}>Entrada / Costo</p>
+              <input value={tEntryFee} onChange={e => setTEntryFee(e.target.value)} placeholder="Ej: Gratis, $500, 10 monedas" style={inp} />
+            </div>
+            <div>
+              <p style={labelSt}>Visibilidad</p>
+              <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                <button onClick={() => setTIsPublic(true)} style={{
+                  flex: 1, padding: '10px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 12,
+                  background: tIsPublic ? `${C.green}20` : C.panel,
+                  border: `1.5px solid ${tIsPublic ? C.green : C.border}`,
+                  color: tIsPublic ? C.green : C.textDim,
+                }}>🌐 Público</button>
+                <button onClick={() => setTIsPublic(false)} style={{
+                  flex: 1, padding: '10px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 12,
+                  background: !tIsPublic ? `#8b5cf620` : C.panel,
+                  border: `1.5px solid ${!tIsPublic ? '#8b5cf6' : C.border}`,
+                  color: !tIsPublic ? '#8b5cf6' : C.textDim,
+                }}>🔒 Privado</button>
+              </div>
+            </div>
           </div>
 
           {/* Submit */}
@@ -1139,201 +1421,125 @@ function TournamentsList({ profile }) {
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-const TABS = [
-  { id: 'hub',         icon: '🏠', label: 'Hub'        },
-  { id: 'torneos',     icon: '🏆', label: 'Torneos'    },
-  { id: 'rankings',    icon: '📊', label: 'Rankings'   },
-  { id: 'herramientas',icon: '🛠️', label: 'Herramientas' },
-]
-
-const TOOL_COMPONENTS = {
-  sorteo:        SorteoPage,
-  brackets:      BracketsPage,
-  tabla:         TablaPosicionesPage,
-  votaciones:    VotacionesPage,
-  resultados:    CargaResultadosPage,
-  calendario:    CalendarioPage,
-  premios:       SistemaPremiosPage,
-}
-
 export default function TournamentsPage() {
   const { profile } = useAuthStore()
-  const [tab, setTab] = useState('hub')
-  const [activeTool, setActiveTool] = useState(null)
-  const [showPlanModal, setShowPlanModal] = useState(false)
   const { isCommunity } = usePlan(profile)
+  const [managedCommunities, setManagedCommunities] = useState([])
+  const [loadingComm, setLoadingComm] = useState(false)
+  const [selectedCommunity, setSelectedCommunity] = useState(null)
 
-  function requirePlan(fn) {
-    if (!isCommunity) { setShowPlanModal(true); return }
-    fn()
-  }
+  // Load communities where user is owner or admin
+  useEffect(() => {
+    if (!profile?.id) return
+    setLoadingComm(true)
+    ;(async () => {
+      // Communities created by user
+      const { data: owned } = await supabase
+        .from('conversations')
+        .select('id, name, description, avatar_url, group_type, tags, created_by')
+        .eq('group_type', 'community')
+        .eq('created_by', profile.id)
 
-  if (activeTool && TOOL_COMPONENTS[activeTool]) {
-    const ToolPage = TOOL_COMPONENTS[activeTool]
-    return <ToolPage onBack={() => setActiveTool(null)} />
+      // Communities where user has admin/owner role
+      const { data: roleRows } = await supabase
+        .from('group_roles')
+        .select('conversation_id')
+        .eq('user_id', profile.id)
+        .in('role', ['owner', 'admin', 'moderador'])
+
+      const managedIds = new Set((roleRows || []).map(r => r.conversation_id))
+      if (managedIds.size > 0) {
+        const { data: managed } = await supabase
+          .from('conversations')
+          .select('id, name, description, avatar_url, group_type, tags, created_by')
+          .eq('group_type', 'community')
+          .in('id', [...managedIds])
+        ;(managed || []).forEach(c => {
+          if (!(owned || []).find(o => o.id === c.id)) owned?.push(c)
+        })
+      }
+
+      setManagedCommunities(owned || [])
+      setLoadingComm(false)
+    })()
+  }, [profile?.id])
+
+  if (selectedCommunity) {
+    return <CommunityTournamentsPanel community={selectedCommunity} onClose={() => setSelectedCommunity(null)} canManage={true} />
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg }}>
-      <style>{`
-        .comm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-      `}</style>
-
       {/* Header */}
-      <div style={{ padding: '16px 16px 0', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <span style={{ fontSize: 24 }}>🌐</span>
-          <div>
-            <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 18 }}>Comunidad</p>
-            <p style={{ margin: 0, color: C.textDim, fontSize: 11 }}>Centro de organización y competencias</p>
-          </div>
-          {isCommunity && (
-            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: '#3b82f614', color: '#3b82f6', border: '1px solid #3b82f644' }}>
-              🌐 Plan Comunidad
-            </span>
-          )}
+      <div style={{ padding: '16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 28 }}>🏆</span>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: 0, color: C.text, fontWeight: 800, fontSize: 17 }}>Mis Torneos</p>
+          <p style={{ margin: 0, color: C.textDim, fontSize: 11, marginTop: 1 }}>Seleccioná una comunidad para gestionar</p>
         </div>
-
-        {/* Tab bar */}
-        <div style={{ display: 'flex', gap: 0, overflowX: 'auto' }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              flex: 1, minWidth: 70, padding: '10px 4px', background: 'none', border: 'none',
-              borderBottom: `2.5px solid ${tab === t.id ? C.green : 'transparent'}`,
-              color: tab === t.id ? C.green : C.textDim,
-              fontSize: 12, fontWeight: tab === t.id ? 700 : 500,
-              cursor: 'pointer', transition: 'all .15s', whiteSpace: 'nowrap',
-            }}>
-              {t.icon} {t.label}
-            </button>
-          ))}
-        </div>
+        {isCommunity && (
+          <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: `${C.green}14`, color: C.green, border: `1px solid ${C.green}44` }}>
+            PRO
+          </span>
+        )}
       </div>
 
-      {/* Plan modal */}
-      {showPlanModal && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 100,
-          background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-        }} onClick={() => setShowPlanModal(false)}>
-          <div onClick={e => e.stopPropagation()} style={{
-            background: C.panel, borderRadius: 20, padding: 28, maxWidth: 340, width: '100%',
-            border: `1px solid ${C.green}33`,
-          }}>
-            <div style={{ textAlign: 'center', marginBottom: 20 }}>
-              <span style={{ fontSize: 48 }}>🌐</span>
-              <h3 style={{ color: C.text, margin: '8px 0 4px', fontWeight: 800 }}>Plan Comunidad</h3>
-              <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>Activá el plan gratis para crear y organizar comunidades</p>
-            </div>
-            {['Crear torneos y ligas', 'Brackets automáticos', 'Sorteos en vivo', 'Rankings por zonas y países', 'Gestión de clanes', 'Estadísticas avanzadas'].map(f => (
-              <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                <span style={{ color: C.text, fontSize: 13 }}>{f}</span>
-              </div>
-            ))}
-            <button onClick={() => setShowPlanModal(false)} style={{
-              width: '100%', marginTop: 16, padding: '13px', borderRadius: 12, border: 'none',
-              background: C.green, color: C.bg, fontWeight: 800, fontSize: 15,
-              cursor: 'pointer', boxShadow: `0 4px 20px ${C.green}44`,
-            }}>Activar gratis — durante beta</button>
-          </div>
-        </div>
-      )}
-
-      {/* Content */}
+      {/* Community list */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-
-        {/* ── HUB ── */}
-        {tab === 'hub' && (
-          <div>
-            {/* Banner plan */}
-            {!isCommunity && (
-              <div style={{
-                background: 'linear-gradient(135deg, #3b82f614, #a855f708)',
-                border: '1.5px solid #3b82f644',
-                borderRadius: 16, padding: '16px 18px', marginBottom: 16,
+        {loadingComm ? (
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+            <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+          </div>
+        ) : managedCommunities.length === 0 ? (
+          <div style={{ textAlign: 'center', marginTop: 60 }}>
+            <div style={{ fontSize: 52, marginBottom: 14 }}>🌐</div>
+            <p style={{ color: C.text, fontSize: 15, fontWeight: 700, margin: '0 0 6px' }}>Sin comunidades</p>
+            <p style={{ color: C.textDim, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+              Creá una comunidad desde Chats<br/>o pedile al dueño que te asigne como admin.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {managedCommunities.map(comm => (
+              <button key={comm.id} onClick={() => setSelectedCommunity(comm)} style={{
                 display: 'flex', alignItems: 'center', gap: 14,
-              }}>
-                <span style={{ fontSize: 32 }}>🌐</span>
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: 0, color: '#3b82f6', fontWeight: 800, fontSize: 14 }}>Plan Comunidad — Gratis</p>
-                  <p style={{ margin: '2px 0 0', color: C.textDim, fontSize: 12 }}>Activá tu acceso para organizar torneos, ligas y clanes</p>
+                background: C.panel, border: `1px solid ${C.border}`,
+                borderRadius: 14, padding: '14px 16px', cursor: 'pointer',
+                textAlign: 'left', width: '100%', transition: 'border-color .15s',
+              }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = C.green}
+                onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+              >
+                <div style={{
+                  width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
+                  background: `${C.green}20`, border: `2px solid ${C.green}44`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 18, fontWeight: 800, color: C.text, overflow: 'hidden',
+                }}>
+                  {comm.avatar_url
+                    ? <img src={comm.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : comm.name?.slice(0, 2).toUpperCase()
+                  }
                 </div>
-                <button onClick={() => setShowPlanModal(true)} style={{
-                  background: '#3b82f6', border: 'none', borderRadius: 10,
-                  color: '#fff', fontWeight: 700, fontSize: 12,
-                  padding: '8px 14px', cursor: 'pointer', flexShrink: 0,
-                }}>Activar</button>
-              </div>
-            )}
-
-            <SectionHeader icon="🚀" title="Acceso rápido" desc="Tus herramientas de comunidad" />
-            <div className="comm-grid" style={{ marginBottom: 20 }}>
-              <FeatureCard icon="🏆" title="Crear Torneo" desc="Organizá competencias por eliminación, grupos o liga" color={C.green} onClick={() => setTab('torneos')} />
-              <FeatureCard icon="📋" title="Crear Liga" desc="Sistema de puntos con tabla de posiciones" color="#3b82f6" onClick={() => setTab('torneos')} />
-              <FeatureCard icon="⚔️" title="Torneo de Clanes" desc="Enfrentá grupos de jugadores organizados en clanes" color="#a855f7" onClick={() => setTab('torneos')} />
-              <FeatureCard icon="🎲" title="Sorteo en Vivo" desc="Sorteá enfrentamientos y premios en tiempo real" color="#f59e0b" onClick={() => setActiveTool('sorteo')} />
-              <FeatureCard icon="🔱" title="Brackets" desc="Cuadros de eliminación automáticos y visuales" color="#06b6d4" onClick={() => setActiveTool('brackets')} />
-              <FeatureCard icon="📊" title="Rankings" desc="Posiciones por zonas, países y plataformas" color={C.green} onClick={() => setTab('rankings')} />
-            </div>
-
-            <SectionHeader icon="📢" title="Novedades" desc="Últimas competencias y eventos" />
-            <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, padding: '14px 16px' }}>
-              <p style={{ color: C.textDim, fontSize: 13, margin: 0, textAlign: 'center' }}>
-                Próximamente — feed de actividad de tu comunidad
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ── TORNEOS ── */}
-        {tab === 'torneos' && (
-          <div style={{ position: 'relative' }}>
-            {!isCommunity && <LockOverlay onRequest={() => setShowPlanModal(true)} />}
-            <SectionHeader icon="🏆" title="Competencias" desc="Torneos, ligas y clanes" />
-            <TournamentsList profile={profile} />
-          </div>
-        )}
-
-        {/* ── RANKINGS ── */}
-        {tab === 'rankings' && (
-          <div>
-            <SectionHeader icon="📊" title="Rankings" desc="Clasificaciones globales y por categoría" />
-            <RankingsSection />
-          </div>
-        )}
-
-        {/* ── HERRAMIENTAS ── */}
-        {tab === 'herramientas' && (
-          <div>
-            {/* Herramientas gratuitas para todos */}
-            <SectionHeader icon="🎲" title="Herramientas gratuitas" desc="Disponibles para todos los jugadores" />
-            <div className="comm-grid" style={{ marginBottom: 20 }}>
-              <FeatureCard icon="🎲" title="Sorteo en Vivo" desc="Sorteá participantes o premios en tiempo real" color="#f59e0b" onClick={() => setActiveTool('sorteo')} />
-              <FeatureCard icon="🔱" title="Generador de Brackets" desc="Cuadros de eliminación directa automáticos" color="#06b6d4" onClick={() => setActiveTool('brackets')} />
-              <FeatureCard icon="📋" title="Tabla de Posiciones" desc="Seguí el puntaje en tiempo real de tu liga" color="#3b82f6" onClick={() => setActiveTool('tabla')} />
-            </div>
-
-            {/* Herramientas avanzadas — requieren plan Comunidad */}
-            <div style={{ position: 'relative' }}>
-              {!isCommunity && <LockOverlay onRequest={() => setShowPlanModal(true)} />}
-              <SectionHeader icon="🛠️" title="Herramientas avanzadas" desc="Requieren plan Comunidad" />
-              <div className="comm-grid">
-                <FeatureCard icon="🗳️" title="Votaciones" desc="Creá encuestas para tu comunidad" color="#a855f7" onClick={() => setActiveTool('votaciones')} />
-                <FeatureCard icon="📸" title="Carga de Resultados" desc="Los jugadores suben fotos de sus resultados para validación" color={C.green} onClick={() => setActiveTool('resultados')} />
-                <FeatureCard icon="🌍" title="Rankings por Zona" desc="Clasificaciones separadas por país, región o plataforma" color={C.green} onClick={() => setTab('rankings')} />
-                <FeatureCard icon="🏅" title="Sistema de Premios" desc="Asigná premios y trofeos a los ganadores de tus torneos" color="#f59e0b" onClick={() => setActiveTool('premios')} />
-                <FeatureCard icon="📅" title="Calendario de Eventos" desc="Programá fechas y partidos con recordatorios automáticos" color="#3b82f6" onClick={() => setActiveTool('calendario')} />
-              </div>
-            </div>
-
-            <div style={{ marginTop: 20, background: `${C.green}10`, border: `1px solid ${C.green}33`, borderRadius: 16, padding: '16px 18px' }}>
-              <p style={{ margin: '0 0 4px', color: C.green, fontWeight: 700, fontSize: 14 }}>¿Tenés ideas para nuevas herramientas?</p>
-              <p style={{ margin: 0, color: C.textDim, fontSize: 12 }}>Escribinos en el grupo de soporte — estamos construyendo esto con la comunidad.</p>
-            </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {comm.name}
+                  </p>
+                  {comm.tags?.length > 0 && (
+                    <p style={{ margin: '3px 0 0', fontSize: 11, color: C.textDim }}>
+                      {comm.tags.join(' · ')}
+                    </p>
+                  )}
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
+              </button>
+            ))}
           </div>
         )}
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
 }

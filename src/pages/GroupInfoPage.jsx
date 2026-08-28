@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
+import CommunityBotSettingsPage from './CommunityBotSettingsPage'
 
 const AVATAR_COLORS = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100','#c62828']
 function avatarColor(id) {
@@ -140,13 +141,18 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
 
   // ── State ──
   const [tab, setTab] = useState('info')
+  const [showBotSettings, setShowBotSettings] = useState(false)
   const [memberMenu, setMemberMenu] = useState(null)
   const [memberSearch, setMemberSearch] = useState('')
   const [inviteSearch, setInviteSearch] = useState('')
   const [inviteResults, setInviteResults] = useState([])
   const [inviting, setInviting] = useState(null)
   const [roles, setRoles] = useState({})
+  const [playerRanks, setPlayerRanks] = useState({})
+  const [memberCustomRoles, setMemberCustomRoles] = useState({}) // userId -> roleId[]
+  const [customRoleMenuMember, setCustomRoleMenuMember] = useState(null)
   const [leavingGroup, setLeavingGroup] = useState(false)
+  const [rankMenuMember, setRankMenuMember] = useState(null)
 
   // Join requests
   const [joinRequests, setJoinRequests] = useState([])
@@ -174,6 +180,15 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [slowMode,   setSlowMode]   = useState(conversation?.slow_mode_seconds || null)
   const [autoDelete, setAutoDelete] = useState(conversation?.auto_delete_hours || null)
 
+  // Community torneos config
+  const [torneosEnabled,  setTorneosEnabled]  = useState(conversation?.torneos_enabled  !== false)
+  const [ligasEnabled,    setLigasEnabled]    = useState(conversation?.ligas_enabled    !== false)
+  const [clanesEnabled,   setClanesEnabled]   = useState(conversation?.clanes_enabled   || false)
+  const [communityGames,  setCommunityGames]  = useState(conversation?.tags || [])
+  const [savingTorneos,   setSavingTorneos]   = useState(false)
+  const [gameRules,       setGameRules]       = useState(conversation?.game_rules || {})
+  const [rulesTab,        setRulesTab]        = useState('efootball')
+
   // Privacidad avanzada
   const [allowExport,      setAllowExport]      = useState(conversation?.allow_export      !== false)
   const [allowAutoSave,    setAllowAutoSave]    = useState(conversation?.allow_auto_save    !== false)
@@ -181,14 +196,42 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const [requireApproval,  setRequireApproval]  = useState(conversation?.require_approval  || false)
   const [savingPerms, setSavingPerms] = useState(false)
 
-  // Invite link
-  const [inviteLink, setInviteLink] = useState(conversation?.invite_link || '')
+  // Invite link — token stored in DB, full URL shown to user
+  const rawToken = conversation?.invite_link || ''
+  const [inviteLink, setInviteLink] = useState(
+    rawToken ? `${window.location.origin}/join/${rawToken}` : ''
+  )
   const [generatingLink, setGeneratingLink] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
   // Media
   const [media, setMedia] = useState([])
   const [mediaLoading, setMediaLoading] = useState(false)
+
+  // Stats
+  const [stats, setStats] = useState(null)
+  const [statsLoading, setStatsLoading] = useState(false)
+
+  // Roles PRO
+  const [customRoles, setCustomRoles] = useState([])
+  const [rolesLoading, setRolesLoading] = useState(false)
+  const [showRoleForm, setShowRoleForm] = useState(false)
+  const ROLE_PERMS_DEFAULT = {
+    can_send_messages: true,
+    can_create_tournaments: false,
+    can_manage_tournaments: false,
+    can_create_events: false,
+    can_publish_announcements: false,
+    can_manage_members: false,
+    can_kick_members: false,
+    can_manage_roles: false,
+    can_view_stats: false,
+    can_manage_bots: false,
+  }
+  const [roleForm, setRoleForm] = useState({ name: '', color: '#8b5cf6', icon: '', ...ROLE_PERMS_DEFAULT })
+  const [editingRole, setEditingRole] = useState(null) // role object being edited
+  const [savingRole, setSavingRole] = useState(false)
+  const [deletingRole, setDeletingRole] = useState(null)
 
   const members = conversation?.members || []
   const allMembers = [
@@ -201,19 +244,27 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   const isAdmin = isOwner || myRole === 'owner' || myRole === 'admin'
   const isMod   = isAdmin || myRole === 'moderador'
   const isOrganizador = isMod || myRole === 'organizador'
+  const isCommunity = conversation?.group_type === 'community'
+  const isPROOwner  = ['ceo', 'admin', 'comunidad'].includes(conversation?.owner_role || '')
 
   // ── Load roles ──
   useEffect(() => {
     if (!conversation?.id) return
     supabase.from('group_roles')
-      .select('user_id, role')
+      .select('user_id, role, player_rank')
       .eq('conversation_id', conversation.id)
       .then(({ data }) => {
-        if (data) {
-          const map = {}
-          data.forEach(r => { map[r.user_id] = r.role })
-          setRoles(map)
+        const roleMap = {}
+        const rankMap = {}
+        ;(data || []).forEach(r => {
+          roleMap[r.user_id] = r.role
+          if (r.player_rank) rankMap[r.user_id] = r.player_rank
+        })
+        if (conversation.created_by && !roleMap[conversation.created_by]) {
+          roleMap[conversation.created_by] = 'owner'
         }
+        setRoles(roleMap)
+        setPlayerRanks(rankMap)
       })
   }, [conversation?.id])
 
@@ -229,6 +280,43 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
       .limit(60)
       .then(({ data }) => { setMedia(data || []); setMediaLoading(false) })
   }, [tab, conversation?.id])
+
+  // ── Load stats ──
+  useEffect(() => {
+    if (tab !== 'stats' || !conversation?.id || !isAdmin) return
+    setStatsLoading(true)
+    supabase.from('community_stats')
+      .select('*')
+      .eq('conversation_id', conversation.id)
+      .single()
+      .then(({ data }) => { setStats(data || null); setStatsLoading(false) })
+  }, [tab, conversation?.id, isAdmin])
+
+  // ── Load custom roles ──
+  useEffect(() => {
+    if (!conversation?.id || !isCommunity) return
+    supabase.from('community_custom_roles')
+      .select('*')
+      .eq('conversation_id', conversation.id)
+      .order('priority', { ascending: false })
+      .then(({ data }) => setCustomRoles(data || []))
+  }, [conversation?.id, isCommunity])
+
+  // ── Load member custom role assignments ──
+  useEffect(() => {
+    if (!conversation?.id || !isCommunity) return
+    supabase.from('community_role_members')
+      .select('user_id, role_id')
+      .eq('conversation_id', conversation.id)
+      .then(({ data }) => {
+        const map = {}
+        ;(data || []).forEach(r => {
+          if (!map[r.user_id]) map[r.user_id] = []
+          map[r.user_id].push(r.role_id)
+        })
+        setMemberCustomRoles(map)
+      })
+  }, [conversation?.id, isCommunity])
 
   // ── Load join requests ──
   useEffect(() => {
@@ -276,6 +364,86 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
     setSavingPin(true)
     await pinMessage(conversation.id, pinText.trim())
     setSavingPin(false); setEditingPin(false)
+  }
+
+    const PERM_GROUPS = [
+    {
+      label: 'General',
+      items: [
+        { key: 'can_send_messages', label: 'Enviar mensajes', desc: 'Puede escribir en los canales de la comunidad' },
+        { key: 'can_view_stats', label: 'Ver estadísticas', desc: 'Acceso a la pestaña de stats de la comunidad' },
+      ],
+    },
+    {
+      label: 'Torneos & Eventos',
+      items: [
+        { key: 'can_create_tournaments', label: 'Crear torneos', desc: 'Puede crear torneos y ligas dentro de la comunidad' },
+        { key: 'can_manage_tournaments', label: 'Gestionar torneos', desc: 'Puede editar y eliminar torneos existentes' },
+        { key: 'can_create_events', label: 'Crear eventos', desc: 'Puede publicar eventos en la comunidad' },
+      ],
+    },
+    {
+      label: 'Moderación',
+      items: [
+        { key: 'can_publish_announcements', label: 'Publicar anuncios', desc: 'Puede publicar anuncios para todos los miembros' },
+        { key: 'can_manage_members', label: 'Gestionar miembros', desc: 'Puede ver y administrar la lista de miembros' },
+        { key: 'can_kick_members', label: 'Expulsar miembros', desc: 'Puede expulsar miembros de la comunidad' },
+      ],
+    },
+    {
+      label: 'Administración',
+      items: [
+        { key: 'can_manage_roles', label: 'Gestionar roles', desc: 'Puede crear, editar y asignar roles personalizados' },
+        { key: 'can_manage_bots', label: 'Gestionar bots', desc: 'Puede configurar bots de la comunidad' },
+      ],
+    },
+  ]
+
+  function openRoleForm(role = null) {
+    if (role) {
+      setEditingRole(role)
+      setRoleForm({ name: role.name, color: role.color, icon: role.icon || '', ...Object.fromEntries(Object.keys(ROLE_PERMS_DEFAULT).map(k => [k, role[k] ?? ROLE_PERMS_DEFAULT[k]])) })
+    } else {
+      setEditingRole(null)
+      setRoleForm({ name: '', color: '#8b5cf6', icon: '', ...ROLE_PERMS_DEFAULT })
+    }
+    setShowRoleForm(true)
+  }
+
+  function closeRoleForm() {
+    setShowRoleForm(false)
+    setEditingRole(null)
+    setRoleForm({ name: '', color: '#8b5cf6', icon: '', ...ROLE_PERMS_DEFAULT })
+  }
+
+  async function saveCustomRole() {
+    if (!roleForm.name.trim()) return
+    setSavingRole(true)
+    const perms = Object.fromEntries(Object.keys(ROLE_PERMS_DEFAULT).map(k => [k, !!roleForm[k]]))
+    if (editingRole) {
+      const { data, error } = await supabase.from('community_custom_roles').update({
+        name: roleForm.name.trim(), color: roleForm.color,
+        icon: roleForm.icon.trim() || null, ...perms,
+      }).eq('id', editingRole.id).select().single()
+      if (!error && data) setCustomRoles(prev => prev.map(r => r.id === data.id ? data : r))
+    } else {
+      const { data, error } = await supabase.from('community_custom_roles').insert({
+        conversation_id: conversation.id,
+        name: roleForm.name.trim(), color: roleForm.color,
+        icon: roleForm.icon.trim() || null,
+        priority: customRoles.length, ...perms,
+      }).select().single()
+      if (!error && data) setCustomRoles(prev => [data, ...prev])
+    }
+    setSavingRole(false)
+    closeRoleForm()
+  }
+
+  async function deleteCustomRole(roleId) {
+    setDeletingRole(roleId)
+    await supabase.from('community_custom_roles').delete().eq('id', roleId)
+    setCustomRoles(prev => prev.filter(r => r.id !== roleId))
+    setDeletingRole(null)
   }
 
   async function togglePublic() {
@@ -344,6 +512,42 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
     setMemberMenu(null)
   }
 
+  async function setPlayerRank(memberId, rank) {
+    await supabase.from('group_roles').upsert(
+      { conversation_id: conversation.id, user_id: memberId, role: roles[memberId] || 'member', player_rank: rank || null, granted_by: profile.id },
+      { onConflict: 'conversation_id,user_id' }
+    )
+    setPlayerRanks(prev => rank ? { ...prev, [memberId]: rank } : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== memberId)))
+    setRankMenuMember(null)
+    setMemberMenu(null)
+  }
+
+  async function assignCustomRole(memberId, roleId) {
+    await supabase.from('community_role_members').upsert(
+      { conversation_id: conversation.id, user_id: memberId, role_id: roleId, assigned_by: profile.id },
+      { onConflict: 'conversation_id,user_id,role_id' }
+    )
+    setMemberCustomRoles(prev => ({
+      ...prev,
+      [memberId]: [...new Set([...(prev[memberId] || []), roleId])],
+    }))
+    setCustomRoleMenuMember(null)
+    setMemberMenu(null)
+  }
+
+  async function removeCustomRole(memberId, roleId) {
+    await supabase.from('community_role_members').delete()
+      .eq('conversation_id', conversation.id)
+      .eq('user_id', memberId)
+      .eq('role_id', roleId)
+    setMemberCustomRoles(prev => ({
+      ...prev,
+      [memberId]: (prev[memberId] || []).filter(id => id !== roleId),
+    }))
+    setCustomRoleMenuMember(null)
+    setMemberMenu(null)
+  }
+
   async function silenceMember(memberId, hours) {
     const until = new Date(Date.now() + hours * 3600 * 1000).toISOString()
     await supabase.from('conversation_members')
@@ -371,6 +575,29 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
     fetchConversations(profile.id)
   }
 
+  async function saveTorneosConfig() {
+    setSavingTorneos(true)
+    await supabase.from('conversations').update({
+      torneos_enabled: torneosEnabled,
+      ligas_enabled:   ligasEnabled,
+      clanes_enabled:  clanesEnabled,
+      tags:            communityGames,
+      game_rules:      gameRules,
+    }).eq('id', conversation.id)
+    setSavingTorneos(false)
+  }
+
+  function setRule(game, key, value) {
+    setGameRules(prev => ({
+      ...prev,
+      [game]: { ...(prev[game] || {}), [key]: value },
+    }))
+  }
+
+  function getRule(game, key, defaultVal) {
+    return gameRules?.[game]?.[key] ?? defaultVal
+  }
+
   async function handleLeave() {
     if (!window.confirm('¿Salir del grupo?')) return
     setLeavingGroup(true)
@@ -379,18 +606,27 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
   }
 
   async function handleDeleteGroup() {
-    if (!window.confirm('⚠️ ¿Eliminar el grupo permanentemente? Esto borrará todos los mensajes y no se puede deshacer.')) return
-    await supabase.from('conversations').delete().eq('id', conversation.id)
+    const label = isCommunity ? 'comunidad' : 'grupo'
+    if (!window.confirm(`⚠️ ¿Eliminar la ${label} permanentemente? Esto borrará todos los mensajes y no se puede deshacer.`)) return
+    const { data, error } = await supabase.rpc('delete_group_or_community', { p_conversation_id: conversation.id })
+    if (error || data?.ok === false) {
+      alert('Error al eliminar: ' + (data?.error || error?.message || 'Error desconocido'))
+      return
+    }
     onLeft?.()
   }
 
   async function uploadAvatar(file) {
     if (!file) return
-    const ext = file.name.split('.').pop()
+    const ext = file.name.split('.').pop().toLowerCase().replace('jpeg', 'jpg')
     const path = `group-avatars/${conversation.id}.${ext}`
-    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    if (error) return
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+    const { error } = await supabase.storage.from('avatars').upload(path, file, {
+      upsert: true,
+      contentType: file.type || 'image/jpeg',
+    })
+    if (error) { alert('Error al subir imagen: ' + error.message); return }
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+    const publicUrl = data.publicUrl + '?t=' + Date.now()
     await supabase.from('conversations').update({ avatar_url: publicUrl }).eq('id', conversation.id)
   }
 
@@ -422,11 +658,18 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
     { id: 'info',     label: '📋 Info' },
     { id: 'members',  label: '👥 Miembros' },
     { id: 'perms',    label: '🔐 Permisos' },
+    ...(isCommunity ? [{ id: 'torneos', label: '🏆 Torneos' }] : []),
     ...(isAdmin && requireApproval ? [{ id: 'requests', label: `📬 Solicitudes${joinRequests.length ? ` (${joinRequests.length})` : ''}` }] : []),
+    ...(isCommunity && isAdmin ? [{ id: 'stats', label: '📊 Stats' }] : []),
+    ...(isCommunity && isAdmin ? [{ id: 'roles', label: '🎭 Roles' }] : []),
     { id: 'media',    label: '🖼 Medios' },
   ]
 
   // ── RENDER ────────────────────────────────────────────────────────────────────
+  if (showBotSettings) {
+    return <CommunityBotSettingsPage conversation={conversation} onBack={() => setShowBotSettings(false)} />
+  }
+
   return (
     <div style={{
       height: '100%', display: 'flex', flexDirection: 'column',
@@ -670,12 +913,52 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
               </div>
             )}
 
+            {/* Bot Settings PRO */}
+            {isCommunity && isAdmin && (
+              <div style={{ padding: '8px 16px', borderBottom: `1px solid ${C.border}` }}>
+                {conversation?.plan === 'pro' ? (
+                  <button onClick={() => setShowBotSettings(true)} style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                    background: `linear-gradient(135deg, #f59e0b18, #f59e0b08)`,
+                    border: `1px solid #f59e0b44`, textAlign: 'left',
+                  }}>
+                    <span style={{ fontSize: 22 }}>🤖</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>Bot Settings</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b33', borderRadius: 20, padding: '1px 7px' }}>PRO</span>
+                      </div>
+                      <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>Plantillas y alertas automáticas</div>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                  </button>
+                ) : (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '12px 14px', borderRadius: 12,
+                    background: C.panel2, border: `1px solid ${C.border}`,
+                  }}>
+                    <span style={{ fontSize: 22 }}>🤖</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: C.textDim, fontWeight: 700, fontSize: 13 }}>Bot API & Plantillas</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b33', borderRadius: 20, padding: '1px 7px' }}>PRO</span>
+                      </div>
+                      <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>Solo disponible en comunidades PRO</div>
+                    </div>
+                    <span style={{ fontSize: 10, color: '#f59e0b', fontWeight: 700 }}>Actualizar</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Actions */}
             <div style={{ padding: '12px 0', borderBottom: `1px solid ${C.border}` }}>
-              <Row icon="🚩" label="Reportar grupo" onClick={() => alert('Reporte enviado. Gracias.')} />
-              <Row icon="🚪" label="Salir del grupo" danger onClick={handleLeave} />
+              <Row icon="🚩" label={`Reportar ${isCommunity ? 'comunidad' : 'grupo'}`} onClick={() => alert('Reporte enviado. Gracias.')} />
+              <Row icon="🚪" label={`Salir del ${isCommunity ? 'la comunidad' : 'grupo'}`} danger onClick={handleLeave} />
               {isOwner && (
-                <Row icon="💣" label="Eliminar grupo" danger onClick={handleDeleteGroup} />
+                <Row icon="💣" label={`Eliminar ${isCommunity ? 'comunidad' : 'grupo'}`} danger onClick={handleDeleteGroup} />
               )}
             </div>
           </>
@@ -738,6 +1021,9 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
             {filteredMembers.map(m => {
               const mRole = roles[m.id] || (m.id === conversation?.created_by ? 'owner' : 'member')
               const rcfg = GROUP_ROLE_CFG[mRole] || GROUP_ROLE_CFG.member
+              const mRank = playerRanks[m.id]
+              const mCustomRoleIds = memberCustomRoles[m.id] || []
+              const mCustomRoles = customRoles.filter(r => mCustomRoleIds.includes(r.id))
               return (
                 <div key={m.id} style={{ position: 'relative' }}>
                   <div style={{
@@ -758,11 +1044,25 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                             textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap',
                           }}>{rcfg.icon} {rcfg.label}</span>
                         )}
+                        {mCustomRoles.map(cr => (
+                          <span key={cr.id} style={{
+                            fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px',
+                            color: cr.color, background: `${cr.color}18`, border: `1px solid ${cr.color}33`,
+                            whiteSpace: 'nowrap',
+                          }}>{cr.icon} {cr.name}</span>
+                        ))}
+                        {mRank && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px',
+                            color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b33',
+                            letterSpacing: '0.5px', whiteSpace: 'nowrap',
+                          }}>⭐ {mRank}</span>
+                        )}
                       </div>
                       <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>@{m.username}</p>
                     </div>
                     {isMod && !m.isMe && (
-                      <button onClick={() => setMemberMenu(memberMenu === m.id ? null : m.id)} style={{
+                      <button onClick={() => { setMemberMenu(memberMenu === m.id ? null : m.id); setRankMenuMember(null); setCustomRoleMenuMember(null) }} style={{
                         background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 6, borderRadius: 8, display: 'flex',
                       }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
@@ -781,7 +1081,6 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                         boxShadow: '0 8px 32px rgba(0,0,0,0.6)', minWidth: 210,
                       }}
                     >
-                      {/* Role assignment — ordered by hierarchy */}
                       {isAdmin && mRole !== 'owner' && (
                         <>
                           <div style={{ padding: '7px 14px 4px', fontSize: 10, color: C.textDim, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>Asignar rol</div>
@@ -789,6 +1088,60 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
                           {mRole !== 'moderador'   && <ModeBtn label="🔰 Hacer Moderador"   onClick={() => setRole(m.id, 'moderador')} />}
                           {mRole !== 'organizador' && <ModeBtn label="🎖️ Hacer Organizador" onClick={() => setRole(m.id, 'organizador')} />}
                           {mRole !== 'member'      && <ModeBtn label="👤 Quitar rol"         onClick={() => setRole(m.id, 'member')} />}
+                          <div style={{ height: 1, background: C.border }} />
+                        </>
+                      )}
+                      {isCommunity && isAdmin && (
+                        <>
+                          <div style={{ padding: '7px 14px 4px', fontSize: 10, color: C.textDim, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>Rango de jugador</div>
+                          {rankMenuMember === m.id ? (
+                            <div style={{ padding: '6px 14px 10px' }}>
+                              {['Bronce','Plata','Oro','Platino','Diamante','Élite','Leyenda'].map(rank => (
+                                <button key={rank} onClick={() => setPlayerRank(m.id, rank)} style={{
+                                  display: 'block', width: '100%', textAlign: 'left',
+                                  padding: '6px 8px', borderRadius: 6, border: 'none',
+                                  background: mRank === rank ? '#f59e0b22' : 'transparent',
+                                  color: mRank === rank ? '#f59e0b' : C.text2,
+                                  fontSize: 13, cursor: 'pointer', fontWeight: mRank === rank ? 700 : 400,
+                                }}>⭐ {rank}</button>
+                              ))}
+                              {mRank && <button onClick={() => setPlayerRank(m.id, null)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', borderRadius: 6, border: 'none', background: 'transparent', color: '#ef4444', fontSize: 12, cursor: 'pointer' }}>✕ Quitar rango</button>}
+                            </div>
+                          ) : (
+                            <ModeBtn label={mRank ? `⭐ Rango: ${mRank}` : '⭐ Asignar rango'} onClick={() => setRankMenuMember(m.id)} />
+                          )}
+                          <div style={{ height: 1, background: C.border }} />
+                        </>
+                      )}
+                      {isCommunity && isAdmin && customRoles.length > 0 && (
+                        <>
+                          <div style={{ padding: '7px 14px 4px', fontSize: 10, color: C.textDim, fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>Roles personalizados</div>
+                          {customRoleMenuMember === m.id ? (
+                            <div style={{ padding: '6px 14px 10px' }}>
+                              {customRoles.map(cr => {
+                                const hasRole = mCustomRoleIds.includes(cr.id)
+                                return (
+                                  <button key={cr.id} onClick={() => hasRole ? removeCustomRole(m.id, cr.id) : assignCustomRole(m.id, cr.id)} style={{
+                                    display: 'flex', width: '100%', alignItems: 'center', gap: 8,
+                                    padding: '6px 8px', borderRadius: 6, border: 'none',
+                                    background: hasRole ? `${cr.color}18` : 'transparent',
+                                    cursor: 'pointer', textAlign: 'left',
+                                  }}>
+                                    <span style={{
+                                      fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '1px 6px',
+                                      color: cr.color, background: `${cr.color}18`, border: `1px solid ${cr.color}33`,
+                                    }}>{cr.icon} {cr.name}</span>
+                                    {hasRole && <span style={{ fontSize: 11, color: '#22c55e', marginLeft: 'auto' }}>✓</span>}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <ModeBtn
+                              label={mCustomRoles.length > 0 ? `🎭 Roles: ${mCustomRoles.map(r => r.name).join(', ')}` : '🎭 Asignar rol personalizado'}
+                              onClick={() => setCustomRoleMenuMember(m.id)}
+                            />
+                          )}
                           <div style={{ height: 1, background: C.border }} />
                         </>
                       )}
@@ -992,6 +1345,468 @@ export default function GroupInfoPage({ conversation, onBack, onLeft }) {
             </div>
           </>
         )}
+
+        {/* ════ TAB: ESTADÍSTICAS ════ */}
+        {tab === 'stats' && isCommunity && isAdmin && (
+          <>
+            {statsLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+                <div style={{ width: 28, height: 28, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+              </div>
+            ) : !stats ? (
+              <div style={{ padding: '60px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📊</div>
+                <p style={{ margin: 0, color: C.text2 }}>No hay estadísticas disponibles aún.</p>
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: C.textDim }}>Requiere ejecutar migración 035.</p>
+              </div>
+            ) : (
+              <div style={{ padding: '16px' }}>
+                {/* Tarjetas de stats */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                  {[
+                    { label: 'Miembros totales', value: stats.total_members, icon: '👥', color: C.green },
+                    { label: 'Nuevos (7 días)',  value: stats.new_members_7d,  icon: '📈', color: '#3b82f6' },
+                    { label: 'Nuevos (30 días)', value: stats.new_members_30d, icon: '📅', color: '#8b5cf6' },
+                    { label: 'Mensajes (7 días)',value: stats.messages_7d,     icon: '💬', color: '#f59e0b' },
+                    { label: 'Torneos',          value: stats.total_tournaments,icon: '🏆',color: '#ef4444' },
+                    { label: 'Eventos',          value: stats.total_events,    icon: '📅', color: '#06b6d4' },
+                  ].map(s => (
+                    <div key={s.label} style={{
+                      background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14,
+                      padding: '14px', display: 'flex', flexDirection: 'column', gap: 6,
+                    }}>
+                      <span style={{ fontSize: 24 }}>{s.icon}</span>
+                      <span style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value ?? 0}</span>
+                      <span style={{ fontSize: 11, color: C.textDim, lineHeight: 1.3 }}>{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px' }}>
+                  <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    Mensajes totales
+                  </p>
+                  <p style={{ margin: 0, fontSize: 28, fontWeight: 800, color: C.text }}>
+                    {(stats.total_messages ?? 0).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ════ TAB: ROLES PERSONALIZADOS ════ */}
+        {tab === 'roles' && isCommunity && isAdmin && (
+          <>
+            {/* Header con botón crear */}
+            <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, color: C.text, fontSize: 14 }}>Roles de la comunidad</p>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>
+                  Roles personalizados para organizar a tus miembros.
+                </p>
+              </div>
+              <button onClick={() => showRoleForm ? closeRoleForm() : openRoleForm()} style={{
+                background: C.green, border: 'none', borderRadius: 10, padding: '8px 14px',
+                color: C.bg, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                boxShadow: `0 2px 8px ${C.green}33`,
+              }}>
+                {showRoleForm ? 'Cancelar' : '+ Nuevo rol'}
+              </button>
+            </div>
+
+            {/* Formulario crear/editar rol */}
+            {showRoleForm && (
+              <div style={{ padding: '16px', background: `${C.green}08`, borderBottom: `1px solid ${C.border}` }}>
+                {/* Nombre + emoji + color */}
+                <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  {editingRole ? `Editando: ${editingRole.name}` : 'Nuevo rol'}
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <input
+                    placeholder="Nombre del rol"
+                    value={roleForm.name}
+                    onChange={e => setRoleForm(f => ({ ...f, name: e.target.value }))}
+                    maxLength={30}
+                    style={{
+                      flex: 1, minWidth: 120, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+                      color: C.text, fontSize: 13, padding: '8px 12px', outline: 'none',
+                    }}
+                  />
+                  <input
+                    placeholder="🏆"
+                    value={roleForm.icon}
+                    onChange={e => setRoleForm(f => ({ ...f, icon: e.target.value }))}
+                    maxLength={4}
+                    style={{
+                      width: 52, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+                      color: C.text, fontSize: 18, padding: '6px 8px', outline: 'none', textAlign: 'center',
+                    }}
+                  />
+                  <input
+                    type="color" value={roleForm.color}
+                    onChange={e => setRoleForm(f => ({ ...f, color: e.target.value }))}
+                    style={{ width: 42, height: 40, border: 'none', borderRadius: 8, cursor: 'pointer', background: 'none', padding: 0 }}
+                  />
+                </div>
+
+                {/* Preview */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <span style={{ fontSize: 11, color: C.textDim }}>Vista previa:</span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, borderRadius: 4, padding: '2px 8px',
+                    color: roleForm.color, background: `${roleForm.color}18`,
+                    border: `1px solid ${roleForm.color}44`,
+                  }}>
+                    {roleForm.icon} {roleForm.name || 'Nombre del rol'}
+                  </span>
+                </div>
+
+                {/* Permisos */}
+                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+                  <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: C.text }}>🔐 Permisos del rol</p>
+                  {PERM_GROUPS.map(group => (
+                    <div key={group.label} style={{ marginBottom: 14 }}>
+                      <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                        {group.label}
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {group.items.map(({ key, label, desc }) => (
+                          <label key={key} style={{
+                            display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                            background: roleForm[key] ? `${roleForm.color}12` : C.panel2,
+                            border: `1px solid ${roleForm[key] ? roleForm.color + '44' : C.border}`,
+                            borderRadius: 8, padding: '8px 10px', transition: 'all .15s',
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={!!roleForm[key]}
+                              onChange={e => setRoleForm(f => ({ ...f, [key]: e.target.checked }))}
+                              style={{ width: 16, height: 16, accentColor: roleForm.color, flexShrink: 0, cursor: 'pointer' }}
+                            />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: roleForm[key] ? 700 : 500, color: roleForm[key] ? C.text : C.textDim }}>{label}</div>
+                              <div style={{ fontSize: 10, color: C.textDim, marginTop: 1, lineHeight: 1.3 }}>{desc}</div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={saveCustomRole}
+                  disabled={savingRole || !roleForm.name.trim()}
+                  style={{
+                    marginTop: 4, background: savingRole || !roleForm.name.trim() ? C.panel2 : C.green,
+                    border: 'none', borderRadius: 8, padding: '10px 24px',
+                    color: C.bg, fontSize: 13, fontWeight: 700, cursor: 'pointer', width: '100%',
+                  }}
+                >
+                  {savingRole ? 'Guardando...' : editingRole ? '✓ Actualizar rol' : '✓ Guardar rol'}
+                </button>
+              </div>
+            )}
+
+            {/* Lista de roles */}
+            {rolesLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                <div style={{ width: 24, height: 24, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+              </div>
+            ) : customRoles.length === 0 ? (
+              <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>🎭</div>
+                <p style={{ margin: 0, color: C.text2, fontWeight: 600 }}>Sin roles personalizados</p>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: C.textDim }}>
+                  Creá roles para organizar mejor a los miembros de la comunidad.
+                </p>
+              </div>
+            ) : (
+              customRoles.map(role => {
+                const activePerms = PERM_GROUPS.flatMap(g => g.items).filter(({ key }) => role[key])
+                return (
+                  <div key={role.id} style={{
+                    padding: '12px 16px', borderBottom: `1px solid ${C.border}11`,
+                  }}>
+                    {/* Row: badge + actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: activePerms.length ? 8 : 0 }}>
+                      <span style={{
+                        fontSize: 12, fontWeight: 700, borderRadius: 6, padding: '3px 10px',
+                        color: role.color, background: `${role.color}18`,
+                        border: `1px solid ${role.color}44`, flexShrink: 0, whiteSpace: 'nowrap',
+                      }}>
+                        {role.icon} {role.name}
+                      </span>
+                      <div style={{ flex: 1 }} />
+                      <button
+                        onClick={() => openRoleForm(role)}
+                        style={{
+                          background: `${role.color}18`, border: `1px solid ${role.color}44`,
+                          borderRadius: 6, padding: '5px 10px', color: role.color,
+                          fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+                        }}
+                      >✏️ Editar</button>
+                      <button
+                        onClick={() => deleteCustomRole(role.id)}
+                        disabled={deletingRole === role.id}
+                        style={{
+                          background: '#ef444412', border: 'none', borderRadius: 6, padding: '5px 9px',
+                          color: '#ef4444', fontSize: 11, cursor: 'pointer', flexShrink: 0,
+                          opacity: deletingRole === role.id ? 0.5 : 1,
+                        }}
+                      >
+                        {deletingRole === role.id ? '...' : '🗑'}
+                      </button>
+                    </div>
+                    {/* Permisos activos */}
+                    {activePerms.length > 0 ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {activePerms.map(({ key, label }) => (
+                          <span key={key} style={{
+                            fontSize: 10, color: role.color, background: `${role.color}12`,
+                            border: `1px solid ${role.color}30`, borderRadius: 4, padding: '1px 7px',
+                          }}>{label}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 11, color: C.textDim }}>Sin permisos especiales — solo puede leer</span>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </>
+        )}
+
+        {/* ════ TAB: TORNEOS ════ */}
+        {tab === 'torneos' && (() => {
+          const GAMES = [
+            { id: 'efootball',   icon: '⚽', label: 'eFootball' },
+            { id: 'fc26',        icon: '⚽', label: 'FC 26' },
+            { id: 'fc27',        icon: '⚽', label: 'FC 27' },
+          ]
+          function toggleGame(id) {
+            setCommunityGames(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id])
+          }
+          return (
+            <div style={{ padding: '0 0 40px' }}>
+              {/* Header info */}
+              <div style={{ padding: '16px', background: `${C.green}08`, borderBottom: `1px solid ${C.border}` }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text }}>🏆 Torneos & Ligas</p>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: C.textDim, lineHeight: 1.4 }}>
+                  Configurá qué tipo de competencias se pueden organizar dentro de esta comunidad.
+                </p>
+              </div>
+
+              {/* Enable / disable sections */}
+              <div style={{ borderBottom: `1px solid ${C.border}` }}>
+                <p style={{ margin: '16px 16px 8px', fontSize: 10, fontWeight: 800, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+                  Tipos de competencia
+                </p>
+                <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[
+                    ['torneosEnabled', torneosEnabled, setTorneosEnabled, '🏆', 'Torneos', 'Eliminación directa, grupos, bracket'],
+                    ['ligasEnabled',   ligasEnabled,   setLigasEnabled,   '🥇', 'Ligas',   'Todos vs todos, tabla de posiciones'],
+                    ['clanesEnabled',  clanesEnabled,  setClanesEnabled,  '⚔️', 'Torneos de Clanes', 'Equipos o clanes compiten entre sí'],
+                  ].map(([key, val, setter, icon, lbl, desc]) => (
+                    <div key={key} style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      background: val ? `${C.green}08` : C.panel2,
+                      border: `1px solid ${val ? C.green + '44' : C.border}`,
+                      borderRadius: 12, padding: '12px 14px',
+                    }}>
+                      <span style={{ fontSize: 22 }}>{icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text }}>{lbl}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>{desc}</p>
+                      </div>
+                      {isAdmin && <Toggle value={val} onChange={setter} />}
+                      {!isAdmin && (
+                        <span style={{ fontSize: 11, color: val ? C.green : C.textDim, fontWeight: 700 }}>{val ? 'ON' : 'OFF'}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Games */}
+              <div style={{ borderBottom: `1px solid ${C.border}` }}>
+                <p style={{ margin: '16px 16px 8px', fontSize: 10, fontWeight: 800, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+                  Juegos de la comunidad
+                </p>
+                <div style={{ padding: '0 16px 16px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {GAMES.map(g => {
+                    const selected = communityGames.includes(g.id)
+                    return (
+                      <button key={g.id} onClick={() => isAdmin && toggleGame(g.id)} style={{
+                        padding: '7px 14px', borderRadius: 20, border: 'none',
+                        cursor: isAdmin ? 'pointer' : 'default', fontSize: 13,
+                        background: selected ? C.green : C.panel2,
+                        color: selected ? C.bg : C.text2,
+                        fontWeight: selected ? 700 : 400,
+                        opacity: !isAdmin && !selected ? 0.5 : 1,
+                      }}>
+                        {g.icon} {g.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                {communityGames.length > 0 && (
+                  <p style={{ margin: '0 16px 12px', fontSize: 11, color: C.textDim }}>
+                    {communityGames.length} juego{communityGames.length !== 1 ? 's' : ''} seleccionado{communityGames.length !== 1 ? 's' : ''}
+                  </p>
+                )}
+              </div>
+
+              {/* Reglamento de sala editable por juego */}
+              {(() => {
+                const soccerGames = [
+                  communityGames.includes('efootball') && { id: 'efootball', label: 'eFootball', icon: '⚽' },
+                  (communityGames.includes('fc26') || communityGames.includes('fc27')) && { id: 'fc', label: 'FC 26/27', icon: '⚽' },
+                ].filter(Boolean)
+                if (!soccerGames.length) return null
+
+                // Which rules tab is valid
+                const validTab = soccerGames.find(g => g.id === rulesTab) ? rulesTab : soccerGames[0].id
+
+                const EFOOTBALL_RULES = [
+                  { key: 'sin_handicap',       icon: '⚖️', label: 'Sin handicap / igualador de equipo' },
+                  { key: 'sin_cartas_op',       icon: '🚫', label: 'Sin cartas OP/TOTY/Evolutions' },
+                  { key: 'envio_mazo',          icon: '📋', label: 'Mazo/equipo enviado antes del partido' },
+                  { key: 'tacticas_libres',     icon: '🎯', label: 'Tácticas libres' },
+                  { key: 'restriccion_division',icon: '🏅', label: 'Restricción de división mínima' },
+                  { key: 'sin_manager_legend',  icon: '👤', label: 'Sin Manager/Leyenda' },
+                  { key: 'penales_5',           icon: '🥅', label: 'Penales máx. 5 en empate' },
+                ]
+                const FC_RULES = [
+                  { key: 'sin_handicap',        icon: '⚖️', label: 'Sin handicap / asistencia de puntería' },
+                  { key: 'sin_cartas_op',        icon: '🚫', label: 'Sin cartas TOTY/TOTS/Héroe' },
+                  { key: 'envio_equipo',         icon: '📋', label: 'Equipo enviado antes del partido' },
+                  { key: 'sin_icon',             icon: '⭐', label: 'Sin íconos/leyendas' },
+                  { key: 'restriccion_overall',  icon: '🏅', label: 'Restricción de overall máximo' },
+                  { key: 'tacticas_libres',      icon: '🎯', label: 'Tácticas libres' },
+                  { key: 'prohibido_press',      icon: '🛡️', label: 'Prohibido pressing constante' },
+                ]
+
+                const rules = validTab === 'efootball' ? EFOOTBALL_RULES : FC_RULES
+
+                return (
+                  <div style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <p style={{ margin: '16px 16px 8px', fontSize: 10, fontWeight: 800, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+                      Reglamento de sala
+                    </p>
+
+                    {/* Game tabs */}
+                    {soccerGames.length > 1 && (
+                      <div style={{ display: 'flex', gap: 6, padding: '0 16px 12px' }}>
+                        {soccerGames.map(g => (
+                          <button key={g.id} onClick={() => setRulesTab(g.id)} style={{
+                            padding: '5px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                            background: validTab === g.id ? C.green : C.panel2,
+                            color: validTab === g.id ? C.bg : C.text2,
+                          }}>{g.icon} {g.label}</button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Toggleable rules */}
+                    <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {rules.map(r => {
+                        const on = getRule(validTab, r.key, false)
+                        return (
+                          <div key={r.key} style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 12px', borderRadius: 10,
+                            background: on ? `${C.green}10` : C.panel2,
+                            border: `1px solid ${on ? C.green + '44' : C.border + '44'}`,
+                            cursor: isAdmin ? 'pointer' : 'default',
+                            transition: 'background .15s',
+                          }}
+                          onClick={() => isAdmin && setRule(validTab, r.key, !on)}
+                          >
+                            <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{r.icon}</span>
+                            <span style={{ flex: 1, fontSize: 13, color: on ? C.text : C.text2 }}>{r.label}</span>
+                            {isAdmin
+                              ? <Toggle value={on} onChange={v => setRule(validTab, r.key, v)} />
+                              : <span style={{ fontSize: 11, fontWeight: 700, color: on ? C.green : C.textDim }}>{on ? 'ON' : '—'}</span>
+                            }
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* División mínima (texto) — solo si está activada */}
+                    {validTab === 'efootball' && getRule('efootball', 'restriccion_division', false) && (
+                      <div style={{ padding: '8px 16px' }}>
+                        <input
+                          value={getRule('efootball', 'division_minima_texto', '')}
+                          onChange={e => setRule('efootball', 'division_minima_texto', e.target.value)}
+                          placeholder="Ej: División 1 o superior"
+                          disabled={!isAdmin}
+                          style={{
+                            width: '100%', boxSizing: 'border-box',
+                            background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+                            color: C.text, fontSize: 13, padding: '8px 12px', outline: 'none',
+                            opacity: isAdmin ? 1 : 0.6,
+                          }}
+                        />
+                      </div>
+                    )}
+                    {validTab === 'fc' && getRule('fc', 'restriccion_overall', false) && (
+                      <div style={{ padding: '8px 16px' }}>
+                        <input
+                          value={getRule('fc', 'overall_max_texto', '')}
+                          onChange={e => setRule('fc', 'overall_max_texto', e.target.value)}
+                          placeholder="Ej: Overall máximo 85"
+                          disabled={!isAdmin}
+                          style={{
+                            width: '100%', boxSizing: 'border-box',
+                            background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+                            color: C.text, fontSize: 13, padding: '8px 12px', outline: 'none',
+                            opacity: isAdmin ? 1 : 0.6,
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Reglas adicionales / texto libre */}
+                    <div style={{ padding: '8px 16px 16px' }}>
+                      <p style={{ margin: '0 0 6px', fontSize: 11, color: C.textDim, fontWeight: 600 }}>Reglas adicionales (texto libre)</p>
+                      <textarea
+                        value={getRule(validTab, 'custom', '')}
+                        onChange={e => setRule(validTab, 'custom', e.target.value)}
+                        placeholder={isAdmin ? 'Escribí reglas específicas de tu comunidad...' : 'Sin reglas adicionales'}
+                        disabled={!isAdmin}
+                        rows={3}
+                        style={{
+                          width: '100%', boxSizing: 'border-box', resize: 'vertical',
+                          background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+                          color: C.text, fontSize: 13, padding: '8px 12px', outline: 'none', fontFamily: 'inherit',
+                          opacity: isAdmin ? 1 : 0.6,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Save button — only for admins */}
+              {isAdmin && (
+                <div style={{ padding: '16px' }}>
+                  <button onClick={saveTorneosConfig} disabled={savingTorneos} style={{
+                    width: '100%', padding: '12px', borderRadius: 12, border: 'none',
+                    background: savingTorneos ? C.panel2 : C.green,
+                    color: savingTorneos ? C.textDim : C.bg,
+                    fontWeight: 700, fontSize: 14, cursor: savingTorneos ? 'default' : 'pointer',
+                  }}>
+                    {savingTorneos ? 'Guardando…' : '💾 Guardar configuración'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ════ TAB: MEDIOS ════ */}
         {tab === 'media' && (

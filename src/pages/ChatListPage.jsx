@@ -5,6 +5,7 @@ import { useChatStore } from '../store/chatStore'
 import { supabase } from '../lib/supabase'
 import NewGroupPage from './NewGroupPage'
 import { StoriesBar, useStoryUserIds, openStoryForUser } from './StoriesPage'
+import BannerAd from '../components/BannerAd'
 import { useOnlineUsers } from '../hooks/usePresence'
 import { C } from '../theme'
 
@@ -53,8 +54,8 @@ function Avatar({ name, size = 48, color, url }) {
 function GroupAvatar({ members = [], size = 50, isCommunity = false }) {
   const shown = members.slice(0, 4)
   const bg = isCommunity
-    ? 'linear-gradient(135deg,#7c3aed,#4f46e5)'
-    : 'linear-gradient(135deg,#0B7A2A,#065f21)'
+    ? 'linear-gradient(135deg,#00f5d4,#7c3aed)'
+    : 'linear-gradient(135deg,#00f5d4,#00b894)'
 
   if (shown.length < 2) {
     // Single face or no members — show icon
@@ -175,6 +176,23 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
   useEffect(() => { setFilter(initialFilter || 'todos') }, [initialFilter])
   const [showFab, setShowFab] = useState(false)
+
+  // Ctrl+Alt+N → nuevo chat
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.ctrlKey && e.altKey && e.key === 'n') {
+        e.preventDefault()
+        setNewGroupType('group')
+        setShowNewGroup(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+  const [showAddContact, setShowAddContact] = useState(false)
+  const [addContactQuery, setAddContactQuery] = useState('')
+  const [addContactResults, setAddContactResults] = useState([])
+  const [addContactLoading, setAddContactLoading] = useState(false)
   const [loadingConvs, setLoadingConvs] = useState(conversations.length === 0)
   const storyUserIds = useStoryUserIds()
   const onlineUsers = useOnlineUsers()
@@ -258,9 +276,14 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
     fetchConversations(profile.id)
   }
 
-  function handleGroupCreated(convId, name, members) {
+  function handleGroupCreated(convId, name, members, type) {
     setShowNewGroup(false)
-    setActiveConversation({ id: convId, name, isGroup: true, members })
+    const isCommunity = type === 'community'
+    setActiveConversation({
+      id: convId, name, isGroup: true, members,
+      group_type: type || 'group',
+      isCommunity,
+    })
     fetchConversations(profile.id)
   }
 
@@ -327,10 +350,14 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   if (showNewGroup) return <NewGroupPage initialType={newGroupType} onBack={() => setShowNewGroup(false)} onCreated={handleGroupCreated} />
 
   const filtered = (search ? [] : conversations.filter(c => {
+    if (filter === 'noleidos')    return (c.unread || 0) > 0
     if (filter === 'chats')       return !c.isGroup && !c.isCommunity
+    if (filter === 'contactos')   return !c.isGroup && !c.isCommunity
     if (filter === 'directos')    return !c.isGroup && !c.isCommunity
     if (filter === 'grupos')      return c.isGroup && !c.isCommunity
     if (filter === 'comunidades') return c.isCommunity
+    if (filter === 'torneos')     return c.group_type === 'tournament'
+    if (filter === 'ligas')       return c.group_type === 'liga'
     if (filter === 'amigo')       return !c.isGroup && contactCategories[c.user?.id] === 'amigo'
     if (filter === 'clan')        return !c.isGroup && contactCategories[c.user?.id] === 'clan'
     if (filter === 'conocido')    return !c.isGroup && contactCategories[c.user?.id] === 'conocido'
@@ -351,81 +378,66 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
         {/* Top bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {/* Logo icon */}
-            <div style={{
-              width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-              background: `linear-gradient(135deg, ${C.greenDk} 0%, #0f3d1a 100%)`,
-              border: `1px solid ${C.green}40`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: `0 0 12px ${C.green}22`,
-            }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill={C.green} stroke="none">
-                <path d="M13 2L4.5 13.5H11L10 22L20.5 10H14L13 2Z"/>
-              </svg>
-            </div>
+            {/* Logo */}
+            <img src="/logo.svg" alt="NexoTribu" width="28" height="28" style={{ borderRadius: 8, flexShrink: 0 }} />
             <span style={{ color: C.text, fontWeight: 800, fontSize: 17, letterSpacing: '-0.3px' }}>
-              Mi Mensajero
+              NexoTribu
             </span>
           </div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {/* Ordenar */}
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {/* Nuevo chat — Ctrl+Alt+N */}
+            <button
+              title="Nuevo chat (Ctrl+Alt+N)"
+              onClick={() => { setNewGroupType('group'); setShowNewGroup(true) }}
+              style={{ width: 34, height: 34, borderRadius: '50%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                <line x1="12" y1="8" x2="12" y2="14"/><line x1="9" y1="11" x2="15" y2="11"/>
+              </svg>
+            </button>
+
+            {/* 3 puntos — menú contextual */}
             <div style={{ position: 'relative' }}>
-              <button onClick={e => { e.stopPropagation(); setShowSortMenu(v => !v) }} title="Ordenar" style={{
-                width: 32, height: 32, borderRadius: '50%', background: showSortMenu ? `${C.green}22` : C.panel2,
-                border: `1px solid ${showSortMenu ? C.green + '55' : C.border}`, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={showSortMenu ? C.green : C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="7" y2="18"/>
+              <button
+                onClick={e => { e.stopPropagation(); setShowSortMenu(v => !v) }}
+                style={{ width: 34, height: 34, borderRadius: '50%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill={C.text2}>
+                  <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
                 </svg>
               </button>
               {showSortMenu && (
                 <div onClick={e => e.stopPropagation()} style={{
-                  position: 'absolute', right: 0, top: 38, zIndex: 100,
+                  position: 'absolute', right: 0, top: 38, zIndex: 200,
                   background: C.panel, border: `1px solid ${C.border}`,
-                  borderRadius: 12, overflow: 'hidden', minWidth: 170,
+                  borderRadius: 10, overflow: 'hidden', minWidth: 210,
                   boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
                 }}>
-                  {[['recientes','🕐 Más recientes'],['no_leidos','🔵 No leídos primero'],['az','🔤 A-Z']].map(([id, label]) => (
-                    <div key={id} onClick={() => { setSortOrder(id); setShowSortMenu(false) }} style={{
-                      padding: '10px 14px', cursor: 'pointer', fontSize: 13,
-                      color: sortOrder === id ? C.green : C.text,
-                      fontWeight: sortOrder === id ? 700 : 400,
-                      background: sortOrder === id ? `${C.green}10` : 'transparent',
-                      borderBottom: `1px solid ${C.border}22`,
+                  {[
+                    { label: 'Nuevo grupo', action: () => { setNewGroupType('group'); setShowNewGroup(true) } },
+                    { label: 'Mensajes destacados', action: () => {} },
+                    { label: 'Seleccionar chats', action: () => { setSelectMode(true); setSelected(new Set()) } },
+                    { label: 'Marcar todos como leídos', action: async () => {
+                      await supabase.from('conversation_members').update({ unread: 0 }).eq('user_id', profile?.id)
+                    }},
+                    { divider: true },
+                    { label: 'Cerrar sesión', action: signOut, danger: true },
+                  ].map((item, i) => item.divider ? (
+                    <div key={i} style={{ height: 1, background: C.border, margin: '4px 0' }} />
+                  ) : (
+                    <button key={i} onClick={() => { setShowSortMenu(false); item.action() }} style={{
+                      width: '100%', padding: '11px 16px', border: 'none', background: 'none',
+                      cursor: 'pointer', textAlign: 'left', fontSize: 14,
+                      color: item.danger ? '#ef4444' : C.text,
                     }}
                       onMouseEnter={e => e.currentTarget.style.background = C.panel2}
-                      onMouseLeave={e => e.currentTarget.style.background = sortOrder === id ? `${C.green}10` : 'transparent'}
-                    >{label} {sortOrder === id ? '✓' : ''}</div>
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    >{item.label}</button>
                   ))}
                 </div>
               )}
             </div>
-            {/* Seleccionar / cancelar */}
-            <button onClick={() => { setSelectMode(s => !s); setSelected(new Set()) }} title={selectMode ? 'Cancelar selección' : 'Seleccionar chats'} style={{
-              width: 32, height: 32, borderRadius: '50%', cursor: 'pointer',
-              background: selectMode ? C.green : C.panel2,
-              border: `1px solid ${selectMode ? C.green : C.border}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              {selectMode
-                ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="4" height="4" rx="1"/><rect x="3" y="11" width="4" height="4" rx="1"/><rect x="3" y="17" width="4" height="4" rx="1"/><line x1="10" y1="7" x2="21" y2="7"/><line x1="10" y1="13" x2="21" y2="13"/><line x1="10" y1="19" x2="21" y2="19"/></svg>
-              }
-            </button>
-            <button onClick={() => onProfileClick?.()} title="Perfil" style={{
-              width: 32, height: 32, borderRadius: '50%', background: C.panel2,
-              border: `1px solid ${C.border}`, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-              </svg>
-            </button>
-            <button onClick={signOut} style={{
-              background: 'none', border: `1px solid ${C.border}`, cursor: 'pointer',
-              color: C.textDim, fontSize: 11, padding: '4px 10px', borderRadius: 8,
-            }}>Salir</button>
           </div>
         </div>
 
@@ -455,32 +467,54 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
           </div>
         </div>
 
-        {/* Filter tabs */}
+        {/* Filter tabs — estilo WhatsApp */}
         {!search && (
           <div style={{
-            display: 'flex', gap: 5, padding: '8px 12px 8px',
+            display: 'flex', gap: 6, padding: '8px 12px',
             borderTop: `1px solid ${C.border}`, overflowX: 'auto',
+            alignItems: 'center',
           }}>
             {[
-              ['todos','Todos','💬'],
-              ['chats','Chats','👤'],
-              ['grupos','Grupos','👥'],
-              ['comunidades','Comunidades','🌐'],
-              ['amigo','Amigos','🤝'],
-              ['clan','Clan','⚔️'],
-              ['conocido','Conocidos','👋'],
-            ].map(([id, label, icon]) => (
+              ['todos',      'Todos'],
+              ['noleidos',   'No leídos'],
+              ['grupos',     'Grupos'],
+              ['contactos',  'Contactos'],
+            ].map(([id, label]) => {
+              const active = filter === id
+              return (
+                <button key={id} onClick={() => setFilter(id)} style={{
+                  background: active ? C.green : C.panel2,
+                  border: 'none', borderRadius: 20, cursor: 'pointer',
+                  padding: '5px 14px',
+                  color: active ? '#fff' : C.text2,
+                  fontSize: 13, fontWeight: active ? 700 : 500,
+                  transition: 'all .15s',
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                }}>{label}</button>
+              )
+            })}
+            {/* + para más filtros */}
+            <button onClick={() => setFilter('mas')} style={{
+              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+              background: filter === 'mas' ? C.green : C.panel2,
+              border: `1px solid ${filter === 'mas' ? C.green : C.border}`,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: filter === 'mas' ? '#fff' : C.textDim, fontSize: 18, fontWeight: 700,
+              transition: 'all .15s',
+            }}>+</button>
+            {/* Sub-filtros extra — aparecen cuando se toca + */}
+            {filter === 'mas' && [
+              ['comunidades','Comunidades'],
+              ['torneos','Torneos'],
+              ['ligas','Ligas'],
+              ['amigo','Amigos'],
+            ].map(([id, label]) => (
               <button key={id} onClick={() => setFilter(id)} style={{
-                background: filter === id ? `${C.green}18` : C.panel2,
-                border: `1px solid ${filter === id ? C.green + '55' : C.border}`,
-                borderRadius: 20, cursor: 'pointer',
-                padding: '5px 11px',
-                color: filter === id ? C.green : C.textDim,
-                fontSize: 12, fontWeight: filter === id ? 700 : 500,
-                transition: 'all .15s',
-                display: 'flex', alignItems: 'center', gap: 4,
-                whiteSpace: 'nowrap', flexShrink: 0,
-              }}><span style={{ fontSize: 13 }}>{icon}</span>{label}</button>
+                background: C.panel2, border: `1px solid ${C.border}`,
+                borderRadius: 20, cursor: 'pointer', padding: '5px 14px',
+                color: C.text2, fontSize: 13, fontWeight: 500,
+                whiteSpace: 'nowrap', flexShrink: 0, transition: 'all .15s',
+              }}>{label}</button>
             ))}
           </div>
         )}
@@ -488,6 +522,9 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
       {/* ── STORIES BAR ── */}
       <StoriesBar />
+
+      {/* ── BANNER ── */}
+      <BannerAd position="chats" style={{ marginTop: 8 }} />
 
       {/* ── LIST ── */}
       <div style={{ flex: 1, overflowY: 'auto', overflowAnchor: 'none' }}>
@@ -567,6 +604,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
             : lastMsg?.type === 'audio' ? '🎤 Audio'
             : lastMsg?.content?.startsWith('[↩ ') ? '↩ ' + (lastMsg.content.split('\n')[1] || lastMsg.content)
             : lastMsg?.content || ''
+          const channelName = isCommunity ? lastMsg?.channel_name : null
           // For groups: find sender name from members list
           const senderMember = isGroup && !isMine && lastMsg
             ? conv.members?.find(m => m.id === lastMsg.sender_id)
@@ -615,7 +653,9 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
               {/* Avatar */}
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 {isGroup
-                  ? <GroupAvatar members={conv.members || []} size={50} isCommunity={isCommunity} />
+                  ? (conv.avatar_url
+                      ? <img src={conv.avatar_url} alt={name} style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                      : <GroupAvatar members={conv.members || []} size={50} isCommunity={isCommunity} />)
                   : storyUserIds.has(conv.user?.id)
                     ? (
                       <div
@@ -671,7 +711,21 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
                         borderRadius: 4, padding: '1px 5px', letterSpacing: '0.5px', textTransform: 'uppercase',
                       }}>Comunidad</span>
                     )}
-                    {isGroup && !isCommunity && (
+                    {isGroup && !isCommunity && conv.group_type === 'tournament' && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, color: '#f59e0b', flexShrink: 0,
+                        background: '#f59e0b18', border: '1px solid #f59e0b40',
+                        borderRadius: 4, padding: '1px 5px', letterSpacing: '0.5px', textTransform: 'uppercase',
+                      }}>Torneo</span>
+                    )}
+                    {isGroup && !isCommunity && conv.group_type === 'liga' && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, color: '#38bdf8', flexShrink: 0,
+                        background: '#38bdf818', border: '1px solid #38bdf840',
+                        borderRadius: 4, padding: '1px 5px', letterSpacing: '0.5px', textTransform: 'uppercase',
+                      }}>Liga</span>
+                    )}
+                    {isGroup && !isCommunity && !conv.group_type && (
                       <span style={{
                         fontSize: 9, fontWeight: 700, color: C.green, flexShrink: 0,
                         background: `${C.green}15`, border: `1px solid ${C.green}30`,
@@ -706,18 +760,20 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
                 )}
                 {lastMsg && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {isMine && <Ticks read={!!lastMsg.read_at} />}
+                    {isMine && !isCommunity && <Ticks read={!!lastMsg.read_at} />}
                     <p style={{
                       margin: 0, fontSize: 12,
                       color: conv.unread > 0 ? C.text2 : C.textDim,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
                       fontWeight: conv.unread > 0 ? 500 : 400,
                     }}>
-                      {isMine
-                        ? <span style={{ color: C.textDim }}>Vos: </span>
-                        : senderName
-                          ? <span style={{ color: C.text2, fontWeight: 600 }}>{senderName.split(' ')[0]}: </span>
-                          : null
+                      {isCommunity && channelName
+                        ? <span style={{ color: C.textDim }}>#{channelName}: </span>
+                        : isMine
+                          ? <span style={{ color: C.textDim }}>Vos: </span>
+                          : senderName
+                            ? <span style={{ color: C.text2, fontWeight: 600 }}>{senderName.split(' ')[0]}: </span>
+                            : null
                       }
                       {preview || 'Conversación iniciada'}
                     </p>
@@ -806,30 +862,6 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
         </div>
       )}
 
-      {/* ── FAB ── */}
-      <div style={{ position: 'absolute', bottom: 20, right: 16, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, zIndex: 30 }}>
-        {showFab && (
-          <>
-            <FabItem label="Nueva comunidad" icon="🌐" onClick={() => { setShowFab(false); setNewGroupType('community'); setShowNewGroup(true) }} />
-            <FabItem label="Nuevo grupo" icon="👥" onClick={() => { setShowFab(false); setNewGroupType('group'); setShowNewGroup(true) }} />
-            <FabItem label="Nuevo chat" icon="💬" onClick={() => { setShowFab(false); document.querySelector('input[placeholder*="Buscar"]')?.focus() }} />
-          </>
-        )}
-        <button
-          onClick={e => { e.stopPropagation(); setShowFab(v => !v) }}
-          style={{
-            width: 50, height: 50, borderRadius: '50%',
-            background: C.green, border: 'none', cursor: 'pointer',
-            boxShadow: `0 4px 20px ${C.green}55`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transform: showFab ? 'rotate(45deg)' : 'none',
-            transition: 'transform .2s, box-shadow .2s',
-          }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M12 5v14M5 12h14" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round"/>
-          </svg>
-        </button>
-      </div>
 
       {/* Barra de selección */}
       {selectMode && (
@@ -887,6 +919,84 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
         onConfirm={confirmDialog?.onConfirm}
         onCancel={() => setConfirmDialog(null)}
       />
+
+      {/* ── Modal Agregar Contacto ── */}
+      {showAddContact && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200,
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        }} onClick={() => setShowAddContact(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '100%', maxWidth: 480, background: C.panel,
+            borderRadius: '20px 20px 0 0', padding: '20px 20px 32px',
+            display: 'flex', flexDirection: 'column', gap: 14,
+            maxHeight: '80vh',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ color: C.text, fontWeight: 800, fontSize: 16 }}>➕ Agregar contacto</div>
+              <button onClick={() => setShowAddContact(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 20 }}>✕</button>
+            </div>
+            <input
+              autoFocus
+              placeholder="Buscar por nombre o @usuario"
+              value={addContactQuery}
+              onChange={async e => {
+                const q = e.target.value
+                setAddContactQuery(q)
+                if (q.trim().length < 2) { setAddContactResults([]); return }
+                setAddContactLoading(true)
+                const { data } = await supabase.from('users')
+                  .select('id, display_name, username, avatar_url, elo')
+                  .or(`display_name.ilike.%${q}%,username.ilike.%${q}%`)
+                  .neq('id', profile.id)
+                  .limit(15)
+                setAddContactResults(data || [])
+                setAddContactLoading(false)
+              }}
+              style={{
+                padding: '11px 14px', borderRadius: 12, outline: 'none',
+                background: C.panel2, border: `1px solid ${C.border}`,
+                color: C.text, fontSize: 14,
+              }}
+            />
+            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {addContactLoading && <div style={{ textAlign: 'center', color: C.textDim, padding: 16 }}>Buscando...</div>}
+              {!addContactLoading && addContactQuery.length >= 2 && addContactResults.length === 0 && (
+                <div style={{ textAlign: 'center', color: C.textDim, padding: 16 }}>Sin resultados</div>
+              )}
+              {addContactResults.map(u => (
+                <button key={u.id} onClick={async () => {
+                  // Open or create DM
+                  const existing = conversations.find(c => !c.isGroup && c.user?.id === u.id)
+                  if (existing) {
+                    setActiveConversation(existing)
+                  } else {
+                    const { data } = await supabase.rpc('get_or_create_dm', { other_user_id: u.id })
+                    if (data) fetchConversations(profile.id)
+                  }
+                  setShowAddContact(false)
+                }} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 12px', borderRadius: 12, background: C.panel2,
+                  border: `1px solid ${C.border}`, cursor: 'pointer', textAlign: 'left',
+                }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: C.border, overflow: 'hidden', flexShrink: 0 }}>
+                    {u.avatar_url
+                      ? <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.green, fontWeight: 700 }}>{u.display_name?.[0]?.toUpperCase()}</div>
+                    }
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>{u.display_name}</div>
+                    {u.username && <div style={{ color: C.textDim, fontSize: 12 }}>@{u.username}</div>}
+                  </div>
+                  <span style={{ color: C.green, fontSize: 12, fontWeight: 700 }}>💬 Chat</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -2,23 +2,33 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { sounds, ringtone, outgoingRing, busyTone } from '../lib/sounds'
 
+// openrelay.metered.ca is the free public TURN that works with openrelayproject credentials
+// For production, set VITE_TURN_USERNAME / VITE_TURN_CREDENTIAL + VITE_TURN_HOST in .env
 const TURN_USER = import.meta.env.VITE_TURN_USERNAME || 'openrelayproject'
 const TURN_CRED = import.meta.env.VITE_TURN_CREDENTIAL || 'openrelayproject'
+const TURN_HOST = import.meta.env.VITE_TURN_HOST || 'openrelay.metered.ca'
+
+// Strip protocol (https://) and port from TURN_HOST so URLs are valid
+const TURN_HOST_CLEAN = TURN_HOST.replace(/^https?:\/\//, '').split(':')[0]
+
+// Always include the free public relay as guaranteed fallback
+const FREE_TURN = [
+  { urls: 'turn:openrelay.metered.ca:80',                               username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443',                              username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turns:openrelay.metered.ca:443?transport=tcp',               username: 'openrelayproject', credential: 'openrelayproject' },
+]
+const USER_TURN = TURN_HOST_CLEAN !== 'openrelay.metered.ca' ? [
+  { urls: `turn:${TURN_HOST_CLEAN}:443`,                username: TURN_USER, credential: TURN_CRED },
+  { urls: `turns:${TURN_HOST_CLEAN}:443?transport=tcp`, username: TURN_USER, credential: TURN_CRED },
+] : []
 
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:stun.relay.metered.ca:80' },
-    { urls: 'turn:a.relay.metered.ca:80',            username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turn:a.relay.metered.ca:80?transport=tcp', username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turn:a.relay.metered.ca:443',           username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turns:a.relay.metered.ca:443?transport=tcp', username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turn:global.relay.metered.ca:80',       username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turn:global.relay.metered.ca:443',      username: TURN_USER, credential: TURN_CRED },
-    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: TURN_USER, credential: TURN_CRED },
+    ...USER_TURN,
+    ...FREE_TURN,
   ],
   iceCandidatePoolSize: 10,
   iceTransportPolicy: 'all',
@@ -224,10 +234,11 @@ export default function CallPage({
   const [showBgPicker, setShowBgPicker] = useState(false)
   const [selectedBg, setSelectedBg] = useState('default')
   const [screenSharing, setScreenSharing] = useState(false)
+  const [remoteScreenSharing, setRemoteScreenSharing] = useState(false)
   const [note, setNote] = useState('')
   const [showNote, setShowNote] = useState(false)
 
-  const pc = useRef(null)
+const pc = useRef(null)
   const localStream = useRef(null)
   const screenStream = useRef(null)
   const sessionCh = useRef(null)
@@ -235,15 +246,37 @@ export default function CallPage({
   const qualityRef = useRef(null)
   const connectTimeoutRef = useRef(null)
   const ringTimeoutRef = useRef(null)
+  const iceRestartTimerRef = useRef(null)
   const silentCtxRef = useRef(null)
   const connectedRef = useRef(false)
+  const hangupCalledRef = useRef(false)  // prevent double-hangup
+  const iceRestartAttempted = useRef(false)
   const localVid = useRef(null)
   const remoteVid = useRef(null)
   const remoteAudio = useRef(null)
+  const remoteStreamRef = useRef(null)  // store stream so we can re-apply after DOM mounts
   const pendingIce = useRef([])
   const sessionChReady = useRef(false)
   const pendingOutIce = useRef([])  // ICE candidates queued until sessionCh is ready
   const touchY0 = useRef(0)
+
+  // Re-apply remote stream after DOM re-renders (race: ontrack fires before video element mounts)
+  useEffect(() => {
+    if (phase === 'active' && remoteStreamRef.current) {
+      const s = remoteStreamRef.current
+      if (remoteAudio.current && !remoteAudio.current.srcObject) {
+        remoteAudio.current.srcObject = s
+        remoteAudio.current.play().catch(() => {})
+      }
+      if (remoteVid.current && (!remoteVid.current.srcObject || remoteVid.current.srcObject !== s)) {
+        remoteVid.current.srcObject = s
+        remoteVid.current.play().catch(() => {})
+      }
+    }
+  }, [phase])
+
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  const canScreenShare = !isMobile && typeof navigator.mediaDevices?.getDisplayMedia === 'function'
 
   const name = contact?.display_name || 'Usuario'
   const avatar_url = contact?.avatar_url || null
@@ -282,6 +315,25 @@ export default function CallPage({
       })
       .on('broadcast', { event: 'call-end' }, () => hangup(false))
       .on('broadcast', { event: 'call-reject' }, () => { busyTone.start(); setTimeout(() => busyTone.stop(), 3000); hangup(false) })
+      .on('broadcast', { event: 'call-busy' }, () => {
+        setPhase('busy')
+        busyTone.start()
+        setTimeout(() => { busyTone.stop(); hangup(false) }, 4000)
+      })
+      .on('broadcast', { event: 'call-screen-share' }, ({ payload }) => {
+        if (payload.from === myUserId) return
+        setRemoteScreenSharing(payload.active)
+        // Force video element to reload the track by briefly nulling srcObject
+        if (remoteVid.current && remoteStreamRef.current) {
+          remoteVid.current.srcObject = null
+          setTimeout(() => {
+            if (remoteVid.current && remoteStreamRef.current) {
+              remoteVid.current.srcObject = remoteStreamRef.current
+              remoteVid.current.play().catch(() => {})
+            }
+          }, 80)
+        }
+      })
       .on('broadcast', { event: 'call-reaction' }, ({ payload }) => {
         if (payload.from === myUserId) return
         addReaction(payload.emoji)
@@ -310,6 +362,7 @@ export default function CallPage({
       clearInterval(qualityRef.current)
       clearTimeout(connectTimeoutRef.current)
       clearTimeout(ringTimeoutRef.current)
+      clearTimeout(iceRestartTimerRef.current)
       if (sessionCh.current) supabase.removeChannel(sessionCh.current)
     }
   }, [])
@@ -354,48 +407,57 @@ export default function CallPage({
   }
 
   async function getMedia() {
-    if (window.Capacitor?.isNativePlatform?.()) {
-      try {
-        const { Permissions } = window.Capacitor.Plugins
-        if (Permissions?.requestPermissions) {
-          await Permissions.requestPermissions({ permissions: ['microphone'] })
-        }
-      } catch (_) {}
-    }
-    try {
-      const ctx = new AudioContext()
-      if (ctx.state === 'suspended') await ctx.resume()
-      ctx.close()
-    } catch (_) {}
+    console.log('[CALL]','getMedia start mediaDevices=' + !!navigator.mediaDevices)
+    if (!navigator.mediaDevices?.getUserMedia) { console.log('[CALL]','ERR: no mediaDevices'); throw new Error('getUserMedia no disponible') }
 
-    // Strong echo cancellation prevents feedback when phones are close
+    const withTimeout = (promise, ms) => Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + ms + 'ms')), ms))
+    ])
+
     const audioConstraints = {
-      echoCancellation: { ideal: true },
-      noiseSuppression: { ideal: true },
-      autoGainControl:  { ideal: true },
-      channelCount:     { ideal: 1 },
-      sampleRate:       { ideal: 48000 },
-      // Chrome/Edge extended constraints
-      googEchoCancellation: true,
-      googAutoGainControl:  true,
-      googNoiseSuppression: true,
-      googHighpassFilter:   true,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
     }
-    const stream = await navigator.mediaDevices.getUserMedia(
-      callType === 'video'
-        ? { audio: audioConstraints, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } }
-        : { audio: audioConstraints }
-    )
+
+    let stream
+    // Video calls: request camera + mic; audio calls: mic only
+    const constraints = isVideo
+      ? { audio: audioConstraints, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } }
+      : { audio: audioConstraints }
+
+    try {
+      console.log('[CALL]','getUserMedia', JSON.stringify(constraints))
+      stream = await withTimeout(navigator.mediaDevices.getUserMedia(constraints), 15000)
+      console.log('[CALL]','getUserMedia OK tracks=' + stream.getTracks().length)
+    } catch (e1) {
+      console.log('[CALL]','getUserMedia ERR: ' + e1.name + ' ' + e1.message)
+      // If video permission denied, fallback to audio only
+      if (isVideo && (e1.name === 'NotAllowedError' || e1.name === 'NotFoundError')) {
+        console.log('[CALL]','video denied, falling back to audio-only')
+        try {
+          stream = await withTimeout(navigator.mediaDevices.getUserMedia({ audio: audioConstraints }), 8000)
+          console.log('[CALL]','audio fallback OK tracks=' + stream.getTracks().length)
+        } catch (e2) { throw e2 }
+      } else {
+        throw e1
+      }
+    }
     localStream.current = stream
     if (localVid.current) { localVid.current.srcObject = stream; localVid.current.muted = true }
     return stream
   }
 
   function makePc(stream) {
-    const conn = new RTCPeerConnection(ICE_SERVERS)
+    console.log('[CALL]','makePc TURN_HOST=' + TURN_HOST)
+    let conn
+    try { conn = new RTCPeerConnection(ICE_SERVERS); console.log('[CALL]','RTCPeerConnection OK') }
+    catch(e) { console.log('[CALL]','RTCPeerConnection ERR: ' + e.message); throw e }
     stream.getTracks().forEach(t => conn.addTrack(t, stream))
     conn.ontrack = e => {
       const s = e.streams[0]
+      remoteStreamRef.current = s
       if (remoteAudio.current) { remoteAudio.current.srcObject = s; remoteAudio.current.play().catch(() => {}) }
       if (remoteVid.current) { remoteVid.current.srcObject = s; remoteVid.current.play().catch(() => {}) }
     }
@@ -408,37 +470,83 @@ export default function CallPage({
       }
     }
     conn.onconnectionstatechange = () => {
+      console.log('[CALL]','conn=' + conn.connectionState)
       if (conn.connectionState === 'connected') {
         clearTimeout(connectTimeoutRef.current)
+        clearTimeout(iceRestartTimerRef.current)
+        hangupCalledRef.current = false
+        iceRestartAttempted.current = false
         goActive()
       }
-      if (conn.connectionState === 'failed') hangup(true)
+      if (conn.connectionState === 'failed') {
+        if (hangupCalledRef.current) return
+        hangupCalledRef.current = true
+        hangup(true)
+      }
     }
     conn.oniceconnectionstatechange = () => {
+      console.log('[CALL]','ice=' + conn.iceConnectionState)
       if (conn.iceConnectionState === 'disconnected') {
-        try { conn.restartIce() } catch (_) {}
+        // brief disconnection — wait 5s before acting
+        iceRestartTimerRef.current = setTimeout(() => {
+          if (conn.iceConnectionState === 'disconnected' || conn.iceConnectionState === 'failed') {
+            if (!iceRestartAttempted.current) {
+              iceRestartAttempted.current = true
+              try { conn.restartIce() } catch (_) {}
+            }
+          }
+        }, 5000)
       }
-      if (conn.iceConnectionState === 'failed') hangup(true)
+      if (conn.iceConnectionState === 'failed') {
+        if (!iceRestartAttempted.current) {
+          // first failure: attempt ICE restart, wait 8s before giving up
+          iceRestartAttempted.current = true
+          try { conn.restartIce() } catch (_) {}
+          iceRestartTimerRef.current = setTimeout(() => {
+            if (conn.iceConnectionState !== 'connected' && conn.connectionState !== 'connected') {
+              if (hangupCalledRef.current) return
+              hangupCalledRef.current = true
+              hangup(true)
+            }
+          }, 8000)
+        } else {
+          // already tried restart — give up
+          if (hangupCalledRef.current) return
+          hangupCalledRef.current = true
+          hangup(true)
+        }
+      }
     }
     connectTimeoutRef.current = setTimeout(() => {
-      if (pc.current && pc.current.connectionState !== 'connected') hangup(true)
-    }, 60000)
+      if (pc.current && pc.current.connectionState !== 'connected') {
+        if (hangupCalledRef.current) return
+        hangupCalledRef.current = true
+        hangup(true)
+      }
+    }, 90000)
     pc.current = conn
     return conn
   }
 
   async function startOutgoing() {
+    console.log('[CALL]','startOutgoing')
     try {
       const stream = await getMedia()
+      console.log('[CALL]','getMedia OK tracks=' + stream.getTracks().length)
       const conn = makePc(stream)
       const offer = await conn.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: callType === 'video' })
+      console.log('[CALL]','offer created')
       await conn.setLocalDescription(offer)
 
-      // Send offer via dedicated user channel (callee is listening here)
-      const ch = supabase.channel(`user-calls:${contact.id}`, { config: { broadcast: { ack: false } } })
-      await new Promise(r => ch.subscribe(s => s === 'SUBSCRIBED' && r()))
-      await ch.send({ type: 'broadcast', event: 'call-offer', payload: { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer } })
-      supabase.removeChannel(ch)
+      // Send offer via dedicated user channel — retry up to 3 times so mobile→PC works even on slow connections
+      const offerPayload = { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer }
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const ch = supabase.channel(`user-calls:${contact.id}-${attempt}`, { config: { broadcast: { ack: false } } })
+        await new Promise(r => ch.subscribe(s => s === 'SUBSCRIBED' && r()))
+        await ch.send({ type: 'broadcast', event: 'call-offer', payload: offerPayload })
+        supabase.removeChannel(ch)
+        if (attempt < 2) await new Promise(r => setTimeout(r, 800))
+      }
       supabase.functions.invoke('send-fcm-notification', {
         body: {
           targetUserId: contact.id,
@@ -446,7 +554,7 @@ export default function CallPage({
           payload: { from: myUserId, fromName: myUserName || '', convId: conversationId, callType, offer: JSON.stringify(offer) },
         }
       }).catch(() => {})
-    } catch (e) { alert(`Error: ${e.message}`); onEnd() }
+    } catch (e) { console.log('[CALL]','ERR startOutgoing: ' + e.name + ' ' + e.message); alert(`Error: ${e.message}`); onEnd() }
   }
 
   async function acceptCall() {
@@ -457,11 +565,12 @@ export default function CallPage({
       const stream = await getMedia()
       const conn = makePc(stream)
 
-      // Offer can arrive as object (Realtime broadcast) or JSON string (push notification)
+      console.log('[CALL]', 'setRemoteDesc offer')
       const offerDesc = typeof incomingOffer === 'string'
         ? new RTCSessionDescription(JSON.parse(incomingOffer))
         : new RTCSessionDescription(incomingOffer)
       await conn.setRemoteDescription(offerDesc)
+      console.log('[CALL]', 'setRemoteDesc OK, draining ' + pendingIce.current.length + ' ice')
 
       for (const c of pendingIce.current) {
         try { await conn.addIceCandidate(new RTCIceCandidate(c)) } catch (_) {}
@@ -470,16 +579,19 @@ export default function CallPage({
 
       const answer = await conn.createAnswer()
       await conn.setLocalDescription(answer)
+      console.log('[CALL]', 'answer created, sending')
 
       // Wait for channel to be ready before sending answer
       if (!sessionChReady.current) {
+        console.log('[CALL]', 'waiting for sessionCh...')
         await new Promise(resolve => {
           const iv = setInterval(() => { if (sessionChReady.current) { clearInterval(iv); resolve() } }, 100)
           setTimeout(() => { clearInterval(iv); resolve() }, 5000)
         })
       }
-      sessionCh.current?.send({ type: 'broadcast', event: 'call-answer', payload: { answer } })
-    } catch (e) { console.error('[acceptCall]', e); alert(`Error: ${e.message}`); hangup(true) }
+      await sessionCh.current?.send({ type: 'broadcast', event: 'call-answer', payload: { answer } })
+      console.log('[CALL]', 'answer sent')
+    } catch (e) { console.log('[CALL]', 'ERR acceptCall: ' + e.name + ' ' + e.message); alert(`Error: ${e.message}`); hangup(true) }
   }
 
   function goActive() {
@@ -511,6 +623,7 @@ export default function CallPage({
     clearInterval(qualityRef.current)
     clearTimeout(connectTimeoutRef.current)
     clearTimeout(ringTimeoutRef.current)
+    clearTimeout(iceRestartTimerRef.current)
     silentCtxRef.current?.close(); silentCtxRef.current = null
     screenStream.current?.getTracks().forEach(t => t.stop())
     sounds.callEnd()
@@ -552,10 +665,31 @@ export default function CallPage({
     }
   }
 
-  function toggleCam() {
+  async function toggleCam() {
     vibrate(25)
     const t = localStream.current?.getVideoTracks()[0]
-    if (t) { t.enabled = !t.enabled; setCamOff(c => !c) }
+    if (t) {
+      t.enabled = !t.enabled
+      setCamOff(c => !c)
+      return
+    }
+    // No video track yet (call fell back to audio-only) — try to get camera now
+    if (!camOff) return
+    try {
+      const cs = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+      const ct = cs.getVideoTracks()[0]
+      localStream.current?.addTrack(ct)
+      if (localVid.current) localVid.current.srcObject = localStream.current
+      const videoSender = pc.current?.getSenders().find(s => s.track?.kind === 'video')
+      if (videoSender) {
+        await videoSender.replaceTrack(ct).catch(() => {})
+      } else {
+        pc.current?.addTrack(ct, localStream.current)
+      }
+      setCamOff(false)
+    } catch (e) {
+      alert('No se pudo acceder a la cámara: ' + e.message)
+    }
   }
 
   async function applySpeakerRoute(useSpeaker) {
@@ -598,6 +732,7 @@ export default function CallPage({
         if (localVid.current) { localVid.current.srcObject = localStream.current }
       }
       setScreenSharing(false)
+      sessionCh.current?.send({ type: 'broadcast', event: 'call-screen-share', payload: { from: myUserId, active: false } }).catch(() => {})
     } else {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
@@ -609,6 +744,7 @@ export default function CallPage({
         setScreenSharing(true)
         // Auto-stop when user ends via browser UI
         screenTrack.onended = () => toggleScreenShare()
+        sessionCh.current?.send({ type: 'broadcast', event: 'call-screen-share', payload: { from: myUserId, active: true } }).catch(() => {})
       } catch (_) { /* user cancelled or not supported */ }
     }
   }
@@ -766,6 +902,7 @@ export default function CallPage({
     <>
       <audio ref={remoteAudio} autoPlay playsInline style={{ display: 'none' }} />
 
+
       {/* Desktop: overlay + centered window */}
       {isDesktop && (
         <div style={{
@@ -829,10 +966,15 @@ export default function CallPage({
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)' }} />
         </div>
 
-        {/* Remote video */}
-        {isVideo && phase === 'active' && (
+        {/* Remote video — also shown for screen share even in audio calls */}
+        {(isVideo || remoteScreenSharing) && phase === 'active' && (
           <video ref={remoteVid} autoPlay playsInline
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }} />
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: remoteScreenSharing ? 'contain' : 'cover', zIndex: 1, background: remoteScreenSharing ? '#000' : 'none' }} />
+        )}
+        {remoteScreenSharing && phase === 'active' && (
+          <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10, background: 'rgba(0,0,0,0.7)', borderRadius: 20, padding: '4px 14px', fontSize: 12, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>🖥️</span> {contact?.display_name} está compartiendo pantalla
+          </div>
         )}
 
         {/* Local PiP */}
@@ -914,8 +1056,8 @@ export default function CallPage({
               {phase === 'active' && (
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: accent, boxShadow: `0 0 8px ${accent}`, animation: 'blink 2s ease-in-out infinite' }} />
               )}
-              <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 17, letterSpacing: '0.1px' }}>
-                {phase === 'connecting' ? 'Llamando...' : phase === 'active' ? fmtTime(elapsed) : 'Llamada finalizada'}
+              <span style={{ color: phase === 'busy' ? '#ef4444' : 'rgba(255,255,255,0.65)', fontSize: 17, letterSpacing: '0.1px' }}>
+                {phase === 'connecting' ? 'Llamando...' : phase === 'active' ? fmtTime(elapsed) : phase === 'busy' ? 'Ocupado' : 'Llamada finalizada'}
               </span>
             </div>
 
@@ -995,8 +1137,8 @@ export default function CallPage({
                       onClick={toggleCam}
                     />
                   )}
-                  {/* Screen share (video calls + desktop) */}
-                  {isVideo && (
+                  {/* Screen share (video calls, desktop only — not available on mobile browsers) */}
+                  {isVideo && canScreenShare && (
                     <RoundBtn
                       icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>

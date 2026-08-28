@@ -6,12 +6,42 @@ import ContactPage from './ContactPage'
 import CallPage from './CallPage'
 import GroupCallPage from './GroupCallPage'
 import GroupInfoPage from './GroupInfoPage'
+import CommunityTournamentsPanel from './CommunityTournamentsPanel'
 import { useContactStatus, formatLastSeen } from '../hooks/useContactStatus'
 import { supabase } from '../lib/supabase'
 import { sounds } from '../lib/sounds'
 import { acquireWakeLock } from '../lib/appStartup'
+import { useCallStore } from '../store/callStore'
 import { detectSpam, applyAutoSanction, checkSanction, reportMessage, sanctionMessage } from '../lib/antispam'
 import { C } from '../theme'
+
+// ── Support bot trigger ────────────────────────────────────────────────────────
+const SUPABASE_FUNCTIONS_URL = (import.meta.env.VITE_SUPABASE_URL || 'https://gxberqtxbnrnudawwyzd.supabase.co')
+  .replace('supabase.co', 'supabase.co/functions/v1')
+const SUPPORT_BOT_SECRET = import.meta.env.VITE_SUPPORT_BOT_SECRET || ''
+
+let _supportGroupId = undefined // undefined = not fetched; null = not set
+
+async function getSupportGroupId() {
+  if (_supportGroupId !== undefined) return _supportGroupId
+  try {
+    const { data } = await supabase.from('app_config').select('value').eq('key', 'support_group_id').single()
+    _supportGroupId = data?.value ?? null
+  } catch { _supportGroupId = null }
+  return _supportGroupId
+}
+
+async function triggerSupportBot(conversationId, senderId, content, messageId) {
+  try {
+    const supportGroupId = await getSupportGroupId()
+    if (!supportGroupId || conversationId !== supportGroupId) return
+    fetch(`${SUPABASE_FUNCTIONS_URL}/support-bot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPPORT_BOT_SECRET}` },
+      body: JSON.stringify({ conversation_id: conversationId, sender_id: senderId, content, message_id: messageId }),
+    }).catch(() => {})
+  } catch {}
+}
 
 const EMOJI_CATS = [
   { id: 'recientes', label: '🕐', title: 'Recientes', emojis: [] },
@@ -55,10 +85,16 @@ function senderColor(id) {
   return SENDER_COLORS[Math.abs(h) % SENDER_COLORS.length]
 }
 
+function localDateStr(ts) {
+  if (!ts) return ''
+  const d = new Date(normalizeTs(ts))
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
 function groupByDate(messages) {
   const groups = []; let cur = null
   for (const msg of messages) {
-    const date = msg.created_at?.slice(0, 10)
+    const date = localDateStr(msg.created_at)
     if (!cur || cur.date !== date) { cur = { date, msgs: [] }; groups.push(cur) }
     cur.msgs.push(msg)
   }
@@ -113,21 +149,27 @@ function Avatar({ name, size = 32, color, url }) {
 }
 
 // ── Ticks ─────────────────────────────────────────────────────────────────────
-function Ticks({ read }) {
+function Ticks({ read, onGreen }) {
+  const color = read ? '#34b7f1' : (onGreen ? 'rgba(0,0,0,0.45)' : C.textDim)
   return (
-    <svg width="14" height="9" viewBox="0 0 16 11" fill="none" style={{ display: 'inline', verticalAlign: 'middle', marginLeft: 3 }}>
-      <path d="M1 5.5L5 9.5L11 2" stroke={read ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M5 5.5L9 9.5L15 2" stroke={read ? C.green : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    <svg width="14" height="9" viewBox="0 0 16 11" fill="none" style={{ display: 'inline', verticalAlign: 'middle', marginLeft: 2, flexShrink: 0 }}>
+      <path d="M1 5.5L5 9.5L11 2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 5.5L9 9.5L15 2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
 
 // ── Date separator ────────────────────────────────────────────────────────────
 function DateSeparator({ dateStr }) {
-  const d = new Date(dateStr), now = new Date()
-  const y = new Date(now); y.setDate(y.getDate() - 1)
-  const label = d.toDateString() === now.toDateString() ? 'Hoy'
-    : d.toDateString() === y.toDateString() ? 'Ayer'
+  // dateStr is already a local YYYY-MM-DD string — parse as local to avoid UTC offset bug
+  const [y2, m2, d2] = dateStr.split('-').map(Number)
+  const d = new Date(y2, m2 - 1, d2)
+  const now = new Date()
+  const todayStr = localDateStr(now.toISOString())
+  const yest = new Date(now); yest.setDate(yest.getDate() - 1)
+  const yestStr = localDateStr(yest.toISOString())
+  const label = dateStr === todayStr ? 'Hoy'
+    : dateStr === yestStr ? 'Ayer'
     : d.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })
   return (
     <div style={{ display: 'flex', justifyContent: 'center', margin: '14px 0', alignItems: 'center', gap: 10 }}>
@@ -413,7 +455,7 @@ function ConfirmDialog({ open, title, message, onConfirm, onCancel, confirmLabel
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatPage({ onBack }) {
   const { profile } = useAuthStore()
-  const { activeConversation, messages, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage, topics, activeTopicId, fetchTopics, createTopic, setActiveTopic } = useChatStore()
+  const { activeConversation, messages, conversations, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage, topics, activeTopicId, fetchTopics, createTopic, setActiveTopic, fetchConversations } = useChatStore()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -428,6 +470,7 @@ export default function ChatPage({ onBack }) {
   const [hoveredMsg, setHoveredMsg] = useState(null)
   const [deleteMenuMsg, setDeleteMenuMsg] = useState(null) // messageId showing delete submenu
   const [confirmDialog, setConfirmDialog] = useState(null)
+  const [chatToast, setChatToast] = useState(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedMsgs, setSelectedMsgs] = useState(new Set())
 
@@ -446,24 +489,32 @@ export default function ChatPage({ onBack }) {
     setDeleteMenuMsg(null); setLongPressMsg(null)
   }
   function deleteForAll(msgId) {
-    deleteMessage(msgId, activeConversation.id)
+    deleteMessage(msgId, activeConversation.id, profile?.role)
     setDeleteMenuMsg(null); setLongPressMsg(null)
   }
   function handleClearHistory() {
     setShowChatMenu(false)
     setConfirmDialog({
       title: 'Limpiar historial',
-      message: 'Se borrarán todos los mensajes solo para vos.',
+      message: 'Se borrarán todos los mensajes solo para vos. El chat seguirá en tu lista.',
       danger: true, confirmLabel: 'Limpiar',
       onConfirm: async () => {
         setConfirmDialog(null)
-        // Mark all visible messages as deleted-for-me locally
+        const now = new Date().toISOString()
+        // Mark cleared_at in DB so sidebar also clears preview
+        await supabase.from('conversation_members')
+          .update({ cleared_at: now })
+          .eq('conversation_id', activeConversation.id)
+          .eq('user_id', profile.id)
+        // Also clear locally
         const allIds = messages.map(m => m.id)
         setDeletedForMe(prev => {
           const next = new Set(prev); allIds.forEach(id => next.add(id))
           localStorage.setItem(deletedForMeKey, JSON.stringify([...next]))
           return next
         })
+        // Reload conversations so sidebar updates
+        fetchConversations(profile.id)
       },
     })
   }
@@ -519,10 +570,12 @@ export default function ChatPage({ onBack }) {
   const [forwardMsg, setForwardMsg] = useState(null) // message to forward
   const [viewOncePending, setViewOncePending] = useState(null) // { file, type } waiting for view count pick
   const [showTopicsPanel, setShowTopicsPanel] = useState(false)
+  const [showTournamentsPanel, setShowTournamentsPanel] = useState(false)
   const [showNewTopic, setShowNewTopic] = useState(false)
   const [newTopicName, setNewTopicName] = useState('')
   const [newTopicEmoji, setNewTopicEmoji] = useState('💬')
   const [showChatMenu, setShowChatMenu] = useState(false)
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false)
   const [autoDeleteHours, setAutoDeleteHours] = useState(null)
   const [showAutoDeletePicker, setShowAutoDeletePicker] = useState(false)
   const [searchMode, setSearchMode] = useState(false)
@@ -545,6 +598,11 @@ export default function ChatPage({ onBack }) {
   const inputRef = useRef(null)
   const fileRef = useRef(null)
   const longPressTimer = useRef(null)
+
+  // Invitation status for DM chats: null | 'pending_sent' | 'pending_received'
+  const [invStatus, setInvStatus] = useState(null)
+  const [invId, setInvId] = useState(null)
+  const [invLoading, setInvLoading] = useState(false)
 
   useEffect(() => {
     if (!showChatMenu) return
@@ -706,9 +764,16 @@ export default function ChatPage({ onBack }) {
       : rawText
     setReplyTo(null); setText('')
     try {
-      await sendMessage(activeConversation.id, profile.id, content, 'text', null, activeTopicId)
+      const msg = await sendMessage(activeConversation.id, profile.id, content, 'text', null, activeTopicId)
       sounds.msgSent()
-    } catch (err) { alert(`Error: ${err.message}`); setText(content) }
+      // If this is the support group, trigger the support bot
+      triggerSupportBot(activeConversation.id, profile.id, content, msg?.id)
+    } catch (err) {
+      const msg = err?.message || 'Error al enviar'
+      setChatToast({ text: msg.includes('uuid') ? 'Error de conexión. Recargá la página.' : `Error: ${msg}`, type: 'error' })
+      setTimeout(() => setChatToast(null), 4000)
+      setText(content)
+    }
     setSending(false)
     // On mobile: blur to dismiss keyboard after send; on desktop: keep focus
     if (window.innerWidth < 768) {
@@ -739,6 +804,32 @@ export default function ChatPage({ onBack }) {
       setChatBg(saved ? JSON.parse(saved) : null)
     } catch { setChatBg(null) }
   }, [activeConversation?.id])
+
+  // Check invitation status for DM chats
+  useEffect(() => {
+    if (!profile?.id || !otherUser?.id || isGroup) { setInvStatus(null); return }
+    supabase.from('chat_invitations')
+      .select('id, from_user_id')
+      .or(`and(from_user_id.eq.${profile.id},to_user_id.eq.${otherUser.id}),and(from_user_id.eq.${otherUser.id},to_user_id.eq.${profile.id})`)
+      .eq('status', 'pending')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setInvId(data.id)
+          setInvStatus(data.from_user_id === profile.id ? 'pending_sent' : 'pending_received')
+        } else {
+          setInvStatus(null); setInvId(null)
+        }
+      })
+  }, [profile?.id, otherUser?.id, isGroup])
+
+  async function acceptInvitation() {
+    if (!invId) return
+    setInvLoading(true)
+    const { data, error } = await supabase.rpc('accept_chat_invitation', { p_invitation_id: invId })
+    if (!error && data?.ok) { setInvStatus(null); setInvId(null) }
+    setInvLoading(false)
+  }
 
   function saveChatBg(bg) {
     setChatBg(bg)
@@ -915,9 +1006,18 @@ export default function ChatPage({ onBack }) {
     setRecording(false); setRecLocked(false); setRecCancelling(false); setRecDuration(0)
   }
 
+  const _privBlock = (() => { try { return JSON.parse(localStorage.getItem('privacySettings') || '{}') } catch { return {} } })()
+  const knownUserIds = (() => {
+    if (!_privBlock.blockUnknown || !isGroup) return null
+    const ids = new Set([profile?.id])
+    conversations?.forEach(c => {
+      if (!c.isGroup) c.members?.forEach(m => m?.id && ids.add(m.id))
+    })
+    return ids
+  })()
   const filteredMessages = searchQuery
-    ? messages.filter(m => !deletedForMe.has(m.id) && m.content?.toLowerCase?.().includes(searchQuery.toLowerCase()))
-    : messages.filter(m => !deletedForMe.has(m.id))
+    ? messages.filter(m => !deletedForMe.has(m.id) && m.content?.toLowerCase?.().includes(searchQuery.toLowerCase()) && (!knownUserIds || m.sender_id === profile?.id || knownUserIds.has(m.sender_id)))
+    : messages.filter(m => !deletedForMe.has(m.id) && (!knownUserIds || m.sender_id === profile?.id || knownUserIds.has(m.sender_id)))
   const grouped = groupByDate(filteredMessages)
   const memberMap = {}
   activeConversation?.members?.forEach(m => { if (m) memberMap[m.id] = m })
@@ -936,6 +1036,18 @@ export default function ChatPage({ onBack }) {
   const activeTopic = activeTopicId ? topics.find(t => t.id === activeTopicId) : null
   const isAnnouncementTopic = activeTopic?.topic_type === 'announcements'
 
+  // Channel permission: is the current user an admin/owner of this community?
+  const isCommunityAdmin = isGroup && (
+    activeConversation?.created_by === profile?.id ||
+    activeConversation?.members?.find(m => m?.id === profile?.id)?.role === 'owner' ||
+    activeConversation?.members?.find(m => m?.id === profile?.id)?.role === 'admin'
+  )
+  // Announcement-only channel (set when opening from ChannelsTab)
+  const isAnnouncementChannel = activeConversation?.group_type === 'channel' && activeConversation?.is_announcement === true
+  // Can the user send in the active channel?
+  const activeChannelLocked = (activeTopic?.who_can_send === 'admins' && !isCommunityAdmin) ||
+    (isAnnouncementChannel && !isCommunityAdmin && activeConversation?.created_by !== profile?.id)
+
   if (showGroupInfo && isGroup) return (
     <GroupInfoPage
       conversation={activeConversation}
@@ -946,6 +1058,46 @@ export default function ChatPage({ onBack }) {
 
   return (
     <>
+      {/* Privacy Info Modal */}
+      {showPrivacyModal && (
+        <div onClick={() => setShowPrivacyModal(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: C.panel, borderRadius: 20, padding: '28px 24px 20px',
+            maxWidth: 360, width: '100%', textAlign: 'center',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ fontSize: 52, marginBottom: 16 }}>🔒</div>
+            <h3 style={{ margin: '0 0 8px', color: C.text, fontSize: 18, fontWeight: 700 }}>
+              Tus chats son privados
+            </h3>
+            <p style={{ margin: '0 0 20px', color: C.textDim, fontSize: 13, lineHeight: 1.6 }}>
+              Los mensajes y llamadas están cifrados de extremo a extremo.
+              Solo las personas en este chat pueden leerlos, escucharlos o compartirlos.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24, textAlign: 'left' }}>
+              {[
+                ['💬', 'Mensajes de texto y voz'],
+                ['📞', 'Llamadas y videollamadas'],
+                ['📷', 'Fotos, videos y archivos'],
+                ['⚡', 'Mensajes temporales'],
+              ].map(([icon, label]) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: C.panel2, borderRadius: 12 }}>
+                  <span style={{ fontSize: 20 }}>{icon}</span>
+                  <span style={{ color: C.text2, fontSize: 13 }}>{label}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowPrivacyModal(false)} style={{
+              width: '100%', padding: '12px', borderRadius: 12, border: 'none',
+              background: C.green, color: C.bg, fontWeight: 700, fontSize: 15, cursor: 'pointer',
+            }}>Entendido</button>
+          </div>
+        </div>
+      )}
+
       {/* Call overlay — renders on top of chat without leaving the page */}
       {call && (
         <CallPage
@@ -955,8 +1107,8 @@ export default function ChatPage({ onBack }) {
           contact={otherUser}
           callType={call.type}
           isIncoming={false}
-          onEnd={() => setCall(null)}
-          onAccept={acquireWakeLock}
+          onEnd={() => { setCall(null); useCallStore.getState().setInCall(false) }}
+          onAccept={() => { useCallStore.getState().setInCall(true); acquireWakeLock() }}
         />
       )}
       {groupCall && (
@@ -1144,6 +1296,14 @@ export default function ChatPage({ onBack }) {
         onClick={() => { setLongPressMsg(null); setShowEmoji(false); setDeleteMenuMsg(null); setShowAttachMenu(false); setShowBgPicker(false) }}
       >
 
+        {/* ── COMMUNITY TOURNAMENTS PANEL (overlay) ── */}
+        {activeConversation?.isCommunity && showTournamentsPanel && (
+          <CommunityTournamentsPanel
+            community={activeConversation}
+            onClose={() => setShowTournamentsPanel(false)}
+          />
+        )}
+
         {/* ── HEADER ── */}
         <div style={{
           background: C.panel, display: 'flex', alignItems: 'center',
@@ -1196,12 +1356,12 @@ export default function ChatPage({ onBack }) {
           {/* Call buttons */}
           {!isGroup && (
             <div style={{ display: 'flex', gap: 2 }}>
-              <HdrBtn title="Llamada" onClick={() => setCall({ type: 'audio' })}>
+              <HdrBtn title="Llamada" onClick={() => { useCallStore.getState().setInCall(true); setCall({ type: 'audio' }) }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill={C.text2}>
                   <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
                 </svg>
               </HdrBtn>
-              <HdrBtn title="Video" onClick={() => setCall({ type: 'video' })}>
+              <HdrBtn title="Video" onClick={() => { useCallStore.getState().setInCall(true); setCall({ type: 'video' }) }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill={C.text2}>
                   <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
                 </svg>
@@ -1222,6 +1382,12 @@ export default function ChatPage({ onBack }) {
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={showTopicsPanel ? C.green : C.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
+            </HdrBtn>
+          )}
+          {/* Tournaments button — only for communities */}
+          {activeConversation?.isCommunity && (
+            <HdrBtn title="Torneos & Ligas" onClick={() => setShowTournamentsPanel(v => !v)}>
+              <span style={{ fontSize: 16, lineHeight: 1, color: showTournamentsPanel ? C.green : C.text2 }}>🏆</span>
             </HdrBtn>
           )}
           {/* Search button */}
@@ -1256,64 +1422,109 @@ export default function ChatPage({ onBack }) {
                   minWidth: 210,
                 }}
               >
-                {/* Auto-delete / mensajes temporales */}
-                <div
-                  onClick={() => setShowAutoDeletePicker(v => !v)}
-                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${C.border}22`, background: showAutoDeletePicker ? C.panel2 : 'transparent' }}
-                  onMouseEnter={e => e.currentTarget.style.background = C.panel2}
-                  onMouseLeave={e => e.currentTarget.style.background = showAutoDeletePicker ? C.panel2 : 'transparent'}
-                >
-                  <span>⏱️</span>
-                  <span style={{ flex: 1 }}>Mensajes temporales</span>
-                  {autoDeleteHours ? <span style={{ fontSize: 10, color: C.green, fontWeight: 700 }}>ON</span> : <span style={{ fontSize: 10, color: C.textDim }}>▼</span>}
-                </div>
-                {showAutoDeletePicker && (
-                  <div style={{ background: C.panel2, borderBottom: `1px solid ${C.border}22` }}>
-                    {[
-                      [null,'Desactivado'],
-                      [0.083,'5 minutos'],
-                      [1,'1 hora'],
-                      [12,'12 horas'],
-                      [24,'24 horas'],
-                      [168,'7 días'],
-                    ].map(([h, label]) => (
-                      <div
-                        key={label}
-                        onClick={() => handleSetAutoDelete(h)}
-                        style={{
-                          padding: '8px 28px', cursor: 'pointer', fontSize: 12,
-                          color: autoDeleteHours === h ? C.green : C.text,
-                          fontWeight: autoDeleteHours === h ? 700 : 400,
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = C.panel}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >{label} {autoDeleteHours === h ? '✓' : ''}</div>
-                    ))}
-                  </div>
+                {/* Auto-delete / mensajes temporales — solo admin en grupos/canales */}
+                {(!isGroup || isCommunityAdmin) && (
+                  <>
+                    <div
+                      onClick={() => setShowAutoDeletePicker(v => !v)}
+                      style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${C.border}22`, background: showAutoDeletePicker ? C.panel2 : 'transparent' }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                      onMouseLeave={e => e.currentTarget.style.background = showAutoDeletePicker ? C.panel2 : 'transparent'}
+                    >
+                      <span>⏱️</span>
+                      <span style={{ flex: 1 }}>Mensajes temporales</span>
+                      {autoDeleteHours ? <span style={{ fontSize: 10, color: C.green, fontWeight: 700 }}>ON</span> : <span style={{ fontSize: 10, color: C.textDim }}>▼</span>}
+                    </div>
+                    {showAutoDeletePicker && (
+                      <div style={{ background: C.panel2, borderBottom: `1px solid ${C.border}22` }}>
+                        {[
+                          [null,'Desactivado'],
+                          [0.083,'5 minutos'],
+                          [1,'1 hora'],
+                          [12,'12 horas'],
+                          [24,'24 horas'],
+                          [168,'7 días'],
+                        ].map(([h, label]) => (
+                          <div
+                            key={label}
+                            onClick={() => handleSetAutoDelete(h)}
+                            style={{
+                              padding: '8px 28px', cursor: 'pointer', fontSize: 12,
+                              color: autoDeleteHours === h ? C.green : C.text,
+                              fontWeight: autoDeleteHours === h ? 700 : 400,
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = C.panel}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >{label} {autoDeleteHours === h ? '✓' : ''}</div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
+                {[
+                  { icon: '☑️', label: 'Seleccionar mensajes', desc: 'Reenviá o borrá varios', onClick: () => { setShowChatMenu(false); setSelectMode(true); setSelectedMsgs(new Set()) } },
+                ].map(item => (
+                  <div key={item.label}
+                    onClick={item.onClick}
+                    style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
+                    onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{item.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{item.label}</div>
+                      <div style={{ fontSize: 11, color: C.textDim }}>{item.desc}</div>
+                    </div>
+                  </div>
+                ))}
                 <div
-                  onClick={() => { setShowChatMenu(false); setSelectMode(true); setSelectedMsgs(new Set()) }}
-                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', gap: 8, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
+                  onClick={() => {
+                    const opts = [
+                      { label: '1 hora', ms: 3600_000 },
+                      { label: '8 horas', ms: 28800_000 },
+                      { label: '24 horas', ms: 86400_000 },
+                      { label: 'Siempre', ms: 9999999_000 },
+                    ]
+                    const choice = prompt('Silenciar por:\n' + opts.map((o,i) => `${i+1}. ${o.label}`).join('\n') + '\n\nEscribí el número:')
+                    const idx = parseInt(choice) - 1
+                    if (idx >= 0 && idx < opts.length) {
+                      const until = Date.now() + opts[idx].ms
+                      try { localStorage.setItem(`mute_${activeConversation?.id}`, String(until)) } catch {}
+                    }
+                  }}
+                  style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
                   onMouseEnter={e => e.currentTarget.style.background = C.panel2}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  <span>☑️</span> Seleccionar mensajes
+                  <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🔕</span>
+                  <div>
+                    <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>Silenciar notificaciones</div>
+                    <div style={{ fontSize: 11, color: C.textDim }}>1h · 8h · 24h · Siempre</div>
+                  </div>
                 </div>
                 <div
                   onClick={handleClearHistory}
-                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', gap: 8, alignItems: 'center' }}
+                  style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
                   onMouseEnter={e => e.currentTarget.style.background = C.panel2}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  <span>🧹</span> Limpiar historial
+                  <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🧹</span>
+                  <div>
+                    <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>Limpiar historial</div>
+                    <div style={{ fontSize: 11, color: C.textDim }}>Solo para vos · el chat queda en la lista</div>
+                  </div>
                 </div>
                 <div
                   onClick={handleDeleteChat}
-                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: '#ef4444', display: 'flex', gap: 8, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#ef444418'}
+                  style={{ padding: '10px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'center', borderTop: `1px solid ${C.border}33` }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#ef444412'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  <span>🗑️</span> Borrar chat
+                  <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🗑️</span>
+                  <div>
+                    <div style={{ fontSize: 13, color: '#ef4444', fontWeight: 600 }}>Borrar chat</div>
+                    <div style={{ fontSize: 11, color: C.textDim }}>Eliminás el chat de tu lista</div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1356,11 +1567,6 @@ export default function ChatPage({ onBack }) {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ color: C.text2, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Canales</span>
-              <button onClick={() => setShowNewTopic(v => !v)} style={{
-                background: showNewTopic ? `${C.green}22` : 'none', border: `1px solid ${showNewTopic ? C.green : C.border}`,
-                borderRadius: 8, color: showNewTopic ? C.green : C.text2, fontSize: 11, padding: '3px 8px',
-                cursor: 'pointer', fontWeight: 600,
-              }}>+ Nuevo</button>
             </div>
 
             {/* New topic form */}
@@ -1403,16 +1609,6 @@ export default function ChatPage({ onBack }) {
 
             {/* Topic list */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button
-                onClick={() => { setActiveTopic(null) }}
-                style={{
-                  background: activeTopicId === null ? `${C.green}22` : C.panel2,
-                  border: `1px solid ${activeTopicId === null ? C.green : C.border}`,
-                  borderRadius: 20, color: activeTopicId === null ? C.green : C.text2,
-                  fontSize: 12, padding: '4px 12px', cursor: 'pointer', fontWeight: 600,
-                  transition: 'all .15s',
-                }}
-              >💬 General</button>
               {topics.map(t => (
                 <button key={t.id}
                   onClick={() => setActiveTopic(t.id)}
@@ -1421,10 +1617,14 @@ export default function ChatPage({ onBack }) {
                     border: `1px solid ${activeTopicId === t.id ? C.green : C.border}`,
                     borderRadius: 20, color: activeTopicId === t.id ? C.green : C.text2,
                     fontSize: 12, padding: '4px 12px', cursor: 'pointer', fontWeight: 600,
-                    transition: 'all .15s',
+                    transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 4,
                   }}
-                >{t.emoji} {t.name}</button>
+                >
+                  {t.emoji} {t.name}
+                  {t.who_can_send === 'admins' && <span style={{ fontSize: 10, opacity: 0.7 }}>🔒</span>}
+                </button>
               ))}
+              {/* Only show "+ Nuevo" for non-default extra channels if admin */}
             </div>
           </div>
         )}
@@ -1529,15 +1729,29 @@ export default function ChatPage({ onBack }) {
                 const senderRole = senderInfo?.role
                 const isReply = msg.content?.startsWith('[↩ ')
 
-                if (msg.is_deleted) return (
-                  <div key={msg.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: 4 }}>
-                    <span style={{
-                      fontSize: 12, fontStyle: 'italic', color: C.textDim,
-                      padding: '5px 12px', background: C.panel, borderRadius: 10,
-                      border: `1px solid ${C.border}`,
-                    }}>🚫 Mensaje eliminado</span>
-                  </div>
-                )
+                if (msg.is_deleted) {
+                  const _priv = (() => { try { return JSON.parse(localStorage.getItem('privacySettings') || '{}') } catch { return {} } })()
+                  const _vipRoles = new Set(['vip','ceo','com_starter','com_elite','superadmin','admin','organizador'])
+                  const _vipPlans = new Set(['vip', 'pro', 'superadmin', 'admin', 'ceo'])
+                  const isVip = _vipRoles.has(profile?.role) || _vipPlans.has(profile?.plan)
+                  const canSeeDeleted = isVip && _priv.seeDeleted !== false && msg.deleted_content
+                  return (
+                    <div key={msg.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: 4 }}>
+                      {canSeeDeleted
+                        ? <span style={{
+                            fontSize: 12, fontStyle: 'italic', color: '#d97706',
+                            padding: '5px 12px', background: '#f59e0b10', borderRadius: 10,
+                            border: '1px solid #f59e0b40',
+                          }}>🔓 {msg.deleted_content} <span style={{ fontSize: 10, opacity: 0.6 }}>(eliminado)</span></span>
+                        : <span style={{
+                            fontSize: 12, fontStyle: 'italic', color: C.textDim,
+                            padding: '5px 12px', background: C.panel, borderRadius: 10,
+                            border: `1px solid ${C.border}`,
+                          }}>🚫 Mensaje eliminado</span>
+                      }
+                    </div>
+                  )
+                }
 
                 if (isSystem) return (
                   <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', margin: '6px 0' }}>
@@ -1548,15 +1762,101 @@ export default function ChatPage({ onBack }) {
                   </div>
                 )
 
+                // ── BOT MESSAGE CARD ─────────────────────────────────
+                const isBot = msg.metadata?.bot === true
+                if (isBot) {
+                  const botName = msg.metadata?.bot_name || 'Bot'
+                  const lines = msg.content?.split('\n').filter(Boolean) || []
+                  const reactions = msg.reactions || []
+                  const grouped2 = reactions.reduce((a, r) => { a[r.emoji] = (a[r.emoji] || 0) + 1; return a }, {})
+                  const myReacts2 = new Set(reactions.filter(r => r.user_id === profile?.id).map(r => r.emoji))
+                  const REACTS = ['👍','🔥','⚽','❤️','😮']
+                  return (
+                    <div key={msg.id} style={{ marginBottom: 10, maxWidth: '100%' }}>
+                      <div style={{
+                        background: 'linear-gradient(135deg, #0f2027 0%, #1a2a1a 100%)',
+                        border: `1px solid ${C.green}44`,
+                        borderRadius: 16, overflow: 'hidden',
+                        maxWidth: 'min(420px, 100%)',
+                        boxShadow: `0 4px 20px ${C.green}18`,
+                      }}>
+                        {/* Header */}
+                        <div style={{
+                          background: `linear-gradient(90deg, ${C.green}22, transparent)`,
+                          borderBottom: `1px solid ${C.green}22`,
+                          padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8,
+                        }}>
+                          <div style={{
+                            width: 28, height: 28, borderRadius: '50%',
+                            background: `${C.green}22`, border: `1.5px solid ${C.green}66`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 14, flexShrink: 0,
+                          }}>🤖</div>
+                          <span style={{ color: C.green, fontWeight: 700, fontSize: 12 }}>{botName}</span>
+                          <span style={{ color: C.textDim, fontSize: 10, marginLeft: 'auto' }}>
+                            {new Date(msg.created_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        {/* Body */}
+                        <div style={{ padding: '12px 14px 10px' }}>
+                          {lines.map((line, li) => {
+                            const isLink = line.startsWith('http')
+                            if (isLink) return (
+                              <a key={li} href={line} target="_blank" rel="noreferrer" style={{
+                                display: 'block', marginTop: 8,
+                                color: C.green, fontSize: 12, wordBreak: 'break-all',
+                                textDecoration: 'none', fontWeight: 600,
+                              }}>🔗 {line}</a>
+                            )
+                            return (
+                              <p key={li} style={{
+                                margin: li === 0 ? 0 : '4px 0 0',
+                                color: li === 0 ? C.text : C.text2,
+                                fontSize: li === 0 ? 14 : 13,
+                                fontWeight: li === 0 ? 600 : 400,
+                                lineHeight: 1.5,
+                                wordBreak: 'break-word',
+                              }}>{line}</p>
+                            )
+                          })}
+                        </div>
+                        {/* Reactions */}
+                        <div style={{
+                          padding: '6px 14px 10px', display: 'flex', gap: 6, flexWrap: 'wrap',
+                          borderTop: `1px solid ${C.green}11`,
+                        }}>
+                          {REACTS.map(em => {
+                            const count = grouped2[em] || 0
+                            const mine = myReacts2.has(em)
+                            return (
+                              <button key={em} onClick={() => reactToMessage(msg.id, profile.id, em)} style={{
+                                background: mine ? `${C.green}22` : 'rgba(255,255,255,0.05)',
+                                border: `1px solid ${mine ? C.green : 'rgba(255,255,255,0.1)'}`,
+                                borderRadius: 20, padding: '3px 8px', cursor: 'pointer',
+                                fontSize: 13, display: 'flex', alignItems: 'center', gap: 3,
+                                color: mine ? C.green : C.textDim, fontWeight: mine ? 700 : 400,
+                                transition: 'all .15s',
+                              }}>
+                                {em}{count > 0 && <span style={{ fontSize: 10 }}>{count}</span>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+
                 const br = isMine
                   ? (isFirst && isLast ? '14px 4px 14px 14px' : isFirst ? '14px 4px 4px 14px' : isLast ? '14px 14px 4px 14px' : '14px 4px 4px 14px')
                   : (isFirst && isLast ? '4px 14px 14px 14px' : isFirst ? '4px 14px 14px 4px' : isLast ? '4px 14px 14px 4px' : '4px 14px 14px 4px')
 
-                // Sent: green-tinted. Received: panel2
+                // Sent: solid teal gradient. Received: panel2
                 const bubbleBg = isMine
-                  ? `linear-gradient(135deg, ${C.green}1a 0%, ${C.green}26 100%)`
+                  ? `linear-gradient(135deg, ${C.green}, ${C.green2})`
                   : C.panel2
-                const bubbleBorder = isMine ? `1px solid ${C.green}33` : `1px solid ${C.border}`
+                const bubbleBorder = isMine ? 'none' : `1px solid ${C.border}`
+                const bubbleColor = isMine ? '#000' : C.text
 
                 const isMsgSelected = selectedMsgs.has(msg.id)
                 return (
@@ -1629,7 +1929,7 @@ export default function ChatPage({ onBack }) {
                         background: bubbleBg,
                         borderRadius: br,
                         padding: msg.type === 'image' ? '4px' : '7px 11px 5px',
-                        color: C.text, fontSize: 14, lineHeight: 1.45,
+                        color: bubbleColor, fontSize: 14, lineHeight: 1.45,
                         boxShadow: isMine ? '0 2px 8px rgba(0,0,0,0.4)' : '0 1px 4px rgba(0,0,0,0.3)',
                         wordBreak: 'break-word',
                         border: bubbleBorder,
@@ -1771,19 +2071,29 @@ export default function ChatPage({ onBack }) {
             </div>
           ))}
 
-          {!loadingMessages && messages.length === 0 && (
+          {!loadingMessages && filteredMessages.length === 0 && (
             <div style={{
               flex: 1, display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center',
-              gap: 10, color: C.textDim, paddingTop: 60, textAlign: 'center',
+              gap: 12, paddingTop: 60, textAlign: 'center', padding: '60px 24px 0',
             }}>
               <div style={{
-                width: 60, height: 60, borderRadius: '50%',
+                width: 64, height: 64, borderRadius: '50%',
                 background: `${C.green}0A`, border: `1.5px solid ${C.green}20`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26,
               }}>⚡</div>
-              <p style={{ margin: 0, fontSize: 14, color: C.text2 }}>{isGroup ? '¡Rompé el hielo!' : 'Comenzá la conversación'}</p>
-              <p style={{ margin: 0, fontSize: 11, color: C.textDim }}>Competí · Conectá · Ganá</p>
+              <p style={{ margin: 0, fontSize: 14, color: C.text2, fontWeight: 600 }}>
+                {isGroup ? '¡Rompé el hielo!' : 'Comenzá la conversación'}
+              </p>
+              <button onClick={() => setShowPrivacyModal(true)} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: '8px 14px', borderRadius: 12,
+                color: C.textDim, fontSize: 12, lineHeight: 1.5,
+                maxWidth: 280,
+              }}>
+                🔒 Los mensajes y llamadas están cifrados. Solo las personas en este chat pueden leerlos.
+                <span style={{ color: C.green, marginLeft: 4, fontWeight: 600 }}>Más info</span>
+              </button>
             </div>
           )}
           <div ref={bottomRef} />
@@ -1898,7 +2208,7 @@ export default function ChatPage({ onBack }) {
           </div>
           )
         })()}
-        <style>{`@keyframes emojiSlideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`}</style>
+        <style>{`@keyframes emojiSlideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}} @keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`}</style>
 
         {/* ── ATTACH MENU ── */}
         {showAttachMenu && !showGifPicker && !showStickerPicker && (
@@ -2103,20 +2413,52 @@ export default function ChatPage({ onBack }) {
           @keyframes recSlideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
         `}</style>
 
-        {/* Announcements: only admins post, others see read-only bar */}
-        {isAnnouncementTopic && (
+        {/* Channel locked: only admins can post */}
+        {(isAnnouncementTopic || activeChannelLocked) && (
           <div style={{
             padding: '10px 16px', background: C.panel, borderTop: `1px solid ${C.border}`,
             display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
             paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
           }}>
-            <span style={{ fontSize: 18 }}>📢</span>
-            <span style={{ color: C.textDim, fontSize: 13 }}>Solo los administradores pueden publicar avisos</span>
+            <span style={{ fontSize: 18 }}>{isAnnouncementTopic || isAnnouncementChannel ? '📢' : '🔒'}</span>
+            <span style={{ color: C.textDim, fontSize: 13 }}>
+              {isAnnouncementChannel ? 'Solo el administrador puede publicar en este canal de anuncios' : 'Solo los administradores pueden escribir en este canal'}
+            </span>
+          </div>
+        )}
+
+        {/* ── INVITATION BANNER ── */}
+        {invStatus && (
+          <div style={{ padding: '12px 16px', background: C.panel, borderTop: `1px solid ${C.border}`, textAlign: 'center', flexShrink: 0 }}>
+            {invStatus === 'pending_sent' ? (
+              <div style={{ color: C.textDim, fontSize: 13 }}>
+                ⏳ Esperando que <strong style={{ color: C.text }}>{otherUser?.display_name}</strong> acepte tu invitación
+              </div>
+            ) : (
+              <div>
+                <div style={{ color: C.textDim, fontSize: 12, marginBottom: 10 }}>
+                  <strong style={{ color: C.text }}>{otherUser?.display_name}</strong> quiere enviarte mensajes
+                </div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                  <button onClick={acceptInvitation} disabled={invLoading} style={{
+                    padding: '9px 20px', background: C.green, border: 'none', borderRadius: 20,
+                    color: '#000', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  }}>{invLoading ? '...' : '✓ Aceptar'}</button>
+                  <button onClick={async () => {
+                    await supabase.from('chat_invitations').update({ status: 'rejected' }).eq('id', invId)
+                    setInvStatus(null); setInvId(null)
+                  }} style={{
+                    padding: '9px 20px', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 20,
+                    color: C.textDim, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                  }}>✕ Rechazar</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* ── INPUT BAR ── */}
-        {!isAnnouncementTopic && !recLocked && (
+        {!invStatus && !isAnnouncementTopic && !activeChannelLocked && !recLocked && (
           <form onSubmit={handleSend} style={{
             display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 12px 10px',
             background: C.panel, borderTop: `1px solid ${C.border}`, flexShrink: 0,
@@ -2206,7 +2548,8 @@ export default function ChatPage({ onBack }) {
             {text.trim() ? (
               <button type="submit" disabled={sending} style={{
                 width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
-                background: C.green, border: 'none', cursor: 'pointer',
+                background: `linear-gradient(135deg, ${C.green}, ${C.green2})`,
+                border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 opacity: sending ? 0.5 : 1,
                 boxShadow: `0 4px 16px ${C.green}55`,
@@ -2215,7 +2558,7 @@ export default function ChatPage({ onBack }) {
                 onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)' }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'none' }}
               >
-                <svg width="17" height="17" viewBox="0 0 24 24" fill={C.bg}><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="#000"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
               </button>
             ) : (
               <div style={{ display: 'flex', gap: 6 }}>
@@ -2227,7 +2570,7 @@ export default function ChatPage({ onBack }) {
                     onClick={startRecording}
                     style={{
                       width: 42, height: 42, borderRadius: '50%',
-                      background: C.green,
+                      background: `linear-gradient(135deg, ${C.green}, ${C.green2})`,
                       border: 'none', cursor: 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       boxShadow: `0 4px 16px ${C.green}55`,
@@ -2235,7 +2578,7 @@ export default function ChatPage({ onBack }) {
                       transition: 'background .15s, box-shadow .15s, transform .15s',
                       userSelect: 'none', WebkitUserSelect: 'none',
                     }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill={C.bg}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="#000">
                       <path d="M12 1c-1.66 0-3 1.34-3 3v8c0 1.66 1.34 3 3 3s3-1.34 3-3V4c0-1.66-1.34-3-3-3zm5.3 9c0 3-2.54 5.1-5.3 5.1S6.7 13 6.7 10H5c0 3.41 2.72 6.23 6 6.72V20h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
                     </svg>
                   </button>
@@ -2293,6 +2636,23 @@ export default function ChatPage({ onBack }) {
             }}>
               {selectedMsgs.size === 0 ? 'Eliminar' : `Eliminar (${selectedMsgs.size})`}
             </button>
+          </div>
+        )}
+
+        {/* In-app error toast */}
+        {chatToast && (
+          <div style={{
+            position: 'absolute', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+            background: chatToast.type === 'error' ? '#ef4444' : C.green,
+            color: '#fff', borderRadius: 12, padding: '10px 18px',
+            fontSize: 13, fontWeight: 600, zIndex: 9999,
+            boxShadow: '0 4px 20px rgba(0,0,0,.35)',
+            display: 'flex', alignItems: 'center', gap: 10, maxWidth: 320, textAlign: 'center',
+            animation: 'slideUp .2s ease',
+          }}>
+            <span>{chatToast.type === 'error' ? '⚠️' : '✓'}</span>
+            <span>{chatToast.text}</span>
+            <button onClick={() => setChatToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 16, lineHeight: 1, padding: 0, marginLeft: 4 }}>✕</button>
           </div>
         )}
 
@@ -2426,13 +2786,13 @@ function FileBubble({ data, isMine }) {
 function MsgBody({ msg, isMine, otherLastRead }) {
   const time = (
     <span style={{
-      fontSize: 10, color: isMine ? `${C.green}99` : C.textDim,
+      fontSize: 10, color: isMine ? 'rgba(0,0,0,0.55)' : C.textDim,
       marginLeft: 6, whiteSpace: 'nowrap',
       display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'bottom',
     }}>
       {msg.edited_at && <span style={{ fontSize: 9, opacity: 0.7 }}>editado · </span>}
       {formatTime(msg.created_at)}
-      {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} />}
+      {isMine && <Ticks read={otherLastRead && otherLastRead > msg.created_at} onGreen={isMine} />}
     </span>
   )
   if (msg.type === 'image') return (
@@ -2503,6 +2863,8 @@ function MsgBody({ msg, isMine, otherLastRead }) {
   // Highlight @mentions + link preview
   const content = msg.content || ''
   const hasUrl = URL_REGEX.test(content); URL_REGEX.lastIndex = 0
+  const _privLp = (() => { try { return JSON.parse(localStorage.getItem('privacySettings') || '{}') } catch { return {} } })()
+  const showLinkPreview = hasUrl && !_privLp.noLinkPreview
   if (content.includes('@')) {
     const parts = content.split(/(@\w[\w ]*)/g)
     return (
@@ -2514,14 +2876,14 @@ function MsgBody({ msg, isMine, otherLastRead }) {
           )}
           {time}
         </span>
-        {hasUrl && <LinkPreview text={content} />}
+        {showLinkPreview && <LinkPreview text={content} />}
       </div>
     )
   }
   return (
     <div>
       <span style={{ whiteSpace: 'pre-wrap' }}>{content}{time}</span>
-      {hasUrl && <LinkPreview text={content} />}
+      {showLinkPreview && <LinkPreview text={content} />}
     </div>
   )
 }

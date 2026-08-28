@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
+import { getLimits, getRoleCfg } from '../lib/roles'
 import { C } from '../theme'
 
 const AVATAR_COLORS = ['#e91e63','#9c27b0','#1565c0','#00838f','#2e7d32','#e65100','#c62828']
@@ -11,18 +12,93 @@ function avatarColor(id) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
+const CATEGORIES = [
+  { id: 'efootball', label: 'eFootball', icon: '⚽' },
+  { id: 'fc',        label: 'FC',        icon: '🎮' },
+]
+
+const DEFAULT_CHANNELS = [
+  { name: 'General', description: 'Canal principal de la comunidad', who_can_send: 'everyone' },
+]
+
+const GAME_GROUPS = [
+  {
+    id: 'efootball',
+    label: 'eFootball',
+    icon: '⚽',
+    platforms: [
+      { id: 'efootball',        label: 'Crossplay', desc: 'PC / Consola' },
+      { id: 'efootball_mobile', label: 'Mobile',    desc: 'iOS / Android' },
+    ],
+  },
+  {
+    id: 'fc27',
+    label: 'FC 27',
+    icon: '🎮',
+    platforms: [
+      { id: 'fc27_newgen', label: 'New Gen', desc: 'PS5 / Xbox Series' },
+      { id: 'fc27_oldgen', label: 'Old Gen', desc: 'PS4 / Xbox One' },
+      { id: 'fc27_mobile', label: 'Mobile',  desc: 'iOS / Android' },
+    ],
+  },
+  {
+    id: 'fc26',
+    label: 'FC 26',
+    icon: '🎮',
+    platforms: [
+      { id: 'fc26_newgen', label: 'New Gen', desc: 'PS5 / Xbox Series' },
+      { id: 'fc26_oldgen', label: 'Old Gen', desc: 'PS4 / Xbox One' },
+      { id: 'fc26_mobile', label: 'Mobile',  desc: 'iOS / Android' },
+    ],
+  },
+]
+
+function planLabel(role) {
+  if (!role || role === 'member') return 'Gratis'
+  if (role === 'ceo')        return 'CEO'
+  if (role === 'admin')      return 'Admin'
+  if (role === 'comunidad')  return 'Comunidad PRO'
+  if (role === 'vip')        return 'VIP'
+  if (role === 'moderador')  return 'Moderador'
+  if (role === 'organizador')return 'Organizador'
+  return role
+}
+
 export default function NewGroupPage({ onBack, onCreated, initialType }) {
   const { profile } = useAuthStore()
   const { createGroup } = useChatStore()
-  const [step, setStep] = useState(1)
+  const limits = getLimits(profile)
+
+  const [step, setStep] = useState(initialType === 'community' ? 2 : 1)
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [selected, setSelected] = useState([])
   const [groupName, setGroupName] = useState('')
-  const [groupType, setGroupType] = useState(initialType || 'group') // 'group' | 'community'
+  const [groupType, setGroupType] = useState(initialType || 'group')
   const [description, setDescription] = useState('')
+  const [joinMode, setJoinMode] = useState('public')
+  const [category, setCategory] = useState('efootball')
+  const [rules, setRules] = useState('')
+  const [permissions, setPermissions] = useState({
+    who_can_send: 'everyone',
+    who_can_create_tournaments: 'admins',
+    who_can_invite: 'admins',
+    who_can_kick: 'admins',
+  })
+  const [selectedGames, setSelectedGames] = useState([])
+  const [torneosEnabled, setTorneosEnabled]   = useState(true)
+  const [ligasEnabled,   setLigasEnabled]     = useState(true)
+  const [clanesEnabled,  setClanesEnabled]    = useState(false)
+  const [isPublic, setIsPublic] = useState(true)
   const [creating, setCreating] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [avatarFile, setAvatarFile] = useState(null)
+  const [avatarPreview, setAvatarPreview] = useState(null)
+  // Member roles (for community/clan creation)
+  const [memberRoles, setMemberRoles] = useState({}) // { userId: 'admin'|'moderador'|'member' }
+  // Clan-specific fields
+  const [clanTag, setClanTag] = useState('')
+  const [clanRecruitment, setClanRecruitment] = useState('open') // open | invite_only | closed
 
   async function searchUsers(q) {
     if (!q.trim()) { setSearchResults([]); return }
@@ -45,12 +121,97 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
   }
 
   async function handleCreate() {
-    if (!groupName.trim() || selected.length === 0) return
+    if (!groupName.trim()) return
+    if (groupType === 'group' && selected.length === 0) return
     setCreating(true)
-    const convId = await createGroup(groupName.trim(), selected.map(u => u.id), profile.id, groupType, description.trim())
+    const memberIds = selected.map(u => u.id)
+    const dbGroupType = groupType === 'clan' ? 'group' : groupType
+    const convId = await createGroup(
+      groupName.trim(),
+      memberIds,
+      profile.id,
+      dbGroupType,
+      description.trim(),
+      joinMode === 'public'
+    )
+    if (convId && (groupType === 'community' || groupType === 'clan')) {
+      const updatePayload = {
+        tags:             selectedGames,
+        torneos_enabled:  torneosEnabled,
+        ligas_enabled:    ligasEnabled,
+        clanes_enabled:   clanesEnabled,
+        category,
+        rules:            rules.trim() || null,
+        join_mode:        joinMode,
+        permissions,
+      }
+      if (groupType === 'clan') {
+        updatePayload.group_type = 'clan'
+        updatePayload.clan_tag   = clanTag.trim().toUpperCase() || null
+        updatePayload.join_mode  = clanRecruitment
+      }
+      await supabase.from('conversations').update(updatePayload).eq('id', convId)
+
+      // Assign custom roles to members
+      for (const user of selected) {
+        const role = memberRoles[user.id]
+        if (role && role !== 'member') {
+          await supabase.from('conversation_members')
+            .update({ role })
+            .eq('conversation_id', convId)
+            .eq('user_id', user.id)
+        }
+      }
+
+      // Crear canales por defecto (solo comunidades)
+      if (groupType === 'community') {
+        for (const ch of DEFAULT_CHANNELS) {
+          const { data: channel } = await supabase.from('conversations').insert({
+            name:        ch.name,
+            type:        'channel',
+            community_id: convId,
+            created_by:  profile.id,
+            description: ch.description,
+            permissions: { ...permissions, who_can_send: ch.who_can_send },
+          }).select('id').single()
+          if (channel) {
+            await supabase.from('conversation_members').insert({
+              conversation_id: channel.id,
+              user_id: profile.id,
+              role: 'owner',
+            })
+          }
+        }
+      }
+    }
+    // Upload avatar if provided
+    if (convId && avatarFile) {
+      const ext = avatarFile.name.split('.').pop()
+      const path = `community-avatars/${convId}.${ext}`
+      const { data: uploadData } = await supabase.storage
+        .from('attachments')
+        .upload(path, avatarFile, { upsert: true, contentType: avatarFile.type })
+      if (uploadData) {
+        const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(path)
+        if (urlData?.publicUrl) {
+          await supabase.from('conversations').update({ avatar_url: urlData.publicUrl }).eq('id', convId)
+        }
+      }
+    }
     setCreating(false)
-    onCreated(convId, groupName.trim(), selected)
+    onCreated(convId, groupName.trim(), selected, groupType)
   }
+
+  function toggleGame(gameId) {
+    setSelectedGames(prev =>
+      prev.includes(gameId) ? prev.filter(g => g !== gameId) : [...prev, gameId]
+    )
+  }
+
+  const isCommunity = groupType === 'community'
+  const isClan = groupType === 'clan'
+  const isGroupOrClan = isCommunity || isClan
+  const canProceedStep1 = isGroupOrClan || selected.length > 0
 
   return (
     <div style={{
@@ -73,7 +234,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
         </button>
         <div style={{ flex: 1 }}>
           <h2 style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>
-            {step === 1 ? 'Nuevo grupo / comunidad' : groupType === 'community' ? 'Nueva comunidad' : 'Nuevo grupo'}
+            {step === 1 ? 'Nuevo grupo / comunidad' : isCommunity ? 'Nueva comunidad' : isClan ? 'Nuevo Clan ⚔️' : 'Nuevo grupo'}
           </h2>
           {step === 1 && (
             <p style={{ margin: '2px 0 0', fontSize: 12, color: C.textDim }}>
@@ -81,7 +242,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             </p>
           )}
         </div>
-        {step === 1 && selected.length > 0 && (
+        {step === 1 && canProceedStep1 && (
           <button onClick={() => setStep(2)} style={{
             width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
             background: C.green, border: 'none', cursor: 'pointer',
@@ -97,6 +258,36 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
 
       {step === 1 && (
         <>
+          {/* Type selector at top of step 1 */}
+          <div style={{ padding: '12px 16px', background: C.panel2, borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 8, flexShrink: 0 }}>
+            {[
+              { value: 'group',     label: 'Grupo',     icon: '👥' },
+              { value: 'community', label: 'Comunidad', icon: '🌐' },
+              { value: 'clan',      label: 'Clan',      icon: '⚔️' },
+            ].map(opt => (
+              <button key={opt.value} onClick={() => setGroupType(opt.value)} style={{
+                flex: 1, padding: '8px 10px', borderRadius: 10, border: `1.5px solid`,
+                borderColor: groupType === opt.value ? C.green : C.border,
+                background: groupType === opt.value ? `${C.green}14` : C.panel,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: 6, fontSize: 13, fontWeight: 600,
+                color: groupType === opt.value ? C.green : C.text2,
+                transition: 'all .15s',
+              }}>
+                <span>{opt.icon}</span> {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Community/Clan tip */}
+          {isGroupOrClan && (
+            <div style={{ padding: '10px 16px', background: `${C.green}0A`, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+              <p style={{ margin: 0, fontSize: 12, color: C.green }}>
+                {isClan ? '⚔️ El clan puede empezar vacío. Podés invitar jugadores ahora o después.' : '🌐 Las comunidades pueden empezar vacías. Podés agregar miembros ahora o después.'}
+              </p>
+            </div>
+          )}
+
           {/* Selected chips */}
           {selected.length > 0 && (
             <div style={{
@@ -162,40 +353,70 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
               <p style={{ textAlign: 'center', padding: '20px', color: C.textDim, fontSize: 13 }}>Buscando...</p>
             )}
             {!search && !searching && (
-              <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>👥</div>
-                <p style={{ color: C.text2, fontSize: 14, margin: '0 0 4px', fontWeight: 600 }}>Agregar participantes</p>
-                <p style={{ color: C.textDim, fontSize: 12, margin: 0 }}>Buscá a las personas para agregar al grupo</p>
+              <div style={{ textAlign: 'center', padding: '40px 24px' }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>{isCommunity ? '🌐' : '👥'}</div>
+                <p style={{ color: C.text2, fontSize: 14, margin: '0 0 4px', fontWeight: 600 }}>
+                  {isCommunity ? 'Agregar miembros (opcional)' : 'Agregar participantes'}
+                </p>
+                <p style={{ color: C.textDim, fontSize: 12, margin: '0 0 16px' }}>
+                  {isCommunity
+                    ? 'Buscá usuarios para invitar, o continuá sin agregar ninguno'
+                    : 'Buscá a las personas para agregar al grupo'
+                  }
+                </p>
+                {isCommunity && (
+                  <button onClick={() => setStep(2)} style={{
+                    padding: '10px 24px', borderRadius: 20, border: 'none',
+                    background: C.green, color: C.bg, fontSize: 13, fontWeight: 700,
+                    cursor: 'pointer', boxShadow: `0 2px 12px ${C.green}44`,
+                  }}>
+                    Continuar sin agregar →
+                  </button>
+                )}
               </div>
             )}
             {searchResults.map(u => {
               const isSel = selected.find(s => s.id === u.id)
+              const ROLE_OPTS = isClan
+                ? [{ v: 'member', l: 'Miembro' }, { v: 'moderador', l: 'Co-líder' }, { v: 'admin', l: 'Líder' }]
+                : [{ v: 'member', l: 'Miembro' }, { v: 'moderador', l: 'Moderador' }, { v: 'admin', l: 'Admin' }]
               return (
-                <button key={u.id} onClick={() => toggleUser(u)} style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 16px', background: isSel ? `${C.green}0C` : 'none',
-                  border: 'none', borderBottom: `1px solid ${C.border}22`,
-                  cursor: 'pointer', textAlign: 'left',
-                  transition: 'background .15s',
-                }}>
-                  <div style={{
-                    width: 46, height: 46, borderRadius: '50%', flexShrink: 0,
-                    background: isSel ? C.green : avatarColor(u.id),
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 16, fontWeight: 700,
-                    color: isSel ? C.bg : '#fff',
-                    transition: 'background .15s',
+                <div key={u.id} style={{ borderBottom: `1px solid ${C.border}22` }}>
+                  <button onClick={() => toggleUser(u)} style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 16px', background: isSel ? `${C.green}0C` : 'none',
+                    border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background .15s',
                   }}>
-                    {isSel
-                      ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-                      : u.display_name.slice(0, 2).toUpperCase()
-                    }
-                  </div>
-                  <div>
-                    <p style={{ margin: 0, color: C.text, fontWeight: 600, fontSize: 14 }}>{u.display_name}</p>
-                    <p style={{ margin: '2px 0 0', color: C.textDim, fontSize: 12 }}>@{u.username}</p>
-                  </div>
-                </button>
+                    <div style={{
+                      width: 46, height: 46, borderRadius: '50%', flexShrink: 0,
+                      background: isSel ? C.green : avatarColor(u.id),
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 16, fontWeight: 700, color: isSel ? C.bg : '#fff',
+                      transition: 'background .15s',
+                    }}>
+                      {isSel
+                        ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                        : u.display_name.slice(0, 2).toUpperCase()
+                      }
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, color: C.text, fontWeight: 600, fontSize: 14 }}>{u.display_name}</p>
+                      <p style={{ margin: '2px 0 0', color: C.textDim, fontSize: 12 }}>@{u.username}</p>
+                    </div>
+                  </button>
+                  {isSel && isGroupOrClan && (
+                    <div style={{ display: 'flex', gap: 6, padding: '0 16px 10px 74px' }}>
+                      {ROLE_OPTS.map(ro => (
+                        <button key={ro.v} onClick={() => setMemberRoles(r => ({ ...r, [u.id]: ro.v }))} style={{
+                          padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                          border: `1.5px solid ${(memberRoles[u.id] || 'member') === ro.v ? C.green : C.border}`,
+                          background: (memberRoles[u.id] || 'member') === ro.v ? `${C.green}20` : C.panel2,
+                          color: (memberRoles[u.id] || 'member') === ro.v ? C.green : C.textDim,
+                        }}>{ro.l}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
@@ -203,49 +424,108 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
       )}
 
       {step === 2 && (
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 24px', gap: 24 }}>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 24px', gap: 22 }}>
 
-          {/* Type selector */}
-          <div style={{ width: '100%', display: 'flex', gap: 10 }}>
-            {[
-              { value: 'group', label: 'Grupo', desc: 'Conversación privada entre miembros', icon: '👥' },
-              { value: 'community', label: 'Comunidad', desc: 'Canal público con descripción y reglas', icon: '🏆' },
-            ].map(opt => (
-              <button key={opt.value} onClick={() => setGroupType(opt.value)} style={{
-                flex: 1, padding: '14px 10px', borderRadius: 14, border: `2px solid`,
-                borderColor: groupType === opt.value ? C.green : C.border,
-                background: groupType === opt.value ? `${C.green}0D` : C.panel,
-                cursor: 'pointer', textAlign: 'center', transition: 'all .15s',
+          {/* Plan info card */}
+          {(isCommunity || isClan) && (() => {
+            const role = profile?.role || 'member'
+            const roleCfg = getRoleCfg(role)
+            const plan = planLabel(role)
+            const isFreeMember = !role || role === 'member'
+            return (
+              <div style={{
+                width: '100%', background: C.panel, borderRadius: 14,
+                border: `1px solid ${isFreeMember ? C.border : roleCfg.color + '44'}`,
+                overflow: 'hidden',
               }}>
-                <div style={{ fontSize: 24, marginBottom: 6 }}>{opt.icon}</div>
-                <p style={{ margin: '0 0 4px', color: groupType === opt.value ? C.green : C.text, fontWeight: 700, fontSize: 14 }}>{opt.label}</p>
-                <p style={{ margin: 0, color: C.textDim, fontSize: 11, lineHeight: 1.4 }}>{opt.desc}</p>
-              </button>
-            ))}
-          </div>
+                {/* Plan header */}
+                <div style={{
+                  background: isFreeMember ? C.panel2 : `${roleCfg.color}18`,
+                  padding: '10px 16px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: isFreeMember ? C.textDim : roleCfg.color, letterSpacing: '.5px' }}>
+                    {roleCfg.icon} Tu plan — {plan}
+                  </span>
+                  {isFreeMember && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', background: '#f59e0b18', border: '1px solid #f59e0b44', borderRadius: 8, padding: '2px 8px' }}>
+                      Límites básicos
+                    </span>
+                  )}
+                </div>
+                {/* Limit rows */}
+                <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.textDim }}>👥 Miembros en la comunidad</span>
+                    <strong style={{ color: C.text }}>{limits.maxCommunityMembers >= 9999 ? '∞' : limits.maxCommunityMembers.toLocaleString()}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.textDim }}>🏆 Torneos que podés crear/día</span>
+                    <strong style={{ color: C.text }}>{limits.maxTournamentsPerDay >= 999 ? '∞' : limits.maxTournamentsPerDay}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.textDim }}>👤 Jugadores por torneo/liga</span>
+                    <strong style={{ color: C.text }}>{limits.maxParticipants >= 9999 ? '∞' : limits.maxParticipants}</strong>
+                  </div>
+                  {isFreeMember && (
+                    <div style={{ marginTop: 4, padding: '8px 10px', background: '#f59e0b10', borderRadius: 8, border: '1px solid #f59e0b30' }}>
+                      <p style={{ margin: 0, fontSize: 11, color: '#f59e0b', lineHeight: 1.5 }}>
+                        ⭐ <strong>VIP</strong>: hasta 128 jugadores, 10 torneos/día<br/>
+                        🌐 <strong>Comunidad PRO</strong>: sin límites prácticos, herramientas avanzadas
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
 
-          {/* Avatar preview */}
-          <div style={{
-            width: 90, height: 90,
-            borderRadius: groupType === 'community' ? 24 : '50%',
-            background: groupName ? `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})` : C.panel2,
-            border: `2px solid ${groupName ? C.green : C.border}44`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: groupName ? 28 : 32, fontWeight: 800, color: C.text,
-            boxShadow: groupName ? `0 0 24px ${C.green}22` : 'none',
-            transition: 'all .2s',
-          }}>
-            {groupName ? groupName.slice(0, 2).toUpperCase() : (groupType === 'community' ? '🏆' : '👥')}
+          {/* Avatar preview — clickable to upload */}
+          <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => document.getElementById('avatar-upload-input').click()}>
+            <input
+              id="avatar-upload-input"
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                setAvatarFile(file)
+                setAvatarPreview(URL.createObjectURL(file))
+              }}
+            />
+            <div style={{
+              width: 90, height: 90,
+              borderRadius: isCommunity ? 24 : '50%',
+              background: groupName ? `linear-gradient(135deg, ${C.greenDk}88, ${C.panel2})` : C.panel2,
+              border: `2px solid ${groupName ? C.green : C.border}44`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: groupName ? 28 : 32, fontWeight: 800, color: C.text,
+              boxShadow: groupName ? `0 0 24px ${C.green}22` : 'none',
+              transition: 'all .2s', overflow: 'hidden',
+            }}>
+              {avatarPreview
+                ? <img src={avatarPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : groupName ? groupName.slice(0, 2).toUpperCase() : (isCommunity ? '🌐' : '👥')
+              }
+            </div>
+            <div style={{
+              position: 'absolute', bottom: 0, right: 0,
+              width: 26, height: 26, borderRadius: '50%',
+              background: C.green, border: `2px solid ${C.bg}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13,
+            }}>📷</div>
           </div>
 
           {/* Name */}
           <div style={{ width: '100%' }}>
             <label style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
-              {groupType === 'community' ? 'Nombre de la comunidad' : 'Nombre del grupo'}
+              {isCommunity ? 'Nombre de la comunidad' : isClan ? 'Nombre del Clan' : 'Nombre del grupo'}
             </label>
             <input
               type="text"
-              placeholder={groupType === 'community' ? 'Ej: SomosLFA Oficial' : 'Ej: Equipo Relámpago ⚡'}
+              placeholder={isCommunity ? 'Ej: eFootball Argentina' : isClan ? 'Ej: Thunder Clan ⚡' : 'Ej: Equipo Relámpago ⚡'}
               value={groupName}
               onChange={e => setGroupName(e.target.value)}
               maxLength={50} autoFocus
@@ -259,47 +539,317 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{groupName.length}/50</p>
           </div>
 
-          {/* Description (communities) */}
-          {groupType === 'community' && (
+          {/* Clan tag */}
+          {isClan && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                Tag del Clan (2-5 letras)
+              </label>
+              <input
+                type="text"
+                placeholder="Ej: TDT, ARG, CQAS"
+                value={clanTag}
+                onChange={e => setClanTag(e.target.value.toUpperCase().slice(0, 5))}
+                maxLength={5}
+                style={{
+                  width: '100%', background: 'transparent',
+                  border: 'none', borderBottom: `1.5px solid ${C.green}`,
+                  color: C.text, fontSize: 20, padding: '6px 0 10px',
+                  outline: 'none', textAlign: 'center', boxSizing: 'border-box', fontWeight: 800,
+                  letterSpacing: 4,
+                }}
+              />
+              <p style={{ textAlign: 'center', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>Se mostrará como [{clanTag || 'TAG'}] en tu perfil</p>
+            </div>
+          )}
+
+          {/* Clan recruitment */}
+          {isClan && (
             <div style={{ width: '100%' }}>
               <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
-                Descripción (opcional)
+                Reclutamiento
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { v: 'open',        icon: '🟢', l: 'Abierto',    d: 'Cualquiera puede unirse' },
+                  { v: 'invite_only', icon: '📨', l: 'Invitación', d: 'Solo con invitación' },
+                  { v: 'closed',      icon: '🔒', l: 'Cerrado',    d: 'No se aceptan miembros' },
+                ].map(opt => (
+                  <button key={opt.v} onClick={() => setClanRecruitment(opt.v)} style={{
+                    flex: 1, padding: '10px 6px', borderRadius: 12, border: `2px solid`,
+                    borderColor: clanRecruitment === opt.v ? C.green : C.border,
+                    background: clanRecruitment === opt.v ? `${C.green}0D` : C.panel,
+                    cursor: 'pointer', textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 18, marginBottom: 3 }}>{opt.icon}</div>
+                    <p style={{ margin: '0 0 2px', color: clanRecruitment === opt.v ? C.green : C.text, fontWeight: 700, fontSize: 12 }}>{opt.l}</p>
+                    <p style={{ margin: 0, color: C.textDim, fontSize: 10 }}>{opt.d}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Description */}
+          <div style={{ width: '100%' }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+              Descripción (opcional)
+            </label>
+            <textarea
+              placeholder={isCommunity ? 'De qué trata esta comunidad...' : 'Descripción del grupo...'}
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              maxLength={200}
+              rows={3}
+              style={{
+                width: '100%', background: C.panel, border: `1px solid ${C.border}`,
+                borderRadius: 10, color: C.text, fontSize: 14, padding: '10px 12px',
+                outline: 'none', resize: 'none', boxSizing: 'border-box', lineHeight: 1.5,
+              }}
+            />
+            <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{description.length}/200</p>
+          </div>
+
+          {/* Game selector — communities only */}
+          {isCommunity && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                🎮 Juegos y plataformas
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {GAME_GROUPS.map(group => {
+                  const anySelected = group.platforms.some(p => selectedGames.includes(p.id))
+                  return (
+                    <div key={group.id} style={{
+                      background: anySelected ? `${C.green}08` : C.panel,
+                      border: `1.5px solid ${anySelected ? C.green + '44' : C.border}`,
+                      borderRadius: 12, padding: '10px 12px',
+                    }}>
+                      <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: anySelected ? C.green : C.text }}>
+                        {group.icon} {group.label}
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {group.platforms.map(plat => {
+                          const sel = selectedGames.includes(plat.id)
+                          return (
+                            <button key={plat.id} onClick={() => toggleGame(plat.id)} style={{
+                              padding: '6px 12px', borderRadius: 20,
+                              border: `1.5px solid ${sel ? C.green : C.border}`,
+                              background: sel ? `${C.green}18` : C.panel2,
+                              color: sel ? C.green : C.text2,
+                              fontSize: 12, fontWeight: sel ? 700 : 500,
+                              cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                              transition: 'all .15s', gap: 1,
+                            }}>
+                              <span>{plat.label}</span>
+                              <span style={{ fontSize: 10, color: sel ? C.green : C.textDim, fontWeight: 400 }}>{plat.desc}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {selectedGames.length > 0 && (
+                <p style={{ margin: '10px 0 0', fontSize: 11, color: C.textDim }}>
+                  Los torneos y ligas de esta comunidad se organizarán para: {selectedGames.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Competition types — communities only */}
+          {isCommunity && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                🏆 Competencias habilitadas
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  [torneosEnabled, setTorneosEnabled, '🏆', 'Torneos', 'Eliminación directa, brackets, grupos'],
+                  [ligasEnabled,   setLigasEnabled,   '🥇', 'Ligas',   'Todos vs todos, tabla de posiciones'],
+                  [clanesEnabled,  setClanesEnabled,  '⚔️', 'Torneos de Clanes', 'Equipos o clanes compiten entre sí'],
+                ].map(([val, setter, icon, lbl, desc]) => (
+                  <div key={lbl} onClick={() => setter(!val)} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    background: val ? `${C.green}0D` : C.panel,
+                    border: `1.5px solid ${val ? C.green + '55' : C.border}`,
+                    borderRadius: 12, padding: '11px 14px', cursor: 'pointer',
+                    transition: 'all .15s',
+                  }}>
+                    <span style={{ fontSize: 20 }}>{icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: val ? C.green : C.text }}>{lbl}</p>
+                      <p style={{ margin: '1px 0 0', fontSize: 11, color: C.textDim }}>{desc}</p>
+                    </div>
+                    <div style={{
+                      width: 44, height: 24, borderRadius: 12, border: 'none',
+                      background: val ? C.green : C.panel2,
+                      outline: `1px solid ${val ? C.green : C.border}`,
+                      position: 'relative', flexShrink: 0,
+                    }}>
+                      <div style={{
+                        position: 'absolute', top: 2, left: val ? 22 : 2,
+                        width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.25)', transition: 'left .2s',
+                      }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+
+          {/* Torneos inside community — info box */}
+          {isCommunity && (
+            <div style={{
+              width: '100%', background: `${C.green}0A`,
+              border: `1px solid ${C.green}30`, borderRadius: 12, padding: '12px 16px',
+            }}>
+              <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 800, color: C.green }}>🏆 Torneos y Ligas dentro de la Comunidad</p>
+              <p style={{ margin: 0, fontSize: 12, color: C.textDim, lineHeight: 1.6 }}>
+                Una vez creada la comunidad, podés organizar torneos y ligas <strong>desde adentro</strong>. Los miembros se inscriben, juegan, cargan resultados y ven las tablas de posiciones — todo en un solo lugar.
+              </p>
+            </div>
+          )}
+
+          {/* Category — communities only */}
+          {isCommunity && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                Categoría
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {CATEGORIES.map(cat => {
+                  const sel = category === cat.id
+                  return (
+                    <button key={cat.id} onClick={() => setCategory(cat.id)} style={{
+                      padding: '7px 14px', borderRadius: 20,
+                      border: `1.5px solid ${sel ? C.green : C.border}`,
+                      background: sel ? `${C.green}18` : C.panel,
+                      color: sel ? C.green : C.text2,
+                      fontSize: 13, fontWeight: sel ? 700 : 500,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                      transition: 'all .15s',
+                    }}>
+                      {cat.icon} {cat.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Rules — communities only */}
+          {isCommunity && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                Reglas de la comunidad (opcional)
               </label>
               <textarea
-                placeholder="De qué trata esta comunidad..."
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                maxLength={200}
+                placeholder={'Ej: Respeto entre miembros. No spam. Resultados en 24hs...'}
+                value={rules}
+                onChange={e => setRules(e.target.value)}
+                maxLength={500}
                 rows={3}
                 style={{
                   width: '100%', background: C.panel, border: `1px solid ${C.border}`,
                   borderRadius: 10, color: C.text, fontSize: 14, padding: '10px 12px',
-                  outline: 'none', resize: 'none', boxSizing: 'border-box',
-                  lineHeight: 1.5,
+                  outline: 'none', resize: 'none', boxSizing: 'border-box', lineHeight: 1.5,
                 }}
               />
-              <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{description.length}/200</p>
+              <p style={{ textAlign: 'right', fontSize: 11, color: C.textDim, margin: '4px 0 0' }}>{rules.length}/500</p>
+            </div>
+          )}
+
+          {/* Privacy / join_mode — communities only */}
+          {isCommunity && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                Privacidad
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { value: 'public',      icon: '🌐', label: 'Pública',    desc: 'Cualquiera puede unirse' },
+                  { value: 'approval',    icon: '✋', label: 'Aprobación', desc: 'Admin aprueba solicitudes' },
+                  { value: 'invite_only', icon: '🔒', label: 'Invitación', desc: 'Solo con link privado' },
+                ].map(opt => (
+                  <button key={opt.value} onClick={() => setJoinMode(opt.value)} style={{
+                    flex: 1, padding: '10px 6px', borderRadius: 12, border: `2px solid`,
+                    borderColor: joinMode === opt.value ? C.green : C.border,
+                    background: joinMode === opt.value ? `${C.green}0D` : C.panel,
+                    cursor: 'pointer', textAlign: 'center', transition: 'all .15s',
+                  }}>
+                    <div style={{ fontSize: 18, marginBottom: 4 }}>{opt.icon}</div>
+                    <p style={{ margin: '0 0 2px', color: joinMode === opt.value ? C.green : C.text, fontWeight: 700, fontSize: 12 }}>{opt.label}</p>
+                    <p style={{ margin: 0, color: C.textDim, fontSize: 10 }}>{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Permissions — communities only */}
+          {isCommunity && (
+            <div style={{ width: '100%' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.text2, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                Permisos
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { key: 'who_can_send',               label: '💬 Quién puede enviar mensajes' },
+                  { key: 'who_can_create_tournaments',  label: '🏆 Quién puede crear torneos' },
+                  { key: 'who_can_invite',              label: '📨 Quién puede invitar miembros' },
+                  { key: 'who_can_kick',                label: '🚫 Quién puede expulsar' },
+                ].map(({ key, label }) => (
+                  <div key={key} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px',
+                  }}>
+                    <span style={{ fontSize: 13, color: C.text }}>{label}</span>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {['everyone', 'admins'].map(val => (
+                        <button key={val} onClick={() => setPermissions(p => ({ ...p, [key]: val }))} style={{
+                          padding: '4px 10px', borderRadius: 8, border: `1.5px solid`,
+                          borderColor: permissions[key] === val ? C.green : C.border,
+                          background: permissions[key] === val ? `${C.green}18` : C.panel2,
+                          color: permissions[key] === val ? C.green : C.textDim,
+                          fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all .15s',
+                        }}>
+                          {val === 'everyone' ? 'Todos' : 'Admins'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ margin: '8px 0 0', fontSize: 11, color: C.textDim }}>
+                🏷️ Canales por defecto que se crearán: #general, #anuncios, #torneos, #resultados, #sorteos
+              </p>
             </div>
           )}
 
           {/* Members preview */}
           <div style={{ width: '100%', background: C.panel, borderRadius: 12, padding: '12px 16px', border: `1px solid ${C.border}` }}>
             <p style={{ margin: '0 0 8px', fontSize: 11, color: C.textDim, fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase' }}>
-              {selected.length + 1} participantes
+              {selected.length + 1} {isCommunity ? 'miembro' : 'participante'}{selected.length + 1 !== 1 ? 's' : ''}
             </p>
             <p style={{ margin: 0, fontSize: 13, color: C.text2, lineHeight: 1.6 }}>
               {profile?.display_name}{selected.map(u => `, ${u.display_name}`).join('')}
+              {isCommunity && selected.length === 0 && <span style={{ color: C.textDim }}> (podés agregar más después)</span>}
             </p>
           </div>
 
           {/* Create button */}
           <button
             onClick={handleCreate}
-            disabled={creating || !groupName.trim()}
+            disabled={creating || !groupName.trim() || (groupType === 'group' && selected.length === 0)}
             style={{
               width: 60, height: 60, borderRadius: '50%', border: 'none',
-              background: creating || !groupName.trim() ? C.panel2 : C.green,
-              cursor: creating || !groupName.trim() ? 'not-allowed' : 'pointer',
+              background: (creating || !groupName.trim() || (groupType === 'group' && selected.length === 0)) ? C.panel2 : C.green,
+              cursor: (creating || !groupName.trim() || (groupType === 'group' && selected.length === 0)) ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: !groupName.trim() ? 'none' : `0 4px 20px ${C.green}44`,
               transition: 'all .2s',
@@ -312,7 +862,7 @@ export default function NewGroupPage({ onBack, onCreated, initialType }) {
             }
           </button>
           <p style={{ margin: '-16px 0 0', fontSize: 12, color: C.textDim }}>
-            {groupType === 'community' ? 'Crear comunidad' : 'Crear grupo'}
+            {isCommunity ? 'Crear comunidad' : isClan ? 'Crear clan' : 'Crear grupo'}
           </p>
         </div>
       )}

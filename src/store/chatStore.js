@@ -2,6 +2,14 @@ import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 import { sounds } from '../lib/sounds'
 
+// Extract clean UUID from any string (handles embedded quotes, JSON encoding, etc.)
+const cleanUUID = v => {
+  if (!v) return v
+  const s = typeof v === 'string' ? v : String(v)
+  const m = s.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+  return m ? m[0] : s
+}
+
 export const useChatStore = create((set, get) => ({
   conversations: [],
   activeConversation: null,
@@ -9,8 +17,12 @@ export const useChatStore = create((set, get) => ({
   loadingMessages: false,
   topics: [],
   activeTopicId: null,
+  subChannelMap: {}, // subChannelId → communityConvId
 
-  setActiveConversation: (conv) => set({ activeConversation: conv, messages: [], topics: [], activeTopicId: null }),
+  setActiveConversation: (conv) => {
+    const cleaned = conv ? { ...conv, id: cleanUUID(conv.id) } : conv
+    set({ activeConversation: cleaned, messages: [], topics: [], activeTopicId: null })
+  },
   setActiveTopic: (topicId) => set({ activeTopicId: topicId }),
 
   fetchTopics: async (conversationId) => {
@@ -34,7 +46,8 @@ export const useChatStore = create((set, get) => ({
     return data
   },
 
-  fetchMessages: async (conversationId, topicId = null) => {
+  fetchMessages: async (rawConversationId, topicId = null) => {
+    const conversationId = cleanUUID(rawConversationId)
     set({ loadingMessages: true })
     const userId = (await supabase.auth.getUser()).data?.user?.id
 
@@ -72,11 +85,11 @@ export const useChatStore = create((set, get) => ({
     if (!memberships?.length) { set({ conversations: [] }); return }
 
     // Try to get group metadata (only available after migration 003)
-    const convIds0 = memberships.map(m => m.conversation_id)
+    const convIds0 = memberships.map(m => cleanUUID(m.conversation_id))
     let convMeta = {}
     const { data: metaRows } = await supabase
       .from('conversations')
-      .select('id, name, is_group, created_by, avatar_url, group_type, description')
+      .select('id, name, is_group, created_by, avatar_url, group_type, description, is_public, is_locked, who_can_send, who_can_add, who_can_edit_info, slow_mode_seconds, auto_delete_hours, allow_export, allow_auto_save, announcement_only, require_approval, invite_link, pinned_message, torneos_enabled, ligas_enabled, clanes_enabled, tags, member_count, game_rules, plan')
       .in('id', convIds0)
     metaRows?.forEach(r => { convMeta[r.id] = r })
 
@@ -133,9 +146,32 @@ export const useChatStore = create((set, get) => ({
           id: convId,
           isGroup,
           isCommunity: meta?.group_type === 'community',
+          group_type: meta?.group_type,
           name: isGroup ? meta?.name : null,
           description: meta?.description,
           avatarUrl: meta?.avatar_url,
+          avatar_url: meta?.avatar_url,
+          created_by: meta?.created_by,
+          is_public: meta?.is_public,
+          is_locked: meta?.is_locked,
+          who_can_send: meta?.who_can_send,
+          who_can_add: meta?.who_can_add,
+          who_can_edit_info: meta?.who_can_edit_info,
+          slow_mode_seconds: meta?.slow_mode_seconds,
+          auto_delete_hours: meta?.auto_delete_hours,
+          allow_export: meta?.allow_export,
+          allow_auto_save: meta?.allow_auto_save,
+          announcement_only: meta?.announcement_only,
+          plan: meta?.plan ?? 'free',
+          require_approval: meta?.require_approval,
+          invite_link: meta?.invite_link,
+          pinned_message: meta?.pinned_message,
+          torneos_enabled: meta?.torneos_enabled,
+          ligas_enabled: meta?.ligas_enabled,
+          clanes_enabled: meta?.clanes_enabled,
+          tags: meta?.tags,
+          member_count: meta?.member_count,
+          game_rules: meta?.game_rules,
           user: isGroup ? null : members[0],  // for 1-on-1
           members,                              // for groups
           lastMessage: lastMsgMap[convId],
@@ -143,18 +179,93 @@ export const useChatStore = create((set, get) => ({
           unread: unreadMap[convId] || 0,
         }
       })
-      .filter(c => c.isGroup || c.user)
-      .sort((a, b) => {
-        const ta = a.lastMessage?.created_at || a.id
-        const tb = b.lastMessage?.created_at || b.id
-        return tb.localeCompare(ta)
+      .filter(c => {
+        if (!c.isGroup && !c.user) return false
+        // Torneos y ligas no van en el chat list — se acceden desde la sección Torneos
+        const meta = convMeta[c.id]
+        if (meta?.group_type === 'tournament' || meta?.group_type === 'liga') return false
+        if (meta?.group_type === 'deleted') return false
+        return true
       })
+
+    // For communities: fetch last message across sub-channels and attach channel name
+    const communityConvs = conversations.filter(c => c.isCommunity)
+    if (communityConvs.length > 0) {
+      const communityIds = communityConvs.map(c => c.id)
+      const { data: subChannels } = await supabase
+        .from('conversations')
+        .select('id, name, community_id, group_type')
+        .in('community_id', communityIds)
+        .in('group_type', ['channel', 'group'])
+        .order('created_at', { ascending: true })
+
+      if (subChannels?.length) {
+        const channelIds = subChannels.map(ch => ch.id)
+        const { data: channelMsgs } = await supabase
+          .from('messages')
+          .select('conversation_id, content, created_at, type, sender_id')
+          .in('conversation_id', channelIds)
+          .order('created_at', { ascending: false })
+
+        // Map: communityId → latest msg with channel_name
+        const communityLastMsg = {}
+        channelMsgs?.forEach(msg => {
+          const ch = subChannels.find(c => c.id === msg.conversation_id)
+          if (!ch) return
+          const existing = communityLastMsg[ch.community_id]
+          if (!existing || msg.created_at > existing.created_at) {
+            communityLastMsg[ch.community_id] = { ...msg, channel_name: ch.name }
+          }
+        })
+
+        // Unread count across all sub-channels per community
+        const communityUnread = {}
+        for (const c of communityConvs) {
+          const chIds = subChannels.filter(ch => ch.community_id === c.id).map(ch => ch.id)
+          if (!chIds.length) continue
+          let total = 0
+          for (const chId of chIds) {
+            const lastRead = lastReadMap[c.id]
+            const q = supabase.from('messages').select('*', { count: 'exact', head: true })
+              .eq('conversation_id', chId).neq('sender_id', userId)
+            if (lastRead) q.gt('created_at', lastRead)
+            const { count } = await q
+            total += count || 0
+          }
+          communityUnread[c.id] = total
+        }
+
+        // Build sub-channel → community map for realtime updates
+        const subChannelMap = {}
+        subChannels?.forEach(ch => { subChannelMap[ch.id] = ch.community_id })
+
+        conversations.forEach(c => {
+          if (!c.isCommunity) return
+          if (communityLastMsg[c.id]) {
+            c.lastMessage = communityLastMsg[c.id]
+            c.unread = (communityUnread[c.id] || 0) + (c.unread || 0)
+          }
+        })
+
+        set(state => ({ subChannelMap: { ...state.subChannelMap, ...subChannelMap } }))
+      }
+    }
+
+    conversations.sort((a, b) => {
+      const ta = a.lastMessage?.created_at || a.id
+      const tb = b.lastMessage?.created_at || b.id
+      return tb.localeCompare(ta)
+    })
 
     set({ conversations })
   },
 
   markAsRead: async (conversationId, userId) => {
     if (!conversationId || !userId) return
+    try {
+      const priv = JSON.parse(localStorage.getItem('privacySettings') || '{}')
+      if (priv.readReceipts === false) return
+    } catch {}
     const now = new Date().toISOString()
     await supabase
       .from('conversation_members')
@@ -175,14 +286,34 @@ export const useChatStore = create((set, get) => ({
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         const msg = payload.new
         set(state => {
-          const idx = state.conversations.findIndex(c => c.id === msg.conversation_id)
+          // Resolve the conversation to update — may be a community parent via sub-channel
+          const communityId = state.subChannelMap[msg.conversation_id]
+          const targetId = communityId || msg.conversation_id
+
+          const idx = state.conversations.findIndex(c => c.id === targetId)
           if (idx === -1) return state
+
           const isActive = state.activeConversation?.id === msg.conversation_id
           const isOwn = msg.sender_id === userId
-          // Play sound for any incoming message from someone else
-          if (!isOwn) sounds.msgReceived()
+          if (!isOwn) {
+            sounds.msgReceived()
+            if (document.visibilityState !== 'visible' && Notification.permission === 'granted') {
+              const conv = state.conversations[idx]
+              const convName = conv?.name || 'NexoTribu'
+              const body = msg.type === 'image' ? '📷 Imagen' : msg.type === 'audio' ? '🎵 Audio' : (msg.content || '').slice(0, 80)
+              try {
+                new Notification(convName, {
+                  body,
+                  icon: '/icon-192.png',
+                  badge: '/icon-192.png',
+                  tag: `msg-${targetId}`,
+                  silent: false,
+                })
+              } catch {}
+            }
+          }
           const updated = state.conversations.map(c => {
-            if (c.id !== msg.conversation_id) return c
+            if (c.id !== targetId) return c
             return {
               ...c,
               lastMessage: msg,
@@ -204,7 +335,8 @@ export const useChatStore = create((set, get) => ({
 
 
   sendMessage: async (conversationId, senderId, content, type = 'text', maxViews = null, topicId = null) => {
-    const row = { conversation_id: conversationId, sender_id: senderId, content, type }
+    const cleanConvId = cleanUUID(conversationId)
+    const row = { conversation_id: cleanConvId, sender_id: senderId, content, type }
     if (maxViews) row.max_views = maxViews
     if (topicId) row.topic_id = topicId
     const { data, error } = await supabase
@@ -323,7 +455,7 @@ export const useChatStore = create((set, get) => ({
         .eq('user_id', otherUserId)
         .in('conversation_id', myIds)
 
-      if (shared?.length) return shared[0].conversation_id
+      if (shared?.length) return cleanUUID(shared[0].conversation_id)
     }
 
     // Create new conversation — try with is_group first, fall back without it
@@ -356,16 +488,23 @@ export const useChatStore = create((set, get) => ({
     return conv.id
   },
 
-  deleteMessage: async (messageId, conversationId) => {
-    await supabase.from('messages').update({ is_deleted: true, content: '' }).eq('id', messageId)
-    // Broadcast deletion so all participants update instantly
+  deleteMessage: async (messageId, conversationId, senderRole) => {
+    // Preserve original content for VIP visibility; wipe display content
+    const msg = get().messages.find(m => m.id === messageId)
+    const originalContent = msg?.content || ''
+    await supabase.from('messages').update({
+      is_deleted: true,
+      content: '',
+      deleted_content: senderRole === 'superadmin' ? null : originalContent,
+      deleted_by_role: senderRole || 'member',
+    }).eq('id', messageId)
     if (conversationId) {
       supabase.channel(`conv-events:${conversationId}`)
         .send({ type: 'broadcast', event: 'msg-deleted', payload: { messageId } })
     }
     set(state => ({
       messages: state.messages.map(m =>
-        m.id === messageId ? { ...m, is_deleted: true, content: '' } : m
+        m.id === messageId ? { ...m, is_deleted: true, content: '', deleted_content: senderRole === 'superadmin' ? null : originalContent, deleted_by_role: senderRole || 'member' } : m
       )
     }))
   },
@@ -464,12 +603,12 @@ export const useChatStore = create((set, get) => ({
     }))
   },
 
-  createGroup: async (name, memberIds, createdBy, type = 'group', description = '') => {
+  createGroup: async (name, memberIds, createdBy, type = 'group', description = '', isPublic = true) => {
     const isCommunity = type === 'community'
     const insertData = { name, is_group: true, created_by: createdBy }
-    // Attach extra fields if columns exist (migration 009)
     if (isCommunity) {
       insertData.group_type = 'community'
+      insertData.is_public = isPublic
     }
     if (description) {
       insertData.description = description
@@ -517,6 +656,14 @@ export const useChatStore = create((set, get) => ({
       type: 'system',
       content: `${isCommunity ? 'Comunidad' : 'Grupo'} "${name}" creado`,
     })
+
+    // Auto-create default channels for communities
+    if (isCommunity) {
+      await supabase.from('topics').insert([
+        { conversation_id: conv.id, name: 'General', emoji: '💬', topic_type: 'chat', position: 0, is_default: true, who_can_send: 'everyone' },
+        { conversation_id: conv.id, name: 'Avisos', emoji: '📢', topic_type: 'announcements', position: 1, is_default: true, who_can_send: 'admins' },
+      ])
+    }
 
     return conv.id
   },

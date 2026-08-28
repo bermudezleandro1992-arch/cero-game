@@ -2,12 +2,14 @@ import { useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
-import { soundSettings, SOUND_PACKS } from '../lib/sounds'
+import { soundSettings, SOUND_PACKS, ringSettings, RINGTONES, OUTGOING_TONES } from '../lib/sounds'
 import LegalPage from '../pages/LegalPage'
 import BotApiPage from '../pages/BotApiPage'
 import VipPage from '../pages/VipPage'
 import DonationsPage from '../pages/DonationsPage'
+import SubscriptionPanel from '../pages/SubscriptionPanel'
 import { useTheme } from '../lib/ThemeContext'
+import { useSubscription } from '../hooks/useSubscription'
 
 // ── Role config ───────────────────────────────────────────────────────────────
 const ROLES = {
@@ -19,9 +21,10 @@ const ROLES = {
 }
 
 const PLANS = {
-  community: { label: 'Plan Comunidad',  color: '#3b82f6', bg: '#3b82f614', icon: '🌐' },
-  vip:       { label: 'Plan VIP',        color: '#f59e0b', bg: '#f59e0b14', icon: '⭐' },
-  free:      { label: 'Plan Gratuito',   color: '#64748b', bg: '#64748b14', icon: '🆓' },
+  community: { label: 'Comunidad PRO', color: '#8b5cf6', bg: '#8b5cf614', icon: '💎' },
+  pro:       { label: 'PRO',           color: '#8b5cf6', bg: '#8b5cf614', icon: '💎' },
+  vip:       { label: 'VIP',           color: '#f59e0b', bg: '#f59e0b14', icon: '⭐' },
+  free:      { label: 'Gratuito',      color: '#64748b', bg: '#64748b14', icon: '🆓' },
 }
 
 function RoleBadge({ role }) {
@@ -54,8 +57,11 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const { themeId, setTheme, themes } = useTheme()
   const [showLegal, setShowLegal] = useState(false)
   const [showBotApi, setShowBotApi] = useState(false)
-  const [showVip, setShowVip] = useState(false)
   const [showDonations, setShowDonations] = useState(false)
+  const [showSub, setShowSub] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [section, setSection] = useState('perfil') // 'perfil' | 'cuenta' | 'preferencias'
 
   const defaultName = (!profile?.display_name || profile.display_name === 'Usuario' || profile.display_name.startsWith('user_')) ? '' : profile.display_name
@@ -65,6 +71,8 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const [bio, setBio] = useState(profile?.bio || '')
   const [soundOn, setSoundOn] = useState(soundSettings.isEnabled())
   const [soundPack, setSoundPack] = useState(soundSettings.getPack())
+  const [ringId, setRingId] = useState(ringSettings.getRing())
+  const [outId, setOutId] = useState(ringSettings.getOut())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
@@ -72,10 +80,10 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const avatarInputRef = useRef(null)
 
-  // Plan & role (community plan free for everyone during beta)
   const userRole = profile?.role || 'member'
-  const userPlan = profile?.plan || 'community' // free community plan for all
   const isVerified = profile?.is_verified || false
+  const { plan: subPlan } = useSubscription(profile?.id)
+  const userPlan = subPlan || profile?.plan || 'free'
   const planCfg = PLANS[userPlan] || PLANS.free
 
   async function handleAvatarChange(e) {
@@ -118,10 +126,22 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
   const initials = (name || profile?.display_name || '?').slice(0, 2).toUpperCase()
   const disabled = saving || !name.trim()
 
+  async function handleDeleteAccount() {
+    setDeleting(true); setDeleteError('')
+    try {
+      const { error } = await supabase.rpc('delete_user_account')
+      if (error) throw error
+      await supabase.auth.signOut()
+    } catch (err) {
+      setDeleteError(err.message || 'Error al eliminar la cuenta. Intentá de nuevo.')
+      setDeleting(false)
+    }
+  }
+
   if (showLegal) return <LegalPage onBack={() => setShowLegal(false)} />
   if (showBotApi) return <BotApiPage onBack={() => setShowBotApi(false)} />
-  if (showVip) return <VipPage onBack={() => setShowVip(false)} />
   if (showDonations) return <DonationsPage onBack={() => setShowDonations(false)} />
+  if (showSub) return <SubscriptionPanel onBack={() => setShowSub(false)} />
 
   const inp = {
     width: '100%', background: C.panel2,
@@ -181,10 +201,10 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
         )}
       </div>
 
-      {/* Hero — avatar + info + badges */}
+      {/* Hero — avatar + info + badges + stats */}
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        padding: '20px 20px 16px',
+        padding: '14px 16px 14px',
         background: `radial-gradient(ellipse at 50% 0%, ${C.greenDk}22 0%, transparent 65%)`,
         borderBottom: `1px solid ${C.border}`, flexShrink: 0,
       }}>
@@ -244,38 +264,38 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
         </div>
 
         {!forceSetup && profile?.bio && (
-          <p style={{ color: C.textDim, fontSize: 13, margin: '10px 0 0', textAlign: 'center', maxWidth: 280, lineHeight: 1.4 }}>{profile.bio}</p>
+          <p style={{ color: C.textDim, fontSize: 12, margin: '6px 0 0', textAlign: 'center', maxWidth: 280, lineHeight: 1.4 }}>{profile.bio}</p>
         )}
-        <p style={{ margin: '6px 0 0', color: C.textDim, fontSize: 11 }}>
+        <p style={{ margin: '4px 0 0', color: C.textDim, fontSize: 10 }}>
           {uploadingAvatar ? 'Subiendo foto...' : 'Tocá la foto para cambiarla'}
         </p>
-      </div>
 
-      {/* Stats */}
-      {!forceSetup && (
-        <div style={{ padding: '16px 20px', background: C.panel2, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Estadísticas</p>
-          <div className="stat-grid">
-            {[
-              { icon: '🏆', label: 'Torneos',     value: profile?.stats_tournaments || 0 },
-              { icon: '🥇', label: 'Campeonatos', value: profile?.stats_wins || 0 },
-              { icon: '⚔️', label: 'Partidos',    value: profile?.stats_matches || 0 },
-              { icon: '✅', label: 'Victorias',   value: profile?.stats_victories || 0 },
-              { icon: '⚽', label: 'Goles',       value: profile?.stats_goals || 0 },
-              { icon: '📊', label: 'Ranking',     value: profile?.stats_ranking ? `#${profile.stats_ranking}` : '--' },
-            ].map(s => (
-              <div key={s.label} className="stat-item" style={{
-                background: C.panel, borderRadius: 12, padding: '10px 6px',
-                border: `1px solid ${C.border}`, textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 18, marginBottom: 2 }}>{s.icon}</div>
-                <div style={{ color: C.text, fontWeight: 800, fontSize: 15 }}>{s.value}</div>
-                <div style={{ color: C.textDim, fontSize: 10, marginTop: 1 }}>{s.label}</div>
-              </div>
-            ))}
+        {/* Stats inline en el hero */}
+        {!forceSetup && (
+          <div style={{ width: '100%', marginTop: 12 }}>
+            <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase', textAlign: 'left' }}>Estadísticas</p>
+            <div className="stat-grid">
+              {[
+                { icon: '🏆', label: 'Torneos',     value: profile?.stats_tournaments || 0 },
+                { icon: '🥇', label: 'Campeonatos', value: profile?.stats_wins || 0 },
+                { icon: '⚔️', label: 'Partidos',    value: profile?.stats_matches || 0 },
+                { icon: '✅', label: 'Victorias',   value: profile?.stats_victories || 0 },
+                { icon: '⚽', label: 'Goles',       value: profile?.stats_goals || 0 },
+                { icon: '📊', label: 'Ranking',     value: profile?.stats_ranking ? `#${profile.stats_ranking}` : '--' },
+              ].map(s => (
+                <div key={s.label} className="stat-item" style={{
+                  background: `${C.panel}cc`, borderRadius: 10, padding: '8px 4px',
+                  border: `1px solid ${C.border}`, textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 16, marginBottom: 1 }}>{s.icon}</div>
+                  <div style={{ color: C.text, fontWeight: 800, fontSize: 14 }}>{s.value}</div>
+                  <div style={{ color: C.textDim, fontSize: 9, marginTop: 1 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Section tabs */}
       {!forceSetup && (
@@ -296,7 +316,8 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
       )}
 
       {/* Content — scrollable area */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 40px', minHeight: 0 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 40px', minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ width: '100%', maxWidth: 680 }}>
 
         {/* ── PERFIL ── */}
         {(section === 'perfil' || forceSetup) && (
@@ -412,7 +433,6 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
 
             {/* Acciones */}
             {[
-              { icon: '⭐', label: 'Plan VIP', desc: 'Comunidades ilimitadas, bots y más', color: '#f59e0b', action: () => setShowVip(true) },
               { icon: '💚', label: 'Apoyá el proyecto', desc: 'Donaciones para mantener todo gratis', color: C.green, action: () => setShowDonations(true) },
               { icon: '🤖', label: 'API de Bots', desc: 'Conectá plataformas externas y bots', color: C.textDim, action: () => setShowBotApi(true) },
               { icon: '⚖️', label: 'Legal y Privacidad', desc: 'Términos, privacidad y reglamento', color: C.textDim, action: () => setShowLegal(true) },
@@ -433,6 +453,47 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
                 </svg>
               </button>
             ))}
+
+            {/* Danger zone — delete account */}
+            <div style={{
+              background: '#ef444410', border: `1px solid #ef444430`,
+              borderRadius: 16, padding: '16px 18px', marginTop: 8,
+            }}>
+              <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: '#ef4444', letterSpacing: '1.5px', textTransform: 'uppercase' }}>Zona de peligro</p>
+              {!deleteConfirm ? (
+                <button type="button" onClick={() => setDeleteConfirm(true)} style={{
+                  width: '100%', padding: '12px', borderRadius: 12, border: `1px solid #ef444444`,
+                  background: 'transparent', color: '#ef4444', fontSize: 14, fontWeight: 700,
+                  cursor: 'pointer',
+                }}>
+                  🗑️ Eliminar mi cuenta
+                </button>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <p style={{ margin: 0, color: '#ef4444', fontSize: 13, lineHeight: 1.6, fontWeight: 600 }}>
+                    ¿Estás seguro? Esta acción es <strong>irreversible</strong>. Se eliminarán todos tus mensajes, torneos, datos y tu cuenta de forma permanente.
+                  </p>
+                  {deleteError && (
+                    <p style={{ margin: 0, color: '#ef4444', fontSize: 12, background: '#ef444418', borderRadius: 8, padding: '8px 12px' }}>{deleteError}</p>
+                  )}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" onClick={() => { setDeleteConfirm(false); setDeleteError('') }} style={{
+                      flex: 1, padding: '11px', borderRadius: 10, border: `1px solid ${C.border}`,
+                      background: C.panel2, color: C.text, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    }}>
+                      Cancelar
+                    </button>
+                    <button type="button" onClick={handleDeleteAccount} disabled={deleting} style={{
+                      flex: 1, padding: '11px', borderRadius: 10, border: 'none',
+                      background: deleting ? '#ef444444' : '#ef4444', color: '#fff',
+                      fontSize: 13, fontWeight: 700, cursor: deleting ? 'not-allowed' : 'pointer',
+                    }}>
+                      {deleting ? 'Eliminando...' : 'Sí, eliminar todo'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -488,6 +549,50 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
                       )}
                     </button>
                   ))}
+
+                  <p style={{ margin: '10px 0 6px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Tono de llamada entrante</p>
+                  {Object.values(RINGTONES).map(r => (
+                    <button key={r.id} type="button" onClick={() => { ringSettings.setRing(r.id); setRingId(r.id); r.play() }} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                      background: ringId === r.id ? `${C.green}18` : C.panel2,
+                      border: `1.5px solid ${ringId === r.id ? C.green : C.border}`,
+                      transition: 'all .15s',
+                    }}>
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>{r.emoji}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: ringId === r.id ? C.green : C.text, fontWeight: 600, fontSize: 13 }}>{r.label}</div>
+                        <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{r.desc}</div>
+                      </div>
+                      {ringId === r.id && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+
+                  <p style={{ margin: '10px 0 6px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Tono de llamada saliente</p>
+                  {Object.values(OUTGOING_TONES).map(o => (
+                    <button key={o.id} type="button" onClick={() => { ringSettings.setOut(o.id); setOutId(o.id); o.play() }} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                      background: outId === o.id ? `${C.green}18` : C.panel2,
+                      border: `1.5px solid ${outId === o.id ? C.green : C.border}`,
+                      transition: 'all .15s',
+                    }}>
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>{o.emoji}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: outId === o.id ? C.green : C.text, fontWeight: 600, fontSize: 13 }}>{o.label}</div>
+                        <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{o.desc}</div>
+                      </div>
+                      {outId === o.id && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      )}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
@@ -515,6 +620,7 @@ export default function ProfileSheet({ onClose, forceSetup = false }) {
             </div>
           </div>
         )}
+      </div>{/* maxWidth wrapper */}
       </div>
     </div>
   )

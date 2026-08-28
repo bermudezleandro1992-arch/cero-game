@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00e676"/>
+      <stop offset="100%" stop-color="#00b0ff"/>
+    </linearGradient>
+    <clipPath id="hex-clip">
+      <polygon points="100,8 180,52 180,148 100,192 20,148 20,52"/>
+    </clipPath>
+  </defs>
+
+  <!-- Hexagon border -->
+  <polygon points="100,8 180,52 180,148 100,192 20,148 20,52"
+    fill="none" stroke="url(#g1)" stroke-width="10" stroke-linejoin="round"/>
+
+  <!-- N letter -->
+  <text x="100" y="138" text-anchor="middle" font-family="Arial Black, sans-serif"
+    font-weight="900" font-size="110" fill="url(#g1)" clip-path="url(#hex-clip)">N</text>
+
+  <!-- Lightning bolt overlay -->
+  <polygon points="112,42 88,105 105,105 88,158 124,88 106,88 124,42"
+    fill="url(#g1)" opacity="0.9"/>
+</svg>

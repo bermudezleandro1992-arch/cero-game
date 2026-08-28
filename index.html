@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
-    <title>Mi Mensajero</title>
+    <title>NexoTribu</title>
     <meta name="description" content="Mensajería moderna con comunidades y bots" />
 
     <!-- PWA -->
@@ -13,9 +13,10 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Mi Mensajero" />
+    <meta name="apple-mobile-web-app-title" content="NexoTribu" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   </head>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
@@ -33,7 +34,22 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
+          navigator.serviceWorker.register('/sw.js').then(reg => {
+            // When a new SW takes over, reload so users always get fresh code
+            reg.addEventListener('updatefound', () => {
+              const newWorker = reg.installing
+              if (!newWorker) return
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+                  window.location.reload()
+                }
+              })
+            })
+          })
+          // If the controlling SW changes (another tab triggered the update), reload
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload()
+          })
         })
       }
     </script>
