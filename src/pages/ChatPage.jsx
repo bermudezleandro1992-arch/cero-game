@@ -769,8 +769,8 @@ export default function ChatPage({ onBack }) {
       // If this is the support group, trigger the support bot
       triggerSupportBot(activeConversation.id, profile.id, content, msg?.id)
     } catch (err) {
-      const msg = err?.message || 'Error al enviar'
-      setChatToast({ text: msg.includes('uuid') ? 'Error de conexión. Recargá la página.' : `Error: ${msg}`, type: 'error' })
+      const msg = err?.message || err?.code || JSON.stringify(err) || 'Error al enviar'
+      setChatToast({ text: `Error: ${msg}`, type: 'error' })
       setTimeout(() => setChatToast(null), 4000)
       setText(content)
     }
