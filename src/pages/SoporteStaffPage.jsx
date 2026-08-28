@@ -100,7 +100,24 @@ export default function SoporteStaffPage({ onBack }) {
 
   async function takeTicket() {
     if (!selected) return
-    // Direct update — bypasses missing RPC
+
+    let convId = selected.conversation_id
+
+    // If ticket has no conversation yet, create one between user and staff
+    if (!convId && selected.user_id) {
+      const { data: conv } = await supabase.from('conversations')
+        .insert({ name: `Soporte TK-${selected.ticket_number || selected.id.slice(0, 6)}`, is_group: true, group_type: 'support', created_by: profile.id })
+        .select('id').single()
+      if (conv) {
+        convId = conv.id
+        await supabase.from('conversation_members').insert([
+          { conversation_id: convId, user_id: profile.id },
+          { conversation_id: convId, user_id: selected.user_id },
+        ])
+        await supabase.from('support_tickets').update({ conversation_id: convId }).eq('id', selected.id)
+      }
+    }
+
     const { error } = await supabase
       .from('support_tickets')
       .update({ status: 'in_progress', assigned_to: profile.id })
@@ -109,14 +126,15 @@ export default function SoporteStaffPage({ onBack }) {
       alert(`Error al tomar el ticket: ${error.message}`)
       return
     }
-    // Ensure staff is in the support conversation so they can chat
-    if (selected.conversation_id) {
+
+    if (convId) {
       await supabase.from('conversation_members')
-        .upsert({ conversation_id: selected.conversation_id, user_id: profile.id }, { onConflict: 'conversation_id,user_id', ignoreDuplicates: true })
+        .upsert({ conversation_id: convId, user_id: profile.id }, { onConflict: 'conversation_id,user_id', ignoreDuplicates: true })
     }
-    const updated = { ...selected, status: 'in_progress', assigned_to: profile.id, agent: { id: profile.id, display_name: profile.display_name, username: profile.username } }
+
+    const updated = { ...selected, status: 'in_progress', assigned_to: profile.id, conversation_id: convId, agent: { id: profile.id, display_name: profile.display_name, username: profile.username } }
     setSelected(updated)
-    setTickets(prev => prev.map(t => t.id === selected.id ? { ...t, status: 'in_progress', assigned_to: profile.id } : t))
+    setTickets(prev => prev.map(t => t.id === selected.id ? { ...t, status: 'in_progress', assigned_to: profile.id, conversation_id: convId } : t))
   }
 
   async function closeTicket() {
