@@ -159,14 +159,15 @@ export default function LoginPage() {
         .glow-btn:hover { transform:translateY(-1px); box-shadow:0 8px 32px rgba(0,210,120,.25); }
         .glow-btn:active { transform:translateY(0); }
         @media (max-width:860px) {
-          .login-root { flex-direction:column; }
-          .hero { padding:48px 24px 32px; }
-          .form-col { width:100%; padding:32px 24px 48px; border-left:none; border-top:1px solid rgba(255,255,255,.06); }
+          .login-root { flex-direction:column; overflow-y:auto; }
+          .hero { padding:40px 24px 28px; justify-content:flex-start; }
+          .form-col { width:100%; padding:32px 24px 56px; border-left:none; border-top:1px solid rgba(255,255,255,.06); justify-content:flex-start; }
+          .feat-grid { margin-top:24px; }
         }
         @media (max-width:480px) {
           .feat-grid { gap:8px; }
-          .hero { padding:36px 16px 24px; }
-          .form-col { padding:28px 16px 40px; }
+          .hero { padding:28px 16px 20px; }
+          .form-col { padding:24px 16px 48px; }
         }
       `}</style>
 
@@ -176,7 +177,7 @@ export default function LoginPage() {
           <div style={{ position:'absolute', top:-120, left:-80, width:500, height:500, borderRadius:'50%', background:'radial-gradient(circle,rgba(0,210,120,.07) 0%,transparent 70%)', pointerEvents:'none' }} />
           <div style={{ position:'absolute', bottom:-80, right:-40, width:360, height:360, borderRadius:'50%', background:'radial-gradient(circle,rgba(0,150,255,.05) 0%,transparent 70%)', pointerEvents:'none' }} />
 
-          <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:48 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:'clamp(20px,4vw,48px)' }}>
             <img src="/logo.svg" alt="NexoTribu" width={48} height={48} />
             <div>
               <div style={{ fontFamily:'Rajdhani,sans-serif', color:'#fff', fontWeight:700, fontSize:22, letterSpacing:'.5px' }}>NexoTribu</div>
@@ -207,7 +208,7 @@ export default function LoginPage() {
             ))}
           </div>
 
-          <div style={{ marginTop:36, display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ marginTop:'clamp(16px,3vw,36px)', display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ width:8, height:8, borderRadius:'50%', background:'#00d278', boxShadow:'0 0 8px #00d278' }} />
             <span style={{ color:'rgba(255,255,255,.4)', fontSize:12 }}>
               Plataforma en desarrollo activo · <span style={{ color:'rgba(255,255,255,.6)', fontWeight:600 }}>Registrate gratis y sé parte desde el inicio</span>
