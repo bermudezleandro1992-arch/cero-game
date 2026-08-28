@@ -457,6 +457,7 @@ export default function ChatPage({ onBack }) {
   const { profile } = useAuthStore()
   const { activeConversation, messages, conversations, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage, topics, activeTopicId, fetchTopics, createTopic, setActiveTopic, fetchConversations } = useChatStore()
   const [text, setText] = useState('')
+  const convId = (activeConversation?.id || '').replace(/^"+|"+$/g, '').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] || activeConversation?.id
   const [sending, setSending] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
@@ -764,7 +765,7 @@ export default function ChatPage({ onBack }) {
       : rawText
     setReplyTo(null); setText('')
     try {
-      const msg = await sendMessage(activeConversation.id, profile.id, content, 'text', null, activeTopicId)
+      const msg = await sendMessage(convId, profile.id, content, 'text', null, activeTopicId)
       sounds.msgSent()
       // If this is the support group, trigger the support bot
       triggerSupportBot(activeConversation.id, profile.id, content, msg?.id)
@@ -879,13 +880,13 @@ export default function ChatPage({ onBack }) {
 
   async function sendGif(url) {
     setShowGifPicker(false); setShowAttachMenu(false)
-    await sendMessage(activeConversation.id, profile.id, url, 'gif')
+    await sendMessage(convId, profile.id, url, 'gif')
     sounds.msgSent()
   }
 
   async function sendSticker(emoji) {
     setShowStickerPicker(false); setShowAttachMenu(false)
-    await sendMessage(activeConversation.id, profile.id, emoji, 'sticker')
+    await sendMessage(convId, profile.id, emoji, 'sticker')
     sounds.msgSent()
   }
 
@@ -895,7 +896,7 @@ export default function ChatPage({ onBack }) {
     if (!question || options.length < 2) return
     const payload = JSON.stringify({ question, options })
     setPollQ(''); setPollOpts(['', '']); setShowPollModal(false)
-    await sendMessage(activeConversation.id, profile.id, payload, 'poll')
+    await sendMessage(convId, profile.id, payload, 'poll')
     sounds.msgSent()
   }
 
@@ -904,7 +905,7 @@ export default function ChatPage({ onBack }) {
     if (!title || !evDate) return
     const payload = JSON.stringify({ title, date: evDate, time: evTime, place: evPlace.trim() })
     setEvTitle(''); setEvDate(''); setEvTime(''); setEvPlace(''); setShowEventModal(false)
-    await sendMessage(activeConversation.id, profile.id, payload, 'event')
+    await sendMessage(convId, profile.id, payload, 'event')
     sounds.msgSent()
   }
 
@@ -917,9 +918,9 @@ export default function ChatPage({ onBack }) {
         : file.type.startsWith('image/') ? 'image' : 'file'
       const meta = JSON.stringify({ name: file.name, size: file.size, mime: file.type, url })
       if (type === 'file') {
-        await sendMessage(activeConversation.id, profile.id, meta, 'file')
+        await sendMessage(convId, profile.id, meta, 'file')
       } else {
-        await sendMessage(activeConversation.id, profile.id, url, type)
+        await sendMessage(convId, profile.id, url, type)
       }
       sounds.msgSent()
     } catch (err) { alert(`Error: ${err.message}`) }
@@ -943,7 +944,7 @@ export default function ChatPage({ onBack }) {
     setUploadingImage(true)
     try {
       const url = await uploadImage(file, profile.id)
-      await sendMessage(activeConversation.id, profile.id, url, type, maxViews || null)
+      await sendMessage(convId, profile.id, url, type, maxViews || null)
       sounds.msgSent()
     } catch (err) { alert(`Error: ${err.message}`) }
     setUploadingImage(false)
@@ -977,7 +978,7 @@ export default function ChatPage({ onBack }) {
           const ext = type.includes('mp4') || type.includes('m4a') ? 'm4a' : 'webm'
           const file = new File([blob], `voice-${Date.now()}.${ext}`, { type })
           const url = await uploadImage(file, profile.id)
-          await sendMessage(activeConversation.id, profile.id, url, 'audio')
+          await sendMessage(convId, profile.id, url, 'audio')
           sounds.msgSent()
         } catch (err) { alert(`Error al enviar audio: ${err.message}`) }
         setUploadingImage(false)
