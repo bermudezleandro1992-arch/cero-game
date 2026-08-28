@@ -246,25 +246,28 @@ function BirthdateGate({ onDone, userId }) {
         </div>
 
         {/* Accept checkbox */}
-        <div style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'4px 0', marginBottom:16 }}>
-          <div onClick={() => setAccepted(a => !a)} style={{
-            width:20, height:20, borderRadius:5, flexShrink:0, marginTop:2,
+        <div onClick={() => setAccepted(a => !a)} style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'8px 0 4px', marginBottom:4, cursor:'pointer', userSelect:'none' }}>
+          <div style={{
+            width:20, height:20, borderRadius:5, flexShrink:0, marginTop:1,
             background: accepted ? '#00d278' : 'rgba(255,255,255,.05)',
             border: `2px solid ${accepted ? '#00d278' : 'rgba(255,255,255,.2)'}`,
             display:'flex', alignItems:'center', justifyContent:'center',
-            transition:'all .15s', cursor:'pointer',
+            transition:'all .15s',
           }}>
             {accepted && <svg width="11" height="11" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
           </div>
-          <div style={{ color:'rgba(255,255,255,.7)', fontSize:13, lineHeight:1.6 }}>
-            <span onClick={() => setAccepted(a => !a)} style={{ cursor:'pointer' }}>
-              Confirmo que tengo 18 años o más y acepto el reglamento y los{' '}
-            </span>
-            <button onClick={() => setModal('terminos')} style={{ background:'none', border:'none', padding:0, color:'#00d278', fontWeight:600, cursor:'pointer', fontSize:13, fontFamily:'inherit', textDecoration:'underline' }}>
-              Términos de Uso
-            </button>
-            <span onClick={() => setAccepted(a => !a)} style={{ cursor:'pointer' }}>{' '}de NexoTribu.</span>
-          </div>
+          <span style={{ color:'rgba(255,255,255,.7)', fontSize:13, lineHeight:1.6 }}>
+            Confirmo que tengo 18 años o más y acepto el reglamento de NexoTribu.
+          </span>
+        </div>
+        {/* Legal links — completely separate from checkbox */}
+        <div style={{ paddingLeft:32, marginBottom:16, display:'flex', gap:16 }}>
+          <button onClick={() => setModal('terminos')} style={{ background:'none', border:'none', padding:0, color:'#00d278', fontWeight:600, cursor:'pointer', fontSize:12, fontFamily:'inherit', textDecoration:'underline' }}>
+            Términos de Uso
+          </button>
+          <button onClick={() => setModal('privacidad')} style={{ background:'none', border:'none', padding:0, color:'rgba(255,255,255,.35)', fontWeight:600, cursor:'pointer', fontSize:12, fontFamily:'inherit', textDecoration:'underline' }}>
+            Política de Privacidad
+          </button>
         </div>
 
         {error && <p style={{ color:'#ef4444', fontSize:12, margin:'0 0 12px', textAlign:'center' }}>{error}</p>}
