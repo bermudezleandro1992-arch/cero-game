@@ -80,32 +80,51 @@ La plataforma es exclusiva para mayores de 18 años. Eliminamos de inmediato dat
 Soporte disponible dentro de la aplicación.
 `
 
-function LegalModal({ title, content, onClose }) {
+function LegalModal({ initialTab, onClose }) {
+  const [tab, setTab] = useState(initialTab || 'terminos')
+  const content = tab === 'terminos' ? TERMINOS : PRIVACIDAD
+
+  function renderContent(text) {
+    return text.trim().split('\n\n').map((block, i) => {
+      if (block.startsWith('**')) {
+        const [h, ...rest] = block.split('\n')
+        return (
+          <div key={i} style={{ marginBottom:20 }}>
+            <div style={{ color:'#00d278', fontSize:15, fontWeight:700, marginBottom:8, borderLeft:'3px solid #00d278', paddingLeft:12 }}>{h.replace(/\*\*/g,'')}</div>
+            {rest.map((line, j) => <p key={j} style={{ color:'rgba(255,255,255,.6)', fontSize:14, margin:'0 0 6px', lineHeight:1.7, paddingLeft:15 }}>{line}</p>)}
+          </div>
+        )
+      }
+      return <p key={i} style={{ color:'rgba(255,255,255,.6)', fontSize:14, margin:'0 0 12px', lineHeight:1.7 }}>{block}</p>
+    })
+  }
+
   return (
     <div style={{ position:'fixed', inset:0, zIndex:200, background:'#080d12', overflowY:'auto', padding:'0 0 40px' }}>
-      <div style={{ position:'sticky', top:0, background:'#080d12', borderBottom:'1px solid rgba(255,255,255,.08)', padding:'14px 20px', display:'flex', alignItems:'center', gap:12, zIndex:1 }}>
-        <button onClick={onClose} style={{ background:'rgba(255,255,255,.08)', border:'none', borderRadius:8, padding:'6px 14px', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+      {/* Header */}
+      <div style={{ position:'sticky', top:0, background:'#080d12', borderBottom:'1px solid rgba(255,255,255,.08)', padding:'12px 20px', display:'flex', alignItems:'center', gap:12, zIndex:1 }}>
+        <button onClick={onClose} style={{ background:'rgba(255,255,255,.08)', border:'none', borderRadius:8, padding:'6px 14px', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', flexShrink:0 }}>
           ← Volver
         </button>
-        <span style={{ color:'#fff', fontWeight:700, fontSize:15 }}>{title}</span>
+        {/* Tabs */}
+        <div style={{ display:'flex', gap:4, background:'rgba(255,255,255,.05)', borderRadius:8, padding:3 }}>
+          {[['terminos','Términos de Uso'],['privacidad','Política de Privacidad']].map(([id, label]) => (
+            <button key={id} onClick={() => setTab(id)} style={{
+              background: tab === id ? '#00d278' : 'transparent',
+              border:'none', borderRadius:6, padding:'5px 12px',
+              color: tab === id ? '#fff' : 'rgba(255,255,255,.4)',
+              fontSize:12, fontWeight:600, cursor:'pointer', transition:'all .15s',
+            }}>{label}</button>
+          ))}
+        </div>
       </div>
+      {/* Content */}
       <div style={{ maxWidth:640, margin:'0 auto', padding:'28px 20px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:24 }}>
           <img src="/logo.svg" alt="NexoTribu" width={28} height={28} />
           <span style={{ color:'rgba(255,255,255,.4)', fontSize:12 }}>Última actualización: agosto de 2026</span>
         </div>
-        {content.trim().split('\n\n').map((block, i) => {
-          if (block.startsWith('**')) {
-            const [h, ...rest] = block.split('\n')
-            return (
-              <div key={i} style={{ marginBottom:20 }}>
-                <div style={{ color:'#00d278', fontSize:15, fontWeight:700, marginBottom:8, borderLeft:'3px solid #00d278', paddingLeft:12 }}>{h.replace(/\*\*/g,'')}</div>
-                {rest.map((line, j) => <p key={j} style={{ color:'rgba(255,255,255,.6)', fontSize:14, margin:'0 0 6px', lineHeight:1.7, paddingLeft:15 }}>{line}</p>)}
-              </div>
-            )
-          }
-          return <p key={i} style={{ color:'rgba(255,255,255,.6)', fontSize:14, margin:'0 0 12px', lineHeight:1.7 }}>{block}</p>
-        })}
+        {renderContent(content)}
         <div style={{ marginTop:40, paddingTop:20, borderTop:'1px solid rgba(255,255,255,.08)', color:'rgba(255,255,255,.2)', fontSize:12, textAlign:'center' }}>
           © 2026 NexoTribu. Todos los derechos reservados.
         </div>
@@ -117,8 +136,7 @@ function LegalModal({ title, content, onClose }) {
 export default function LoginPage() {
   const [modal, setModal] = useState(null) // 'terminos' | 'privacidad' | null
 
-  if (modal === 'terminos') return <LegalModal title="Términos de Uso" content={TERMINOS} onClose={() => setModal(null)} />
-  if (modal === 'privacidad') return <LegalModal title="Política de Privacidad" content={PRIVACIDAD} onClose={() => setModal(null)} />
+  if (modal) return <LegalModal initialTab={modal} onClose={() => setModal(null)} />
 
   async function loginGoogle() {
     await supabase.auth.signInWithOAuth({
@@ -166,9 +184,9 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <h1 style={{ fontFamily:'Rajdhani,sans-serif', color:'#fff', fontSize:'clamp(34px,5vw,56px)', fontWeight:700, lineHeight:1.1, margin:'0 0 16px', maxWidth:520 }}>
-            Donde tu comunidad<br />
-            <span style={{ color:'#00d278' }}>se organiza de verdad.</span>
+          <h1 style={{ fontFamily:'Rajdhani,sans-serif', color:'#fff', fontSize:'clamp(38px,5.5vw,68px)', fontWeight:700, lineHeight:1.0, margin:'0 0 20px', maxWidth:560, letterSpacing:'-0.5px', textWrap:'balance' }}>
+            Tu comunidad gamer,<br />
+            <span style={{ color:'#00d278', fontWeight:700 }}>organizada de verdad.</span>
           </h1>
           <p style={{ color:'rgba(255,255,255,.5)', fontSize:16, margin:0, maxWidth:420, lineHeight:1.7 }}>
             Sin grupos de WhatsApp que explotan. Sin Discord perdido en canales. NexoTribu es mensajería, torneos y bots en un solo lugar — para gamers que van en serio.
@@ -228,7 +246,7 @@ export default function LoginPage() {
             {[
               { icon:'🔒', t:'Acceso seguro con Google',  d:'Sin contraseñas que recordar.' },
               { icon:'🔞', t:'Solo para mayores de 18',   d:'Verificamos tu edad al registrarte.' },
-              { icon:'⚡', t:'Gratis para siempre',       d:'Las funciones base nunca se cobran.' },
+              { icon:'🏆', t:'Torneos y comunidades',     d:'Organizá, competí y crecé con tu tribu.' },
             ].map(b => (
               <div key={b.t} style={{ display:'flex', alignItems:'center', gap:12 }}>
                 <span style={{ fontSize:18, flexShrink:0 }}>{b.icon}</span>
