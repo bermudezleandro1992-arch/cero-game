@@ -184,9 +184,10 @@ function BirthdateGate({ onDone, userId }) {
     const age = getAge(birthdate)
     if (age < 18) { setError('Debés tener al menos 18 años para usar NexoTribu.'); return }
     setLoading(true)
-    try {
-      await supabase.from('users').update({ birth_date: birthdate }).eq('id', userId)
-    } catch (_) { /* si falla el update igual dejamos pasar */ }
+    // Fire-and-forget with 5s timeout — never block the user on DB issues
+    const timeout = new Promise(r => setTimeout(r, 5000))
+    const update = supabase.from('users').update({ birth_date: birthdate }).eq('id', userId)
+    await Promise.race([update, timeout]).catch(() => {})
     onDone()
   }
 
