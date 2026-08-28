@@ -470,6 +470,7 @@ export default function ChatPage({ onBack }) {
   const [hoveredMsg, setHoveredMsg] = useState(null)
   const [deleteMenuMsg, setDeleteMenuMsg] = useState(null) // messageId showing delete submenu
   const [confirmDialog, setConfirmDialog] = useState(null)
+  const [chatToast, setChatToast] = useState(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedMsgs, setSelectedMsgs] = useState(new Set())
 
@@ -767,7 +768,12 @@ export default function ChatPage({ onBack }) {
       sounds.msgSent()
       // If this is the support group, trigger the support bot
       triggerSupportBot(activeConversation.id, profile.id, content, msg?.id)
-    } catch (err) { alert(`Error: ${err.message}`); setText(content) }
+    } catch (err) {
+      const msg = err?.message || 'Error al enviar'
+      setChatToast({ text: msg.includes('uuid') ? 'Error de conexión. Recargá la página.' : `Error: ${msg}`, type: 'error' })
+      setTimeout(() => setChatToast(null), 4000)
+      setText(content)
+    }
     setSending(false)
     // On mobile: blur to dismiss keyboard after send; on desktop: keep focus
     if (window.innerWidth < 768) {
@@ -2202,7 +2208,7 @@ export default function ChatPage({ onBack }) {
           </div>
           )
         })()}
-        <style>{`@keyframes emojiSlideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`}</style>
+        <style>{`@keyframes emojiSlideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}} @keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`}</style>
 
         {/* ── ATTACH MENU ── */}
         {showAttachMenu && !showGifPicker && !showStickerPicker && (
@@ -2630,6 +2636,23 @@ export default function ChatPage({ onBack }) {
             }}>
               {selectedMsgs.size === 0 ? 'Eliminar' : `Eliminar (${selectedMsgs.size})`}
             </button>
+          </div>
+        )}
+
+        {/* In-app error toast */}
+        {chatToast && (
+          <div style={{
+            position: 'absolute', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+            background: chatToast.type === 'error' ? '#ef4444' : C.green,
+            color: '#fff', borderRadius: 12, padding: '10px 18px',
+            fontSize: 13, fontWeight: 600, zIndex: 9999,
+            boxShadow: '0 4px 20px rgba(0,0,0,.35)',
+            display: 'flex', alignItems: 'center', gap: 10, maxWidth: 320, textAlign: 'center',
+            animation: 'slideUp .2s ease',
+          }}>
+            <span>{chatToast.type === 'error' ? '⚠️' : '✓'}</span>
+            <span>{chatToast.text}</span>
+            <button onClick={() => setChatToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 16, lineHeight: 1, padding: 0, marginLeft: 4 }}>✕</button>
           </div>
         )}
 
