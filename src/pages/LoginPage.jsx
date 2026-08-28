@@ -241,12 +241,12 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <div className="apk-btn" style={{ opacity:.45, cursor:'default' }}>
+          <a className="apk-btn" href="https://drive.google.com/file/d/1WvjWDxj3Dl-bkr7_YkQeJhRCEe5o2xN7/view" target="_blank" rel="noreferrer">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 17V3M7 12l5 5 5-5"/><rect x="3" y="17" width="18" height="4" rx="1"/>
             </svg>
-            App Android — próximamente
-          </div>
+            Descargar para Android (.apk)
+          </a>
 
           <div style={{ display:'flex', alignItems:'center', gap:10, margin:'14px 0' }}>
             <div style={{ flex:1, height:1, background:'rgba(255,255,255,.08)' }} />
