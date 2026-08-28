@@ -40,6 +40,7 @@ export default function InviteJoinPage({ token, onBack }) {
         .limit(1)
 
       if (!rows?.length) {
+        localStorage.removeItem('mm_pending_invite')
         setError('El link de invitación no existe o fue revocado.')
         setLoading(false)
         return
@@ -167,10 +168,10 @@ export default function InviteJoinPage({ token, onBack }) {
               <div style={{ fontSize: 48, marginBottom: 12 }}>🚫</div>
               <p style={{ margin: '0 0 6px', color: C.text, fontWeight: 700, fontSize: 15 }}>Link inválido</p>
               <p style={{ margin: '0 0 20px', color: C.textDim, fontSize: 13 }}>{error}</p>
-              <button onClick={onBack} style={{
+              <button onClick={() => { localStorage.removeItem('mm_pending_invite'); onBack?.() }} style={{
                 padding: '10px 24px', borderRadius: 12, border: `1px solid ${C.border}`,
                 background: C.panel2, color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer',
-              }}>Volver</button>
+              }}>Ir al inicio</button>
             </div>
           )}
 
