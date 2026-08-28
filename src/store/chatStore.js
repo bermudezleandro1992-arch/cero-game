@@ -11,7 +11,11 @@ export const useChatStore = create((set, get) => ({
   activeTopicId: null,
   subChannelMap: {}, // subChannelId → communityConvId
 
-  setActiveConversation: (conv) => set({ activeConversation: conv, messages: [], topics: [], activeTopicId: null }),
+  setActiveConversation: (conv) => {
+    const stripQ = s => (typeof s === 'string' ? s.replace(/^"+|"+$/g, '') : s)
+    const cleaned = conv ? { ...conv, id: stripQ(conv.id) } : conv
+    set({ activeConversation: cleaned, messages: [], topics: [], activeTopicId: null })
+  },
   setActiveTopic: (topicId) => set({ activeTopicId: topicId }),
 
   fetchTopics: async (conversationId) => {
