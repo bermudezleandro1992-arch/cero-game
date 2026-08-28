@@ -149,25 +149,30 @@ export default function LoginPage() {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+        * { box-sizing:border-box; }
         .login-root { min-height:100dvh; display:flex; background:#080d12; font-family:'Inter',sans-serif; }
-        .hero { flex:1; display:flex; flex-direction:column; justify-content:center; padding:60px 64px; position:relative; overflow:hidden; }
+        .hero { flex:1; display:flex; flex-direction:column; justify-content:center; padding:60px 64px; position:relative; overflow:hidden; min-width:0; }
         .form-col { width:400px; flex-shrink:0; display:flex; flex-direction:column; justify-content:center; padding:48px 40px; background:#0e1419; border-left:1px solid rgba(255,255,255,.06); }
-        .feat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:40px; max-width:520px; }
-        .feat-card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:14px; padding:18px; transition:border-color .2s,background .2s; }
+        .feat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:32px; max-width:520px; }
+        .feat-card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:14px; padding:16px; transition:border-color .2s,background .2s; }
         .feat-card:hover { border-color:rgba(0,210,120,.3); background:rgba(0,210,120,.04); }
         .glow-btn { width:100%; padding:15px; border-radius:12px; background:#fff; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:12px; font-family:'Inter',sans-serif; font-size:15px; font-weight:700; color:#111; transition:transform .15s,box-shadow .15s; }
         .glow-btn:hover { transform:translateY(-1px); box-shadow:0 8px 32px rgba(0,210,120,.25); }
         .glow-btn:active { transform:translateY(0); }
+        .apk-btn { width:100%; padding:13px; border-radius:12px; background:transparent; border:1.5px solid rgba(0,210,120,.4); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; font-family:'Inter',sans-serif; font-size:14px; font-weight:600; color:#00d278; transition:all .15s; text-decoration:none; margin-top:10px; }
+        .apk-btn:hover { background:rgba(0,210,120,.08); border-color:#00d278; }
         @media (max-width:860px) {
           .login-root { flex-direction:column; overflow-y:auto; }
-          .hero { padding:40px 24px 28px; justify-content:flex-start; }
-          .form-col { width:100%; padding:32px 24px 56px; border-left:none; border-top:1px solid rgba(255,255,255,.06); justify-content:flex-start; }
-          .feat-grid { margin-top:24px; }
+          .hero { padding:36px 24px 24px; justify-content:flex-start; }
+          .form-col { width:100%; padding:28px 24px 52px; border-left:none; border-top:1px solid rgba(255,255,255,.06); justify-content:flex-start; }
+          .feat-grid { margin-top:20px; }
         }
-        @media (max-width:480px) {
-          .feat-grid { gap:8px; }
-          .hero { padding:28px 16px 20px; }
-          .form-col { padding:24px 16px 48px; }
+        @media (max-width:600px) {
+          .feat-grid { grid-template-columns:1fr; gap:8px; }
+          .hero { padding:24px 16px 20px; }
+          .form-col { padding:20px 16px 44px; }
+          .feat-card { padding:14px; display:flex; align-items:flex-start; gap:12px; }
+          .feat-card-icon { font-size:20px; flex-shrink:0; margin-bottom:0 !important; }
         }
       `}</style>
 
@@ -201,9 +206,11 @@ export default function LoginPage() {
               { icon:'🤖', t:'Bots y automatización',d:'API abierta para que tu bot publique, notifique y juegue.' },
             ].map(f => (
               <div key={f.t} className="feat-card">
-                <div style={{ fontSize:22, marginBottom:8 }}>{f.icon}</div>
-                <div style={{ color:'#fff', fontWeight:700, fontSize:13, marginBottom:4 }}>{f.t}</div>
-                <div style={{ color:'rgba(255,255,255,.4)', fontSize:12, lineHeight:1.5 }}>{f.d}</div>
+                <div className="feat-card-icon" style={{ fontSize:22, marginBottom:8 }}>{f.icon}</div>
+                <div>
+                  <div style={{ color:'#fff', fontWeight:700, fontSize:13, marginBottom:4 }}>{f.t}</div>
+                  <div style={{ color:'rgba(255,255,255,.4)', fontSize:12, lineHeight:1.5 }}>{f.d}</div>
+                </div>
               </div>
             ))}
           </div>
@@ -227,6 +234,19 @@ export default function LoginPage() {
             </p>
           </div>
 
+          <a className="apk-btn" href="/NexoTribu.apk" download="NexoTribu.apk">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 17V3M7 12l5 5 5-5"/><rect x="3" y="17" width="18" height="4" rx="1"/>
+            </svg>
+            Descargar para Android (.apk)
+          </a>
+
+          <div style={{ display:'flex', alignItems:'center', gap:10, margin:'14px 0' }}>
+            <div style={{ flex:1, height:1, background:'rgba(255,255,255,.08)' }} />
+            <span style={{ color:'rgba(255,255,255,.2)', fontSize:11 }}>o entrá desde el navegador</span>
+            <div style={{ flex:1, height:1, background:'rgba(255,255,255,.08)' }} />
+          </div>
+
           <button className="glow-btn" onClick={loginGoogle}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -237,7 +257,7 @@ export default function LoginPage() {
             Continuar con Google
           </button>
 
-          <div style={{ margin:'20px 0', display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ margin:'16px 0 8px', display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ flex:1, height:1, background:'rgba(255,255,255,.08)' }} />
             <span style={{ color:'rgba(255,255,255,.25)', fontSize:11 }}>inicio de sesión seguro</span>
             <div style={{ flex:1, height:1, background:'rgba(255,255,255,.08)' }} />
