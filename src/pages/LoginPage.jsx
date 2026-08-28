@@ -150,7 +150,7 @@ export default function LoginPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
         * { box-sizing:border-box; }
-        .login-root { min-height:100dvh; display:flex; background:#080d12; font-family:'Inter',sans-serif; }
+        .login-root { min-height:100dvh; display:flex; background:#080d12; font-family:'Inter',sans-serif; overflow-y:auto; }
         .hero { flex:1; display:flex; flex-direction:column; justify-content:center; padding:60px 64px; position:relative; overflow:hidden; min-width:0; }
         .form-col { width:400px; flex-shrink:0; display:flex; flex-direction:column; justify-content:center; padding:48px 40px; background:#0e1419; border-left:1px solid rgba(255,255,255,.06); }
         .feat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:32px; max-width:520px; }
@@ -162,9 +162,9 @@ export default function LoginPage() {
         .apk-btn { width:100%; padding:13px; border-radius:12px; background:transparent; border:1.5px solid rgba(0,210,120,.4); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; font-family:'Inter',sans-serif; font-size:14px; font-weight:600; color:#00d278; transition:all .15s; text-decoration:none; margin-top:10px; }
         .apk-btn:hover { background:rgba(0,210,120,.08); border-color:#00d278; }
         @media (max-width:860px) {
-          .login-root { flex-direction:column; overflow-y:auto; }
-          .hero { padding:32px 20px 20px; justify-content:flex-start; }
-          .form-col { width:100%; padding:24px 20px 48px; border-left:none; border-top:1px solid rgba(255,255,255,.06); justify-content:flex-start; }
+          .login-root { flex-direction:column; }
+          .hero { padding:32px 20px 20px; justify-content:flex-start; flex:none; }
+          .form-col { width:100%; padding:24px 20px 48px; border-left:none; border-top:1px solid rgba(255,255,255,.06); justify-content:flex-start; flex:none; }
           .feat-grid { margin-top:16px; max-width:100%; }
         }
         @media (max-width:600px) {
