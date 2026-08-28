@@ -95,14 +95,16 @@ export default function TournamentChat({ tournamentId, profile }) {
   async function handleSend() {
     const trimmed = text.trim()
     if (!trimmed || sending || !profile?.id) return
+    if (isMember === false) { alert('Primero inscribite al torneo para poder chatear.'); return }
     setSending(true)
     setText('')
-    await supabase.from('messages').insert({
+    const { error } = await supabase.from('messages').insert({
       conversation_id: tournamentId,
       sender_id: profile.id,
       content: trimmed,
       type: 'text',
     })
+    if (error) { alert(`Error al enviar: ${error.message}`); setText(trimmed) }
     setSending(false)
     inputRef.current?.focus()
   }
@@ -111,11 +113,17 @@ export default function TournamentChat({ tournamentId, profile }) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
+  if (isMember === null) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+      <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+    </div>
+  )
+
   if (isMember === false) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 32, gap: 12, textAlign: 'center' }}>
       <div style={{ fontSize: 48 }}>🔒</div>
       <div style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>Solo para participantes</div>
-      <div style={{ color: C.textDim, fontSize: 13 }}>Únete al torneo para acceder al chat grupal.</div>
+      <div style={{ color: C.textDim, fontSize: 13 }}>Inscribite al torneo para acceder al chat grupal.</div>
     </div>
   )
 
