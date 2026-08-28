@@ -384,8 +384,7 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
         </div>
       )}
 
-      {/* Botón completar con bots (solo admin) */}
-      {isAdmin && data.status === 'inscripcion' && data.max_participants && data.participant_count < data.max_participants && (
+      {onFillBots && data.status === 'inscripcion' && data.max_participants && data.participant_count < data.max_participants && (
         <button onClick={onFillBots} style={{
           width: '100%', padding: '12px 0', borderRadius: 14,
           border: `1.5px dashed ${C.border}`,
@@ -501,7 +500,7 @@ function LigaOverview({ data }) {
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function TournamentDashboard({ tournamentId, profile, isAdmin, onBack }) {
+export default function TournamentDashboard({ tournamentId, profile, isAdmin, onBack, showBotButton }) {
   const [data, setData]           = useState(null)
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
@@ -663,7 +662,7 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
                 isAdmin={isAdmin}
                 isMember={isMember}
                 onJoin={joining ? null : handleJoin}
-                onFillBots={handleFillBots}
+                onFillBots={showBotButton ? handleFillBots : null}
               />
         )}
 

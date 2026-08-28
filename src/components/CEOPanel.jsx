@@ -1653,6 +1653,7 @@ export default function CEOPanel({ community, onBack, onCommunityDeleted, onGoVi
         profile={profile}
         isAdmin={isAdmin}
         onBack={() => setViewTorneo(null)}
+        showBotButton
       />
     )
   }
