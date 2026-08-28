@@ -323,7 +323,8 @@ export const useChatStore = create((set, get) => ({
 
 
   sendMessage: async (conversationId, senderId, content, type = 'text', maxViews = null, topicId = null) => {
-    const row = { conversation_id: conversationId, sender_id: senderId, content, type }
+    const cleanConvId = typeof conversationId === 'string' ? conversationId.replace(/^"+|"+$/g, '') : conversationId
+    const row = { conversation_id: cleanConvId, sender_id: senderId, content, type }
     if (maxViews) row.max_views = maxViews
     if (topicId) row.topic_id = topicId
     const { data, error } = await supabase
