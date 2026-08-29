@@ -71,7 +71,6 @@ export default function AdminGate({ profile, children }) {
   const [passkeyId, setPasskeyId]   = useState(null)
   const [hasTOTP, setHasTOTP]       = useState(false)
   const [bioSupported, setBioSupported] = useState(false)
-  const [password, setPassword]     = useState('')
 
   // Check if session already unlocked (within TTL)
   const checkSession = useCallback(() => {
@@ -216,14 +215,16 @@ export default function AdminGate({ profile, children }) {
     setLoading(false)
   }
 
-  async function verifyPassword() {
-    if (!password) return
+  async function verifyWithGoogle() {
     setLoading(true); setError('')
     try {
-      const { data: { user }, error } = await supabase.auth.getUser()
-      if (!user?.email) throw new Error('No se pudo obtener el email')
-      const { error: signInErr } = await supabase.auth.signInWithPassword({ email: user.email, password })
-      if (signInErr) throw new Error('Contraseña incorrecta')
+      // Re-authenticate with Google — Supabase will redirect and return
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.href, queryParams: { prompt: 'select_account' } },
+      })
+      if (error) throw error
+      // After redirect returns, session is fresh → grant access
       grantAccess()
     } catch (e) { setError(e.message) }
     setLoading(false)
@@ -343,18 +344,11 @@ export default function AdminGate({ profile, children }) {
               </button>
             )}
 
-            {/* Password fallback — always available */}
+            {/* Google re-auth fallback */}
             <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <p style={{ color: C.textDim, fontSize: 12, margin: 0, textAlign: 'center' }}>O verificá con tu contraseña</p>
-              <input
-                type="password" autoComplete="current-password"
-                value={password}
-                onChange={e => { setPassword(e.target.value); setError('') }}
-                onKeyDown={e => e.key === 'Enter' && verifyPassword()}
-                style={inp} placeholder="Tu contraseña de NexoTribu"
-              />
-              <button onClick={verifyPassword} disabled={loading || !password} style={btn('#374151')}>
-                {loading ? 'Verificando...' : '🔑 Entrar con contraseña'}
+              <p style={{ color: C.textDim, fontSize: 12, margin: 0, textAlign: 'center' }}>O verificá con tu cuenta de Google</p>
+              <button onClick={verifyWithGoogle} disabled={loading} style={btn('#374151')}>
+                {loading ? 'Redirigiendo...' : '🔑 Verificar con Google'}
               </button>
             </div>
           </>
