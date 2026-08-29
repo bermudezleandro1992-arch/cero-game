@@ -271,6 +271,17 @@ export const useChatStore = create((set, get) => ({
   subscribeToConversations: (userId) => {
     const channel = supabase
       .channel(`user-convs:${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_members', filter: `user_id=eq.${userId}` }, () => {
+        get().fetchConversations(userId)
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, (payload) => {
+        const updated = payload.new
+        set(state => ({
+          conversations: state.conversations.map(c =>
+            c.id === updated.id ? { ...c, ...updated } : c
+          )
+        }))
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         const msg = payload.new
         set(state => {
