@@ -235,6 +235,7 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
   const [err,         setErr]         = useState('')
   const [upgradeReason, setUpgradeReason] = useState(null)
   const [joinAsPlayer,  setJoinAsPlayer]  = useState(false)
+  const [autoStartOnFull, setAutoStartOnFull] = useState(false)
   // Liga extras
   const [ligaJornadas,    setLigaJornadas]    = useState('')
   const [ligaAscensos,    setLigaAscensos]    = useState(false)
@@ -289,6 +290,7 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
           is_public: isPublic,
           created_by: profile.id,
           game: game || null,
+          auto_start_on_full: autoStartOnFull,
           ...(communityId ? { community_id: communityId } : {}),
           ...(type === 'liga' && ligaTemporada ? { description: `Temporada: ${ligaTemporada}` } : {}),
         })
@@ -524,6 +526,25 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
                 transition: 'left .2s', display: 'block',
               }} />
             </button>
+          </div>
+
+          {/* Auto-start on full */}
+          <div onClick={() => setAutoStartOnFull(v => !v)} style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
+            background: C.panel, borderRadius: 10, border: `1px solid ${autoStartOnFull ? '#f59e0b' : C.border}`,
+            cursor: 'pointer', userSelect: 'none',
+          }}>
+            <div style={{
+              width: 20, height: 20, borderRadius: 4, border: `2px solid ${autoStartOnFull ? '#f59e0b' : C.textDim}`,
+              background: autoStartOnFull ? '#f59e0b' : 'transparent', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {autoStartOnFull && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
+            </div>
+            <div>
+              <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>⚡ Iniciar sorteo automáticamente al completarse</div>
+              <div style={{ color: C.textDim, fontSize: 11 }}>Cuando se llenen todos los cupos, el torneo arranca solo. Si está desactivado, el organizador inicia el sorteo manualmente.</div>
+            </div>
           </div>
 
           {err && <div style={{ color: '#ef4444', fontSize: 12, fontWeight: 600 }}>{err}</div>}

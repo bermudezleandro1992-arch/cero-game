@@ -68,7 +68,7 @@ async function fetchDashboard(tournamentId) {
     .from('conversations')
     .select(`
       id, name, tournament_status, format, game, max_participants,
-      tournament_format, tournament_mode,
+      tournament_format, tournament_mode, auto_start_on_full,
       liga_tipo, liga_fase, temporada, division, group_type,
       registration_deadline, start_date, description, banner_url
     `)
@@ -542,8 +542,15 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       .insert({ conversation_id: tournamentId, user_id: profile.id })
     if (e) { alert(`Error al inscribirte: ${e.message}`); setJoining(false); return }
     setIsMember(true)
-    setData(d => d ? { ...d, participant_count: d.participant_count + 1 } : d)
+    const newCount = (data?.participant_count ?? 0) + 1
+    setData(d => d ? { ...d, participant_count: newCount } : d)
     setJoining(false)
+
+    // Auto-start si se completaron los cupos
+    if (data?.auto_start_on_full && data?.max_participants && newCount >= data.max_participants && data.status === 'inscripcion') {
+      const { error: startErr } = await supabase.rpc('start_tournament', { p_tournament_id: tournamentId })
+      if (!startErr) setData(d => d ? { ...d, status: 'en_curso' } : d)
+    }
   }
 
   async function handleFillBots() {
@@ -557,7 +564,20 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       p_slots: slots,
     })
     if (error) { alert(`Error creando bots: ${error.message}`); return }
-    setData(d => d ? { ...d, participant_count: d.max_participants } : d)
+    const newCount = data.max_participants
+    setData(d => d ? { ...d, participant_count: newCount } : d)
+
+    // Auto-start sorteo si está configurado
+    if (data.auto_start_on_full && data.status === 'inscripcion') {
+      const { error: startErr } = await supabase.rpc('start_tournament', { p_tournament_id: tournamentId })
+      if (startErr) {
+        alert(`✅ ${slots} bots agregados. Error al iniciar sorteo automático: ${startErr.message}`)
+      } else {
+        setData(d => d ? { ...d, status: 'en_curso' } : d)
+        alert(`✅ ${slots} bots agregados y sorteo iniciado automáticamente. ¡El torneo está en curso!`)
+      }
+      return
+    }
     alert(`✅ ${slots} bots agregados correctamente`)
   }
 
