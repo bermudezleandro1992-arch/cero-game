@@ -1106,7 +1106,7 @@ function ContactPickerSheet({ mode, selectedIds, onConfirm, onClose }) {
   }
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', background: C.bg }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', maxWidth: '100vw' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text, padding: 4, display: 'flex' }}>
@@ -1335,7 +1335,7 @@ function NotificacionesTab({ profile }) {
         <div style={{ margin: 16, background: '#f59e0b14', border: `1px solid #f59e0b40`, borderRadius: 12, padding: '12px 16px' }}>
           <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: 13, marginBottom: 4 }}>⚠️ Notificaciones del sistema</div>
           <div style={{ color: C.textDim, fontSize: 12, marginBottom: 10, lineHeight: 1.5 }}>Las notificaciones están desactivadas en tu navegador. Activálas para recibir alertas.</div>
-          <button onClick={() => Notification.requestPermission()} style={{ padding: '7px 14px', background: '#f59e0b', color: '#000', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+          <button onClick={() => { if (typeof Notification !== 'undefined') Notification.requestPermission().then(() => window.location.reload()) }} style={{ padding: '7px 14px', background: '#f59e0b', color: '#000', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
             Activar notificaciones
           </button>
         </div>
