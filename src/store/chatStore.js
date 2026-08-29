@@ -249,6 +249,7 @@ export const useChatStore = create((set, get) => ({
   },
 
   markAsRead: async (conversationId, userId) => {
+    conversationId = cleanUUID(conversationId)
     if (!conversationId || !userId) return
     try {
       const priv = JSON.parse(localStorage.getItem('privacySettings') || '{}')
@@ -370,6 +371,7 @@ export const useChatStore = create((set, get) => ({
   },
 
   subscribeToMessages: (conversationId) => {
+    conversationId = cleanUUID(conversationId)
     const channel = supabase
       .channel(`msgs:${conversationId}`)
       .on('postgres_changes', {
