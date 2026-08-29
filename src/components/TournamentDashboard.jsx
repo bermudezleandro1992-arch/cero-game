@@ -547,14 +547,35 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
     if (slots <= 0) return
     if (!window.confirm(`¿Agregar ${slots} bots para completar el torneo?`)) return
 
-    const { error: e1 } = await supabase.rpc('fill_tournament_bots', {
-      p_tournament_id: tournamentId,
-      p_slots: slots,
-    })
-    if (e1) { alert(`Error creando bots: ${e1.message}`); return }
+    const BOT_NAMES = ['Águila FC','Boca Juniors Bot','River Plate Bot','Bayern Bot','Real Madrid Bot','Barcelona Bot','Juventus Bot','PSG Bot','Chelsea Bot','City Bot','Liverpool Bot','Atlético Bot','Inter Bot','Milan Bot','Dortmund Bot','Porto Bot','Benfica Bot','Ajax Bot','Lyon Bot','Sevilla Bot']
+    const shortId = tournamentId.replace(/-/g, '').slice(0, 8)
 
-    setData(d => d ? { ...d, participant_count: d.max_participants } : d)
-    alert(`✅ ${slots} bots agregados correctamente`)
+    let added = 0
+    for (let i = 1; i <= slots; i++) {
+      const name = BOT_NAMES[(i - 1) % BOT_NAMES.length] + (i > BOT_NAMES.length ? ` ${Math.floor((i-1)/BOT_NAMES.length)+1}` : '')
+      const username = `bot_${shortId}_${i}`
+
+      // Upsert bot user (uses SECURITY DEFINER RPC to bypass RLS+FK)
+      const { data: botUser, error: ue } = await supabase.rpc('upsert_bot_user', {
+        p_display_name: name,
+        p_username: username,
+      })
+      if (ue || !botUser) { alert(`Error creando bot ${i}: ${ue?.message || 'sin ID'}`); break }
+
+      const { error: me } = await supabase
+        .from('conversation_members')
+        .insert({ conversation_id: tournamentId, user_id: botUser })
+        .select()
+      if (me && !me.message?.includes('duplicate')) {
+        alert(`Error agregando bot ${i}: ${me.message}`); break
+      }
+      added++
+    }
+
+    if (added > 0) {
+      setData(d => d ? { ...d, participant_count: (d.participant_count || 0) + added } : d)
+      alert(`✅ ${added} bots agregados correctamente`)
+    }
   }
 
   if (loading) return (
