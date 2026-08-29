@@ -1498,20 +1498,131 @@ const TICKET_STATUS = {
   closed:      { label: 'Cerrado',   color: '#6b7280' },
 }
 
+function TicketChat({ ticket, profile, onBack }) {
+  const [messages, setMessages] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const bottomRef = useRef(null)
+  const s = TICKET_STATUS[ticket.status] || TICKET_STATUS.open
+
+  useEffect(() => {
+    if (!ticket.conversation_id) { setLoading(false); return }
+    supabase
+      .from('messages')
+      .select('*, sender:users!messages_sender_id_fkey(id,display_name,username,avatar_url)')
+      .eq('conversation_id', ticket.conversation_id)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => { setMessages(data || []); setLoading(false) })
+
+    const ch = supabase.channel(`ticket-user-${ticket.conversation_id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${ticket.conversation_id}` }, payload => {
+        setMessages(prev => prev.find(m => m.id === payload.new.id) ? prev : [...prev, payload.new])
+      })
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [ticket.conversation_id])
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  async function sendMsg() {
+    if (!input.trim() || !ticket.conversation_id || sending) return
+    setSending(true)
+    const content = input.trim()
+    setInput('')
+    await supabase.from('messages').insert({ conversation_id: ticket.conversation_id, sender_id: profile.id, content, type: 'text' })
+    setSending(false)
+  }
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
+      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, padding: 4, display: 'flex' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{ticket.ticket_no}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: s.color, background: `${s.color}18`, borderRadius: 5, padding: '2px 8px' }}>{s.label}</span>
+          </div>
+          <div style={{ fontSize: 11, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ticket.title || ticket.category}</div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+            <div style={{ width: 20, height: 20, border: `2px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+          </div>
+        ) : !ticket.conversation_id ? (
+          <div style={{ textAlign: 'center', padding: '32px 16px', color: C.textDim, fontSize: 13 }}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>⏳</div>
+            <div style={{ fontWeight: 700, color: C.text, marginBottom: 6 }}>Ticket en espera</div>
+            Un agente revisará tu ticket y abrirá el chat a la brevedad. Podés volver acá para seguir la conversación.
+          </div>
+        ) : messages.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 16px', color: C.textDim, fontSize: 13 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
+            El chat está listo. Un agente se comunicará con vos en breve.
+          </div>
+        ) : messages.map(m => {
+          const isMe = m.sender_id === profile?.id
+          return (
+            <div key={m.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
+              <div style={{ maxWidth: '75%', background: isMe ? C.green : C.panel2, borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px', padding: '9px 13px', border: isMe ? 'none' : `1px solid ${C.border}` }}>
+                {!isMe && <div style={{ fontSize: 10, fontWeight: 700, color: C.green, marginBottom: 3 }}>{m.sender?.display_name || 'Soporte'}</div>}
+                <div style={{ fontSize: 13, color: isMe ? '#fff' : C.text, lineHeight: 1.5 }}>{m.content}</div>
+                <div style={{ fontSize: 10, color: isMe ? 'rgba(255,255,255,.6)' : C.textDim, textAlign: 'right', marginTop: 3 }}>
+                  {new Date(m.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {ticket.status !== 'closed' && ticket.conversation_id && (
+        <div style={{ padding: '10px 12px', borderTop: `1px solid ${C.border}`, background: C.panel, display: 'flex', gap: 8, flexShrink: 0 }}>
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg() } }}
+            placeholder="Escribí tu mensaje..."
+            rows={1}
+            style={{ flex: 1, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '9px 12px', color: C.text, fontSize: 13, resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }}
+          />
+          <button onClick={sendMsg} disabled={!input.trim() || sending} style={{ background: input.trim() ? C.green : C.border, border: 'none', borderRadius: 8, padding: '9px 14px', cursor: input.trim() ? 'pointer' : 'default', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+            {sending ? '…' : '↑'}
+          </button>
+        </div>
+      )}
+      {ticket.status === 'closed' && (
+        <div style={{ padding: '10px 16px', borderTop: `1px solid ${C.border}`, background: C.panel, textAlign: 'center', color: C.textDim, fontSize: 12 }}>
+          Este ticket está cerrado.
+        </div>
+      )}
+    </div>
+  )
+}
+
 function MisTickets({ profile }) {
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
+  const [openTicket, setOpenTicket] = useState(null)
 
   useEffect(() => {
     if (!profile?.id) return
     supabase
       .from('support_tickets')
-      .select('id, ticket_no, title, status, category, created_at')
+      .select('id, ticket_no, title, status, category, created_at, conversation_id')
       .eq('user_id', profile.id)
       .order('created_at', { ascending: false })
       .limit(20)
       .then(({ data }) => { setTickets(data || []); setLoading(false) })
   }, [profile?.id])
+
+  if (openTicket) return <TicketChat ticket={openTicket} profile={profile} onBack={() => setOpenTicket(null)} />
 
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
@@ -1530,7 +1641,10 @@ function MisTickets({ profile }) {
       {tickets.map((t, i) => {
         const s = TICKET_STATUS[t.status] || TICKET_STATUS.open
         return (
-          <div key={t.id} style={{ padding: '11px 16px', borderBottom: i < tickets.length - 1 ? `1px solid ${C.border}22` : 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div key={t.id} onClick={() => setOpenTicket(t)} style={{ padding: '11px 16px', borderBottom: i < tickets.length - 1 ? `1px solid ${C.border}22` : 'none', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+            onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                 <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{t.ticket_no}</span>
@@ -1538,8 +1652,11 @@ function MisTickets({ profile }) {
               </div>
               <div style={{ color: C.textDim, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title || t.category}</div>
             </div>
-            <div style={{ fontSize: 11, color: C.textDim, flexShrink: 0 }}>
-              {new Date(t.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ fontSize: 11, color: C.textDim }}>
+                {new Date(t.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
             </div>
           </div>
         )
