@@ -912,7 +912,23 @@ export default function App() {
             </div>
           </nav>
         ) : (
-        <nav className="slfa-side-nav">
+        <nav className="slfa-side-nav" style={{ overflowY: 'auto' }}>
+          {/* Admin Panel — arriba para que siempre sea visible */}
+          {['superadmin','admin'].includes(profile?.role) && (
+            <button onClick={() => { setShowProfile(false); setTab('admin'); setActiveConversation(null) }} style={{
+              width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', gap: 4, border: 'none',
+              background: tab === 'admin' ? '#ef444412' : 'none',
+              cursor: 'pointer', padding: '14px 0',
+              borderLeft: `3px solid ${tab === 'admin' ? '#ef4444' : 'transparent'}`,
+              transition: 'background .15s',
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={tab === 'admin' ? '#ef4444' : C.textDim} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <span style={{ fontSize: 10, fontWeight: tab === 'admin' ? 700 : 400, color: tab === 'admin' ? '#ef4444' : C.textDim }}>Admin</span>
+            </button>
+          )}
           {NAV.filter(n => !hiddenNavIds.includes(n.id)).map(({ id, label, icon }) => {
             const active = (id === 'ajustes' ? (!showProfile && tab === 'perfil') : !showProfile && tab === id)
             return (
