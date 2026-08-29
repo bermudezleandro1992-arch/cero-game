@@ -544,20 +544,11 @@ export default function TournamentDashboard({ tournamentId, profile, isAdmin, on
     if (slots <= 0) return
     if (!window.confirm(`¿Agregar ${slots} bots para completar el torneo?`)) return
 
-    const BOT_NAMES = ['Águila FC','Boca Juniors Bot','River Plate Bot','Bayern Bot','Real Madrid Bot','Barcelona Bot','Juventus Bot','PSG Bot','Chelsea Bot','City Bot','Liverpool Bot','Atlético Bot','Inter Bot','Milan Bot','Dortmund Bot','Porto Bot','Benfica Bot','Ajax Bot','Lyon Bot','Sevilla Bot']
-    const bots = []
-    for (let i = 0; i < slots; i++) {
-      const name = BOT_NAMES[i % BOT_NAMES.length] + (i >= BOT_NAMES.length ? ` ${Math.floor(i/BOT_NAMES.length)+1}` : '')
-      const username = `bot_${tournamentId.slice(0,8)}_${i+1}`
-      bots.push({ display_name: name, username, is_bot: true, bot_type: 'tournament_filler', role: 'user' })
-    }
-
-    const { data: created, error: e1 } = await supabase.from('users').insert(bots).select('id')
+    const { error: e1 } = await supabase.rpc('fill_tournament_bots', {
+      p_tournament_id: tournamentId,
+      p_slots: slots,
+    })
     if (e1) { alert(`Error creando bots: ${e1.message}`); return }
-
-    const members = created.map(b => ({ conversation_id: tournamentId, user_id: b.id }))
-    const { error: e2 } = await supabase.from('conversation_members').insert(members)
-    if (e2) { alert(`Error inscribiendo bots: ${e2.message}`); return }
 
     setData(d => d ? { ...d, participant_count: d.max_participants } : d)
     alert(`✅ ${slots} bots agregados correctamente`)
