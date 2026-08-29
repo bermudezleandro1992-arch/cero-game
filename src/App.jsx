@@ -503,10 +503,17 @@ export default function App() {
   const { conversations, activeConversation, setActiveConversation, fetchConversations, subscribeToConversations } = useChatStore()
   const [tab, setTab] = useState('chats')
   const [layoutSkin, setLayoutSkinState] = useState(getSkin)
+  const [hiddenNavIds, setHiddenNavIds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mm_hidden_nav') || '[]') } catch { return [] }
+  })
   useEffect(() => {
-    const h = () => setLayoutSkinState(getSkin())
+    const h = () => {
+      setLayoutSkinState(getSkin())
+      try { setHiddenNavIds(JSON.parse(localStorage.getItem('mm_hidden_nav') || '[]')) } catch {}
+    }
     window.addEventListener('skinchange', h)
-    return () => window.removeEventListener('skinchange', h)
+    window.addEventListener('navchange', h)
+    return () => { window.removeEventListener('skinchange', h); window.removeEventListener('navchange', h) }
   }, [])
   const [showProfile, setShowProfile] = useState(false)
   const [showMoreDrawer, setShowMoreDrawer] = useState(false)
@@ -750,7 +757,14 @@ export default function App() {
   const isCommunityOwner = conversations.some(c =>
     (c.group_type === 'community' || c.group_type === 'group') && c.created_by === profile?.id
   ) || ['ceo','com_starter','com_elite','superadmin','admin'].includes(profile?.role)
-  const isOrganizador = ['organizador','superadmin','admin'].includes(profile?.role)
+  const [hasOrgRole, setHasOrgRole] = useState(false)
+  useEffect(() => {
+    if (!profile?.id) return
+    supabase.from('group_roles').select('id', { count: 'exact', head: true })
+      .eq('user_id', profile.id).in('role', ['organizador','admin','owner'])
+      .then(({ count }) => setHasOrgRole((count ?? 0) > 0))
+  }, [profile?.id])
+  const isOrganizador = hasOrgRole || ['superadmin','admin'].includes(profile?.role)
   const isStaff = ['superadmin','admin','moderador'].includes(profile?.role)
 
   return (
@@ -899,7 +913,7 @@ export default function App() {
           </nav>
         ) : (
         <nav className="slfa-side-nav">
-          {NAV.map(({ id, label, icon }) => {
+          {NAV.filter(n => !hiddenNavIds.includes(n.id)).map(({ id, label, icon }) => {
             const active = (id === 'ajustes' ? (!showProfile && tab === 'perfil') : !showProfile && tab === id)
             return (
               <button key={id} onClick={() => id === 'ajustes' ? (setShowProfile(false), setTab('perfil'), setActiveConversation(null)) : (setShowProfile(false), setTab(id), id !== 'chats' && setActiveConversation(null))} style={{

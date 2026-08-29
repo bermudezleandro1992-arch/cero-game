@@ -144,6 +144,16 @@ export default function LoginPage() {
     return () => window.removeEventListener('resize', fn)
   }, [])
 
+  // Allow body scroll on login page (App sets overflow:hidden for the shell)
+  useEffect(() => {
+    document.body.classList.add('allow-scroll')
+    document.documentElement.classList.add('allow-scroll')
+    return () => {
+      document.body.classList.remove('allow-scroll')
+      document.documentElement.classList.remove('allow-scroll')
+    }
+  }, [])
+
   useEffect(() => {
     const el = tickerRef.current
     if (!el) return

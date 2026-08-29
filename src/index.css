@@ -30,3 +30,11 @@ html, body, #root {
 .msg-in {
   animation: messageIn 0.2s ease-out;
 }
+
+html.allow-scroll,
+html.allow-scroll body,
+html.allow-scroll #root {
+  height: auto;
+  min-height: 100%;
+  overflow-y: auto;
+}

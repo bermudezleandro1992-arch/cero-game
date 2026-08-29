@@ -1825,6 +1825,9 @@ export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [skin, setSkinState] = useState(getSkinLocal)
+  const [hiddenNav, setHiddenNav] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mm_hidden_nav') || '[]') } catch { return [] }
+  })
   const fileRef = useRef()
 
   useEffect(() => {
@@ -1832,6 +1835,15 @@ export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport
     window.addEventListener('skinchange', h)
     return () => window.removeEventListener('skinchange', h)
   }, [])
+
+  function toggleNavIcon(id) {
+    setHiddenNav(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      localStorage.setItem('mm_hidden_nav', JSON.stringify(next))
+      window.dispatchEvent(new Event('navchange'))
+      return next
+    })
+  }
 
   useEffect(() => {
     if (!profile) return
@@ -2069,6 +2081,38 @@ export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport
                     </div>
                     {active && !locked && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
                     {locked && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Ocultar iconos del menú lateral */}
+            <div style={{ marginTop: 28 }}>
+              <div style={{ color: C.textDim, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Iconos del menú lateral</div>
+              <p style={{ color: C.textDim, fontSize: 12, margin: '0 0 14px', lineHeight: 1.5 }}>Ocultá los iconos que no uses. Siempre podés volver a activarlos.</p>
+              {[
+                { id: 'inicio', label: 'Inicio', emoji: '🏠' },
+                { id: 'comunidades', label: 'Comunidades', emoji: '🌐' },
+                { id: 'explorar', label: 'Explorar', emoji: '🔍' },
+                { id: 'contactos', label: 'Contactos', emoji: '👥' },
+                { id: 'torneos', label: 'Torneos', emoji: '🏆' },
+                { id: 'anuncios', label: 'Anuncios', emoji: '📢' },
+                { id: 'ranking', label: 'Ranking', emoji: '📊' },
+              ].map(item => {
+                const hidden = hiddenNav.includes(item.id)
+                return (
+                  <button key={item.id} onClick={() => toggleNavIcon(item.id)} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+                    background: hidden ? C.panel2 : C.panel,
+                    border: `1px solid ${hidden ? C.border : C.green + '44'}`,
+                    borderRadius: 12, cursor: 'pointer', textAlign: 'left', width: '100%',
+                    marginBottom: 8, opacity: hidden ? 0.5 : 1,
+                  }}>
+                    <span style={{ fontSize: 20, width: 28, textAlign: 'center' }}>{item.emoji}</span>
+                    <span style={{ flex: 1, color: C.text, fontSize: 14, fontWeight: 600 }}>{item.label}</span>
+                    <span style={{ fontSize: 12, color: hidden ? C.textDim : C.green, fontWeight: 700 }}>
+                      {hidden ? 'Oculto' : 'Visible'}
+                    </span>
                   </button>
                 )
               })}
