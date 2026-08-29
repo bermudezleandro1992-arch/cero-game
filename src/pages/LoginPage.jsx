@@ -1,5 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { Capacitor } from '@capacitor/core'
+
+const APK_URL = 'https://drive.google.com/file/d/1WvjWDxj3Dl-bkr7_YkQeJhRCEe5o2xN7/view?usp=drive_link'
+const GREEN = '#00d278'
 
 const TERMINOS = `
 **1. Quiénes somos**
@@ -89,43 +93,44 @@ function LegalModal({ initialTab, onClose }) {
       if (block.startsWith('**')) {
         const [h, ...rest] = block.split('\n')
         return (
-          <div key={i} style={{ marginBottom:20 }}>
-            <div style={{ color:'#00d278', fontSize:15, fontWeight:700, marginBottom:8, borderLeft:'3px solid #00d278', paddingLeft:12 }}>{h.replace(/\*\*/g,'')}</div>
-            {rest.map((line, j) => <p key={j} style={{ color:'rgba(255,255,255,.6)', fontSize:14, margin:'0 0 6px', lineHeight:1.7, paddingLeft:15 }}>{line}</p>)}
+          <div key={i} style={{ marginBottom: 20 }}>
+            <div style={{ color: GREEN, fontSize: 15, fontWeight: 700, marginBottom: 8, borderLeft: `3px solid ${GREEN}`, paddingLeft: 12 }}>
+              {h.replace(/\*\*/g, '')}
+            </div>
+            {rest.map((line, j) => (
+              <p key={j} style={{ color: 'rgba(255,255,255,.6)', fontSize: 14, margin: '0 0 6px', lineHeight: 1.7, paddingLeft: 15 }}>{line}</p>
+            ))}
           </div>
         )
       }
-      return <p key={i} style={{ color:'rgba(255,255,255,.6)', fontSize:14, margin:'0 0 12px', lineHeight:1.7 }}>{block}</p>
+      return <p key={i} style={{ color: 'rgba(255,255,255,.6)', fontSize: 14, margin: '0 0 12px', lineHeight: 1.7 }}>{block}</p>
     })
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, zIndex:200, background:'#080d12', overflowY:'auto', padding:'0 0 40px' }}>
-      {/* Header */}
-      <div style={{ position:'sticky', top:0, background:'#080d12', borderBottom:'1px solid rgba(255,255,255,.08)', padding:'12px 20px', display:'flex', alignItems:'center', gap:12, zIndex:1 }}>
-        <button onClick={onClose} style={{ background:'rgba(255,255,255,.08)', border:'none', borderRadius:8, padding:'6px 14px', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', flexShrink:0 }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: '#080d12', overflowY: 'auto', padding: '0 0 40px' }}>
+      <div style={{ position: 'sticky', top: 0, background: '#080d12', borderBottom: '1px solid rgba(255,255,255,.08)', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12, zIndex: 1 }}>
+        <button onClick={onClose} style={{ background: 'rgba(255,255,255,.08)', border: 'none', borderRadius: 8, padding: '6px 14px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
           ← Volver
         </button>
-        {/* Tabs */}
-        <div style={{ display:'flex', gap:4, background:'rgba(255,255,255,.05)', borderRadius:8, padding:3 }}>
-          {[['terminos','Términos de Uso'],['privacidad','Política de Privacidad']].map(([id, label]) => (
+        <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,.05)', borderRadius: 8, padding: 3 }}>
+          {[['terminos', 'Términos de Uso'], ['privacidad', 'Política de Privacidad']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={{
-              background: tab === id ? '#00d278' : 'transparent',
-              border:'none', borderRadius:6, padding:'5px 12px',
+              background: tab === id ? GREEN : 'transparent',
+              border: 'none', borderRadius: 6, padding: '5px 12px',
               color: tab === id ? '#fff' : 'rgba(255,255,255,.4)',
-              fontSize:12, fontWeight:600, cursor:'pointer', transition:'all .15s',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all .15s',
             }}>{label}</button>
           ))}
         </div>
       </div>
-      {/* Content */}
-      <div style={{ maxWidth:640, margin:'0 auto', padding:'28px 20px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:24 }}>
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: '28px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
           <img src="/logo.svg" alt="NexoTribu" width={28} height={28} />
-          <span style={{ color:'rgba(255,255,255,.4)', fontSize:12 }}>Última actualización: agosto de 2026</span>
+          <span style={{ color: 'rgba(255,255,255,.4)', fontSize: 12 }}>Última actualización: agosto de 2026</span>
         </div>
         {renderContent(content)}
-        <div style={{ marginTop:40, paddingTop:20, borderTop:'1px solid rgba(255,255,255,.08)', color:'rgba(255,255,255,.2)', fontSize:12, textAlign:'center' }}>
+        <div style={{ marginTop: 40, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,.08)', color: 'rgba(255,255,255,.2)', fontSize: 12, textAlign: 'center' }}>
           © 2026 NexoTribu. Todos los derechos reservados.
         </div>
       </div>
@@ -133,15 +138,27 @@ function LegalModal({ initialTab, onClose }) {
   )
 }
 
+const TICKER_TEXT = 'Plataforma en desarrollo activo  ·  Registrate gratis y sé parte desde el inicio  ·  NexoTribu  ·  '
+
 export default function LoginPage() {
-  const [modal, setModal] = useState(null) // 'terminos' | 'privacidad' | null
+  const isNative = Capacitor.isNativePlatform()
+  const [modal, setModal] = useState(null)
+  const tickerRef = useRef(null)
 
-  useState(() => {
-    document.body.classList.add('allow-scroll')
-    return () => document.body.classList.remove('allow-scroll')
-  })
-
-  if (modal) return <LegalModal initialTab={modal} onClose={() => setModal(null)} />
+  useEffect(() => {
+    const el = tickerRef.current
+    if (!el) return
+    let pos = 0
+    let raf
+    const animate = () => {
+      pos -= 0.5
+      if (pos <= -(el.scrollWidth / 2)) pos = 0
+      el.style.transform = `translateX(${pos}px)`
+      raf = requestAnimationFrame(animate)
+    }
+    raf = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   async function loginGoogle() {
     await supabase.auth.signInWithOAuth({
@@ -150,152 +167,130 @@ export default function LoginPage() {
     })
   }
 
+  if (modal) return <LegalModal initialTab={modal} onClose={() => setModal(null)} />
+
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
-        html, body { margin:0; padding:0; background:#080d12; }
-        * { box-sizing:border-box; }
-        .login-root { display:flex; background:#080d12; font-family:'Inter',sans-serif; }
-        .hero { flex:1; display:flex; flex-direction:column; justify-content:center; padding:60px 64px; position:relative; overflow:hidden; min-width:0; min-height:100dvh; }
-        .form-col { width:400px; flex-shrink:0; display:flex; flex-direction:column; justify-content:center; padding:48px 40px; background:#0e1419; border-left:1px solid rgba(255,255,255,.06); min-height:100dvh; }
-        .feat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:32px; max-width:520px; }
-        .feat-card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:14px; padding:16px; transition:border-color .2s,background .2s; }
-        .feat-card:hover { border-color:rgba(0,210,120,.3); background:rgba(0,210,120,.04); }
-        .glow-btn { width:100%; padding:15px; border-radius:12px; background:#fff; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:12px; font-family:'Inter',sans-serif; font-size:15px; font-weight:700; color:#111; transition:transform .15s,box-shadow .15s; }
-        .glow-btn:hover { transform:translateY(-1px); box-shadow:0 8px 32px rgba(0,210,120,.25); }
-        .glow-btn:active { transform:translateY(0); }
-        .apk-btn { width:100%; padding:13px; border-radius:12px; background:transparent; border:1.5px solid rgba(0,210,120,.4); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; font-family:'Inter',sans-serif; font-size:14px; font-weight:600; color:#00d278; transition:all .15s; text-decoration:none; margin-top:10px; }
-        .apk-btn:hover { background:rgba(0,210,120,.08); border-color:#00d278; }
-        @media (max-width:860px) {
-          .login-root { flex-direction:column; }
-          .hero { min-height:auto; padding:32px 20px 24px; justify-content:flex-start; }
-          .form-col { width:100%; min-height:auto; padding:24px 20px 52px; border-left:none; border-top:1px solid rgba(255,255,255,.06); justify-content:flex-start; }
-          .feat-grid { margin-top:16px; max-width:100%; }
-        }
-        @media (max-width:600px) {
-          .feat-grid { grid-template-columns:1fr 1fr; gap:8px; }
-          .hero { padding:20px 16px 20px; }
-          .form-col { padding:20px 16px 44px; }
-          .feat-card { padding:12px; }
-          .glow-btn { padding:14px; font-size:14px; }
-          .apk-btn { padding:12px; font-size:13px; }
-        }
-      `}</style>
+    <div style={{ minHeight: '100dvh', background: '#080d12', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
-      <div className="login-root">
-        {/* ── HERO ── */}
-        <div className="hero">
-          <div style={{ position:'absolute', top:-120, left:-80, width:500, height:500, borderRadius:'50%', background:'radial-gradient(circle,rgba(0,210,120,.07) 0%,transparent 70%)', pointerEvents:'none' }} />
-          <div style={{ position:'absolute', bottom:-80, right:-40, width:360, height:360, borderRadius:'50%', background:'radial-gradient(circle,rgba(0,150,255,.05) 0%,transparent 70%)', pointerEvents:'none' }} />
+      {/* ── HERO ── */}
+      <div style={{ width: '100%', maxWidth: 520, padding: '44px 20px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
-          <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:'clamp(20px,4vw,48px)' }}>
-            <img src="/logo.svg" alt="NexoTribu" width={48} height={48} />
-            <div>
-              <div style={{ fontFamily:'Rajdhani,sans-serif', color:'#fff', fontWeight:700, fontSize:22, letterSpacing:'.5px' }}>NexoTribu</div>
-              <div style={{ color:'rgba(255,255,255,.35)', fontSize:10, letterSpacing:'2.5px', textTransform:'uppercase' }}>COMPETÍ · CONECTÁ · GANÁ</div>
-            </div>
-          </div>
-
-          <h1 style={{ fontFamily:'Rajdhani,sans-serif', color:'#fff', fontSize:'clamp(38px,5.5vw,68px)', fontWeight:700, lineHeight:1.0, margin:'0 0 20px', maxWidth:560, letterSpacing:'-0.5px', textWrap:'balance' }}>
-            Tu comunidad gamer,<br />
-            <span style={{ color:'#00d278', fontWeight:700 }}>organizada de verdad.</span>
-          </h1>
-          <p style={{ color:'rgba(255,255,255,.5)', fontSize:16, margin:0, maxWidth:420, lineHeight:1.7 }}>
-            Mensajería, torneos, comunidades y bots. Todo lo que tu tribu necesita para organizarse y competir.
-          </p>
-
-          <div className="feat-grid">
-            {[
-              { icon:'💬', t:'Chats que funcionan',  d:'Privados, grupales y de comunidad. Sin límite de miembros.' },
-              { icon:'🏆', t:'Torneos integrados',   d:'Creá, inscribite y seguí los resultados desde la app.' },
-              { icon:'🌐', t:'Comunidades propias',  d:'Con roles, canales y control total para el admin.' },
-              { icon:'🤖', t:'Bots y automatización',d:'API abierta para que tu bot publique, notifique y juegue.' },
-            ].map(f => (
-              <div key={f.t} className="feat-card">
-                <div className="feat-card-icon" style={{ fontSize:22, marginBottom:8 }}>{f.icon}</div>
-                <div>
-                  <div style={{ color:'#fff', fontWeight:700, fontSize:13, marginBottom:4 }}>{f.t}</div>
-                  <div style={{ color:'rgba(255,255,255,.4)', fontSize:12, lineHeight:1.5 }}>{f.d}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ marginTop:'clamp(16px,3vw,36px)', display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ width:8, height:8, borderRadius:'50%', background:'#00d278', boxShadow:'0 0 8px #00d278' }} />
-            <span style={{ color:'rgba(255,255,255,.4)', fontSize:12 }}>
-              Plataforma en desarrollo activo · <span style={{ color:'rgba(255,255,255,.6)', fontWeight:600 }}>Registrate gratis y sé parte desde el inicio</span>
-            </span>
-          </div>
+        <div style={{ marginBottom: 14 }}>
+          <svg width="76" height="76" viewBox="0 0 80 80" fill="none">
+            <polygon points="40,4 74,22 74,58 40,76 6,58 6,22" fill={`${GREEN}20`} stroke={GREEN} strokeWidth="1.5" />
+            <text x="40" y="50" textAnchor="middle" fontSize="30" fontWeight="900" fill={GREEN} fontFamily="system-ui,sans-serif">N</text>
+          </svg>
         </div>
 
-        {/* ── FORM ── */}
-        <div className="form-col">
-          <div style={{ marginBottom:32 }}>
-            <h2 style={{ fontFamily:'Rajdhani,sans-serif', color:'#fff', fontSize:26, fontWeight:700, margin:'0 0 6px' }}>
-              Ingresá a NexoTribu
-            </h2>
-            <p style={{ color:'rgba(255,255,255,.4)', fontSize:13, margin:0 }}>
-              Usá tu cuenta de Google para entrar o registrarte.
-            </p>
-          </div>
+        <h1 style={{ color: '#fff', fontWeight: 900, fontSize: 30, margin: '0 0 4px', letterSpacing: '-0.5px', lineHeight: 1.1 }}>NexoTribu</h1>
+        <p style={{ color: 'rgba(255,255,255,.35)', fontSize: 11, margin: '0 0 22px', letterSpacing: '2.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+          COMPETÍ · CONECTÁ · GANÁ
+        </p>
 
-          <a className="apk-btn" href="https://drive.google.com/file/d/1WvjWDxj3Dl-bkr7_YkQeJhRCEe5o2xN7/view" target="_blank" rel="noreferrer">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 17V3M7 12l5 5 5-5"/><rect x="3" y="17" width="18" height="4" rx="1"/>
-            </svg>
-            Descargar para Android (.apk)
-          </a>
+        <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 28, textAlign: 'center', margin: '0 0 10px', lineHeight: 1.25, letterSpacing: '-0.5px' }}>
+          Tu comunidad gamer,{' '}
+          <span style={{ color: GREEN }}>organizada de verdad.</span>
+        </h2>
+        <p style={{ color: 'rgba(255,255,255,.45)', fontSize: 14, textAlign: 'center', margin: '0 0 28px', lineHeight: 1.65, maxWidth: 360 }}>
+          Mensajería, torneos, comunidades y bots. Todo lo que tu tribu necesita para organizarse y competir.
+        </p>
 
-          <div style={{ display:'flex', alignItems:'center', gap:10, margin:'14px 0' }}>
-            <div style={{ flex:1, height:1, background:'rgba(255,255,255,.08)' }} />
-            <span style={{ color:'rgba(255,255,255,.2)', fontSize:11 }}>o entrá desde el navegador</span>
-            <div style={{ flex:1, height:1, background:'rgba(255,255,255,.08)' }} />
-          </div>
-
-          <button className="glow-btn" onClick={loginGoogle}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            Continuar con Google
-          </button>
-
-          <div style={{ margin:'16px 0 8px', display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ flex:1, height:1, background:'rgba(255,255,255,.08)' }} />
-            <span style={{ color:'rgba(255,255,255,.25)', fontSize:11 }}>inicio de sesión seguro</span>
-            <div style={{ flex:1, height:1, background:'rgba(255,255,255,.08)' }} />
-          </div>
-
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {[
-              { icon:'🔒', t:'Acceso seguro con Google',  d:'Sin contraseñas que recordar.' },
-              { icon:'🔞', t:'Solo para mayores de 18',   d:'Verificamos tu edad al registrarte.' },
-              { icon:'🏆', t:'Torneos y comunidades',     d:'Organizá, competí y crecé con tu tribu.' },
-            ].map(b => (
-              <div key={b.t} style={{ display:'flex', alignItems:'center', gap:12 }}>
-                <span style={{ fontSize:18, flexShrink:0 }}>{b.icon}</span>
-                <div>
-                  <div style={{ color:'rgba(255,255,255,.7)', fontSize:12, fontWeight:600 }}>{b.t}</div>
-                  <div style={{ color:'rgba(255,255,255,.3)', fontSize:11 }}>{b.d}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ marginTop:32, display:'flex', justifyContent:'center', gap:20 }}>
-            <button type="button" onClick={() => setModal('terminos')} style={{ background:'none', border:'none', padding:0, color:'rgba(255,255,255,.3)', fontSize:11, cursor:'pointer', fontFamily:'inherit', textDecoration:'underline' }}>
-              Términos de Uso
-            </button>
-            <button type="button" onClick={() => setModal('privacidad')} style={{ background:'none', border:'none', padding:0, color:'rgba(255,255,255,.3)', fontSize:11, cursor:'pointer', fontFamily:'inherit', textDecoration:'underline' }}>
-              Política de Privacidad
-            </button>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', marginBottom: 28 }}>
+          {[
+            { icon: '💬', t: 'Chats que funcionan', d: 'Privados, grupales y de comunidad.' },
+            { icon: '🏆', t: 'Torneos integrados', d: 'Creá, inscribite y seguí resultados.' },
+            { icon: '🌐', t: 'Comunidades propias', d: 'Con roles, canales y control total.' },
+            { icon: '🤖', t: 'Bots y automatización', d: 'API abierta para publicar y notificar.' },
+          ].map(f => (
+            <div key={f.t} style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 14, padding: '14px 12px' }}>
+              <div style={{ fontSize: 22, marginBottom: 8 }}>{f.icon}</div>
+              <div style={{ color: '#fff', fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{f.t}</div>
+              <div style={{ color: 'rgba(255,255,255,.4)', fontSize: 11, lineHeight: 1.5 }}>{f.d}</div>
+            </div>
+          ))}
         </div>
       </div>
-    </>
+
+      {/* ── TICKER ── */}
+      <div style={{ width: '100%', overflow: 'hidden', background: `${GREEN}12`, borderTop: `1px solid ${GREEN}30`, borderBottom: `1px solid ${GREEN}30`, padding: '8px 0', marginBottom: 36 }}>
+        <div ref={tickerRef} style={{ display: 'flex', whiteSpace: 'nowrap', willChange: 'transform' }}>
+          {[...Array(6)].map((_, i) => (
+            <span key={i} style={{ color: GREEN, fontSize: 12, fontWeight: 600, letterSpacing: '.5px' }}>{TICKER_TEXT}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* ── LOGIN ── */}
+      <div style={{ width: '100%', maxWidth: 400, padding: '0 20px 52px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+
+        <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 24, margin: '0 0 8px', textAlign: 'center' }}>
+          Ingresá a NexoTribu
+        </h2>
+        <p style={{ color: 'rgba(255,255,255,.4)', fontSize: 13, textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
+          Usá tu cuenta de Google para entrar o registrarte.
+        </p>
+
+        {!isNative && (
+          <a href={APK_URL} target="_blank" rel="noreferrer" style={{
+            width: '100%', padding: '14px 16px', borderRadius: 13,
+            background: GREEN, cursor: 'pointer',
+            color: '#fff', fontSize: 15, fontWeight: 800,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            boxShadow: `0 4px 20px ${GREEN}55`, marginBottom: 18,
+            textDecoration: 'none', boxSizing: 'border-box',
+          }}>
+            <span style={{ fontSize: 18 }}>📱</span>
+            Descargar para Android (.apk)
+          </a>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', marginBottom: 18 }}>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
+          <span style={{ color: 'rgba(255,255,255,.25)', fontSize: 11, whiteSpace: 'nowrap' }}>o entrá desde el navegador</span>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
+        </div>
+
+        <button onClick={loginGoogle} style={{
+          width: '100%', padding: '13px 16px', borderRadius: 13,
+          background: '#fff', border: '1px solid #ddd',
+          color: '#333', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          marginBottom: 24, boxSizing: 'border-box',
+        }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Continuar con Google
+        </button>
+
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
+          {[
+            { icon: '🔒', t: 'Acceso seguro con Google', d: 'Sin contraseñas que recordar.' },
+            { icon: '🔞', t: 'Solo para mayores de 18', d: 'Verificamos tu edad al registrarte.' },
+            { icon: '🏆', t: 'Torneos y comunidades', d: 'Organizá, competí y crecé con tu tribu.' },
+          ].map(b => (
+            <div key={b.t} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 20, width: 28, textAlign: 'center', flexShrink: 0 }}>{b.icon}</span>
+              <div>
+                <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 12, fontWeight: 600 }}>{b.t}</div>
+                <div style={{ color: 'rgba(255,255,255,.3)', fontSize: 11 }}>{b.d}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
+          <button onClick={() => setModal('terminos')} style={{ background: 'none', border: 'none', padding: 0, color: 'rgba(255,255,255,.3)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+            Términos de Uso
+          </button>
+          <button onClick={() => setModal('privacidad')} style={{ background: 'none', border: 'none', padding: 0, color: 'rgba(255,255,255,.3)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+            Política de Privacidad
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
