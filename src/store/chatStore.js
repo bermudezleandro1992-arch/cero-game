@@ -492,7 +492,7 @@ export const useChatStore = create((set, get) => ({
       { conversation_id: conv.id, user_id: otherUserId },
     ])
 
-    return conv.id
+    return cleanUUID(conv.id)
   },
 
   deleteMessage: async (messageId, conversationId, senderRole) => {
