@@ -137,7 +137,10 @@ function TorneoCard({ torneo, myId, onVer, onDelete }) {
           <span style={{ color: C.textDim, fontSize: 11 }}>
             👥 {torneo.participant_count} / {torneo.max_participants || '∞'} jugadores
           </span>
-          {isCreator && <span style={{ color: C.green, fontSize: 10, fontWeight: 700 }}>Creador</span>}
+          {torneo._role === 'owner' || isCreator
+            ? <span style={{ color: '#f59e0b', fontSize: 10, fontWeight: 700 }}>🛡 Organizo</span>
+            : <span style={{ color: C.green, fontSize: 10, fontWeight: 700 }}>✅ Participo</span>
+          }
         </div>
         {pct !== null && (
           <div style={{ height: 3, background: C.border, borderRadius: 2 }}>
@@ -231,6 +234,7 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
   const [busy,        setBusy]        = useState(false)
   const [err,         setErr]         = useState('')
   const [upgradeReason, setUpgradeReason] = useState(null)
+  const [joinAsPlayer,  setJoinAsPlayer]  = useState(false)
   // Liga extras
   const [ligaJornadas,    setLigaJornadas]    = useState('')
   const [ligaAscensos,    setLigaAscensos]    = useState(false)
@@ -292,11 +296,14 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
         .single()
       if (convErr) throw convErr
 
-      await supabase.from('conversation_members').insert({
-        conversation_id: conv.id,
-        user_id: profile.id,
-        role: 'owner',
-      })
+      // Insert creator as owner — only if they want to play as participant
+      if (joinAsPlayer) {
+        await supabase.from('conversation_members').insert({
+          conversation_id: conv.id,
+          user_id: profile.id,
+          role: 'owner',
+        })
+      }
 
       sub.refresh()
       onCreated(conv.id)
@@ -520,6 +527,25 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
           </div>
 
           {err && <div style={{ color: '#ef4444', fontSize: 12, fontWeight: 600 }}>{err}</div>}
+
+          {/* Join as player option */}
+          <div onClick={() => setJoinAsPlayer(v => !v)} style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
+            background: C.panel, borderRadius: 10, border: `1px solid ${joinAsPlayer ? C.green : C.border}`,
+            cursor: 'pointer', userSelect: 'none',
+          }}>
+            <div style={{
+              width: 20, height: 20, borderRadius: 4, border: `2px solid ${joinAsPlayer ? C.green : C.textDim}`,
+              background: joinAsPlayer ? C.green : 'transparent', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {joinAsPlayer && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
+            </div>
+            <div>
+              <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>Participar como jugador</div>
+              <div style={{ color: C.textDim, fontSize: 11 }}>Te agregás como participante del torneo</div>
+            </div>
+          </div>
         </div>
 
         {/* Footer */}
@@ -596,15 +622,16 @@ export default function TorneosPage({ onNavigate }) {
       .eq('created_by', profile.id)
       .order('created_at', { ascending: false })
 
-    // Query 2: tournament IDs the user is a member of (but didn't create)
+    // Query 2: all tournament IDs the user is a member of
     const { data: memberRows } = await supabase
       .from('conversation_members')
-      .select('conversation_id')
+      .select('conversation_id, role')
       .eq('user_id', profile.id)
 
-    const memberTournamentIds = (memberRows || []).map(r => r.conversation_id)
     const createdIds = new Set((createdRows || []).map(r => r.id))
-    const joinedIds = memberTournamentIds.filter(id => !createdIds.has(id))
+    const memberMap = {}
+    ;(memberRows || []).forEach(r => { memberMap[r.conversation_id] = r.role })
+    const joinedIds = Object.keys(memberMap).filter(id => !createdIds.has(id))
 
     let joinedRows = []
     if (joinedIds.length) {
@@ -617,7 +644,11 @@ export default function TorneosPage({ onNavigate }) {
       joinedRows = data || []
     }
 
-    const allRows = [...(createdRows || []), ...joinedRows]
+    // Merge: created (as organizer) + joined (as participant)
+    const allRows = [
+      ...(createdRows || []).map(r => ({ ...r, _role: memberMap[r.id] || 'owner' })),
+      ...joinedRows.map(r => ({ ...r, _role: memberMap[r.id] || 'member' })),
+    ]
     if (!allRows.length) { setTorneos([]); setLoading(false); return }
 
     const torneoRows = allRows
@@ -639,6 +670,16 @@ export default function TorneosPage({ onNavigate }) {
   }, [profile?.id])
 
   useEffect(() => { load() }, [load])
+
+  // Realtime: reload when conversations or members change
+  useEffect(() => {
+    if (!profile?.id) return
+    const ch = supabase.channel('torneos-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_members' }, load)
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [profile?.id, load])
 
   async function handleDelete(torneo) {
     // Delete members first, then the conversation
