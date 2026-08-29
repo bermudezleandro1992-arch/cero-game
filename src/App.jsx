@@ -523,6 +523,13 @@ export default function App() {
     return localStorage.getItem('mm_pending_invite') || null
   })
   usePresence(user?.id)
+  const [hasOrgRole, setHasOrgRole] = useState(false)
+  useEffect(() => {
+    if (!profile?.id) return
+    supabase.from('group_roles').select('id', { count: 'exact', head: true })
+      .eq('user_id', profile.id).in('role', ['organizador','admin','owner'])
+      .then(({ count }) => setHasOrgRole((count ?? 0) > 0))
+  }, [profile?.id])
 
   // Fix keyboard overlap — shrink root height when keyboard opens (iOS + Android)
   useEffect(() => {
@@ -757,13 +764,6 @@ export default function App() {
   const isCommunityOwner = conversations.some(c =>
     (c.group_type === 'community' || c.group_type === 'group') && c.created_by === profile?.id
   ) || ['ceo','com_starter','com_elite','superadmin','admin'].includes(profile?.role)
-  const [hasOrgRole, setHasOrgRole] = useState(false)
-  useEffect(() => {
-    if (!profile?.id) return
-    supabase.from('group_roles').select('id', { count: 'exact', head: true })
-      .eq('user_id', profile.id).in('role', ['organizador','admin','owner'])
-      .then(({ count }) => setHasOrgRole((count ?? 0) > 0))
-  }, [profile?.id])
   const isOrganizador = hasOrgRole || ['superadmin','admin'].includes(profile?.role)
   const isStaff = ['superadmin','admin','moderador'].includes(profile?.role)
 
