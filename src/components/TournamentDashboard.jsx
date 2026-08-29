@@ -500,7 +500,12 @@ function LigaOverview({ data }) {
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-const cleanUUID = id => id?.match?.(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? id
+const cleanUUID = id => {
+  if (!id) return id
+  const s = String(id)
+  const m = s.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+  return m ? m[0] : s.replace(/[^0-9a-f-]/gi, '').slice(0, 36)
+}
 
 export default function TournamentDashboard({ tournamentId: rawTournamentId, profile, isAdmin, onBack, showBotButton }) {
   const tournamentId = cleanUUID(rawTournamentId)
