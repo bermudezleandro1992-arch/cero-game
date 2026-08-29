@@ -28,9 +28,11 @@ function formatTime(ts) {
   const d = new Date(normalizeTs(ts)), now = new Date()
   if (d.toDateString() === now.toDateString())
     return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-  const y = new Date(now); y.setDate(y.getDate() - 1)
-  if (d.toDateString() === y.toDateString()) return 'Ayer'
-  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+  const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1)
+  if (d.toDateString() === yesterday.toDateString()) return 'Ayer'
+  const diffDays = Math.floor((now - d) / 86400000)
+  if (diffDays < 7) return d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '')
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
 // ── Avatar ────────────────────────────────────────────────────────────────────

@@ -693,6 +693,169 @@ const ROLES_COMMUNITY = [
   { id: 'owner',       label: 'Dueño' },
 ]
 
+const ROLE_HIERARCHY = [
+  {
+    id: 'owner',
+    label: 'Dueño / CEO',
+    color: '#f59e0b',
+    icon: '👑',
+    perms: ['Panel CEO completo', 'Crear torneos ilimitados', 'Gestionar admins', 'Eliminar comunidad', 'Editar configuración', 'Ver estadísticas', 'Expulsar cualquier miembro'],
+  },
+  {
+    id: 'admin',
+    label: 'Admin',
+    color: '#8b5cf6',
+    icon: '⭐',
+    perms: ['Panel Organizador', 'Crear torneos', 'Gestionar partidos', 'Anuncios', 'Moderar disputas', 'Invitar miembros', 'Expulsar miembros'],
+  },
+  {
+    id: 'organizador',
+    label: 'Organizador',
+    color: '#22c55e',
+    icon: '🎯',
+    perms: ['Crear torneos', 'Gestionar partidos propios', 'Registrar resultados', 'Ver estadísticas del torneo'],
+  },
+  {
+    id: 'moderador',
+    label: 'Moderador',
+    color: '#3b82f6',
+    icon: '🛡️',
+    perms: ['Moderar chat', 'Eliminar mensajes', 'Silenciar miembros', 'Ver reportes'],
+  },
+  {
+    id: 'member',
+    label: 'Miembro',
+    color: '#6b7280',
+    icon: '👤',
+    perms: ['Participar en torneos', 'Enviar mensajes', 'Ver anuncios', 'Acceso a canales públicos'],
+  },
+]
+
+function RolesTab({ communityId, profile, toast }) {
+  const [members, setMembers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState(null) // role id being viewed
+  const [assigning, setAssigning] = useState(null)
+  const [search, setSearch] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('conversation_members')
+      .select('user_id, role, joined_at, users(id, display_name, avatar_url, username)')
+      .eq('conversation_id', communityId)
+    setMembers(data || [])
+    setLoading(false)
+  }, [communityId])
+
+  useEffect(() => { load() }, [load])
+
+  async function changeRole(userId, newRole) {
+    setAssigning(userId)
+    const { error } = await supabase
+      .from('conversation_members')
+      .update({ role: newRole })
+      .eq('conversation_id', communityId)
+      .eq('user_id', userId)
+    setAssigning(null)
+    if (error) toast('Error: ' + error.message, 'error')
+    else { toast('Rol actualizado ✓'); load() }
+  }
+
+  const roleMembers = selected
+    ? members.filter(m => (m.role || 'member') === selected)
+    : members
+
+  const filtered = roleMembers.filter(m =>
+    !search || m.users?.display_name?.toLowerCase().includes(search.toLowerCase()) || m.users?.username?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
+      {/* Role cards */}
+      <div style={{ padding: '12px 16px 8px', borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ color: C.textDim, fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>Jerarquía de roles</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {ROLE_HIERARCHY.map(r => {
+            const count = members.filter(m => (m.role || 'member') === r.id).length
+            const isSelected = selected === r.id
+            return (
+              <button key={r.id} onClick={() => setSelected(isSelected ? null : r.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                background: isSelected ? `${r.color}18` : C.panel,
+                border: `1px solid ${isSelected ? r.color : C.border}`,
+                borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+              }}>
+                <span style={{ fontSize: 18 }}>{r.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: r.color, fontWeight: 700, fontSize: 13 }}>{r.label}</div>
+                  <div style={{ color: C.textDim, fontSize: 10, marginTop: 1 }}>{r.perms.slice(0, 2).join(' · ')}{r.perms.length > 2 ? ' · ...' : ''}</div>
+                </div>
+                <div style={{ color: C.textDim, fontSize: 11, fontWeight: 600, background: C.bg, borderRadius: 20, padding: '2px 8px', border: `1px solid ${C.border}` }}>
+                  {count}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+        {selected && (
+          <div style={{ marginTop: 8, padding: '8px 10px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+            <div style={{ color: C.textDim, fontSize: 10, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 4 }}>
+              Permisos de {ROLE_HIERARCHY.find(r => r.id === selected)?.label}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {ROLE_HIERARCHY.find(r => r.id === selected)?.perms.map(p => (
+                <span key={p} style={{ fontSize: 10, padding: '2px 7px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 20, color: C.text }}>
+                  ✓ {p}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Members with role selector */}
+      <div style={{ padding: '8px 16px', borderBottom: `1px solid ${C.border}` }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={selected ? `Buscar en ${ROLE_HIERARCHY.find(r => r.id === selected)?.label}...` : 'Buscar miembro...'}
+          style={{ width: '100%', padding: '7px 10px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, boxSizing: 'border-box' }} />
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 16px' }}>
+        {loading ? <Spinner /> : filtered.length === 0
+          ? <EmptyState icon="👥" text={selected ? `Sin ${ROLE_HIERARCHY.find(r => r.id === selected)?.label}s` : 'Sin miembros'} />
+          : filtered.map(m => {
+            const u = m.users
+            const isMe = u?.id === profile?.id
+            const roleCfg = ROLE_HIERARCHY.find(r => r.id === (m.role || 'member')) || ROLE_HIERARCHY[4]
+            return (
+              <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ width: 34, height: 34, borderRadius: '50%', background: C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0, overflow: 'hidden' }}>
+                  {u?.avatar_url ? <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '👤'}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: C.text, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {u?.display_name || 'Sin nombre'} {isMe && <span style={{ color: C.textDim, fontSize: 10 }}>(Yo)</span>}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                    <span style={{ fontSize: 10 }}>{roleCfg.icon}</span>
+                    <span style={{ color: roleCfg.color, fontSize: 10, fontWeight: 600 }}>{roleCfg.label}</span>
+                  </div>
+                </div>
+                {!isMe && (
+                  <select value={m.role || 'member'} disabled={assigning === m.user_id}
+                    onChange={e => changeRole(m.user_id, e.target.value)}
+                    style={{ padding: '4px 6px', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 11, cursor: 'pointer' }}>
+                    {ROLES_COMMUNITY.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                  </select>
+                )}
+              </div>
+            )
+          })
+        }
+      </div>
+    </div>
+  )
+}
+
 function MiembrosTab({ communityId, profile, toast }) {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1665,6 +1828,7 @@ export default function CEOPanel({ community, onBack, onCommunityDeleted, onGoVi
     { id: 'disputas',    icon: '⚖️', label: 'Disputas', badge: openDisputesCount },
     { id: 'solicitudes', icon: '🔔', label: 'Solicitudes' },
     { id: 'miembros',    icon: '👥', label: 'Miembros' },
+    { id: 'roles',       icon: '🎖️', label: 'Roles' },
     { id: 'estadisticas',icon: '📈', label: 'Stats' },
     { id: 'referidos',   icon: '🔗', label: 'Referidos' },
     { id: 'config',      icon: '⚙️', label: 'Config' },
@@ -1734,6 +1898,9 @@ export default function CEOPanel({ community, onBack, onCommunityDeleted, onGoVi
             profile={profile}
             toast={showToast}
           />
+        )}
+        {tab === 'roles' && (
+          <RolesTab communityId={communityId} profile={profile} toast={showToast} />
         )}
         {tab === 'estadisticas' && (
           <EstadisticasTab communityId={communityId} />
