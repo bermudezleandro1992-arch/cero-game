@@ -1049,7 +1049,7 @@ export default function App() {
         <div className={`slfa-right${showChat ? ' slfa-right--visible' : ''}`}>
           {activeConversation
             ? activeConversation.isCommunity && activeConversation.group_type === 'community'
-              ? <CommunityDashboard community={activeConversation} onBack={goBack} />
+              ? <CommunityDashboard key={activeConversation.id} community={activeConversation} onBack={goBack} />
               : <ChatPage onBack={goBack} />
             : <EmptyState />}
         </div>
