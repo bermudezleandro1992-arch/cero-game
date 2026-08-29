@@ -306,7 +306,7 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
       }
 
       sub.refresh()
-      onCreated(conv.id)
+      onCreated(conv.id?.match?.(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? conv.id)
     } catch (e) {
       setErr(e.message || 'Error al crear')
       setBusy(false)
