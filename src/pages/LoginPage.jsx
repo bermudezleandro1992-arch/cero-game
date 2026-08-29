@@ -87,40 +87,27 @@ Soporte disponible dentro de la aplicación.
 function LegalModal({ initialTab, onClose }) {
   const [tab, setTab] = useState(initialTab || 'terminos')
   const content = tab === 'terminos' ? TERMINOS : PRIVACIDAD
-
   function renderContent(text) {
     return text.trim().split('\n\n').map((block, i) => {
       if (block.startsWith('**')) {
         const [h, ...rest] = block.split('\n')
         return (
           <div key={i} style={{ marginBottom: 20 }}>
-            <div style={{ color: GREEN, fontSize: 15, fontWeight: 700, marginBottom: 8, borderLeft: `3px solid ${GREEN}`, paddingLeft: 12 }}>
-              {h.replace(/\*\*/g, '')}
-            </div>
-            {rest.map((line, j) => (
-              <p key={j} style={{ color: 'rgba(255,255,255,.6)', fontSize: 14, margin: '0 0 6px', lineHeight: 1.7, paddingLeft: 15 }}>{line}</p>
-            ))}
+            <div style={{ color: GREEN, fontSize: 15, fontWeight: 700, marginBottom: 8, borderLeft: `3px solid ${GREEN}`, paddingLeft: 12 }}>{h.replace(/\*\*/g, '')}</div>
+            {rest.map((line, j) => <p key={j} style={{ color: 'rgba(255,255,255,.6)', fontSize: 14, margin: '0 0 6px', lineHeight: 1.7, paddingLeft: 15 }}>{line}</p>)}
           </div>
         )
       }
       return <p key={i} style={{ color: 'rgba(255,255,255,.6)', fontSize: 14, margin: '0 0 12px', lineHeight: 1.7 }}>{block}</p>
     })
   }
-
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: '#080d12', overflowY: 'auto', padding: '0 0 40px' }}>
       <div style={{ position: 'sticky', top: 0, background: '#080d12', borderBottom: '1px solid rgba(255,255,255,.08)', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12, zIndex: 1 }}>
-        <button onClick={onClose} style={{ background: 'rgba(255,255,255,.08)', border: 'none', borderRadius: 8, padding: '6px 14px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
-          ← Volver
-        </button>
+        <button onClick={onClose} style={{ background: 'rgba(255,255,255,.08)', border: 'none', borderRadius: 8, padding: '6px 14px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>← Volver</button>
         <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,.05)', borderRadius: 8, padding: 3 }}>
           {[['terminos', 'Términos de Uso'], ['privacidad', 'Política de Privacidad']].map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} style={{
-              background: tab === id ? GREEN : 'transparent',
-              border: 'none', borderRadius: 6, padding: '5px 12px',
-              color: tab === id ? '#fff' : 'rgba(255,255,255,.4)',
-              fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all .15s',
-            }}>{label}</button>
+            <button key={id} onClick={() => setTab(id)} style={{ background: tab === id ? GREEN : 'transparent', border: 'none', borderRadius: 6, padding: '5px 12px', color: tab === id ? '#fff' : 'rgba(255,255,255,.4)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{label}</button>
           ))}
         </div>
       </div>
@@ -130,9 +117,7 @@ function LegalModal({ initialTab, onClose }) {
           <span style={{ color: 'rgba(255,255,255,.4)', fontSize: 12 }}>Última actualización: agosto de 2026</span>
         </div>
         {renderContent(content)}
-        <div style={{ marginTop: 40, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,.08)', color: 'rgba(255,255,255,.2)', fontSize: 12, textAlign: 'center' }}>
-          © 2026 NexoTribu. Todos los derechos reservados.
-        </div>
+        <div style={{ marginTop: 40, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,.08)', color: 'rgba(255,255,255,.2)', fontSize: 12, textAlign: 'center' }}>© 2026 NexoTribu. Todos los derechos reservados.</div>
       </div>
     </div>
   )
@@ -144,12 +129,18 @@ export default function LoginPage() {
   const isNative = Capacitor.isNativePlatform()
   const [modal, setModal] = useState(null)
   const tickerRef = useRef(null)
+  const [wide, setWide] = useState(window.innerWidth >= 900)
+
+  useEffect(() => {
+    const onResize = () => setWide(window.innerWidth >= 900)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   useEffect(() => {
     const el = tickerRef.current
     if (!el) return
-    let pos = 0
-    let raf
+    let pos = 0, raf
     const animate = () => {
       pos -= 0.5
       if (pos <= -(el.scrollWidth / 2)) pos = 0
@@ -161,134 +152,165 @@ export default function LoginPage() {
   }, [])
 
   async function loginGoogle() {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    })
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
   }
 
   if (modal) return <LegalModal initialTab={modal} onClose={() => setModal(null)} />
 
   return (
-    <div style={{ minHeight: '100dvh', background: '#080d12', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <div style={{ minHeight: '100dvh', background: '#080d12', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
 
-      {/* ── HERO ── */}
-      <div style={{ width: '100%', maxWidth: 520, padding: '44px 20px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-
-        <div style={{ marginBottom: 14 }}>
-          <svg width="76" height="76" viewBox="0 0 80 80" fill="none">
-            <polygon points="40,4 74,22 74,58 40,76 6,58 6,22" fill={`${GREEN}20`} stroke={GREEN} strokeWidth="1.5" />
-            <text x="40" y="50" textAnchor="middle" fontSize="30" fontWeight="900" fill={GREEN} fontFamily="system-ui,sans-serif">N</text>
-          </svg>
-        </div>
-
-        <h1 style={{ color: '#fff', fontWeight: 900, fontSize: 30, margin: '0 0 4px', letterSpacing: '-0.5px', lineHeight: 1.1 }}>NexoTribu</h1>
-        <p style={{ color: 'rgba(255,255,255,.35)', fontSize: 11, margin: '0 0 22px', letterSpacing: '2.5px', textTransform: 'uppercase', fontWeight: 600 }}>
-          COMPETÍ · CONECTÁ · GANÁ
-        </p>
-
-        <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 28, textAlign: 'center', margin: '0 0 10px', lineHeight: 1.25, letterSpacing: '-0.5px' }}>
-          Tu comunidad gamer,{' '}
-          <span style={{ color: GREEN }}>organizada de verdad.</span>
-        </h2>
-        <p style={{ color: 'rgba(255,255,255,.45)', fontSize: 14, textAlign: 'center', margin: '0 0 28px', lineHeight: 1.65, maxWidth: 360 }}>
-          Mensajería, torneos, comunidades y bots. Todo lo que tu tribu necesita para organizarse y competir.
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', marginBottom: 28 }}>
-          {[
-            { icon: '💬', t: 'Chats que funcionan', d: 'Privados, grupales y de comunidad.' },
-            { icon: '🏆', t: 'Torneos integrados', d: 'Creá, inscribite y seguí resultados.' },
-            { icon: '🌐', t: 'Comunidades propias', d: 'Con roles, canales y control total.' },
-            { icon: '🤖', t: 'Bots y automatización', d: 'API abierta para publicar y notificar.' },
-          ].map(f => (
-            <div key={f.t} style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 14, padding: '14px 12px' }}>
-              <div style={{ fontSize: 22, marginBottom: 8 }}>{f.icon}</div>
-              <div style={{ color: '#fff', fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{f.t}</div>
-              <div style={{ color: 'rgba(255,255,255,.4)', fontSize: 11, lineHeight: 1.5 }}>{f.d}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── TICKER ── */}
-      <div style={{ width: '100%', overflow: 'hidden', background: `${GREEN}12`, borderTop: `1px solid ${GREEN}30`, borderBottom: `1px solid ${GREEN}30`, padding: '8px 0', marginBottom: 36 }}>
+      {/* ── TICKER TOP ── */}
+      <div style={{ width: '100%', overflow: 'hidden', background: `${GREEN}12`, borderBottom: `1px solid ${GREEN}30`, padding: '7px 0', flexShrink: 0 }}>
         <div ref={tickerRef} style={{ display: 'flex', whiteSpace: 'nowrap', willChange: 'transform' }}>
-          {[...Array(6)].map((_, i) => (
+          {[...Array(8)].map((_, i) => (
             <span key={i} style={{ color: GREEN, fontSize: 12, fontWeight: 600, letterSpacing: '.5px' }}>{TICKER_TEXT}</span>
           ))}
         </div>
       </div>
 
-      {/* ── LOGIN ── */}
-      <div style={{ width: '100%', maxWidth: 400, padding: '0 20px 52px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* ── MAIN CONTENT ── */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: wide ? 'row' : 'column',
+        alignItems: wide ? 'stretch' : 'center',
+        maxWidth: 1200,
+        width: '100%',
+        margin: '0 auto',
+        padding: wide ? '48px 48px' : '32px 20px 48px',
+        gap: wide ? 64 : 0,
+        boxSizing: 'border-box',
+      }}>
 
-        <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 24, margin: '0 0 8px', textAlign: 'center' }}>
-          Ingresá a NexoTribu
-        </h2>
-        <p style={{ color: 'rgba(255,255,255,.4)', fontSize: 13, textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
-          Usá tu cuenta de Google para entrar o registrarte.
-        </p>
-
-        {!isNative && (
-          <a href={APK_URL} target="_blank" rel="noreferrer" style={{
-            width: '100%', padding: '14px 16px', borderRadius: 13,
-            background: GREEN, cursor: 'pointer',
-            color: '#fff', fontSize: 15, fontWeight: 800,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            boxShadow: `0 4px 20px ${GREEN}55`, marginBottom: 18,
-            textDecoration: 'none', boxSizing: 'border-box',
-          }}>
-            <span style={{ fontSize: 18 }}>📱</span>
-            Descargar para Android (.apk)
-          </a>
-        )}
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', marginBottom: 18 }}>
-          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
-          <span style={{ color: 'rgba(255,255,255,.25)', fontSize: 11, whiteSpace: 'nowrap' }}>o entrá desde el navegador</span>
-          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
-        </div>
-
-        <button onClick={loginGoogle} style={{
-          width: '100%', padding: '13px 16px', borderRadius: 13,
-          background: '#fff', border: '1px solid #ddd',
-          color: '#333', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          marginBottom: 24, boxSizing: 'border-box',
+        {/* ── LEFT: HERO ── */}
+        <div style={{
+          flex: wide ? '1 1 0' : 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: wide ? 'flex-start' : 'center',
+          justifyContent: 'center',
+          paddingBottom: wide ? 0 : 36,
         }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-          </svg>
-          Continuar con Google
-        </button>
-
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
-          {[
-            { icon: '🔒', t: 'Acceso seguro con Google', d: 'Sin contraseñas que recordar.' },
-            { icon: '🔞', t: 'Solo para mayores de 18', d: 'Verificamos tu edad al registrarte.' },
-            { icon: '🏆', t: 'Torneos y comunidades', d: 'Organizá, competí y crecé con tu tribu.' },
-          ].map(b => (
-            <div key={b.t} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 20, width: 28, textAlign: 'center', flexShrink: 0 }}>{b.icon}</span>
-              <div>
-                <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 12, fontWeight: 600 }}>{b.t}</div>
-                <div style={{ color: 'rgba(255,255,255,.3)', fontSize: 11 }}>{b.d}</div>
-              </div>
+          {/* Logo + brand */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
+            <svg width={wide ? 64 : 56} height={wide ? 64 : 56} viewBox="0 0 80 80" fill="none">
+              <polygon points="40,4 74,22 74,58 40,76 6,58 6,22" fill={`${GREEN}20`} stroke={GREEN} strokeWidth="1.5" />
+              <text x="40" y="50" textAnchor="middle" fontSize="30" fontWeight="900" fill={GREEN} fontFamily="system-ui,sans-serif">N</text>
+            </svg>
+            <div>
+              <h1 style={{ color: '#fff', fontWeight: 900, fontSize: wide ? 34 : 28, margin: 0, letterSpacing: '-0.5px', lineHeight: 1.1 }}>NexoTribu</h1>
+              <p style={{ color: 'rgba(255,255,255,.35)', fontSize: 10, margin: '3px 0 0', letterSpacing: '2.5px', textTransform: 'uppercase', fontWeight: 600 }}>COMPETÍ · CONECTÁ · GANÁ</p>
             </div>
-          ))}
+          </div>
+
+          <h2 style={{ color: '#fff', fontWeight: 900, fontSize: wide ? 42 : 28, margin: '0 0 14px', lineHeight: 1.2, letterSpacing: '-1px', textAlign: wide ? 'left' : 'center' }}>
+            Tu comunidad gamer,{' '}
+            <span style={{ color: GREEN }}>organizada de verdad.</span>
+          </h2>
+          <p style={{ color: 'rgba(255,255,255,.5)', fontSize: wide ? 17 : 14, margin: '0 0 36px', lineHeight: 1.7, textAlign: wide ? 'left' : 'center', maxWidth: 480 }}>
+            Mensajería, torneos, comunidades y bots. Todo lo que tu tribu necesita para organizarse y competir.
+          </p>
+
+          {/* 2×2 feature cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', maxWidth: wide ? 520 : 480 }}>
+            {[
+              { icon: '💬', t: 'Chats que funcionan', d: 'Privados, grupales y de comunidad.' },
+              { icon: '🏆', t: 'Torneos integrados', d: 'Creá, inscribite y seguí resultados.' },
+              { icon: '🌐', t: 'Comunidades propias', d: 'Con roles, canales y control total.' },
+              { icon: '🤖', t: 'Bots y automatización', d: 'API abierta para publicar y notificar.' },
+            ].map(f => (
+              <div key={f.t} style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 14, padding: '16px 14px' }}>
+                <div style={{ fontSize: 24, marginBottom: 8 }}>{f.icon}</div>
+                <div style={{ color: '#fff', fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{f.t}</div>
+                <div style={{ color: 'rgba(255,255,255,.4)', fontSize: 12, lineHeight: 1.5 }}>{f.d}</div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
-          <button onClick={() => setModal('terminos')} style={{ background: 'none', border: 'none', padding: 0, color: 'rgba(255,255,255,.3)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
-            Términos de Uso
+        {/* ── RIGHT: LOGIN FORM ── */}
+        <div style={{
+          flex: wide ? '0 0 380px' : 'none',
+          width: wide ? 380 : '100%',
+          maxWidth: wide ? 380 : 420,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          background: 'rgba(255,255,255,.03)',
+          border: wide ? '1px solid rgba(255,255,255,.08)' : 'none',
+          borderRadius: wide ? 20 : 0,
+          padding: wide ? '36px 32px' : '0',
+          boxSizing: 'border-box',
+        }}>
+          <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 22, margin: '0 0 8px', textAlign: 'center' }}>
+            Ingresá a NexoTribu
+          </h2>
+          <p style={{ color: 'rgba(255,255,255,.4)', fontSize: 13, textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
+            Usá tu cuenta de Google para entrar o registrarte.
+          </p>
+
+          {/* APK */}
+          {!isNative && (
+            <a href={APK_URL} target="_blank" rel="noreferrer" style={{
+              width: '100%', padding: '14px 16px', borderRadius: 13,
+              background: GREEN, cursor: 'pointer', color: '#fff',
+              fontSize: 15, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              boxShadow: `0 4px 20px ${GREEN}55`, marginBottom: 18,
+              textDecoration: 'none', boxSizing: 'border-box',
+            }}>
+              <span style={{ fontSize: 18 }}>📱</span>
+              Descargar para Android (.apk)
+            </a>
+          )}
+
+          {/* Divider */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', marginBottom: 18 }}>
+            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
+            <span style={{ color: 'rgba(255,255,255,.25)', fontSize: 11, whiteSpace: 'nowrap' }}>o entrá desde el navegador</span>
+            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
+          </div>
+
+          {/* Google */}
+          <button onClick={loginGoogle} style={{
+            width: '100%', padding: '13px 16px', borderRadius: 13,
+            background: '#fff', border: '1px solid #ddd',
+            color: '#333', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            marginBottom: 24, boxSizing: 'border-box',
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Continuar con Google
           </button>
-          <button onClick={() => setModal('privacidad')} style={{ background: 'none', border: 'none', padding: 0, color: 'rgba(255,255,255,.3)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
-            Política de Privacidad
-          </button>
+
+          {/* Security */}
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
+            {[
+              { icon: '🔒', t: 'Acceso seguro con Google', d: 'Sin contraseñas que recordar.' },
+              { icon: '🔞', t: 'Solo para mayores de 18', d: 'Verificamos tu edad al registrarte.' },
+              { icon: '🏆', t: 'Torneos y comunidades', d: 'Organizá, competí y crecé con tu tribu.' },
+            ].map(b => (
+              <div key={b.t} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 20, width: 28, textAlign: 'center', flexShrink: 0 }}>{b.icon}</span>
+                <div>
+                  <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 12, fontWeight: 600 }}>{b.t}</div>
+                  <div style={{ color: 'rgba(255,255,255,.3)', fontSize: 11 }}>{b.d}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Legal */}
+          <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
+            <button onClick={() => setModal('terminos')} style={{ background: 'none', border: 'none', padding: 0, color: 'rgba(255,255,255,.3)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>Términos de Uso</button>
+            <button onClick={() => setModal('privacidad')} style={{ background: 'none', border: 'none', padding: 0, color: 'rgba(255,255,255,.3)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>Política de Privacidad</button>
+          </div>
         </div>
       </div>
     </div>
