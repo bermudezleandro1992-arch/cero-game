@@ -89,7 +89,7 @@ export const useChatStore = create((set, get) => ({
     let convMeta = {}
     const { data: metaRows } = await supabase
       .from('conversations')
-      .select('id, name, is_group, created_by, avatar_url, group_type, description, is_public, is_locked, who_can_send, who_can_add, who_can_edit_info, slow_mode_seconds, auto_delete_hours, allow_export, allow_auto_save, announcement_only, require_approval, invite_link, pinned_message, torneos_enabled, ligas_enabled, clanes_enabled, tags, member_count, game_rules, plan, dm_status')
+      .select('id, name, is_group, created_by, avatar_url, group_type, description, is_public, is_locked, who_can_send, who_can_add, who_can_edit_info, slow_mode_seconds, auto_delete_hours, allow_export, allow_auto_save, announcement_only, require_approval, invite_link, pinned_message, torneos_enabled, ligas_enabled, clanes_enabled, tags, member_count, game_rules, plan')
       .in('id', convIds0)
     metaRows?.forEach(r => { convMeta[r.id] = r })
 
@@ -124,6 +124,14 @@ export const useChatStore = create((set, get) => ({
     // Count unread per conversation — single RPC instead of one query per conversation
     const { data: unreadRows } = await supabase.rpc('get_unread_counts', { p_user_id: userId })
     const unreadMap = Object.fromEntries((unreadRows || []).map(r => [r.conversation_id, Number(r.unread_count)]))
+
+    // dm_status (requires migration 076 — gracefully skip if column missing)
+    let dmStatusMap = {}
+    try {
+      const { data: dmRows, error: dmErr } = await supabase
+        .from('conversations').select('id, dm_status').in('id', convIds)
+      if (!dmErr && dmRows) dmRows.forEach(r => { dmStatusMap[r.id] = r.dm_status })
+    } catch (_) { /* migration not applied yet */ }
 
     const conversations = convIds
       .map(convId => {
@@ -165,7 +173,7 @@ export const useChatStore = create((set, get) => ({
           lastMessage: lastMsgMap[convId],
           lastReadAt: lastReadMap[convId],
           unread: unreadMap[convId] || 0,
-          dm_status: meta?.dm_status ?? 'accepted',
+          dm_status: dmStatusMap?.[convId] ?? 'accepted',
         }
       })
       .filter(c => {
