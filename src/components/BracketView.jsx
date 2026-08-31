@@ -425,6 +425,34 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
     await load()
   }
 
+  // Avanzar ganador al siguiente partido en el bracket
+  async function advanceBracket(finishedMatch) {
+    if (!finishedMatch?.winner_id) return
+    // Buscar todos los partidos del torneo
+    const { data: allMatches } = await supabase
+      .from('tournament_matches')
+      .select('id, round_number, match_number, player1_id, player2_id, winner_id, status, phase')
+      .eq('tournament_id', tournamentId)
+      .or('phase.neq.groups,phase.is.null')
+      .order('round_number').order('match_number')
+    if (!allMatches) return
+
+    const rn = finishedMatch.round_number
+    const mn = finishedMatch.match_number
+    const nextRound = rn + 1
+    // match_number en la ronda siguiente: ceil(mn / 2)
+    const nextMatchNum = Math.ceil(mn / 2)
+    // slot: odd match_number → player1, even → player2
+    const slot = mn % 2 === 1 ? 'player1_id' : 'player2_id'
+
+    const nextMatch = allMatches.find(m => m.round_number === nextRound && m.match_number === nextMatchNum)
+    if (!nextMatch) return
+    // Solo actualizar si el slot está vacío
+    if (nextMatch[slot]) return
+
+    await supabase.from('tournament_matches').update({ [slot]: finishedMatch.winner_id }).eq('id', nextMatch.id)
+  }
+
   async function handleResetMatch(match, reason) {
     await supabase.from('tournament_matches').update({
       score1: null, score2: null, winner_id: null, status: 'pendiente',
@@ -498,22 +526,23 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
           isAdmin={isAdmin}
           onClose={() => setReportMatch(null)}
           onUpdate={async () => {
+            // Fetch updated match to check winner
+            const { data: mx } = await supabase
+              .from('tournament_matches').select('*').eq('id', reportMatch.id).single()
+            // Auto-avanzar ganador a la siguiente ronda
+            if (mx?.winner_id) await advanceBracket(mx)
             await load()
             // Bot: publicar resultado en el chat del torneo
-            if (profile?.id) {
-              const { data: mx } = await supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId)
-              const m = (mx || []).find(x => x.id === reportMatch.id)
-              if (m && (m.status === 'finalizado' || m.status === 'aprobado') && m.winner_id) {
-                const p1n = reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1'
-                const p2n = reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2'
-                const winner = m.winner_id === m.player1_id ? p1n : p2n
-                await supabase.from('messages').insert({
-                  conversation_id: tournamentId,
-                  sender_id: profile.id,
-                  content: `🏆 *Resultado confirmado*\n\n${p1n} ${m.score1} — ${m.score2} ${p2n}\n\n✅ Avanza: *${winner}*`,
-                  type: 'text',
-                })
-              }
+            if (profile?.id && mx && (mx.status === 'finalizado' || mx.status === 'aprobado') && mx.winner_id) {
+              const p1n = reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1'
+              const p2n = reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2'
+              const winner = mx.winner_id === mx.player1_id ? p1n : p2n
+              await supabase.from('messages').insert({
+                conversation_id: tournamentId,
+                sender_id: profile.id,
+                content: `🏆 *Resultado confirmado*\n\n${p1n} ${mx.score1} — ${mx.score2} ${p2n}\n\n✅ Avanza: *${winner}*`,
+                type: 'text',
+              })
             }
           }}
         />
