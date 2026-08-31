@@ -753,6 +753,14 @@ export default function App() {
   if (isNewUser) return <BirthdateGate onDone={() => fetchProfile(user.id)} userId={user.id} />
 
   function goBack() {
+    const fromCommunityId = activeConversation?.fromCommunityId
+    if (fromCommunityId) {
+      const community = conversations.find(c => c.id === fromCommunityId)
+      if (community) {
+        setActiveConversation({ ...community, isGroup: true, isCommunity: true })
+        return
+      }
+    }
     setActiveConversation(null)
     fetchConversations(profile.id)
   }

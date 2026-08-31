@@ -687,15 +687,32 @@ export default function ChatPage({ onBack }) {
     clearTimeout(typingTimer.current)
   }
 
-  // Members list for mention autocomplete
+  // Members list for mention autocomplete — load from DB if not present
+  const [loadedMembers, setLoadedMembers] = useState([])
+  useEffect(() => {
+    if (!isGroup || !convId) { setLoadedMembers([]); return }
+    if (activeConversation?.members?.length) { setLoadedMembers(activeConversation.members); return }
+    supabase.rpc('get_conversation_members', { p_conversation_ids: [convId] }).then(({ data }) => {
+      if (!data?.length) return
+      const ids = data.map(r => r.user_id)
+      supabase.from('users').select('id, display_name, username, avatar_url').in('id', ids).then(({ data: users }) => {
+        setLoadedMembers(users || [])
+      })
+    })
+  }, [convId, isGroup])
+
   const allMembers = [
-    ...(activeConversation?.members || []),
+    ...(activeConversation?.members?.length ? activeConversation.members : loadedMembers),
     otherUser,
     profile,
   ].filter(Boolean).filter((m, i, arr) => arr.findIndex(x => x?.id === m?.id) === i)
 
+  const ALL_MENTION = { id: '__all__', display_name: 'todos', username: 'all', isAll: true }
   const mentionMatches = mentionQuery !== null
-    ? allMembers.filter(m => m?.display_name?.toLowerCase().includes(mentionQuery.toLowerCase()) || m?.username?.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 6)
+    ? [
+        ...('todos'.includes(mentionQuery.toLowerCase()) || 'all'.includes(mentionQuery.toLowerCase()) ? [ALL_MENTION] : []),
+        ...allMembers.filter(m => m?.display_name?.toLowerCase().includes(mentionQuery.toLowerCase()) || m?.username?.toLowerCase().includes(mentionQuery.toLowerCase())),
+      ].slice(0, 7)
     : []
 
   function handleTextChange(val) {
@@ -711,7 +728,8 @@ export default function ChatPage({ onBack }) {
   }
 
   function insertMention(member) {
-    const replaced = text.replace(/@([\w ]*)$/, `@${member.display_name} `)
+    const tag = member.isAll ? '@all' : `@${member.display_name}`
+    const replaced = text.replace(/@([\w ]*)$/, `${tag} `)
     setText(replaced)
     setMentionQuery(null)
     inputRef.current?.focus()
@@ -2551,10 +2569,13 @@ export default function ChatPage({ onBack }) {
                           padding: '8px 12px', background: i === mentionIndex ? `${C.green}18` : 'none',
                           border: 'none', cursor: 'pointer', textAlign: 'left',
                         }}>
-                          <Avatar name={m.display_name} size={28} color={senderColor(m.id)} url={m.avatar_url} />
+                          {m.isAll
+                            ? <div style={{ width: 28, height: 28, borderRadius: '50%', background: C.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📣</div>
+                            : <Avatar name={m.display_name} size={28} color={senderColor(m.id)} url={m.avatar_url} />
+                          }
                           <div>
-                            <div style={{ color: C.text, fontSize: 13, fontWeight: 600 }}>{m.display_name}</div>
-                            <div style={{ color: C.textDim, fontSize: 11 }}>@{m.username}</div>
+                            <div style={{ color: m.isAll ? C.green : C.text, fontSize: 13, fontWeight: 600 }}>{m.isAll ? '@all' : m.display_name}</div>
+                            <div style={{ color: C.textDim, fontSize: 11 }}>{m.isAll ? 'Mencionar a todos' : `@${m.username}`}</div>
                           </div>
                         </button>
                       ))}
