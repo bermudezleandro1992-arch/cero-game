@@ -99,7 +99,7 @@ function NewAnnouncementForm({ onClose, onCreate }) {
     // Load user's tournaments for linking
     supabase
       .from('conversations')
-      .select('id, name, group_type, tournament_status')
+      .select('id, name, group_type, tournament_status, community_id')
       .in('group_type', ['tournament', 'liga'])
       .eq('created_by', profile.id)
       .in('tournament_status', ['inscripcion', 'draw', 'en_curso'])
@@ -296,7 +296,14 @@ function NewAnnouncementForm({ onClose, onCreate }) {
           {(category === 'torneo' || category === 'liga') && myTournaments.length > 0 && (
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Vincular torneo/liga (opcional)</label>
-              <select value={selectedTournament} onChange={e => setSelectedTournament(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+              <select value={selectedTournament} onChange={e => {
+                const tid = e.target.value
+                setSelectedTournament(tid)
+                if (tid) {
+                  const t = myTournaments.find(x => x.id === tid)
+                  if (t?.community_id) setSelectedCommunity(t.community_id)
+                }
+              }} style={{ ...inputStyle, cursor: 'pointer' }}>
                 <option value="">Sin vincular</option>
                 {myTournaments.map(t => (
                   <option key={t.id} value={t.id}>{t.group_type === 'liga' ? '⚽' : '🏆'} {t.name}</option>
@@ -531,6 +538,7 @@ export default function AnnouncementsPage() {
       .from('announcements')
       .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url), community:conversations!announcements_conversation_id_fkey(id, name, group_type), tournament:conversations!announcements_tournament_id_fkey(id, name, tournament_status, group_type)')
       .eq('is_active', true)
+      .is('conversation_id', null)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50)
