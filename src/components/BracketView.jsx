@@ -52,8 +52,18 @@ function Avatar({ profile, size = 24 }) {
   )
 }
 
+function isBotProfile(profile) {
+  if (!profile) return false
+  const u = profile.username || ''
+  const d = profile.display_name || ''
+  // bot users created by fill_tournament_bots have user_<hex> username
+  return /^user_[0-9a-f]{6,}/.test(u) || d.toLowerCase() === 'usuario' && /^user_/.test(u)
+}
+
 function name(profile) {
-  return profile?.display_name || profile?.username || '—'
+  if (!profile) return '—'
+  if (isBotProfile(profile)) return '🤖 Bot'
+  return profile.display_name || profile.username || '—'
 }
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
@@ -499,12 +509,7 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
 
   if (!rounds.length) return null
 
-  function isBot(p) {
-    if (!p) return false
-    const u = (p.username || '').toLowerCase()
-    const d = (p.display_name || '').toLowerCase()
-    return u.startsWith('bot_') || u.startsWith('bot ') || d.startsWith('bot ') || d === 'bot'
-  }
+  function isBot(p) { return isBotProfile(p) }
 
   async function handleByeAdvance(match) {
     // Advance the real player (non-bot) by walkover
