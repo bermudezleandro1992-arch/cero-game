@@ -268,7 +268,7 @@ function TabBar({ tabs, active, onChange, visible }) {
 }
 
 // ── TORNEO: OverviewTab ───────────────────────────────────────────────────────
-function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin, onFillBots }) {
+function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin, onFillBots, onStartSorteo }) {
   const fillPct = data.max_participants
     ? Math.round((data.participant_count / data.max_participants) * 100)
     : null
@@ -392,6 +392,20 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
           fontWeight: 700, fontSize: 13, cursor: 'pointer',
         }}>
           🤖 Completar con bots ({data.max_participants - data.participant_count} lugares)
+        </button>
+      )}
+
+      {onStartSorteo && data.status === 'inscripcion' && (
+        <button onClick={onStartSorteo} style={{
+          width: '100%', padding: '14px 0', borderRadius: 14,
+          border: 'none',
+          background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+          color: '#000', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+          boxShadow: '0 4px 20px #f59e0b44',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <span style={{ fontSize: 18 }}>🎱</span>
+          Iniciar sorteo en vivo
         </button>
       )}
     </div>
@@ -617,7 +631,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
   async function handleFillBots() {
     if (!data || !isAdmin) return
     const slots = (data.max_participants ?? 0) - (data.participant_count ?? 0)
-    if (slots <= 0) return
+    if (slots <= 0) { alert('El torneo ya está completo.'); return }
     if (!window.confirm(`¿Agregar ${slots} bots para completar el torneo?`)) return
 
     const { error } = await supabase.rpc('fill_tournament_bots', {
@@ -625,13 +639,23 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       p_slots: slots,
     })
     if (error) { alert(`Error creando bots: ${error.message}`); return }
-    const newCount = data.max_participants
-    setData(d => d ? { ...d, participant_count: newCount } : d)
 
-    // Auto-start sorteo si está configurado
+    // Re-fetch fresh data from DB
+    await refresh()
+
+    // Auto-start si está configurado (usamos data fresca)
+    const fresh = await fetchDashboard(tournamentId).catch(() => null)
+    if (fresh) setData(fresh)
+
     if (data.auto_start_on_full && data.status === 'inscripcion') {
-      triggerAutoStart(data)
+      triggerAutoStart(fresh ?? data)
     }
+  }
+
+  async function handleStartSorteo() {
+    if (!isAdmin || !data) return
+    const delay = data.auto_start_delay_seconds ?? 0
+    await triggerAutoStart({ ...data, auto_start_delay_seconds: delay })
   }
 
   if (loading) return (
@@ -769,6 +793,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
                 isMember={isMember}
                 onJoin={joining ? null : handleJoin}
                 onFillBots={showBotButton ? handleFillBots : null}
+                onStartSorteo={isAdmin && data?.status === 'inscripcion' ? handleStartSorteo : null}
               />
         )}
 
