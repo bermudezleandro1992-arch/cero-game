@@ -59,16 +59,34 @@ const TYPE_CFG = {
 }
 
 const GAME_CATALOG = [
-  { id: 'fc26',        icon: '⚽', label: 'FC 26' },
-  { id: 'fc27',        icon: '⚽', label: 'FC 27' },
-  { id: 'efootball',   icon: '⚽', label: 'eFootball' },
-  { id: 'cs2',         icon: '🎯', label: 'CS2' },
-  { id: 'valorant',    icon: '🎯', label: 'Valorant' },
-  { id: 'warzone',     icon: '🔫', label: 'Warzone' },
-  { id: 'pubg',        icon: '🔫', label: 'PUBG' },
-  { id: 'clashroyale', icon: '👑', label: 'Clash Royale' },
-  { id: 'freef',       icon: '🔥', label: 'Free Fire' },
-  { id: 'otro',        icon: '🎮', label: 'Otro' },
+  { id: 'fc27',        icon: '⚽', label: 'FC 27',      tag: 'fc',        color: '#10b981', comingSoon: ['clubes'] },
+  { id: 'fc26',        icon: '⚽', label: 'FC 26',      tag: 'fc',        color: '#10b981', comingSoon: [] },
+  { id: 'efootball',   icon: '⚽', label: 'eFootball',  tag: 'efootball', color: '#3b82f6', comingSoon: [] },
+  { id: 'cs2',         icon: '🎯', label: 'CS2',        tag: 'fps',       color: '#ef4444', comingSoon: [] },
+  { id: 'valorant',    icon: '🎯', label: 'Valorant',   tag: 'fps',       color: '#ef4444', comingSoon: [] },
+  { id: 'warzone',     icon: '🔫', label: 'Warzone',    tag: 'fps',       color: '#f59e0b', comingSoon: [] },
+  { id: 'pubg',        icon: '🔫', label: 'PUBG',       tag: 'fps',       color: '#f59e0b', comingSoon: [] },
+  { id: 'clashroyale', icon: '👑', label: 'Clash Royale',tag: 'mobile',   color: '#a78bfa', comingSoon: [] },
+  { id: 'freef',       icon: '🔥', label: 'Free Fire',  tag: 'mobile',    color: '#a78bfa', comingSoon: [] },
+  { id: 'otro',        icon: '🎮', label: 'Otro',       tag: 'otro',      color: '#64748b', comingSoon: [] },
+]
+
+// Formatos específicos según juego
+const FC_STRUCTURES_TORNEO = [
+  { id: 'eliminatorias',   label: 'Eliminatoria directa', icon: '⚡', desc: 'Perder = eliminado' },
+  { id: 'bracket',         label: 'Bracket completo',     icon: '🌳', desc: 'Cuadro con todas las rondas' },
+  { id: 'grupos',          label: 'Fase de grupos',       icon: '🔲', desc: 'Grupos + clasificación' },
+  { id: 'grupos_playoffs', label: 'Grupos + Playoffs',    icon: '🏅', desc: 'Fase doble combinada' },
+  { id: 'copa',            label: 'Copa',                 icon: '🏆', desc: 'Con repechaje' },
+]
+const FC_STRUCTURES_LIGA = [
+  { id: 'todos_todos', label: 'Todos vs Todos',    icon: '🔄', desc: 'Cada uno contra todos (Apertura + Clausura)' },
+  { id: 'grupos',      label: 'Grupos + Playoffs', icon: '🏅', desc: 'Grupos + brackets' },
+]
+const FC_LIGA_TIPOS = [
+  { id: 'genuino',   label: '🎮 Genuino',    desc: 'Con equipos reales' },
+  { id: 'dreamteam', label: '⭐ DreamTeam',  desc: 'Ultimate Team propio' },
+  { id: 'clubes',    label: '🏟️ Clubes',     desc: 'Próximamente — FC 27', disabled: true },
 ]
 
 const MODES = [
@@ -78,20 +96,9 @@ const MODES = [
 ]
 
 // Estructuras disponibles según modo y tipo (torneo vs liga)
-function getStructures(mode, type) {
-  if (type === 'liga') {
-    return [
-      { id: 'todos_todos',  label: 'Todos vs Todos',     icon: '🔄', desc: 'Cada uno juega contra todos' },
-      { id: 'grupos',       label: 'Grupos + Playoffs',  icon: '🏅', desc: 'Fase de grupos y eliminatorias' },
-    ]
-  }
-  return [
-    { id: 'eliminatorias',  label: 'Eliminatorias',      icon: '⚡', desc: 'Perder = eliminado' },
-    { id: 'bracket',        label: 'Bracket completo',   icon: '🌳', desc: 'Cuadro con todas las rondas' },
-    { id: 'grupos',         label: 'Fase de grupos',     icon: '🔲', desc: 'Grupos + clasificación a playoffs' },
-    { id: 'grupos_playoffs',label: 'Grupos + Playoffs',  icon: '🏅', desc: 'Doble fase combinada' },
-    { id: 'copa',           label: 'Copa',               icon: '🏆', desc: 'Formato copa, con repechaje' },
-  ]
+function getStructures(mode, type, gameTag) {
+  if (type === 'liga') return FC_STRUCTURES_LIGA
+  return FC_STRUCTURES_TORNEO
 }
 
 const ALL_SIZES = [2, 4, 8, 12, 16, 32, 64, 128]
@@ -181,9 +188,11 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
   const [busy,          setBusy]          = useState(false)
   const [err,           setErr]           = useState('')
 
-  const structures = getStructures(mode, type)
+  const gameInfo = GAME_CATALOG.find(g => g.id === game)
+  const structures = getStructures(mode, type, gameInfo?.tag)
   // Reset structure if current not valid for new type/mode
   const validStruct = structures.find(s => s.id === structure) ? structure : structures[0].id
+  const ligaTipos = FC_LIGA_TIPOS
 
   async function handleCreate() {
     if (!name.trim()) { setErr('Ponele un nombre.'); return }
@@ -293,12 +302,33 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
         <div>
           <span style={lbl}>Juego</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {gameOptions.map(g => (
-              <button key={g.id} onClick={() => setGame(g.id)} style={chip(game === g.id, false)}>
-                {g.icon} {g.label}
-              </button>
-            ))}
+            {gameOptions.map(g => {
+              const selected = game === g.id
+              const gColor = g.color || C.green
+              return (
+                <button key={g.id} onClick={() => setGame(g.id)} style={{
+                  padding: '7px 14px', borderRadius: 20,
+                  border: `1.5px solid ${selected ? gColor : C.border}`,
+                  background: selected ? `${gColor}20` : C.panel2,
+                  color: selected ? gColor : C.text2,
+                  fontWeight: selected ? 800 : 500, fontSize: 12, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  {g.icon} {g.label}
+                  {selected && g.comingSoon?.includes('clubes') && (
+                    <span style={{ fontSize: 9, background: '#f59e0b', color: '#000', borderRadius: 10, padding: '1px 5px', fontWeight: 800 }}>+ Clubes Pronto</span>
+                  )}
+                </button>
+              )
+            })}
           </div>
+          {gameInfo && (
+            <p style={{ margin: '5px 0 0', fontSize: 11, color: C.textDim }}>
+              {game === 'fc27' && '⚽ FC 27 — Genuino, DreamTeam. Próximamente: Clubes.'}
+              {game === 'fc26' && '⚽ FC 26 — Genuino y DreamTeam.'}
+              {game === 'efootball' && '⚽ eFootball — Torneos y ligas con formato propio.'}
+            </p>
+          )}
         </div>
       )}
 
@@ -367,16 +397,22 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
       {type === 'liga' && (<>
         <div>
           <span style={lbl}>Tipo de liga</span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {[{id:'genuino',label:'🎮 Genuino',desc:'Equipos reales, jugadores auténticos'},{id:'dreamteam',label:'⭐ DreamTeam',desc:'Equipo propio (Ultimate Team)'}].map(t => (
-              <button key={t.id} onClick={() => setLigaTipo(t.id)} style={{
-                flex: 1, padding: '8px 6px', borderRadius: 10, cursor: 'pointer',
-                border: `2px solid ${ligaTipo === t.id ? C.green : C.border + '66'}`,
-                background: ligaTipo === t.id ? `${C.green}15` : C.panel2,
-                color: ligaTipo === t.id ? C.green : C.text2, fontWeight: 700, fontSize: 11, textAlign: 'center',
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {ligaTipos.map(t => (
+              <button key={t.id} onClick={() => !t.disabled && setLigaTipo(t.id)} style={{
+                flex: 1, minWidth: 90, padding: '8px 6px', borderRadius: 10,
+                cursor: t.disabled ? 'not-allowed' : 'pointer',
+                border: `2px solid ${!t.disabled && ligaTipo === t.id ? C.green : C.border + '44'}`,
+                background: !t.disabled && ligaTipo === t.id ? `${C.green}15` : C.panel2,
+                color: t.disabled ? C.textDim : ligaTipo === t.id ? C.green : C.text2,
+                fontWeight: 700, fontSize: 11, textAlign: 'center', opacity: t.disabled ? 0.55 : 1,
+                position: 'relative',
               }}>
                 <div>{t.label}</div>
                 <div style={{ fontSize: 10, fontWeight: 400, color: C.textDim, marginTop: 2 }}>{t.desc}</div>
+                {t.disabled && (
+                  <span style={{ position: 'absolute', top: -6, right: 4, fontSize: 9, fontWeight: 800, background: '#f59e0b', color: '#000', borderRadius: 20, padding: '1px 6px' }}>Pronto</span>
+                )}
               </button>
             ))}
           </div>
