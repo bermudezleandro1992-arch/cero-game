@@ -757,7 +757,7 @@ export default function TorneosPage({ onNavigate }) {
             tournamentId={viewing.id}
             profile={profile}
             isAdmin={viewing.created_by === profile?.id || profile?.role === 'superadmin' || profile?.role === 'admin'}
-            onBack={() => setViewing(null)}
+            onBack={() => { setViewing(null); load() }}
           />
         </div>
       </div>

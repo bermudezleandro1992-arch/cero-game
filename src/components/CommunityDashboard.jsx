@@ -994,7 +994,7 @@ export default function CommunityDashboard({ community, onBack }) {
             tournamentId={viewingTournament.id}
             profile={profile}
             isAdmin={isAdmin || viewingTournament.created_by === profile?.id}
-            onBack={() => setViewingTournament(null)}
+            onBack={() => { setViewingTournament(null); loadData() }}
           />
         </div>
       </div>
