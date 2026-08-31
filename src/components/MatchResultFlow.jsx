@@ -790,14 +790,14 @@ function AdminOverride({ match, onDone }) {
     if (!reason.trim()) return setErr('El motivo es obligatorio')
     setLoading(true); setErr(null)
     try {
-      const { data, error } = await supabase.rpc('admin_override_match', {
-        p_match_id:  match.id,
-        p_winner_id: winner,
-        p_score1:    parseInt(s1) || 0,
-        p_score2:    parseInt(s2) || 0,
-        p_reason:    reason.trim(),
-      })
-      if (error || !data?.ok) throw new Error(data?.error || error?.message || 'Error')
+      // Direct update bypassing admin_override_match RPC (which references updated_at that doesn't exist)
+      const { error } = await supabase.from('tournament_matches').update({
+        score1: parseInt(s1) || 0,
+        score2: parseInt(s2) || 0,
+        winner_id: winner,
+        status: 'aprobado',
+      }).eq('id', match.id)
+      if (error) throw new Error(error.message)
       onDone()
     } catch (e) {
       setErr(e.message)

@@ -360,11 +360,54 @@ function DBBracketsView({ tournamentId, maxParticipants, isOrganizer }) {
 
   useEffect(() => { load() }, [tournamentId])
 
+  async function advanceBracket(allMatches) {
+    const maxR = Math.max(...allMatches.map(m => m.round_number), 0)
+    for (let rn = 1; rn <= maxR; rn++) {
+      const roundMx = allMatches.filter(m => m.round_number === rn)
+      const allDone = roundMx.length > 0 && roundMx.every(m => m.status === 'finalizado' || m.status === 'aprobado')
+      if (!allDone) continue
+      const nextExists = allMatches.some(m => m.round_number === rn + 1)
+      if (nextExists) continue
+      const winners = roundMx.map(m => m.winner_id).filter(Boolean)
+      if (winners.length <= 1) continue // campeón — no crear siguiente ronda
+      const inserts = []
+      for (let i = 0; i < winners.length; i += 2) {
+        const a = winners[i], b = winners[i + 1]
+        inserts.push({
+          tournament_id: tournamentId,
+          round_number: rn + 1,
+          match_number: Math.floor(i / 2) + 1,
+          player1_id: a,
+          player2_id: b || null,
+          status: !b ? 'aprobado' : 'pendiente',
+          winner_id: !b ? a : null,
+          score1: !b ? 1 : null,
+          score2: !b ? 0 : null,
+        })
+      }
+      if (inserts.length > 0) await supabase.from('tournament_matches').insert(inserts)
+    }
+  }
+
   async function handleSubmitScore(matchId, s1, s2) {
     setSubmitting(matchId)
     const { data, error } = await supabase.rpc('submit_match_result', { p_match_id: matchId, p_score1: s1, p_score2: s2, p_photo_url: null })
     if (error || data?.ok === false) alert(data?.error || error?.message || 'Error')
     setSelected(null)
+    // Auto-confirm after 2-minute dispute window
+    setTimeout(async () => {
+      const { data: mx } = await supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId).order('round_number').order('match_number')
+      const fresh = (mx || []).find(m => m.id === matchId)
+      if (fresh && (fresh.status === 'resultado_cargado' || fresh.status === 'en_juego')) {
+        await supabase.rpc('approve_match_result', { p_match_id: matchId })
+        const { data: mx2 } = await supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId).order('round_number').order('match_number')
+        await advanceBracket(mx2 || [])
+        const maxR2 = Math.max(...(mx2 || []).map(m => m.round_number), 0)
+        const grouped2 = []
+        for (let r = 1; r <= maxR2; r++) grouped2.push((mx2 || []).filter(m => m.round_number === r).sort((a,b) => a.match_number - b.match_number))
+        setRounds(grouped2)
+      }
+    }, 2 * 60 * 1000)
     await load()
     setSubmitting(null)
   }
@@ -374,8 +417,28 @@ function DBBracketsView({ tournamentId, maxParticipants, isOrganizer }) {
     const { data, error } = await supabase.rpc('approve_match_result', { p_match_id: matchId })
     if (error || data?.ok === false) alert(data?.error || error?.message || 'Error')
     setSelected(null)
-    await load()
+    const { data: mx } = await supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId).order('round_number').order('match_number')
+    await advanceBracket(mx || [])
+    const maxR = Math.max(...(mx || []).map(m => m.round_number), 0)
+    const grouped = []
+    for (let r = 1; r <= maxR; r++) grouped.push((mx || []).filter(m => m.round_number === r).sort((a,b) => a.match_number - b.match_number))
+    const uids = new Set(); (mx || []).forEach(m => { if (m.player1_id) uids.add(m.player1_id); if (m.player2_id) uids.add(m.player2_id) })
+    if (uids.size > 0) {
+      const { data: users } = await supabase.from('users').select('id, display_name, username').in('id', [...uids])
+      const map = {}; (users || []).forEach(u => { map[u.id] = u.display_name || u.username || 'Jugador' }); setUserMap(map)
+    }
+    setRounds(grouped)
     setSubmitting(null)
+  }
+
+  async function handleForceAdvance(playerId, targetMatchId, slot) {
+    // Drag & drop: force a player into the next round slot
+    if (!isOrganizer) return
+    const updates = slot === 1
+      ? { player1_id: playerId, status: 'pendiente' }
+      : { player2_id: playerId, status: 'pendiente' }
+    await supabase.from('tournament_matches').update(updates).eq('id', targetMatchId)
+    await load()
   }
 
   if (loading) return (
@@ -425,21 +488,66 @@ function DBBracketsView({ tournamentId, maxParticipants, isOrganizer }) {
     }))
   )
 
+  const [dragPlayerId, setDragPlayerId] = useState(null)
+  const [dropTarget, setDropTarget]     = useState(null) // { matchId, slot }
+
+  function DraggableMatchCard({ match }) {
+    const isDone = match.status === 'finalizado' || match.status === 'aprobado'
+    function playerRow(playerId, playerName, slot) {
+      const isWinner = isDone && match.winner_id === playerId
+      const isEmpty = !playerId
+      const isDropHere = dropTarget?.matchId === match.id && dropTarget?.slot === slot
+      return (
+        <div
+          draggable={isOrganizer && !!playerId}
+          onDragStart={e => { if (isOrganizer && playerId) { e.dataTransfer.effectAllowed = 'move'; setDragPlayerId(playerId) } }}
+          onDragEnd={() => { setDragPlayerId(null); setDropTarget(null) }}
+          onDragOver={e => { if (isOrganizer && dragPlayerId && isEmpty) { e.preventDefault(); setDropTarget({ matchId: match.id, slot }) } }}
+          onDragLeave={() => setDropTarget(null)}
+          onDrop={async e => {
+            e.preventDefault()
+            if (!isOrganizer || !dragPlayerId || !isEmpty) return
+            await handleForceAdvance(dragPlayerId, match.id, slot)
+            setDragPlayerId(null); setDropTarget(null)
+          }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '5px 8px',
+            background: isDropHere ? `${C.green}22` : isWinner ? `${C.green}15` : 'transparent',
+            borderRadius: 6,
+            border: isDropHere ? `1.5px dashed ${C.green}` : '1.5px solid transparent',
+            cursor: isOrganizer && playerId ? 'grab' : 'default',
+            transition: 'background .15s',
+          }}>
+          <span style={{ fontSize: 11, flex: 1, fontWeight: isWinner ? 700 : 400, color: isEmpty ? C.textDim : isWinner ? C.green : C.text, fontStyle: isEmpty ? 'italic' : 'normal' }}>
+            {isEmpty ? (isOrganizer && dragPlayerId ? '⬇ Soltar aquí' : 'Por definir') : playerName}
+          </span>
+          {isDone && playerId && <span style={{ fontSize: 11, fontWeight: 700, color: isWinner ? C.green : C.textDim }}>{slot === 1 ? match.score1 : match.score2}</span>}
+        </div>
+      )
+    }
+    const statusColor = match.status === 'resultado_cargado' || match.status === 'en_juego' ? '#f59e0b'
+      : match.status === 'finalizado' || match.status === 'aprobado' ? C.green : C.textDim
+    return (
+      <div onClick={() => setSelected(match)} style={{
+        background: C.panel, border: `1px solid ${isDone ? C.green + '60' : C.border}`,
+        borderRadius: 10, overflow: 'hidden', cursor: 'pointer', minWidth: 140,
+        boxShadow: isDone ? `0 0 8px ${C.green}30` : 'none',
+      }}>
+        <div style={{ height: 2, background: statusColor }} />
+        {playerRow(match.player1_id, match.p1, 1)}
+        <div style={{ height: 1, background: C.border + '44', margin: '0 8px' }} />
+        {playerRow(match.player2_id, match.p2, 2)}
+      </div>
+    )
+  }
+
   return (
     <>
       <HorizontalBracket
         rounds={dbRounds}
         champion={champion}
-        renderMatch={(match) => (
-          <MatchCard
-            p1={match.p1} p2={match.p2}
-            score1={match.score1} score2={match.score2}
-            winner={match.winner} winnerId={match.winner_id}
-            p1Id={match.player1_id} p2Id={match.player2_id}
-            status={match.status}
-            onClick={() => setSelected(match)}
-          />
-        )}
+        renderMatch={(match) => <DraggableMatchCard match={match} />}
       />
       <MatchModal
         match={selected}

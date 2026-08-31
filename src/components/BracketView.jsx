@@ -341,6 +341,37 @@ function BracketLines({ rounds }) {
   return <g>{lines}</g>
 }
 
+// ── Selector de partido para resetear ────────────────────────────────────────
+function SelectMatchToReset({ matches, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const resetable = matches.filter(m => m.status === 'finalizado' || m.status === 'aprobado' || m.status === 'resultado_cargado')
+  if (!resetable.length) return null
+  if (!open) return (
+    <button onClick={() => setOpen(true)} style={{ padding: '7px 14px', borderRadius: 10, border: '1px solid #ef444444', background: '#ef444410', color: '#ef4444', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+      ⚙️ Resetear partido
+    </button>
+  )
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(false)} style={{ padding: '7px 14px', borderRadius: 10, border: '1px solid #ef444444', background: '#ef444418', color: '#ef4444', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+        ⚙️ ¿Cuál partido? ↑
+      </button>
+      <div style={{ position: 'absolute', right: 0, top: '110%', background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, zIndex: 999, minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
+        {resetable.map(m => {
+          const p1 = m.player1?.display_name || m.player1?.username || `J${m.match_number * 2 - 1}`
+          const p2 = m.player2?.display_name || m.player2?.username || `J${m.match_number * 2}`
+          return (
+            <button key={m.id} onClick={() => { setOpen(false); onSelect(m) }} style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: `1px solid ${C.border}22` }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{p1} vs {p2}</span>
+              <span style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>R{m.round_number} · P{m.match_number} · {m.status}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function BracketView({ tournamentId, profile, isAdmin, onReportMatch }) {
   const [matches, setMatches]   = useState([])
@@ -348,6 +379,9 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
   const [generating, setGenerating] = useState(false)
   const [error, setError]       = useState(null)
   const [reportMatch, setReportMatch] = useState(null)
+  const [resetModal, setResetModal]   = useState(null) // match to reset
+  const [resetReason, setResetReason] = useState('')
+  const [resetting, setResetting]     = useState(false)
   const scrollRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -387,6 +421,24 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
     if (error || data?.ok === false) {
       setError(error?.message ?? data?.error ?? 'Error al generar el bracket')
       return
+    }
+    await load()
+  }
+
+  async function handleResetMatch(match, reason) {
+    await supabase.from('tournament_matches').update({
+      score1: null, score2: null, winner_id: null, status: 'pendiente',
+    }).eq('id', match.id)
+    // Post bot message about the reset
+    if (profile?.id) {
+      const p1name = match.player1?.display_name || match.player1?.username || 'Jugador 1'
+      const p2name = match.player2?.display_name || match.player2?.username || 'Jugador 2'
+      await supabase.from('messages').insert({
+        conversation_id: tournamentId,
+        sender_id: profile.id,
+        content: `⚙️ *Resultado anulado*\n\n${p1name} vs ${p2name}\nMotivo: ${reason}\n\nEl partido fue reiniciado a pendiente.`,
+        type: 'text',
+      })
     }
     await load()
   }
@@ -445,13 +497,65 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
           profile={profile}
           isAdmin={isAdmin}
           onClose={() => setReportMatch(null)}
-          onUpdate={load}
+          onUpdate={async () => {
+            await load()
+            // Bot: publicar resultado en el chat del torneo
+            if (profile?.id) {
+              const { data: mx } = await supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId)
+              const m = (mx || []).find(x => x.id === reportMatch.id)
+              if (m && (m.status === 'finalizado' || m.status === 'aprobado') && m.winner_id) {
+                const p1n = reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1'
+                const p2n = reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2'
+                const winner = m.winner_id === m.player1_id ? p1n : p2n
+                await supabase.from('messages').insert({
+                  conversation_id: tournamentId,
+                  sender_id: profile.id,
+                  content: `🏆 *Resultado confirmado*\n\n${p1n} ${m.score1} — ${m.score2} ${p2n}\n\n✅ Avanza: *${winner}*`,
+                  type: 'text',
+                })
+              }
+            }
+          }}
         />
+      )}
+
+      {/* Modal resetear partido específico */}
+      {resetModal && (
+        <div onClick={() => { setResetModal(null); setResetReason('') }} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.panel, borderRadius: 20, padding: 24, maxWidth: 340, width: '100%', border: `1px solid ${C.border}` }}>
+            <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 15, color: '#f59e0b' }}>⚠️ Resetear partido</p>
+            <p style={{ margin: '0 0 16px', fontSize: 12, color: C.textDim }}>
+              {resetModal.player1?.display_name || 'Jugador 1'} vs {resetModal.player2?.display_name || 'Jugador 2'}
+            </p>
+            <p style={{ margin: '0 0 6px', fontSize: 12, color: C.text, fontWeight: 600 }}>Motivo (obligatorio)</p>
+            <textarea
+              value={resetReason}
+              onChange={e => setResetReason(e.target.value)}
+              placeholder="Ej: Error en el resultado cargado, se jugó mal el partido..."
+              rows={3}
+              style={{ width: '100%', resize: 'none', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button onClick={() => { setResetModal(null); setResetReason('') }} style={{ flex: 1, padding: 10, borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
+              <button
+                disabled={!resetReason.trim() || resetting}
+                onClick={async () => {
+                  if (!resetReason.trim()) return
+                  setResetting(true)
+                  await handleResetMatch(resetModal, resetReason.trim())
+                  setResetting(false); setResetModal(null); setResetReason('')
+                }}
+                style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: resetReason.trim() ? '#ef4444' : C.panel2, color: resetReason.trim() ? '#fff' : C.textDim, fontWeight: 700, cursor: resetReason.trim() ? 'pointer' : 'default' }}>
+                {resetting ? '…' : 'Resetear'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
 
-        {/* Header con botón de regenerar */}
+        {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '12px 16px', flexShrink: 0, flexWrap: 'wrap', gap: 8,
@@ -463,13 +567,10 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
             </p>
           </div>
           {isAdmin && (
-            <button onClick={handleGenerate} disabled={generating} style={{
-              padding: '7px 14px', borderRadius: 10,
-              border: `1px solid ${C.border}`, background: C.panel2,
-              color: C.text2, fontWeight: 700, fontSize: 12, cursor: generating ? 'default' : 'pointer',
-            }}>
-              {generating ? '…' : '↺ Regenerar'}
-            </button>
+            <SelectMatchToReset
+              matches={matches}
+              onSelect={m => setResetModal(m)}
+            />
           )}
         </div>
 
