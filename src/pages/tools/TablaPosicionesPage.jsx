@@ -174,9 +174,45 @@ function StandingsTable({ rows, userMap, highlightTop, highlightBottom, label })
 }
 
 // ── Bracket view ───────────────────────────────────────────────────────────────
+function BracketMatchCard({ match, userMap, onMatchClick, totalRounds }) {
+  const p1 = match.player1_id ? (userMap[match.player1_id]?.name || 'Jugador') : 'BYE'
+  const p2 = match.player2_id ? (userMap[match.player2_id]?.name || 'Jugador') : 'BYE'
+  const done = match.status === 'finalizado' || match.status === 'aprobado'
+  const inDispute = match.status === 'disputa'
+  const w1 = done && match.winner_id === match.player1_id
+  const w2 = done && match.winner_id === match.player2_id
+  const isFinal = match.round_number === totalRounds
+  return (
+    <button onClick={() => onMatchClick && onMatchClick(match)} style={{
+      display: 'block', width: 148, background: C.panel,
+      border: `1.5px solid ${inDispute ? '#ef4444' : done ? C.green + '66' : C.border}`,
+      borderRadius: 10, padding: 0, cursor: onMatchClick ? 'pointer' : 'default',
+      textAlign: 'left', boxShadow: isFinal ? `0 0 12px ${C.green}33` : 'none',
+    }}>
+      {[{ name: p1, score: match.score1, win: w1, id: match.player1_id },
+        { name: p2, score: match.score2, win: w2, id: match.player2_id }].map((pl, idx) => (
+        <div key={idx} style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '7px 10px',
+          borderBottom: idx === 0 ? `1px solid ${C.border}44` : 'none',
+          background: pl.win ? `${C.green}18` : 'transparent',
+          borderRadius: idx === 0 ? '9px 9px 0 0' : '0 0 9px 9px',
+        }}>
+          <span style={{ fontSize: 11.5, fontWeight: pl.win ? 700 : 400, color: pl.win ? C.green : (!pl.id ? C.textDim : C.text), maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {pl.name}
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: pl.win ? C.green : C.textDim, minWidth: 16, textAlign: 'right' }}>
+            {done ? (pl.score ?? '—') : ''}
+          </span>
+        </div>
+      ))}
+    </button>
+  )
+}
+
 function BracketView({ matches, userMap, onMatchClick, isOrganizer }) {
   const rounds = [...new Set(matches.map(m => m.round_number))].sort((a,b) => a-b)
-  const totalRounds = Math.max(...rounds, 1)
+  const totalRounds = rounds.length > 0 ? Math.max(...rounds) : 1
   const roundLabel = rn => rn === totalRounds ? '🏆 Final' : rn === totalRounds-1 ? 'Semifinal' : rn === totalRounds-2 ? 'Cuartos' : `Ronda ${rn}`
 
   if (matches.length === 0) return (
@@ -185,43 +221,37 @@ function BracketView({ matches, userMap, onMatchClick, isOrganizer }) {
     </div>
   )
 
+  // Horizontal bracket: columns left → right, matches vertically spaced
+  const CARD_H = 64   // approx height of a match card
+  const CARD_W = 148
+  const COL_GAP = 40  // horizontal space between rounds
+
   return (
-    <div style={{ padding: 14 }}>
-      {rounds.map(rn => (
-        <div key={rn} style={{ marginBottom: 18 }}>
-          <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1.5px' }}>
-            {roundLabel(rn)}
-          </p>
-          {matches.filter(m => m.round_number === rn).map(match => {
-            const p1 = match.player1_id ? (userMap[match.player1_id]?.name || 'Jugador') : 'BYE'
-            const p2 = match.player2_id ? (userMap[match.player2_id]?.name || 'Jugador') : 'BYE'
-            const done = match.status === 'finalizado' || match.status === 'aprobado'
-            const inDispute = match.status === 'disputa'
-            return (
-              <button key={match.id} onClick={() => onMatchClick && onMatchClick(match)} style={{
-                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                background: C.panel, border: `1px solid ${inDispute ? '#ef4444' : done ? C.green+'44' : C.border}`,
-                borderRadius: 12, padding: '12px 14px', cursor: 'pointer', textAlign: 'left', marginBottom: 6,
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: done && match.winner_id === match.player1_id ? 700 : 400, color: done && match.winner_id === match.player1_id ? C.green : C.text }}>{p1}</span>
-                    {done && <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{match.score1 ?? '—'}</span>}
-                  </div>
-                  <div style={{ height: 1, background: C.border+'44', margin: '5px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: done && match.winner_id === match.player2_id ? 700 : 400, color: done && match.winner_id === match.player2_id ? C.green : C.text }}>{p2}</span>
-                    {done && <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{match.score2 ?? '—'}</span>}
-                  </div>
+    <div style={{ overflowX: 'auto', padding: '14px 8px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: COL_GAP, minWidth: rounds.length * (CARD_W + COL_GAP) }}>
+        {rounds.map((rn, colIdx) => {
+          const roundMatches = matches.filter(m => m.round_number === rn).sort((a,b) => a.match_number - b.match_number)
+          const totalInRound = roundMatches.length
+          // Each slot height = total height / matches in this round
+          const prevCount = colIdx === 0 ? totalInRound : matches.filter(m => m.round_number === rounds[0]).length
+          const slotH = CARD_H * Math.pow(2, colIdx) + (colIdx > 0 ? (Math.pow(2, colIdx) - 1) * 10 : 0)
+
+          return (
+            <div key={rn} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {/* Round header */}
+              <div style={{ textAlign: 'center', marginBottom: 10, fontSize: 9.5, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1.2px', width: CARD_W }}>
+                {roundLabel(rn)}
+              </div>
+              {/* Match cards with vertical spacing that doubles each round */}
+              {roundMatches.map((match, mIdx) => (
+                <div key={match.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: mIdx < roundMatches.length - 1 ? slotH - CARD_H : 0 }}>
+                  <BracketMatchCard match={match} userMap={userMap} onMatchClick={onMatchClick} totalRounds={totalRounds} />
                 </div>
-                <div style={{ flexShrink: 0, fontSize: 11, color: inDispute ? '#ef4444' : done ? C.green : C.textDim, fontWeight: 700 }}>
-                  {inDispute ? '⚠️ Disputa' : done ? '✓' : 'Pendiente'}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      ))}
+              ))}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -486,6 +516,18 @@ function DBLigaView({ tournamentId, isOrganizer, ligaData, onLigaAction }) {
     await load()
   }
 
+  async function postSorteoMessage(seeded, phaseName) {
+    if (!profile?.id) return
+    const pairs = []
+    for (let i = 0; i < seeded.length; i += 2) {
+      const a = seeded[i], b = seeded[i+1]
+      if (b) pairs.push(`• ${a.name} vs ${b.name}`)
+      else pairs.push(`• ${a.name} — pasa directo (bye)`)
+    }
+    const text = `🎲 *Sorteo ${phaseName} realizado*\n\nLos enfrentamientos quedaron así:\n\n${pairs.join('\n')}\n\n¡Buena suerte a todos! 🏆`
+    await supabase.from('messages').insert({ conversation_id: tournamentId, sender_id: profile.id, content: text, type: 'text' })
+  }
+
   async function handleSorteoConfirm(seeded, phaseTag) {
     setShowSorteo(false)
     const matchInserts = []
@@ -510,6 +552,8 @@ function DBLigaView({ tournamentId, isOrganizer, ligaData, onLigaAction }) {
     const nextFase = roundNum === 2 ? 'apertura_playoffs' : 'clausura_playoffs'
     await supabase.from('conversations').update({ liga_fase: nextFase }).eq('id', tournamentId)
     if (onLigaAction) await onLigaAction('set_fase', nextFase)
+    const phaseName = roundNum === 2 ? 'Apertura' : 'Clausura'
+    await postSorteoMessage(seeded, phaseName)
     await load()
   }
 
