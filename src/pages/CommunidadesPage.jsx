@@ -29,22 +29,34 @@ export default function CommunidadesPage() {
 
   const [tab, setTab] = useState('community')
   const [search, setSearch] = useState('')
+  const [myTournaments, setMyTournaments] = useState([])
+  const [loadingTourneys, setLoadingTourneys] = useState(false)
 
-  // Use already-loaded conversations from chatStore — no extra query needed
   const communities = conversations.filter(c =>
     c.group_type === 'community' && c.name
   )
-  const participating = conversations.filter(c =>
-    c.group_type === 'tournament' || c.group_type === 'liga'
-  )
-  const loading = false
+  const loading = loadingTourneys
+
+  // Fetch torneos/ligas donde el usuario participa
+  useEffect(() => {
+    if (!profile?.id || tab !== 'participando') return
+    setLoadingTourneys(true)
+    supabase
+      .from('tournament_participants')
+      .select('tournament_id, conversations!inner(id, name, avatar_url, group_type, tournament_status, game, community_id)')
+      .eq('user_id', profile.id)
+      .then(({ data }) => {
+        setMyTournaments((data || []).map(r => r.conversations).filter(Boolean))
+        setLoadingTourneys(false)
+      })
+  }, [profile?.id, tab])
 
   function openConv(conv) {
     const isCommunity = conv.group_type === 'community'
     setActiveConversation({ ...conv, isCommunity, isGroup: conv.group_type === 'group' })
   }
 
-  const filtered = (tab === 'community' ? communities : participating).filter(r => {
+  const filtered = (tab === 'community' ? communities : myTournaments).filter(r => {
     if (!search.trim()) return true
     const q = search.trim().toLowerCase()
     return r.name?.toLowerCase().includes(q) || r.description?.toLowerCase().includes(q)

@@ -537,12 +537,14 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
               const p1n = reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1'
               const p2n = reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2'
               const winner = mx.winner_id === mx.player1_id ? p1n : p2n
-              await supabase.from('messages').insert({
+              const msgData = {
                 conversation_id: tournamentId,
                 sender_id: profile.id,
                 content: `🏆 *Resultado confirmado*\n\n${p1n} ${mx.score1} — ${mx.score2} ${p2n}\n\n✅ Avanza: *${winner}*`,
-                type: 'text',
-              })
+                type: mx.result_photo_url ? 'image' : 'text',
+              }
+              if (mx.result_photo_url) msgData.media_url = mx.result_photo_url
+              await supabase.from('messages').insert(msgData)
             }
           }}
         />

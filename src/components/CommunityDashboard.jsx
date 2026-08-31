@@ -490,6 +490,7 @@ const AVISO_CATS = [
 
 function AnunciosTab({ announcements, loading }) {
   const [cat, setCat] = useState('todo')
+  const [lightbox, setLightbox] = useState(null) // url de imagen ampliada
 
   if (loading) {
     return (
@@ -504,6 +505,13 @@ function AnunciosTab({ announcements, loading }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Lightbox imagen ampliada */}
+      {lightbox && (
+        <div onClick={() => setLightbox(null)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <button onClick={() => setLightbox(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', fontSize: 24, width: 40, height: 40, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          <img src={lightbox} alt="" style={{ maxWidth: '100%', maxHeight: '90vh', borderRadius: 12, objectFit: 'contain', boxShadow: '0 8px 40px rgba(0,0,0,.6)' }} onClick={e => e.stopPropagation()} />
+        </div>
+      )}
       {/* Category filter chips */}
       <div style={{ display: 'flex', gap: 6, padding: '10px 14px', overflowX: 'auto', flexShrink: 0, borderBottom: `1px solid ${C.border}22` }}>
         {AVISO_CATS.map(c => (
@@ -552,7 +560,11 @@ function AnunciosTab({ announcements, loading }) {
               <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 6 }}>{a.title}</div>
               {a.body && <p style={{ margin: '0 0 10px', color: C.text2, fontSize: 13, lineHeight: 1.6 }}>{a.body}</p>}
               {a.image_url && (
-                <img src={a.image_url} alt="" style={{ width: '100%', borderRadius: 10, objectFit: 'cover', maxHeight: 200, display: 'block', marginBottom: 10 }} />
+                <img
+                  src={a.image_url} alt=""
+                  onClick={() => setLightbox(a.image_url)}
+                  style={{ width: '100%', borderRadius: 10, objectFit: 'cover', maxHeight: 200, display: 'block', marginBottom: 10, cursor: 'zoom-in' }}
+                />
               )}
               {a.link_url && (
                 <a href={a.link_url} target="_blank" rel="noopener noreferrer" style={{

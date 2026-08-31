@@ -265,12 +265,20 @@ function AwaitingConfirmation({ match, profile, isAdmin, onDone }) {
   async function handleConfirm() {
     setLoading(true)
     if (isAdmin) {
-      // Admin confirma directamente sin pasar por el RPC del perdedor
-      const { error } = await supabase.from('tournament_matches').update({
-        status: 'finalizado',
-        loser_confirmed: true,
-      }).eq('id', match.id)
-      if (!error) onDone()
+      // Intentar con RPC primero (si existe admin_approve_match), luego UPDATE directo
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('admin_approve_match', {
+        p_match_id: match.id,
+      })
+      if (!rpcErr && rpcData?.ok) {
+        onDone()
+      } else {
+        // Fallback: UPDATE directo (requiere RLS permisiva para admins)
+        const { error } = await supabase.from('tournament_matches').update({
+          status: 'finalizado',
+          loser_confirmed: true,
+        }).eq('id', match.id)
+        if (!error) onDone()
+      }
     } else {
       const { data, error } = await supabase.rpc('confirm_match_result', {
         p_match_id: match.id,
