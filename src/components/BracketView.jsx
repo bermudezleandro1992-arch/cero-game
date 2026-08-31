@@ -553,7 +553,7 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0 }}>
 
         {/* Header */}
         <div style={{
@@ -599,13 +599,14 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
           </div>
         </div>
 
-        {/* SVG del bracket — scroll horizontal en mobile */}
+        {/* SVG del bracket — scroll horizontal en mobile, escala en desktop */}
         <div
           ref={scrollRef}
           style={{
             overflowX: 'auto', overflowY: 'auto',
             WebkitOverflowScrolling: 'touch',
             cursor: 'grab',
+            flex: 1,
           }}
           onMouseDown={e => {
             const el = scrollRef.current
@@ -620,7 +621,8 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
           <svg
             width={totalW}
             height={Math.max(totalH, 200)}
-            style={{ display: 'block', userSelect: 'none' }}
+            viewBox={`0 0 ${totalW} ${Math.max(totalH, 200)}`}
+            style={{ display: 'block', userSelect: 'none', minWidth: totalW }}
           >
             {/* Líneas de conexión (debajo de las tarjetas) */}
             <BracketLines rounds={rounds} />
