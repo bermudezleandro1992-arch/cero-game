@@ -38,8 +38,8 @@ BEGIN
     ON CONFLICT DO NOTHING;
 
     -- Add as tournament member
-    INSERT INTO public.conversation_members (conversation_id, user_id, role, joined_at)
-    VALUES (p_tournament_id, v_bot_id, 'member', now())
+    INSERT INTO public.conversation_members (conversation_id, user_id, joined_at)
+    VALUES (p_tournament_id, v_bot_id, now())
     ON CONFLICT DO NOTHING;
   END LOOP;
 END;
