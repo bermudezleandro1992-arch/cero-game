@@ -26,22 +26,67 @@ async function postTournamentAviso(communityId, authorId, title, body, tournamen
   })
 }
 
+// Manda un mensaje de texto al chat del torneo/liga (group chat)
+async function postGroupMessage(tournamentConvId, authorId, text) {
+  if (!tournamentConvId || !authorId || !text) return
+  await supabase.from('messages').insert({
+    conversation_id: tournamentConvId,
+    sender_id: authorId,
+    content: text,
+    type: 'text',
+  })
+}
+
+// Genera el texto del fixture para el chat
+function buildFixtureMessage(matches, userMap, label) {
+  const lines = [`📋 *${label}* — Fixture generado:\n`]
+  const jornadas = [...new Set(matches.map(m => m.jornada_number))].sort((a,b) => a-b)
+  for (const j of jornadas) {
+    lines.push(`\n⚽ Jornada ${j}:`)
+    for (const m of matches.filter(x => x.jornada_number === j)) {
+      const p1 = m.player1_id ? (userMap[m.player1_id] || 'Jugador') : 'BYE'
+      const p2 = m.player2_id ? (userMap[m.player2_id] || 'Jugador') : 'BYE'
+      lines.push(`  ${p1} vs ${p2}`)
+    }
+  }
+  lines.push('\n¡Buena suerte a todos! 🏆')
+  return lines.join('\n')
+}
+
 const TYPE_CFG = {
   tournament: { label: 'Torneo', icon: '🏆', color: '#f59e0b' },
   liga:       { label: 'Liga',   icon: '🥇', color: '#3b82f6' },
 }
 
 const GAME_CATALOG = [
-  { id: 'fc26',        icon: '⚽', label: 'FC 26' },
-  { id: 'fc27',        icon: '⚽', label: 'FC 27' },
-  { id: 'efootball',   icon: '⚽', label: 'eFootball' },
-  { id: 'cs2',         icon: '🎯', label: 'CS2' },
-  { id: 'valorant',    icon: '🎯', label: 'Valorant' },
-  { id: 'warzone',     icon: '🔫', label: 'Warzone' },
-  { id: 'pubg',        icon: '🔫', label: 'PUBG' },
-  { id: 'clashroyale', icon: '👑', label: 'Clash Royale' },
-  { id: 'freef',       icon: '🔥', label: 'Free Fire' },
-  { id: 'otro',        icon: '🎮', label: 'Otro' },
+  { id: 'fc27',        icon: '⚽', label: 'FC 27',      tag: 'fc',        color: '#10b981', comingSoon: ['clubes'] },
+  { id: 'fc26',        icon: '⚽', label: 'FC 26',      tag: 'fc',        color: '#10b981', comingSoon: [] },
+  { id: 'efootball',   icon: '⚽', label: 'eFootball',  tag: 'efootball', color: '#3b82f6', comingSoon: [] },
+  { id: 'cs2',         icon: '🎯', label: 'CS2',        tag: 'fps',       color: '#ef4444', comingSoon: [] },
+  { id: 'valorant',    icon: '🎯', label: 'Valorant',   tag: 'fps',       color: '#ef4444', comingSoon: [] },
+  { id: 'warzone',     icon: '🔫', label: 'Warzone',    tag: 'fps',       color: '#f59e0b', comingSoon: [] },
+  { id: 'pubg',        icon: '🔫', label: 'PUBG',       tag: 'fps',       color: '#f59e0b', comingSoon: [] },
+  { id: 'clashroyale', icon: '👑', label: 'Clash Royale',tag: 'mobile',   color: '#a78bfa', comingSoon: [] },
+  { id: 'freef',       icon: '🔥', label: 'Free Fire',  tag: 'mobile',    color: '#a78bfa', comingSoon: [] },
+  { id: 'otro',        icon: '🎮', label: 'Otro',       tag: 'otro',      color: '#64748b', comingSoon: [] },
+]
+
+// Formatos específicos según juego
+const FC_STRUCTURES_TORNEO = [
+  { id: 'eliminatorias',   label: 'Eliminatoria directa', icon: '⚡', desc: 'Perder = eliminado' },
+  { id: 'bracket',         label: 'Bracket completo',     icon: '🌳', desc: 'Cuadro con todas las rondas' },
+  { id: 'grupos',          label: 'Fase de grupos',       icon: '🔲', desc: 'Grupos + clasificación' },
+  { id: 'grupos_playoffs', label: 'Grupos + Playoffs',    icon: '🏅', desc: 'Fase doble combinada' },
+  { id: 'copa',            label: 'Copa',                 icon: '🏆', desc: 'Con repechaje' },
+]
+const FC_STRUCTURES_LIGA = [
+  { id: 'todos_todos', label: 'Todos vs Todos',    icon: '🔄', desc: 'Cada uno contra todos (Apertura + Clausura)' },
+  { id: 'grupos',      label: 'Grupos + Playoffs', icon: '🏅', desc: 'Grupos + brackets' },
+]
+const FC_LIGA_TIPOS = [
+  { id: 'genuino',   label: '🎮 Genuino',    desc: 'Con equipos reales' },
+  { id: 'dreamteam', label: '⭐ DreamTeam',  desc: 'Ultimate Team propio' },
+  { id: 'clubes',    label: '🏟️ Clubes',     desc: 'Próximamente — FC 27', disabled: true },
 ]
 
 const MODES = [
@@ -51,20 +96,9 @@ const MODES = [
 ]
 
 // Estructuras disponibles según modo y tipo (torneo vs liga)
-function getStructures(mode, type) {
-  if (type === 'liga') {
-    return [
-      { id: 'todos_todos',  label: 'Todos vs Todos',     icon: '🔄', desc: 'Cada uno juega contra todos' },
-      { id: 'grupos',       label: 'Grupos + Playoffs',  icon: '🏅', desc: 'Fase de grupos y eliminatorias' },
-    ]
-  }
-  return [
-    { id: 'eliminatorias',  label: 'Eliminatorias',      icon: '⚡', desc: 'Perder = eliminado' },
-    { id: 'bracket',        label: 'Bracket completo',   icon: '🌳', desc: 'Cuadro con todas las rondas' },
-    { id: 'grupos',         label: 'Fase de grupos',     icon: '🔲', desc: 'Grupos + clasificación a playoffs' },
-    { id: 'grupos_playoffs',label: 'Grupos + Playoffs',  icon: '🏅', desc: 'Doble fase combinada' },
-    { id: 'copa',           label: 'Copa',               icon: '🏆', desc: 'Formato copa, con repechaje' },
-  ]
+function getStructures(mode, type, gameTag) {
+  if (type === 'liga') return FC_STRUCTURES_LIGA
+  return FC_STRUCTURES_TORNEO
 }
 
 const ALL_SIZES = [2, 4, 8, 12, 16, 32, 64, 128]
@@ -126,7 +160,7 @@ function gameIcon(id) {
 }
 
 // ── Create form ───────────────────────────────────────────────────────────────
-function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
+function CreateForm({ communityId, communityTags, communityFeatures, onCreated, onCancel }) {
   const { profile } = useAuthStore()
   const planLimits = getPlanLimits(profile)
   const isFree = planLimits.max <= 8
@@ -154,9 +188,13 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
   const [busy,          setBusy]          = useState(false)
   const [err,           setErr]           = useState('')
 
-  const structures = getStructures(mode, type)
+  const gameInfo = GAME_CATALOG.find(g => g.id === game)
+  const structures = getStructures(mode, type, gameInfo?.tag)
   // Reset structure if current not valid for new type/mode
   const validStruct = structures.find(s => s.id === structure) ? structure : structures[0].id
+  // Clubes habilitado si la feature está activa en la comunidad
+  const clubesEnabled = !!communityFeatures?.clubes_fc
+  const ligaTipos = FC_LIGA_TIPOS.map(t => t.id === 'clubes' ? { ...t, disabled: !clubesEnabled } : t)
 
   async function handleCreate() {
     if (!name.trim()) { setErr('Ponele un nombre.'); return }
@@ -266,12 +304,33 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
         <div>
           <span style={lbl}>Juego</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {gameOptions.map(g => (
-              <button key={g.id} onClick={() => setGame(g.id)} style={chip(game === g.id, false)}>
-                {g.icon} {g.label}
-              </button>
-            ))}
+            {gameOptions.map(g => {
+              const selected = game === g.id
+              const gColor = g.color || C.green
+              return (
+                <button key={g.id} onClick={() => setGame(g.id)} style={{
+                  padding: '7px 14px', borderRadius: 20,
+                  border: `1.5px solid ${selected ? gColor : C.border}`,
+                  background: selected ? `${gColor}20` : C.panel2,
+                  color: selected ? gColor : C.text2,
+                  fontWeight: selected ? 800 : 500, fontSize: 12, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  {g.icon} {g.label}
+                  {selected && g.comingSoon?.includes('clubes') && (
+                    <span style={{ fontSize: 9, background: '#f59e0b', color: '#000', borderRadius: 10, padding: '1px 5px', fontWeight: 800 }}>+ Clubes Pronto</span>
+                  )}
+                </button>
+              )
+            })}
           </div>
+          {gameInfo && (
+            <p style={{ margin: '5px 0 0', fontSize: 11, color: C.textDim }}>
+              {game === 'fc27' && '⚽ FC 27 — Genuino, DreamTeam. Próximamente: Clubes.'}
+              {game === 'fc26' && '⚽ FC 26 — Genuino y DreamTeam.'}
+              {game === 'efootball' && '⚽ eFootball — Torneos y ligas con formato propio.'}
+            </p>
+          )}
         </div>
       )}
 
@@ -340,16 +399,22 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
       {type === 'liga' && (<>
         <div>
           <span style={lbl}>Tipo de liga</span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {[{id:'genuino',label:'🎮 Genuino',desc:'Equipos reales, jugadores auténticos'},{id:'dreamteam',label:'⭐ DreamTeam',desc:'Equipo propio (Ultimate Team)'}].map(t => (
-              <button key={t.id} onClick={() => setLigaTipo(t.id)} style={{
-                flex: 1, padding: '8px 6px', borderRadius: 10, cursor: 'pointer',
-                border: `2px solid ${ligaTipo === t.id ? C.green : C.border + '66'}`,
-                background: ligaTipo === t.id ? `${C.green}15` : C.panel2,
-                color: ligaTipo === t.id ? C.green : C.text2, fontWeight: 700, fontSize: 11, textAlign: 'center',
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {ligaTipos.map(t => (
+              <button key={t.id} onClick={() => !t.disabled && setLigaTipo(t.id)} style={{
+                flex: 1, minWidth: 90, padding: '8px 6px', borderRadius: 10,
+                cursor: t.disabled ? 'not-allowed' : 'pointer',
+                border: `2px solid ${!t.disabled && ligaTipo === t.id ? C.green : C.border + '44'}`,
+                background: !t.disabled && ligaTipo === t.id ? `${C.green}15` : C.panel2,
+                color: t.disabled ? C.textDim : ligaTipo === t.id ? C.green : C.text2,
+                fontWeight: 700, fontSize: 11, textAlign: 'center', opacity: t.disabled ? 0.55 : 1,
+                position: 'relative',
               }}>
                 <div>{t.label}</div>
                 <div style={{ fontSize: 10, fontWeight: 400, color: C.textDim, marginTop: 2 }}>{t.desc}</div>
+                {t.disabled && (
+                  <span style={{ position: 'absolute', top: -6, right: 4, fontSize: 9, fontWeight: 800, background: '#f59e0b', color: '#000', borderRadius: 20, padding: '1px 6px' }}>Pronto</span>
+                )}
               </button>
             ))}
           </div>
@@ -613,6 +678,84 @@ function TournamentCard({ item, onManage, onJoin, onChat, myId, isStaff }) {
       </div>
       </div>
     </div>
+  )
+}
+
+// ── Agregar jugador a liga (organizador) ──────────────────────────────────────
+function AddPlayerToLiga({ tournamentId, communityId, currentParticipants, onAdded }) {
+  const [open, setOpen] = useState(false)
+  const [communityMembers, setCommunityMembers] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(null)
+
+  async function loadCommunityMembers() {
+    setLoading(true)
+    const currentIds = new Set(currentParticipants.map(p => p.user_id))
+    const { data } = await supabase
+      .from('conversation_members')
+      .select('user_id, users:user_id(id, display_name, username, avatar_url)')
+      .eq('conversation_id', communityId)
+    const filtered = (data || []).filter(m => !currentIds.has(m.user_id))
+    setCommunityMembers(filtered)
+    setLoading(false)
+  }
+
+  async function addPlayer(userId) {
+    setAdding(userId)
+    const { error } = await supabase.from('conversation_members').insert({
+      conversation_id: tournamentId,
+      user_id: userId,
+      role: 'member',
+    })
+    if (!error) { await onAdded(); setOpen(false) }
+    else if (error.code === '23505') { await onAdded(); setOpen(false) } // ya existe
+    setAdding(null)
+  }
+
+  return (
+    <>
+      <button onClick={() => { setOpen(true); loadCommunityMembers() }} style={{
+        width: '100%', padding: '10px', borderRadius: 12, border: `1px dashed ${C.green}`,
+        background: `${C.green}10`, color: C.green, fontWeight: 700, fontSize: 13, cursor: 'pointer', marginBottom: 14,
+      }}>
+        ➕ Agregar jugador de la comunidad
+      </button>
+
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.7)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: C.panel, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${C.border}` }}>
+            <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, fontSize: 20 }}>←</button>
+            <p style={{ margin: 0, fontWeight: 800, color: C.text, fontSize: 15 }}>Agregar jugador a la liga</p>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16, background: C.bg }}>
+            {loading ? (
+              <p style={{ textAlign: 'center', color: C.textDim }}>Cargando miembros...</p>
+            ) : communityMembers.length === 0 ? (
+              <p style={{ textAlign: 'center', color: C.textDim }}>Todos los miembros de la comunidad ya están inscriptos.</p>
+            ) : communityMembers.map(m => {
+              const u = m.users
+              const name = u?.display_name || u?.username || 'Jugador'
+              return (
+                <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: `1px solid ${C.border}22` }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: C.panel, overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: C.green }}>
+                    {u?.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : name[0]}
+                  </div>
+                  <span style={{ flex: 1, color: C.text, fontWeight: 600 }}>{name}</span>
+                  <button onClick={() => addPlayer(m.user_id)} disabled={adding === m.user_id} style={{
+                    padding: '7px 14px', borderRadius: 10, border: 'none',
+                    background: adding === m.user_id ? C.panel2 : C.green,
+                    color: adding === m.user_id ? C.textDim : C.bg,
+                    fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                  }}>
+                    {adding === m.user_id ? '…' : '➕ Agregar'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -943,7 +1086,20 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
         {/* ── JUGADORES ── */}
         {activeTab === 'jugadores' && (
           <div>
-            {status === 'inscripcion' && !joined && !canManage && (
+            {/* Botón inscribirse — liga en inscripcion */}
+            {isLiga && status === 'inscripcion' && !joined && !canManage && (
+              <button onClick={handleJoin} style={{
+                width: '100%', padding: 12, borderRadius: 12, border: 'none',
+                background: C.green, color: C.bg, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginBottom: 14,
+              }}>
+                ⚽ Inscribirme a la Liga
+              </button>
+            )}
+            {/* Organizador: agregar jugadores de la comunidad */}
+            {canManage && isLiga && (
+              <AddPlayerToLiga tournamentId={item.id} communityId={item.community_id} currentParticipants={participants} onAdded={loadParticipants} />
+            )}
+            {status === 'inscripcion' && !joined && !canManage && !isLiga && (
               <button onClick={handleJoin} style={{
                 width: '100%', padding: 12, borderRadius: 12, border: 'none',
                 background: C.green, color: C.bg, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginBottom: 14,
@@ -1187,6 +1343,9 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
                 await supabase.from('conversations').update({ tournament_status: 'en_curso', liga_fase: 'apertura' }).eq('id', item.id)
                 setItem(prev => ({ ...prev, tournament_status: 'en_curso', liga_fase: 'apertura' }))
                 await postTournamentAviso(item.community_id, myId, `⚡ Liga "${item.name}" — ¡APERTURA iniciada!`, `${pts.length} jugadores. ${rows.length} partidos. ¡Buena suerte!`, item.id)
+                // Mensaje en el chat del torneo con el fixture completo
+                const nameMap = Object.fromEntries(pts.map(p => [p.user_id, userMap[p.user_id]?.display_name || userMap[p.user_id]?.username || 'Jugador']))
+                await postGroupMessage(item.id, myId, buildFixtureMessage(rows, nameMap, `Apertura — ${item.name}`))
 
               } else if (action === 'generar_clausura') {
                 // Clausura: todos vs todos ida y vuelta (round=3)
@@ -1206,6 +1365,9 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
                 await supabase.from('conversations').update({ liga_fase: 'clausura' }).eq('id', item.id)
                 setItem(prev => ({ ...prev, liga_fase: 'clausura' }))
                 await postTournamentAviso(item.community_id, myId, `🍂 Liga "${item.name}" — ¡CLAUSURA iniciada!`, `${pts.length} jugadores. Ida y vuelta. ¡Que empiece!`, item.id)
+                // Mensaje en el chat del torneo con el fixture de clausura (solo ida, vuelta se informa igual)
+                const nameMap2 = Object.fromEntries(pts.map(p => [p.user_id, userMap[p.user_id]?.display_name || userMap[p.user_id]?.username || 'Jugador']))
+                await postGroupMessage(item.id, myId, buildFixtureMessage(rows.filter(r => r.jornada_number <= pts.length*(pts.length-1)/2), nameMap2, `Clausura — ${item.name}`))
 
               } else if (action === 'iniciar_clausura') {
                 // Called when advancing from apertura_playoffs (no fixture yet)
@@ -1413,6 +1575,7 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
   const [userPerms, setUserPerms] = useState(null)
 
   const communityTags = community?.tags || []
+  const communityFeatures = community?.features || {}
 
   useEffect(() => {
     if (!community?.id || !profile?.id) return
@@ -1557,6 +1720,7 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
             <CreateForm
               communityId={community.id}
               communityTags={communityTags}
+              communityFeatures={communityFeatures}
               onCreated={() => { setShowCreate(false); load() }}
               onCancel={() => setShowCreate(false)}
             />

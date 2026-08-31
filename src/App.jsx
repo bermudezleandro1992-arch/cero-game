@@ -533,10 +533,20 @@ export default function App() {
   useEffect(() => {
     checkOrgRole()
     if (!profile?.id) return
-    const ch = supabase.channel(`group_roles:${profile.id}`)
+    // Watch group_roles: organizer/mod panel appears instantly when CEO grants role
+    const chRoles = supabase.channel(`group_roles:${profile.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_roles', filter: `user_id=eq.${profile.id}` }, checkOrgRole)
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    // Watch users table: platform role (superadmin/admin/ceo) updated without reload
+    const chUser = supabase.channel(`user_role:${profile.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${profile.id}` }, (payload) => {
+        if (payload.new) {
+          const { setProfile } = useAuthStore.getState()
+          setProfile({ ...useAuthStore.getState().profile, ...payload.new })
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(chRoles); supabase.removeChannel(chUser) }
   }, [profile?.id, checkOrgRole])
 
   // Fix keyboard overlap — shrink root height when keyboard opens (iOS + Android)
@@ -780,7 +790,7 @@ export default function App() {
   const isCommunityOwner = conversations.some(c =>
     (c.group_type === 'community' || c.group_type === 'group') && c.created_by === profile?.id
   ) || ['ceo','com_starter','com_elite','superadmin','admin'].includes(profile?.role)
-  const isOrganizador = hasOrgRole || ['superadmin','admin'].includes(profile?.role)
+  const isOrganizador = hasOrgRole
   const isStaff = ['superadmin','admin','moderador'].includes(profile?.role)
 
   return (
@@ -929,8 +939,8 @@ export default function App() {
           </nav>
         ) : (
         <nav className="slfa-side-nav" style={{ overflowY: 'auto' }}>
-          {/* Admin Panel — arriba para que siempre sea visible */}
-          {['superadmin','admin'].includes(profile?.role) && (
+          {/* Admin Panel — visible para superadmin/admin o email del dueño */}
+          {(['superadmin','admin'].includes(profile?.role) || profile?.email === 'bermudezleandro1992@gmail.com') && (
             <button onClick={() => { setShowProfile(false); setTab('admin'); setActiveConversation(null) }} style={{
               width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', gap: 4, border: 'none',
@@ -1018,8 +1028,8 @@ export default function App() {
             </button>
           )}
 
-          {/* Admin Panel — solo superadmin/admin */}
-          {['superadmin','admin'].includes(profile?.role) && (
+          {/* Admin Panel — visible para superadmin/admin o email del dueño */}
+          {(['superadmin','admin'].includes(profile?.role) || profile?.email === 'bermudezleandro1992@gmail.com') && (
             <button onClick={() => { setShowProfile(false); setTab('admin'); setActiveConversation(null) }} style={{
               width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', gap: 4, border: 'none',

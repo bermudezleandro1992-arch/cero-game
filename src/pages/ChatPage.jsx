@@ -687,32 +687,48 @@ export default function ChatPage({ onBack }) {
     clearTimeout(typingTimer.current)
   }
 
-  // Members list for mention autocomplete — load from DB if not present
+  // Members list for mention autocomplete — always load fresh from DB
   const [loadedMembers, setLoadedMembers] = useState([])
   useEffect(() => {
-    if (!isGroup || !convId) { setLoadedMembers([]); return }
-    if (activeConversation?.members?.length) { setLoadedMembers(activeConversation.members); return }
+    if (!convId) { setLoadedMembers([]); return }
+    // Always fetch from DB to ensure we have the full list
     supabase.rpc('get_conversation_members', { p_conversation_ids: [convId] }).then(({ data }) => {
-      if (!data?.length) return
+      if (!data?.length) {
+        // Fallback: direct select
+        supabase.from('conversation_members').select('user_id').eq('conversation_id', convId).then(({ data: rows }) => {
+          if (!rows?.length) return
+          const ids = rows.map(r => r.user_id)
+          supabase.from('users').select('id, display_name, username, avatar_url').in('id', ids).then(({ data: users }) => {
+            setLoadedMembers(users || [])
+          })
+        })
+        return
+      }
       const ids = data.map(r => r.user_id)
       supabase.from('users').select('id, display_name, username, avatar_url').in('id', ids).then(({ data: users }) => {
         setLoadedMembers(users || [])
       })
     })
-  }, [convId, isGroup])
+  }, [convId])
 
   const allMembers = [
-    ...(activeConversation?.members?.length ? activeConversation.members : loadedMembers),
+    ...(activeConversation?.members?.length ? activeConversation.members : []),
+    ...loadedMembers,
     otherUser,
     profile,
   ].filter(Boolean).filter((m, i, arr) => arr.findIndex(x => x?.id === m?.id) === i)
 
-  const ALL_MENTION = { id: '__all__', display_name: 'todos', username: 'all', isAll: true }
+  const ALL_MENTION = { id: '__all__', display_name: 'todos', username: 'todos', isAll: true }
   const mentionMatches = mentionQuery !== null
     ? [
-        ...('todos'.includes(mentionQuery.toLowerCase()) || 'all'.includes(mentionQuery.toLowerCase()) ? [ALL_MENTION] : []),
-        ...allMembers.filter(m => m?.display_name?.toLowerCase().includes(mentionQuery.toLowerCase()) || m?.username?.toLowerCase().includes(mentionQuery.toLowerCase())),
-      ].slice(0, 7)
+        // @todos siempre aparece si el query está vacío o coincide
+        ...(!mentionQuery || 'todos'.startsWith(mentionQuery.toLowerCase()) || 'all'.startsWith(mentionQuery.toLowerCase()) ? [ALL_MENTION] : []),
+        // miembros que coinciden
+        ...allMembers.filter(m =>
+          m?.display_name?.toLowerCase().includes(mentionQuery.toLowerCase()) ||
+          m?.username?.toLowerCase().includes(mentionQuery.toLowerCase())
+        ).filter(m => m.id !== profile?.id), // excluir a uno mismo
+      ].slice(0, 8)
     : []
 
   function handleTextChange(val) {
@@ -728,8 +744,8 @@ export default function ChatPage({ onBack }) {
   }
 
   function insertMention(member) {
-    const tag = member.isAll ? '@all' : `@${member.display_name}`
-    const replaced = text.replace(/@([\w ]*)$/, `${tag} `)
+    const tag = member.isAll ? '@todos' : `@${member.username || member.display_name}`
+    const replaced = text.replace(/@[\w\s]*$/, `${tag} `)
     setText(replaced)
     setMentionQuery(null)
     inputRef.current?.focus()
@@ -2557,26 +2573,35 @@ export default function ChatPage({ onBack }) {
                   {/* Mention dropdown */}
                   {mentionQuery !== null && mentionMatches.length > 0 && (
                     <div style={{
-                      position: 'absolute', bottom: '100%', left: 0, right: 0,
+                      position: 'absolute', bottom: 'calc(100% + 6px)', left: -8, right: -8,
                       background: C.panel, border: `1px solid ${C.border}`,
-                      borderRadius: 12, overflow: 'hidden', zIndex: 50,
-                      boxShadow: '0 -8px 24px rgba(0,0,0,0.5)',
-                      marginBottom: 4,
+                      borderRadius: 14, overflow: 'hidden', zIndex: 100,
+                      boxShadow: '0 -4px 32px rgba(0,0,0,0.6)',
                     }}>
+                      <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px', borderBottom: `1px solid ${C.border}44` }}>
+                        Mencionar
+                      </div>
                       {mentionMatches.map((m, i) => (
                         <button key={m.id} onMouseDown={e => { e.preventDefault(); insertMention(m) }} style={{
                           width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                          padding: '8px 12px', background: i === mentionIndex ? `${C.green}18` : 'none',
+                          padding: '9px 12px',
+                          background: i === mentionIndex ? `${C.green}18` : 'transparent',
                           border: 'none', cursor: 'pointer', textAlign: 'left',
+                          borderLeft: `3px solid ${i === mentionIndex ? C.green : 'transparent'}`,
                         }}>
                           {m.isAll
-                            ? <div style={{ width: 28, height: 28, borderRadius: '50%', background: C.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📣</div>
-                            : <Avatar name={m.display_name} size={28} color={senderColor(m.id)} url={m.avatar_url} />
+                            ? <div style={{ width: 32, height: 32, borderRadius: '50%', background: `${C.green}22`, border: `1.5px solid ${C.green}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>📣</div>
+                            : <Avatar name={m.display_name} size={32} color={senderColor(m.id)} url={m.avatar_url} />
                           }
-                          <div>
-                            <div style={{ color: m.isAll ? C.green : C.text, fontSize: 13, fontWeight: 600 }}>{m.isAll ? '@all' : m.display_name}</div>
-                            <div style={{ color: C.textDim, fontSize: 11 }}>{m.isAll ? 'Mencionar a todos' : `@${m.username}`}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ color: m.isAll ? C.green : C.text, fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {m.isAll ? '@todos' : (m.display_name || m.username)}
+                            </div>
+                            <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>
+                              {m.isAll ? 'Notifica a todos los miembros' : `@${m.username}`}
+                            </div>
                           </div>
+                          {i === mentionIndex && <span style={{ fontSize: 10, color: C.green, fontWeight: 700 }}>↵</span>}
                         </button>
                       ))}
                     </div>

@@ -480,7 +480,17 @@ function TorneosTab({ torneos, profile, onOpenTournament }) {
 }
 
 // ── Anuncios tab ──────────────────────────────────────────────────────────────
+const AVISO_CATS = [
+  { id: 'todo',    label: '📋 Todo',     match: null },
+  { id: 'torneo',  label: '🏆 Torneos',  match: 'torneo' },
+  { id: 'liga',    label: '⚽ Ligas',    match: 'liga' },
+  { id: 'evento',  label: '🎉 Eventos',  match: 'evento' },
+  { id: 'noticia', label: '📰 Noticias', match: 'noticia' },
+]
+
 function AnunciosTab({ announcements, loading }) {
+  const [cat, setCat] = useState('todo')
+
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
@@ -488,53 +498,74 @@ function AnunciosTab({ announcements, loading }) {
       </div>
     )
   }
-  if (!announcements.length) {
-    return (
-      <div style={{ textAlign: 'center', padding: '64px 32px', color: C.textDim }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>📢</div>
-        <p style={{ margin: 0, fontWeight: 700, color: C.text2 }}>Sin anuncios aún</p>
-        <p style={{ margin: '6px 0 0', fontSize: 12 }}>Los anuncios de esta comunidad aparecerán acá</p>
-      </div>
-    )
-  }
+
+  const catCfg = AVISO_CATS.find(c => c.id === cat)
+  const filtered = catCfg?.match ? announcements.filter(a => a.category === catCfg.match) : announcements
+
   return (
-    <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {announcements.map(a => (
-        <div key={a.id} style={{
-          background: C.panel, borderRadius: 14, padding: '14px 16px',
-          border: `1px solid ${C.border}`,
-          boxShadow: a.is_pinned ? `0 0 0 2px ${C.green}44` : 'none',
-        }}>
-          {a.is_pinned && (
-            <div style={{ color: C.green, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>📌 Fijado</div>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            {a.author?.avatar_url
-              ? <img src={a.author.avatar_url} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} alt="" />
-              : <div style={{ width: 32, height: 32, borderRadius: '50%', background: avatarColor(a.author_id), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff' }}>
-                  {(a.author?.display_name || '?').slice(0, 2).toUpperCase()}
-                </div>
-            }
-            <div>
-              <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{a.author?.display_name || 'Organizador'}</div>
-              <div style={{ color: C.textDim, fontSize: 11 }}>{timeAgo(a.created_at)}</div>
-            </div>
-          </div>
-          <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 6 }}>{a.title}</div>
-          {a.body && <p style={{ margin: '0 0 10px', color: C.text2, fontSize: 13, lineHeight: 1.6 }}>{a.body}</p>}
-          {a.image_url && (
-            <img src={a.image_url} alt="" style={{ width: '100%', borderRadius: 10, objectFit: 'cover', maxHeight: 200, display: 'block', marginBottom: 10 }} />
-          )}
-          {a.link_url && (
-            <a href={a.link_url} target="_blank" rel="noopener noreferrer" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10,
-              background: C.green, color: '#000', fontSize: 12, fontWeight: 700, textDecoration: 'none',
-            }}>
-              🔗 {a.link_label || 'Ver más'}
-            </a>
-          )}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Category filter chips */}
+      <div style={{ display: 'flex', gap: 6, padding: '10px 14px', overflowX: 'auto', flexShrink: 0, borderBottom: `1px solid ${C.border}22` }}>
+        {AVISO_CATS.map(c => (
+          <button key={c.id} onClick={() => setCat(c.id)} style={{
+            padding: '5px 13px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0,
+            background: cat === c.id ? C.green : C.panel2,
+            color: cat === c.id ? C.bg : C.text2, fontWeight: cat === c.id ? 700 : 400,
+          }}>{c.label}</button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '64px 32px', color: C.textDim }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📢</div>
+          <p style={{ margin: 0, fontWeight: 700, color: C.text2 }}>Sin {catCfg?.label || 'anuncios'} aún</p>
+          <p style={{ margin: '6px 0 0', fontSize: 12 }}>No hay anuncios de tipo "{catCfg?.label}" todavía.</p>
         </div>
-      ))}
+      ) : (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {filtered.map(a => (
+            <div key={a.id} style={{
+              background: C.panel, borderRadius: 14, padding: '14px 16px',
+              border: `1px solid ${C.border}`,
+              boxShadow: a.is_pinned ? `0 0 0 2px ${C.green}44` : 'none',
+            }}>
+              {a.is_pinned && (
+                <div style={{ color: C.green, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>📌 Fijado</div>
+              )}
+              {a.category && (
+                <div style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, color: a.category === 'torneo' ? '#f59e0b' : a.category === 'liga' ? '#3b82f6' : a.category === 'evento' ? '#a78bfa' : C.green, background: a.category === 'torneo' ? '#f59e0b18' : a.category === 'liga' ? '#3b82f618' : '#a78bfa18', padding: '2px 8px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+                  {a.category === 'torneo' ? '🏆 Torneo' : a.category === 'liga' ? '⚽ Liga' : a.category === 'evento' ? '🎉 Evento' : a.category === 'noticia' ? '📰 Noticia' : a.category}
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                {a.author?.avatar_url
+                  ? <img src={a.author.avatar_url} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} alt="" />
+                  : <div style={{ width: 32, height: 32, borderRadius: '50%', background: avatarColor(a.author_id), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff' }}>
+                      {(a.author?.display_name || '?').slice(0, 2).toUpperCase()}
+                    </div>
+                }
+                <div>
+                  <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{a.author?.display_name || 'Organizador'}</div>
+                  <div style={{ color: C.textDim, fontSize: 11 }}>{timeAgo(a.created_at)}</div>
+                </div>
+              </div>
+              <div style={{ color: C.text, fontWeight: 800, fontSize: 15, marginBottom: 6 }}>{a.title}</div>
+              {a.body && <p style={{ margin: '0 0 10px', color: C.text2, fontSize: 13, lineHeight: 1.6 }}>{a.body}</p>}
+              {a.image_url && (
+                <img src={a.image_url} alt="" style={{ width: '100%', borderRadius: 10, objectFit: 'cover', maxHeight: 200, display: 'block', marginBottom: 10 }} />
+              )}
+              {a.link_url && (
+                <a href={a.link_url} target="_blank" rel="noopener noreferrer" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10,
+                  background: C.green, color: '#000', fontSize: 12, fontWeight: 700, textDecoration: 'none',
+                }}>
+                  🔗 {a.link_label || 'Ver más'}
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -587,14 +618,12 @@ function MiembrosTab({ communityId, ownerId, isAdmin, myId }) {
   ]
 
   async function changeRole(userId, newRole) {
-    await supabase
-      .from('group_roles')
-      .upsert({ user_id: userId, group_id: communityId, role: newRole }, { onConflict: 'user_id,group_id' })
-    await supabase
-      .from('conversation_members')
-      .update({ role: newRole })
-      .eq('conversation_id', communityId)
-      .eq('user_id', userId)
+    const { error } = await supabase.rpc('set_community_member_role', {
+      p_conversation_id: communityId,
+      p_user_id: userId,
+      p_role: newRole,
+    })
+    if (error) { alert('Error al cambiar rol: ' + error.message); return }
     setActionMember(null)
     loadMembers()
   }
@@ -690,7 +719,11 @@ function MiembrosTab({ communityId, ownerId, isAdmin, myId }) {
   )
 }
 
-// ── CEO Panel ─────────────────────────────────────────────────────────────────
+// ── Gestión Panel (CEO / Organizador / Moderador) ─────────────────────────────
+function GestionPanel({ community, profile, isAdmin, isOrganizador, isModerador, onAvisoPublished }) {
+  return <CeoPanel community={community} profile={profile} onAvisoPublished={onAvisoPublished} />
+}
+
 function CeoPanel({ community, profile, onAvisoPublished }) {
   const { setActiveConversation } = useChatStore()
   const [channels, setChannels] = useState([])
@@ -792,10 +825,12 @@ function CeoPanel({ community, profile, onAvisoPublished }) {
   }
 
   async function changeRole(userId, newRole) {
-    await supabase.from('conversation_members')
-      .update({ role: newRole })
-      .eq('conversation_id', community.id)
-      .eq('user_id', userId)
+    const { error } = await supabase.rpc('set_community_member_role', {
+      p_conversation_id: community.id,
+      p_user_id: userId,
+      p_role: newRole,
+    })
+    if (error) { alert('Error al cambiar rol: ' + error.message); return }
     setMembers(prev => prev.map(m => m.user_id === userId ? { ...m, role: newRole } : m))
   }
 
@@ -980,21 +1015,33 @@ export default function CommunityDashboard({ community, onBack }) {
 
   useEffect(() => {
     if (!profile?.id || !community?.id) return
-    if (myRole) return
-    supabase
-      .from('conversation_members')
-      .select('role')
-      .eq('conversation_id', community.id)
-      .eq('user_id', profile.id)
-      .single()
+    // Initial load
+    supabase.from('conversation_members').select('role')
+      .eq('conversation_id', community.id).eq('user_id', profile.id).single()
       .then(({ data }) => { if (data?.role) setMyRole(data.role) })
+    // Realtime: si el CEO cambia el rol, el panel aparece al instante
+    const ch = supabase.channel(`cm_role:${community.id}:${profile.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'conversation_members',
+        filter: `conversation_id=eq.${community.id}`,
+      }, (payload) => {
+        if (payload.new?.user_id === profile.id && payload.new?.role) {
+          setMyRole(payload.new.role)
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
   }, [profile?.id, community?.id])
 
   const isAdmin = community.created_by === profile?.id
     || myRole === 'owner' || myRole === 'admin'
     || profile?.role === 'superadmin' || profile?.role === 'admin'
-  const TABS = isAdmin
-    ? [...BASE_TABS, { id: 'ceo', label: 'CEO', emoji: '⚙️' }]
+  const isOrganizador = myRole === 'organizador'
+  const isModerador   = myRole === 'moderador' || myRole === 'organizador'
+  // Panel visible solo si tiene un rol real en esta comunidad o es admin de la plataforma
+  const hasGestionPanel = isAdmin || isOrganizador || isModerador
+  const TABS = hasGestionPanel
+    ? [...BASE_TABS, { id: 'ceo', label: isAdmin ? 'CEO' : 'Gestión', emoji: '⚙️' }]
     : BASE_TABS
   const [tab, setTab] = useState('inicio')
   const [torneos, setTorneos] = useState([])
@@ -1136,8 +1183,15 @@ export default function CommunityDashboard({ community, onBack }) {
         {tab === 'chat' && (
           <ChannelsTab community={community} profile={profile} isAdmin={isAdmin} />
         )}
-        {tab === 'ceo' && isAdmin && (
-          <CeoPanel community={community} profile={profile} onAvisoPublished={loadData} />
+        {tab === 'ceo' && hasGestionPanel && (
+          <GestionPanel
+            community={community}
+            profile={profile}
+            isAdmin={isAdmin}
+            isOrganizador={isOrganizador}
+            isModerador={isModerador}
+            onAvisoPublished={loadData}
+          />
         )}
       </div>
 

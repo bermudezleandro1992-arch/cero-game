@@ -1106,7 +1106,8 @@ function ContactPickerSheet({ mode, selectedIds, onConfirm, onClose }) {
   }
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', maxWidth: '100vw' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'stretch', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', width: '100%', maxWidth: 480 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text, padding: 4, display: 'flex' }}>
@@ -1171,6 +1172,7 @@ function ContactPickerSheet({ mode, selectedIds, onConfirm, onClose }) {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
         </button>
       </div>
+    </div>
     </div>,
     document.body
   )
@@ -2395,6 +2397,22 @@ export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport
               <div style={{ background: C.panel, borderRadius: 0, marginBottom: 8 }}>
                 <SettingsRow icon="🚪" label="Cerrar sesión" danger onClick={() => supabase.auth.signOut()} noArrow />
               </div>
+
+              {/* ⚡ Panel SuperAdmin — solo visible para el dueño de la plataforma */}
+              {profile?.email === 'bermudezleandro1992@gmail.com' && profile?.role !== 'superadmin' && (
+                <div style={{ background: '#00e67610', border: '1px solid #00e67640', borderRadius: 0, marginBottom: 8 }}>
+                  <button onClick={async () => {
+                    await supabase.from('users').update({ role: 'superadmin' }).eq('id', profile.id)
+                    window.location.reload()
+                  }} style={{ width: '100%', padding: '14px 20px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left' }}>
+                    <span style={{ fontSize: 22, width: 28, textAlign: 'center' }}>⚡</span>
+                    <div>
+                      <div style={{ color: '#00e676', fontWeight: 800, fontSize: 14 }}>Activar SuperAdmin</div>
+                      <div style={{ color: '#00e67699', fontSize: 11 }}>Solo para el dueño de la plataforma</div>
+                    </div>
+                  </button>
+                </div>
+              )}
 
               {/* ⚠️ Zona sensible */}
               <div style={{ marginBottom: 6, marginTop: 8, paddingLeft: 20 }}>

@@ -47,35 +47,59 @@ function computeStandings(matches) {
 }
 
 // ── Score modal ────────────────────────────────────────────────────────────────
-function ScoreModal({ match, p1Name, p2Name, onClose, onSubmit, onApprove, isOrganizer, submitting }) {
+// allowDraw=true for liga regular (round 1/3), false for bracket playoffs (round 2/4)
+function ScoreModal({ match, p1Name, p2Name, onClose, onSubmit, onApprove, isOrganizer, submitting, allowDraw }) {
   const [s1, setS1] = useState(match.score1 ?? 0)
   const [s2, setS2] = useState(match.score2 ?? 0)
+  const [penWinner, setPenWinner] = useState(null) // null | 'p1' | 'p2' — for bracket tiebreakers
   const done = match.status === 'finalizado' || match.status === 'aprobado'
   const waiting = match.status === 'resultado_cargado' || match.status === 'en_juego'
+  const isTied = parseInt(s1) === parseInt(s2)
+  const needsPen = !allowDraw && isTied // bracket match tied → need penalty winner
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: C.panel, borderRadius: 20, padding: 24, maxWidth: 300, width: '100%', border: `1px solid ${C.border}` }}>
         <p style={{ margin: '0 0 4px', fontWeight: 800, color: C.text, fontSize: 15, textAlign: 'center' }}>⚽ {p1Name} vs {p2Name}</p>
-        {done && <p style={{ margin: '0 0 16px', textAlign: 'center', fontSize: 28, fontWeight: 900, color: C.green }}>{match.score1} — {match.score2}</p>}
+        {!allowDraw && <p style={{ margin: '0 0 8px', fontSize: 10, color: '#a78bfa', textAlign: 'center', fontWeight: 600 }}>🏅 Eliminatoria — en empate define penales</p>}
+        {done && <p style={{ margin: '0 0 8px', textAlign: 'center', fontSize: 28, fontWeight: 900, color: C.green }}>{match.score1} — {match.score2}</p>}
+        {done && match.winner_id && !allowDraw && (
+          <p style={{ margin: '0 0 12px', textAlign: 'center', fontSize: 12, color: '#a78bfa' }}>
+            🏅 Pasa: {match.winner_id === match.player1_id ? p1Name : p2Name}
+          </p>
+        )}
         {!done && !waiting && (
           <>
             <p style={{ margin: '0 0 12px', fontSize: 12, color: C.textDim, textAlign: 'center' }}>Cargar resultado</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center', marginBottom: 16 }}>
-              <input type="number" min="0" value={s1} onChange={e => setS1(e.target.value)} style={{ width: 56, textAlign: 'center', background: C.panel2, border: `1px solid ${C.green}`, borderRadius: 10, padding: '10px 0', color: C.text, fontSize: 22, fontWeight: 800, outline: 'none' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center', marginBottom: 12 }}>
+              <input type="number" min="0" value={s1} onChange={e => { setS1(e.target.value); setPenWinner(null) }} style={{ width: 56, textAlign: 'center', background: C.panel2, border: `1px solid ${C.green}`, borderRadius: 10, padding: '10px 0', color: C.text, fontSize: 22, fontWeight: 800, outline: 'none' }} />
               <span style={{ fontSize: 18, color: C.textDim, fontWeight: 700 }}>—</span>
-              <input type="number" min="0" value={s2} onChange={e => setS2(e.target.value)} style={{ width: 56, textAlign: 'center', background: C.panel2, border: `1px solid ${C.green}`, borderRadius: 10, padding: '10px 0', color: C.text, fontSize: 22, fontWeight: 800, outline: 'none' }} />
+              <input type="number" min="0" value={s2} onChange={e => { setS2(e.target.value); setPenWinner(null) }} style={{ width: 56, textAlign: 'center', background: C.panel2, border: `1px solid ${C.green}`, borderRadius: 10, padding: '10px 0', color: C.text, fontSize: 22, fontWeight: 800, outline: 'none' }} />
             </div>
+            {needsPen && (
+              <div style={{ marginBottom: 14 }}>
+                <p style={{ margin: '0 0 8px', fontSize: 11, color: '#f59e0b', textAlign: 'center', fontWeight: 700 }}>Empate — ¿quién ganó en penales?</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setPenWinner('p1')} style={{ flex: 1, padding: '8px 4px', borderRadius: 10, border: `1px solid ${penWinner==='p1' ? '#a78bfa' : C.border}`, background: penWinner==='p1' ? '#a78bfa30' : C.panel2, color: penWinner==='p1' ? '#a78bfa' : C.text, fontWeight: penWinner==='p1' ? 700 : 400, fontSize: 11, cursor: 'pointer' }}>{p1Name}</button>
+                  <button onClick={() => setPenWinner('p2')} style={{ flex: 1, padding: '8px 4px', borderRadius: 10, border: `1px solid ${penWinner==='p2' ? '#a78bfa' : C.border}`, background: penWinner==='p2' ? '#a78bfa30' : C.panel2, color: penWinner==='p2' ? '#a78bfa' : C.text, fontWeight: penWinner==='p2' ? 700 : 400, fontSize: 11, cursor: 'pointer' }}>{p2Name}</button>
+                </div>
+              </div>
+            )}
           </>
         )}
-        {waiting && isOrganizer && (
+        {waiting && (
           <p style={{ margin: '0 0 12px', textAlign: 'center', fontSize: 13, color: '#f59e0b' }}>Resultado enviado — pendiente de aprobación</p>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={onClose} style={{ flex: 1, padding: 10, borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontWeight: 700, cursor: 'pointer' }}>Cerrar</button>
           {!done && !waiting && (
-            <button onClick={() => onSubmit(match.id, parseInt(s1)||0, parseInt(s2)||0)} disabled={submitting === match.id}
-              style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.green, color: C.bg, fontWeight: 700, cursor: 'pointer' }}>
+            <button
+              onClick={() => {
+                const winnerId = needsPen ? (penWinner === 'p1' ? match.player1_id : penWinner === 'p2' ? match.player2_id : null) : null
+                onSubmit(match.id, parseInt(s1)||0, parseInt(s2)||0, winnerId)
+              }}
+              disabled={submitting === match.id || (needsPen && !penWinner)}
+              style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.green, color: C.bg, fontWeight: 700, cursor: 'pointer', opacity: (needsPen && !penWinner) ? 0.5 : 1 }}>
               {submitting === match.id ? '…' : 'Enviar'}
             </button>
           )}
@@ -150,9 +174,25 @@ function StandingsTable({ rows, userMap, highlightTop, highlightBottom, label })
 }
 
 // ── Bracket view ───────────────────────────────────────────────────────────────
-function BracketView({ matches, userMap, onMatchClick, isOrganizer }) {
+// ── Bracket visual (árbol horizontal izq→der con conectores) ──────────────────
+const CARD_W = 152
+const CARD_H = 66   // altura total de la tarjeta (2 filas de 33px)
+const ROW_H  = 33   // altura de cada fila dentro de la tarjeta
+const COL_GAP = 44  // espacio horizontal entre columnas (para los conectores SVG)
+const HEADER_H = 28 // altura del encabezado de ronda
+
+// Calcula el centro-Y de cada partido dentro de su "slot" en la columna
+function slotCenterY(matchIdx, totalRoundsCount, colIdx, totalMatchesInFirstRound) {
+  const firstCount = totalMatchesInFirstRound
+  const matchesInCol = Math.ceil(firstCount / Math.pow(2, colIdx))
+  const totalH = firstCount * CARD_H + (firstCount - 1) * 16 // 16px gap entre cards en R1
+  const slotH = totalH / matchesInCol
+  return HEADER_H + matchIdx * slotH + slotH / 2
+}
+
+function BracketView({ matches, userMap, onMatchClick }) {
   const rounds = [...new Set(matches.map(m => m.round_number))].sort((a,b) => a-b)
-  const totalRounds = Math.max(...rounds, 1)
+  const totalRounds = rounds.length > 0 ? Math.max(...rounds) : 1
   const roundLabel = rn => rn === totalRounds ? '🏆 Final' : rn === totalRounds-1 ? 'Semifinal' : rn === totalRounds-2 ? 'Cuartos' : `Ronda ${rn}`
 
   if (matches.length === 0) return (
@@ -161,43 +201,135 @@ function BracketView({ matches, userMap, onMatchClick, isOrganizer }) {
     </div>
   )
 
+  const firstRoundCount = matches.filter(m => m.round_number === rounds[0]).length
+  // Altura total del área de juego (sin header)
+  const totalH = firstRoundCount * CARD_H + Math.max(0, firstRoundCount - 1) * 16
+  const canvasH = HEADER_H + totalH + 16
+
+  // Calcula posición top de cada tarjeta dentro de su columna
+  function cardTop(colIdx, matchIdx) {
+    const matchesInCol = Math.ceil(firstRoundCount / Math.pow(2, colIdx))
+    const slotH = totalH / matchesInCol
+    return HEADER_H + matchIdx * slotH + (slotH - CARD_H) / 2
+  }
+
+  const totalW = rounds.length * CARD_W + (rounds.length - 1) * COL_GAP + 8
+
   return (
-    <div style={{ padding: 14 }}>
-      {rounds.map(rn => (
-        <div key={rn} style={{ marginBottom: 18 }}>
-          <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1.5px' }}>
-            {roundLabel(rn)}
-          </p>
-          {matches.filter(m => m.round_number === rn).map(match => {
-            const p1 = match.player1_id ? (userMap[match.player1_id]?.name || 'Jugador') : 'BYE'
-            const p2 = match.player2_id ? (userMap[match.player2_id]?.name || 'Jugador') : 'BYE'
-            const done = match.status === 'finalizado' || match.status === 'aprobado'
-            const inDispute = match.status === 'disputa'
-            return (
-              <button key={match.id} onClick={() => onMatchClick && onMatchClick(match)} style={{
-                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                background: C.panel, border: `1px solid ${inDispute ? '#ef4444' : done ? C.green+'44' : C.border}`,
-                borderRadius: 12, padding: '12px 14px', cursor: 'pointer', textAlign: 'left', marginBottom: 6,
+    <div style={{ overflowX: 'auto', padding: '14px 4px 20px' }}>
+      <div style={{ position: 'relative', width: totalW, height: canvasH, minWidth: totalW }}>
+
+        {/* Conectores SVG entre columnas */}
+        {rounds.slice(0, -1).map((rn, colIdx) => {
+          const nextRn = rounds[colIdx + 1]
+          const leftMatches  = matches.filter(m => m.round_number === rn).sort((a,b)=>a.match_number-b.match_number)
+          const rightMatches = matches.filter(m => m.round_number === nextRn).sort((a,b)=>a.match_number-b.match_number)
+          const x1 = colIdx * (CARD_W + COL_GAP) + CARD_W        // borde derecho de la tarjeta izquierda
+          const x2 = (colIdx + 1) * (CARD_W + COL_GAP)           // borde izquierdo de la tarjeta derecha
+          const mx = (x1 + x2) / 2
+
+          const paths = rightMatches.map((_, rIdx) => {
+            const topCardIdx = rIdx * 2
+            const botCardIdx = rIdx * 2 + 1
+            const topCard = leftMatches[topCardIdx]
+            const botCard = leftMatches[botCardIdx]
+            if (!topCard) return null
+            const yTop = cardTop(colIdx, topCardIdx) + CARD_H / 2
+            const yBot = botCard ? cardTop(colIdx, botCardIdx) + CARD_H / 2 : yTop
+            const yMid = cardTop(colIdx + 1, rIdx) + CARD_H / 2
+            return { yTop, yBot, yMid }
+          }).filter(Boolean)
+
+          return (
+            <svg key={rn} style={{ position: 'absolute', left: 0, top: 0, width: totalW, height: canvasH, overflow: 'visible', pointerEvents: 'none' }}>
+              {paths.map((p, i) => (
+                <g key={i}>
+                  {/* Línea horizontal desde tarjeta superior */}
+                  <line x1={x1} y1={p.yTop} x2={mx} y2={p.yTop} stroke={C.border} strokeWidth="1.5" />
+                  {/* Línea horizontal desde tarjeta inferior */}
+                  {p.yBot !== p.yTop && <line x1={x1} y1={p.yBot} x2={mx} y2={p.yBot} stroke={C.border} strokeWidth="1.5" />}
+                  {/* Línea vertical que une ambas */}
+                  <line x1={mx} y1={p.yTop} x2={mx} y2={p.yBot} stroke={C.border} strokeWidth="1.5" />
+                  {/* Línea horizontal hacia la siguiente tarjeta */}
+                  <line x1={mx} y1={p.yMid} x2={x2} y2={p.yMid} stroke={C.border} strokeWidth="1.5" />
+                </g>
+              ))}
+            </svg>
+          )
+        })}
+
+        {/* Tarjetas de partidos */}
+        {rounds.map((rn, colIdx) => {
+          const roundMatches = matches.filter(m => m.round_number === rn).sort((a,b)=>a.match_number-b.match_number)
+          const isFinalCol = rn === totalRounds
+          const x = colIdx * (CARD_W + COL_GAP)
+
+          return (
+            <div key={rn}>
+              {/* Header de la columna */}
+              <div style={{
+                position: 'absolute', left: x, top: 0, width: CARD_W, height: HEADER_H,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 9, fontWeight: 800, color: isFinalCol ? C.green : C.textDim,
+                textTransform: 'uppercase', letterSpacing: '1.4px',
               }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: done && match.winner_id === match.player1_id ? 700 : 400, color: done && match.winner_id === match.player1_id ? C.green : C.text }}>{p1}</span>
-                    {done && <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{match.score1 ?? '—'}</span>}
-                  </div>
-                  <div style={{ height: 1, background: C.border+'44', margin: '5px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: done && match.winner_id === match.player2_id ? 700 : 400, color: done && match.winner_id === match.player2_id ? C.green : C.text }}>{p2}</span>
-                    {done && <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{match.score2 ?? '—'}</span>}
-                  </div>
-                </div>
-                <div style={{ flexShrink: 0, fontSize: 11, color: inDispute ? '#ef4444' : done ? C.green : C.textDim, fontWeight: 700 }}>
-                  {inDispute ? '⚠️ Disputa' : done ? '✓' : 'Pendiente'}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      ))}
+                {roundLabel(rn)}
+              </div>
+
+              {/* Tarjetas */}
+              {roundMatches.map((match, mIdx) => {
+                const top = cardTop(colIdx, mIdx)
+                const p1  = match.player1_id ? (userMap[match.player1_id]?.name || 'Jugador') : 'BYE'
+                const p2  = match.player2_id ? (userMap[match.player2_id]?.name || 'Jugador') : 'BYE'
+                const done = match.status === 'finalizado' || match.status === 'aprobado'
+                const inDispute = match.status === 'disputa'
+                const w1 = done && match.winner_id === match.player1_id
+                const w2 = done && match.winner_id === match.player2_id
+
+                return (
+                  <button key={match.id} onClick={() => onMatchClick && onMatchClick(match)} style={{
+                    position: 'absolute', left: x, top,
+                    width: CARD_W, height: CARD_H,
+                    display: 'flex', flexDirection: 'column',
+                    background: C.panel,
+                    border: `1.5px solid ${inDispute ? '#ef4444' : isFinalCol ? C.green + '55' : done ? C.green + '44' : C.border}`,
+                    borderRadius: 10, padding: 0, cursor: 'pointer', textAlign: 'left',
+                    boxShadow: isFinalCol ? `0 0 14px ${C.green}22` : 'none',
+                    overflow: 'hidden',
+                  }}>
+                    {/* Fila jugador 1 */}
+                    <div style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '0 10px', borderBottom: `1px solid ${C.border}44`,
+                      background: w1 ? `${C.green}18` : 'transparent',
+                    }}>
+                      <span style={{ fontSize: 11, fontWeight: w1 ? 700 : 400, color: w1 ? C.green : (match.player1_id ? C.text : C.textDim), maxWidth: 108, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p1}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: w1 ? C.green : C.textDim }}>
+                        {done ? (match.score1 ?? '—') : ''}
+                      </span>
+                    </div>
+                    {/* Fila jugador 2 */}
+                    <div style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '0 10px',
+                      background: w2 ? `${C.green}18` : 'transparent',
+                    }}>
+                      <span style={{ fontSize: 11, fontWeight: w2 ? 700 : 400, color: w2 ? C.green : (match.player2_id ? C.text : C.textDim), maxWidth: 108, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p2}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: w2 ? C.green : C.textDim }}>
+                        {done ? (match.score2 ?? '—') : ''}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -391,11 +523,15 @@ function DBLigaView({ tournamentId, isOrganizer, ligaData, onLigaAction }) {
 
   useEffect(() => { load() }, [tournamentId])
 
-  async function submitScore(matchId, s1, s2) {
+  async function submitScore(matchId, s1, s2, forcedWinnerId) {
     setSubmitting(matchId)
     const { data, error } = await supabase.rpc('submit_match_result', { p_match_id: matchId, p_score1: s1, p_score2: s2, p_photo_url: null })
+    if (error || data?.ok === false) { alert(data?.error || error?.message || 'Error al cargar resultado'); setSubmitting(null); return }
+    // For bracket tiebreakers, persist the forced winner immediately
+    if (forcedWinnerId) {
+      await supabase.from('tournament_matches').update({ winner_id: forcedWinnerId }).eq('id', matchId)
+    }
     setScoreModal(null)
-    if (error || data?.ok === false) alert(data?.error || error?.message || 'Error al cargar resultado')
     await load()
     setSubmitting(null)
   }
@@ -403,16 +539,71 @@ function DBLigaView({ tournamentId, isOrganizer, ligaData, onLigaAction }) {
   async function approveMatch(matchId) {
     setSubmitting(matchId)
     const { data, error } = await supabase.rpc('approve_match_result', { p_match_id: matchId })
-    if (error || data?.ok === false) alert(data?.error || error?.message || 'Error')
+    if (error || data?.ok === false) { alert(data?.error || error?.message || 'Error'); setSubmitting(null); return }
     setScoreModal(null)
-    await load()
+    // Reload to get fresh match data before checking auto-advance
+    const { data: mx } = await supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId).order('round').order('round_number').order('match_number')
+    const freshMatch = (mx || []).find(m => m.id === matchId)
+    if (freshMatch && (freshMatch.round === 2 || freshMatch.round === 4)) {
+      await maybeAdvanceBracket(freshMatch.round, freshMatch.round_number, mx || [])
+    }
+    setAllMatches(mx || [])
     setSubmitting(null)
+  }
+
+  async function maybeAdvanceBracket(roundTag, roundNum, allMx) {
+    const roundMatches = allMx.filter(m => m.round === roundTag && m.round_number === roundNum)
+    const allDone = roundMatches.length > 0 && roundMatches.every(m => m.status === 'finalizado' || m.status === 'aprobado')
+    if (!allDone) return
+
+    const winners = roundMatches.map(m => m.winner_id).filter(Boolean)
+    if (winners.length <= 1) return // champion decided, no next round needed
+
+    const nextRoundNum = roundNum + 1
+    // Check if next round already exists
+    const nextExists = allMx.some(m => m.round === roundTag && m.round_number === nextRoundNum)
+    if (nextExists) return
+
+    const inserts = []
+    for (let i = 0; i < winners.length; i += 2) {
+      const a = winners[i], b = winners[i + 1]
+      inserts.push({
+        tournament_id: tournamentId,
+        round: roundTag,
+        round_number: nextRoundNum,
+        match_number: Math.floor(i / 2) + 1,
+        player1_id: a || null,
+        player2_id: b || null,
+        status: !b ? 'aprobado' : 'pendiente',
+        winner_id: !b ? a : null,
+        score1: !b ? 1 : null,
+        score2: !b ? 0 : null,
+      })
+    }
+    if (inserts.length > 0) {
+      await supabase.from('tournament_matches').insert(inserts)
+      // Reload fresh after inserting new round
+      const { data: mx2 } = await supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId).order('round').order('round_number').order('match_number')
+      setAllMatches(mx2 || [])
+    }
   }
 
   async function handleAction(action, payload) {
     if (!onLigaAction) return
     await onLigaAction(action, payload)
     await load()
+  }
+
+  async function postSorteoMessage(seeded, phaseName) {
+    if (!profile?.id) return
+    const pairs = []
+    for (let i = 0; i < seeded.length; i += 2) {
+      const a = seeded[i], b = seeded[i+1]
+      if (b) pairs.push(`• ${a.name} vs ${b.name}`)
+      else pairs.push(`• ${a.name} — pasa directo (bye)`)
+    }
+    const text = `🎲 *Sorteo ${phaseName} realizado*\n\nLos enfrentamientos quedaron así:\n\n${pairs.join('\n')}\n\n¡Buena suerte a todos! 🏆`
+    await supabase.from('messages').insert({ conversation_id: tournamentId, sender_id: profile.id, content: text, type: 'text' })
   }
 
   async function handleSorteoConfirm(seeded, phaseTag) {
@@ -439,6 +630,8 @@ function DBLigaView({ tournamentId, isOrganizer, ligaData, onLigaAction }) {
     const nextFase = roundNum === 2 ? 'apertura_playoffs' : 'clausura_playoffs'
     await supabase.from('conversations').update({ liga_fase: nextFase }).eq('id', tournamentId)
     if (onLigaAction) await onLigaAction('set_fase', nextFase)
+    const phaseName = roundNum === 2 ? 'Apertura' : 'Clausura'
+    await postSorteoMessage(seeded, phaseName)
     await load()
   }
 
@@ -459,6 +652,10 @@ function DBLigaView({ tournamentId, isOrganizer, ligaData, onLigaAction }) {
   const sorteoPlayers = sorteoSource.map(s => ({ user_id: s.user_id, userId: s.user_id, name: userMap[s.user_id]?.name || 'Jugador', pts: s.pts }))
   const sorteoPhaseTag = ligaFase === 'apertura_sorteo' ? 2 : 4
   const sorteoLabel = ligaFase === 'apertura_sorteo' ? 'Apertura' : 'Clausura'
+
+  // Pending match counter
+  const pendingMatches = allMatches.filter(m => m.status === 'pendiente' || m.status === 'en_juego' || m.status === 'resultado_cargado')
+  const awaitingApproval = allMatches.filter(m => m.status === 'resultado_cargado' || m.status === 'en_juego')
 
   // Tabs for current phase
   const showBracketsTab = inAperturaPlayoffs
@@ -497,6 +694,25 @@ function DBLigaView({ tournamentId, isOrganizer, ligaData, onLigaAction }) {
           })}
         </div>
       </div>
+
+      {/* Pending match stats bar */}
+      {allMatches.length > 0 && (
+        <div style={{ padding: '6px 14px', background: C.panel, borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 14, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: C.textDim }}>
+            ⚽ <strong style={{ color: C.text }}>{allMatches.length}</strong> partidos totales
+          </span>
+          {pendingMatches.length > 0 && (
+            <span style={{ fontSize: 11, color: '#f59e0b' }}>
+              ⏳ <strong>{pendingMatches.length}</strong> pendientes
+            </span>
+          )}
+          {awaitingApproval.length > 0 && isOrganizer && (
+            <span style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>
+              ✅ <strong>{awaitingApproval.length}</strong> por aprobar
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Organizer action banner */}
       {isOrganizer && (
@@ -713,6 +929,7 @@ function DBLigaView({ tournamentId, isOrganizer, ligaData, onLigaAction }) {
           p2Name={scoreModal.player2_id ? (userMap[scoreModal.player2_id]?.name || 'Jugador 2') : 'BYE'}
           isOrganizer={isOrganizer}
           submitting={submitting}
+          allowDraw={scoreModal.round === 1 || scoreModal.round === 3}
           onClose={() => setScoreModal(null)}
           onSubmit={submitScore}
           onApprove={approveMatch}
