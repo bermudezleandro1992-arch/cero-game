@@ -117,6 +117,25 @@ export default function InviteJoinPage({ token, onBack }) {
           .is('invited_by', null)
       }
 
+      // Mensaje de bienvenida en el canal General de la comunidad
+      if (conv.group_type === 'community') {
+        const { data: generalCh } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('community_id', conv.id)
+          .eq('name', 'General')
+          .single()
+        if (generalCh?.id) {
+          const displayName = profile.display_name || profile.username || 'Nuevo miembro'
+          await supabase.from('messages').insert({
+            conversation_id: generalCh.id,
+            sender_id: profile.id,
+            content: `👋 ¡${displayName} se unió a la comunidad! Bienvenido/a 🎉`,
+            type: 'system',
+          })
+        }
+      }
+
       // Limpiar token pendiente
       localStorage.removeItem('mm_pending_invite')
       setAlreadyMember(true)
