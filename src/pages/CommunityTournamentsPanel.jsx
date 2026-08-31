@@ -13,6 +13,18 @@ const STATUS_CFG = {
   cancelado:   { label: 'Cancelado',   color: '#ef4444', bg: '#ef444418' },
 }
 
+async function postTournamentAviso(communityId, authorId, title, body) {
+  if (!communityId || !authorId) return
+  await supabase.from('announcements').insert({
+    conversation_id: communityId,
+    author_id: authorId,
+    title,
+    body: body || null,
+    category: 'torneo',
+    is_active: true,
+  })
+}
+
 const TYPE_CFG = {
   tournament: { label: 'Torneo', icon: '🏆', color: '#f59e0b' },
   liga:       { label: 'Liga',   icon: '🥇', color: '#3b82f6' },
@@ -192,6 +204,14 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
       }).select('id').single()
       if (convErr) throw convErr
 
+      const typeLabel = type === 'liga' ? 'Liga' : 'Torneo'
+      const typeIcon  = type === 'liga' ? '⚽' : '🏆'
+      await postTournamentAviso(
+        communityId,
+        profile.id,
+        `${typeIcon} ${typeLabel} "${name.trim()}" — ¡Inscripciones ABIERTAS!`,
+        maxPl ? `Cupos disponibles: ${maxPl}. ¡Anotate ya!` : '¡Anotate ya!'
+      )
       onCreated()
     } catch (e) {
       setErr(e.message || 'Error al crear.')
@@ -694,6 +714,11 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
     await runDraw(true)
     const { error } = await supabase.from('conversations').update({ tournament_status: 'en_curso' }).eq('id', item.id)
     if (error) alert(error.message)
+    else await postTournamentAviso(
+      item.community_id, myId,
+      `🏆 "${item.name}" — ¡El torneo COMENZÓ!`,
+      `El sorteo fue realizado. ${participants.length} jugadores compiten. ¡Buena suerte a todos!`
+    )
     await reloadItem()
     setBusy(false)
     setActiveTab('brackets')
@@ -702,6 +727,11 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
   async function handleFinish() {
     if (!confirm('¿Finalizar el torneo?')) return
     await supabase.from('conversations').update({ tournament_status: 'finalizado' }).eq('id', item.id)
+    await postTournamentAviso(
+      item.community_id, myId,
+      `🏁 "${item.name}" — ¡Torneo FINALIZADO!`,
+      '¡Gracias a todos los participantes!'
+    )
     await reloadItem()
   }
 
@@ -1136,6 +1166,7 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
               } else if (action === 'finalizar') {
                 await supabase.from('conversations').update({ tournament_status: 'finalizado' }).eq('id', item.id)
                 setItem(prev => ({ ...prev, tournament_status: 'finalizado' }))
+                await postTournamentAviso(item.community_id, myId, `🏁 Liga "${item.name}" — ¡FINALIZADA!`, '¡Gracias a todos los participantes!')
               } else if (action === 'generar_fixture') {
                 const pts = participants
                 const jornadas = []
@@ -1151,6 +1182,7 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
                 if (rows.length > 0) await supabase.from('tournament_matches').insert(rows)
                 await supabase.from('conversations').update({ tournament_status: 'en_curso' }).eq('id', item.id)
                 setItem(prev => ({ ...prev, tournament_status: 'en_curso' }))
+                await postTournamentAviso(item.community_id, myId, `⚽ Liga "${item.name}" — ¡Fixture generado!`, `${participants.length} jugadores. ¡Que empiece la competencia!`)
               }
             }}
           />

@@ -69,7 +69,7 @@ async function fetchDashboard(tournamentId) {
     .select(`
       id, name, tournament_status, format, game, max_participants,
       tournament_format, tournament_mode, auto_start_on_full, auto_start_delay_seconds, sorteo_starts_at,
-      liga_tipo, liga_fase, temporada, division, group_type,
+      liga_tipo, liga_fase, temporada, division, group_type, community_id,
       registration_deadline, start_date, description, banner_url
     `)
     .eq('id', tournamentId)
@@ -595,11 +595,30 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       .then(({ count }) => setIsMember((count ?? 0) > 0))
   }, [tournamentId, profile?.id])
 
+  async function postAviso(title, body) {
+    const communityId = data?.community_id
+    if (!communityId || !profile?.id) return
+    await supabase.from('announcements').insert({
+      conversation_id: communityId,
+      author_id: profile.id,
+      title,
+      body: body || null,
+      category: 'torneo',
+      is_active: true,
+    })
+  }
+
   async function triggerAutoStart(tournamentData) {
     const delay = tournamentData.auto_start_delay_seconds ?? 0
     if (delay <= 0) {
       const { error: e } = await supabase.rpc('start_tournament', { p_tournament_id: tournamentId })
-      if (!e) refresh()
+      if (!e) {
+        await postAviso(
+          `🏆 "${tournamentData.name}" — ¡El torneo COMENZÓ!`,
+          `Sorteo realizado. ${tournamentData.participant_count ?? ''} jugadores en competencia. ¡Buena suerte!`
+        )
+        refresh()
+      }
       return
     }
     // Write sorteo_starts_at to DB so ALL viewers see the same countdown
@@ -622,8 +641,12 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
     setJoining(false)
 
     // Auto-start si se completaron los cupos
-    if (data?.auto_start_on_full && data?.max_participants && newCount >= data.max_participants && data.status === 'inscripcion') {
-      triggerAutoStart(data)
+    if (data?.max_participants && newCount >= data.max_participants && data.status === 'inscripcion') {
+      await postAviso(
+        `🔒 "${data.name}" — ¡Inscripciones CERRADAS!`,
+        `Se completaron todos los cupos (${data.max_participants}/${data.max_participants}).`
+      )
+      if (data.auto_start_on_full) triggerAutoStart(data)
     }
   }
 
@@ -643,6 +666,10 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
     const fresh = await fetchDashboard(tournamentId).catch(() => null)
     if (fresh) setData(fresh)
 
+    await postAviso(
+      `🔒 "${data.name}" — ¡Inscripciones CERRADAS!`,
+      `Se completaron todos los cupos (${data.max_participants}/${data.max_participants}).`
+    )
     // Always trigger sorteo after filling — organizer already confirmed
     await triggerAutoStart(fresh ?? data)
   }

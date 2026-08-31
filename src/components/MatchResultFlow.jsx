@@ -761,7 +761,113 @@ export default function MatchResultFlow({ match: initialMatch, profile, isAdmin,
           {match.status === 'finalizado' && (
             <FinishedResult match={match} />
           )}
+
+          {/* Admin override — visible en cualquier estado cuando isAdmin */}
+          {isAdmin && (
+            <AdminOverride match={match} onDone={handleDone} />
+          )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Admin Override ────────────────────────────────────────────────────────────
+function AdminOverride({ match, onDone }) {
+  const [open, setOpen]     = useState(false)
+  const [winner, setWinner] = useState('')
+  const [s1, setS1]         = useState(String(match.score1 ?? 0))
+  const [s2, setS2]         = useState(String(match.score2 ?? 0))
+  const [reason, setReason] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [err, setErr]       = useState(null)
+
+  const p1 = match.player1
+  const p2 = match.player2
+
+  async function handleSubmit() {
+    if (!winner) return setErr('Seleccioná el ganador')
+    if (!reason.trim()) return setErr('El motivo es obligatorio')
+    setLoading(true); setErr(null)
+    try {
+      const { data, error } = await supabase.rpc('admin_override_match', {
+        p_match_id:  match.id,
+        p_winner_id: winner,
+        p_score1:    parseInt(s1) || 0,
+        p_score2:    parseInt(s2) || 0,
+        p_reason:    reason.trim(),
+      })
+      if (error || !data?.ok) throw new Error(data?.error || error?.message || 'Error')
+      onDone()
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!open) return (
+    <div style={{ marginTop: 16, borderTop: `1px dashed ${C.border}`, paddingTop: 12 }}>
+      <button onClick={() => setOpen(true)} style={{
+        width: '100%', padding: '10px 0', borderRadius: 10,
+        border: `1px solid #f59e0b44`, background: '#f59e0b10',
+        color: '#f59e0b', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+      }}>
+        ⚖️ Corregir resultado (CEO/Organizador)
+      </button>
+    </div>
+  )
+
+  return (
+    <div style={{ marginTop: 16, borderTop: `1px dashed ${C.border}`, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#f59e0b' }}>⚖️ Corrección de resultado</p>
+
+      {/* Marcador */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input type="number" min="0" max="99" value={s1} onChange={e => setS1(e.target.value)}
+          style={{ flex: 1, textAlign: 'center', padding: '8px', fontSize: 18, fontWeight: 900, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, outline: 'none' }} />
+        <span style={{ color: C.textDim, fontWeight: 700 }}>–</span>
+        <input type="number" min="0" max="99" value={s2} onChange={e => setS2(e.target.value)}
+          style={{ flex: 1, textAlign: 'center', padding: '8px', fontSize: 18, fontWeight: 900, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, outline: 'none' }} />
+      </div>
+
+      {/* Ganador */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        {[{ id: match.player1_id, label: p1?.display_name || p1?.username || 'J1' },
+          { id: match.player2_id, label: p2?.display_name || p2?.username || 'J2' }].map(p => (
+          <button key={p.id} onClick={() => setWinner(p.id)} style={{
+            flex: 1, padding: '10px 0', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+            border: `1.5px solid ${winner === p.id ? C.green : C.border}`,
+            background: winner === p.id ? `${C.green}18` : C.panel2,
+            color: winner === p.id ? C.green : C.text2,
+          }}>
+            {winner === p.id ? '✓ ' : ''}{p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Motivo */}
+      <textarea
+        placeholder="Motivo de la corrección (obligatorio) — ej: 'Disputa resuelta: el jugador envió captura incorrecta'"
+        value={reason} onChange={e => setReason(e.target.value)}
+        rows={3}
+        style={{ padding: '10px 12px', borderRadius: 10, background: C.panel2, border: `1px solid ${C.border}`, color: C.text, fontSize: 13, resize: 'vertical', outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit' }}
+      />
+
+      {err && <p style={{ margin: 0, color: '#ef4444', fontSize: 12 }}>{err}</p>}
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => setOpen(false)} style={{
+          flex: 1, padding: '11px 0', borderRadius: 10, border: `1px solid ${C.border}`,
+          background: 'none', color: C.text2, cursor: 'pointer', fontSize: 13,
+        }}>Cancelar</button>
+        <button onClick={handleSubmit} disabled={loading} style={{
+          flex: 2, padding: '11px 0', borderRadius: 10, border: 'none',
+          background: loading ? C.panel2 : '#f59e0b', color: loading ? C.textDim : '#000',
+          fontWeight: 800, fontSize: 13, cursor: loading ? 'default' : 'pointer',
+        }}>
+          {loading ? 'Guardando…' : '⚖️ Aplicar corrección'}
+        </button>
       </div>
     </div>
   )

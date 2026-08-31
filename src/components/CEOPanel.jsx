@@ -867,11 +867,20 @@ function MiembrosTab({ communityId, profile, toast }) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('conversation_members')
-      .select('user_id, role, users(id, display_name, avatar_url)')
-      .eq('conversation_id', communityId)
-    setMembers(data || [])
+    const { data: memberRows } = await supabase
+      .rpc('get_conversation_members', { p_conversation_ids: [communityId] })
+    const rows = memberRows || []
+    const { data: roleRows } = await supabase
+      .from('conversation_members').select('user_id, role').eq('conversation_id', communityId)
+    const roleMap = Object.fromEntries((roleRows || []).map(r => [r.user_id, r.role]))
+    if (rows.length) {
+      const ids = rows.map(r => r.user_id)
+      const { data: userRows } = await supabase.from('users').select('id, display_name, username, avatar_url').in('id', ids)
+      const userMap = Object.fromEntries((userRows || []).map(u => [u.id, u]))
+      setMembers(rows.map(r => ({ user_id: r.user_id, role: roleMap[r.user_id] || 'member', users: userMap[r.user_id] || null })).filter(m => m.users))
+    } else {
+      setMembers([])
+    }
     setLoading(false)
   }, [communityId])
 
