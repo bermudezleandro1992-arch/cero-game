@@ -790,7 +790,7 @@ export default function App() {
   const isCommunityOwner = conversations.some(c =>
     (c.group_type === 'community' || c.group_type === 'group') && c.created_by === profile?.id
   ) || ['ceo','com_starter','com_elite','superadmin','admin'].includes(profile?.role)
-  const isOrganizador = hasOrgRole || ['superadmin','admin'].includes(profile?.role)
+  const isOrganizador = hasOrgRole
   const isStaff = ['superadmin','admin','moderador'].includes(profile?.role)
 
   return (

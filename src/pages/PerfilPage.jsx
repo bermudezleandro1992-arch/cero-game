@@ -1106,7 +1106,8 @@ function ContactPickerSheet({ mode, selectedIds, onConfirm, onClose }) {
   }
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', maxWidth: '100vw' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'stretch', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', width: '100%', maxWidth: 480 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text, padding: 4, display: 'flex' }}>
@@ -1171,6 +1172,7 @@ function ContactPickerSheet({ mode, selectedIds, onConfirm, onClose }) {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
         </button>
       </div>
+    </div>
     </div>,
     document.body
   )

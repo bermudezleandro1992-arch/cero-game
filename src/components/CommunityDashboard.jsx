@@ -719,7 +719,11 @@ function MiembrosTab({ communityId, ownerId, isAdmin, myId }) {
   )
 }
 
-// ── CEO Panel ─────────────────────────────────────────────────────────────────
+// ── Gestión Panel (CEO / Organizador / Moderador) ─────────────────────────────
+function GestionPanel({ community, profile, isAdmin, isOrganizador, isModerador, onAvisoPublished }) {
+  return <CeoPanel community={community} profile={profile} onAvisoPublished={onAvisoPublished} />
+}
+
 function CeoPanel({ community, profile, onAvisoPublished }) {
   const { setActiveConversation } = useChatStore()
   const [channels, setChannels] = useState([])
@@ -1032,9 +1036,9 @@ export default function CommunityDashboard({ community, onBack }) {
   const isAdmin = community.created_by === profile?.id
     || myRole === 'owner' || myRole === 'admin'
     || profile?.role === 'superadmin' || profile?.role === 'admin'
-  const isOrganizador = isAdmin || myRole === 'organizador'
-  const isModerador   = isAdmin || myRole === 'moderador' || myRole === 'organizador'
-  // Panel "Gestión" visible si tiene algún rol especial
+  const isOrganizador = myRole === 'organizador'
+  const isModerador   = myRole === 'moderador' || myRole === 'organizador'
+  // Panel visible solo si tiene un rol real en esta comunidad o es admin de la plataforma
   const hasGestionPanel = isAdmin || isOrganizador || isModerador
   const TABS = hasGestionPanel
     ? [...BASE_TABS, { id: 'ceo', label: isAdmin ? 'CEO' : 'Gestión', emoji: '⚙️' }]
