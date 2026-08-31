@@ -395,7 +395,7 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
         </button>
       )}
 
-      {onStartSorteo && data.status === 'inscripcion' && (
+      {onStartSorteo && data.status === 'inscripcion' && data.participant_count >= data.max_participants && (
         <button onClick={onStartSorteo} style={{
           width: '100%', padding: '14px 0', borderRadius: 14,
           border: 'none',
@@ -640,22 +640,17 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
     })
     if (error) { alert(`Error creando bots: ${error.message}`); return }
 
-    // Re-fetch fresh data from DB
-    await refresh()
-
-    // Auto-start si está configurado (usamos data fresca)
+    // Fetch fresh state from DB
     const fresh = await fetchDashboard(tournamentId).catch(() => null)
     if (fresh) setData(fresh)
 
-    if (data.auto_start_on_full && data.status === 'inscripcion') {
-      triggerAutoStart(fresh ?? data)
-    }
+    // Always trigger sorteo after filling — organizer already confirmed
+    await triggerAutoStart(fresh ?? data)
   }
 
   async function handleStartSorteo() {
     if (!isAdmin || !data) return
-    const delay = data.auto_start_delay_seconds ?? 0
-    await triggerAutoStart({ ...data, auto_start_delay_seconds: delay })
+    await triggerAutoStart(data)
   }
 
   if (loading) return (
@@ -793,7 +788,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
                 isMember={isMember}
                 onJoin={joining ? null : handleJoin}
                 onFillBots={showBotButton ? handleFillBots : null}
-                onStartSorteo={isAdmin && data?.status === 'inscripcion' ? handleStartSorteo : null}
+                onStartSorteo={isAdmin && data?.status === 'inscripcion' && data?.participant_count >= data?.max_participants ? handleStartSorteo : null}
               />
         )}
 
