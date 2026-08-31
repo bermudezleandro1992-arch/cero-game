@@ -686,7 +686,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
     visibleTabs = ['overview']
     if (hasGroups) visibleTabs.push('groups')
     if (hasBracket) visibleTabs.push('bracket')
-    if (hasMatches) visibleTabs.push('fixture')
+    if (hasMatches && !hasBracket) visibleTabs.push('fixture')
     visibleTabs.push('chat')
   }
 
