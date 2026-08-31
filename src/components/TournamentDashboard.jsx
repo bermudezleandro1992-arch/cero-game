@@ -801,7 +801,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} visible={visibleTabs} />
 
       {/* Contenido */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: activeTab === 'bracket' ? 'hidden' : 'auto', padding: activeTab === 'bracket' ? 0 : 16 }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: activeTab === 'bracket' ? 'hidden' : 'auto', overflowX: 'hidden', padding: activeTab === 'bracket' ? 0 : 16, display: activeTab === 'bracket' ? 'flex' : 'block', flexDirection: 'column' }}>
 
         {activeTab === 'overview' && (
           isLiga
