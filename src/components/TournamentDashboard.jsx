@@ -78,10 +78,9 @@ async function fetchDashboard(tournamentId) {
   if (error || !conv) throw error ?? new Error('No encontrado')
   conv.status = conv.tournament_status
 
-  const { count: participantCount } = await supabase
-    .from('conversation_members')
-    .select('*', { count: 'exact', head: true })
-    .eq('conversation_id', tournamentId)
+  const { data: countData } = await supabase
+    .rpc('get_tournament_participant_count', { p_tournament_id: tournamentId })
+  const participantCount = countData ?? 0
 
   const { data: groups } = await supabase
     .from('tournament_groups')
