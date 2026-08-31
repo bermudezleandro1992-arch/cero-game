@@ -970,9 +970,7 @@ export default function CommunityDashboard({ community, onBack }) {
         .order('created_at', { ascending: false })
         .limit(20),
       supabase
-        .from('conversation_members')
-        .select('conversation_id', { count: 'exact', head: true })
-        .eq('conversation_id', community.id),
+        .rpc('get_conversation_members', { p_conversation_ids: [community.id] }),
     ])
 
     const tRows = tRes.data || []
@@ -988,7 +986,7 @@ export default function CommunityDashboard({ community, onBack }) {
     }
 
     setAnnouncements(aRes.data || [])
-    setMemberCount(mRes.count || 0)
+    setMemberCount((mRes.data || []).length)
     setAnnLoading(false)
   }, [community?.id])
 
