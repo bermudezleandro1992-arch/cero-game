@@ -68,7 +68,7 @@ async function fetchDashboard(tournamentId) {
     .from('conversations')
     .select(`
       id, name, tournament_status, format, game, max_participants,
-      tournament_format, tournament_mode, auto_start_on_full, auto_start_delay_seconds,
+      tournament_format, tournament_mode, auto_start_on_full, auto_start_delay_seconds, sorteo_starts_at,
       liga_tipo, liga_fase, temporada, division, group_type,
       registration_deadline, start_date, description, banner_url
     `)
@@ -518,6 +518,11 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
   const [countdown, setCountdown]   = useState(null) // null | number
   const countdownRef                = useRef(null)
 
+  const refresh = () => {
+    if (!tournamentId) return
+    fetchDashboard(tournamentId).then(setData).catch(() => {})
+  }
+
   useEffect(() => {
     if (!tournamentId) return
     setLoading(true)
@@ -528,6 +533,46 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       .finally(() => setLoading(false))
   }, [tournamentId])
 
+  // Realtime: re-fetch when tournament row or members change
+  useEffect(() => {
+    if (!tournamentId) return
+    const ch = supabase.channel(`td-rt-${tournamentId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'conversations',
+        filter: `id=eq.${tournamentId}`,
+      }, () => refresh())
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'conversation_members',
+        filter: `conversation_id=eq.${tournamentId}`,
+      }, () => refresh())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [tournamentId])
+
+  // Sorteo countdown from DB field (synced across all viewers)
+  useEffect(() => {
+    if (!data?.sorteo_starts_at) { setCountdown(null); return }
+    const tick = () => {
+      const secs = Math.round((new Date(data.sorteo_starts_at) - Date.now()) / 1000)
+      if (secs <= 0) {
+        clearInterval(countdownRef.current)
+        setCountdown(null)
+        // Any viewer triggers start if not already started
+        if (data.status === 'inscripcion' || data.status === 'sorteo_pendiente') {
+          supabase.rpc('start_tournament', { p_tournament_id: tournamentId }).then(({ error: e }) => {
+            if (!e) refresh()
+          })
+        }
+      } else {
+        setCountdown(secs)
+      }
+    }
+    tick()
+    clearInterval(countdownRef.current)
+    countdownRef.current = setInterval(tick, 1000)
+    return () => clearInterval(countdownRef.current)
+  }, [data?.sorteo_starts_at])
+
   useEffect(() => {
     if (!tournamentId || !profile?.id) return
     supabase.from('conversation_members')
@@ -537,27 +582,19 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       .then(({ count }) => setIsMember((count ?? 0) > 0))
   }, [tournamentId, profile?.id])
 
-  function triggerAutoStart(tournamentData) {
+  async function triggerAutoStart(tournamentData) {
     const delay = tournamentData.auto_start_delay_seconds ?? 0
     if (delay <= 0) {
-      supabase.rpc('start_tournament', { p_tournament_id: tournamentId }).then(({ error: e }) => {
-        if (!e) setData(d => d ? { ...d, status: 'en_curso' } : d)
-      })
+      const { error: e } = await supabase.rpc('start_tournament', { p_tournament_id: tournamentId })
+      if (!e) refresh()
       return
     }
-    setCountdown(delay)
-    let remaining = delay
-    countdownRef.current = setInterval(() => {
-      remaining -= 1
-      setCountdown(remaining)
-      if (remaining <= 0) {
-        clearInterval(countdownRef.current)
-        setCountdown(null)
-        supabase.rpc('start_tournament', { p_tournament_id: tournamentId }).then(({ error: e }) => {
-          if (!e) setData(d => d ? { ...d, status: 'en_curso' } : d)
-        })
-      }
-    }, 1000)
+    // Write sorteo_starts_at to DB so ALL viewers see the same countdown
+    const startsAt = new Date(Date.now() + delay * 1000).toISOString()
+    await supabase.from('conversations')
+      .update({ sorteo_starts_at: startsAt })
+      .eq('id', tournamentId)
+    // The realtime subscription will pick up the change and start the countdown on all clients
   }
 
   async function handleJoin() {
@@ -640,24 +677,38 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, position: 'relative' }}>
 
-      {/* Countdown overlay */}
+      {/* Countdown overlay — visible for ALL viewers (synced via DB) */}
       {countdown !== null && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 50,
-          background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(6px)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20,
+          background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(8px)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
         }}>
-          <div style={{ fontSize: 80, lineHeight: 1 }}>🎱</div>
-          <div style={{ fontSize: 90, fontWeight: 900, color: '#f59e0b', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+          <div style={{ fontSize: 72, lineHeight: 1, animation: 'pulse 1s ease-in-out infinite' }}>🎱</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '3px' }}>
+            ¡Sorteo en vivo!
+          </div>
+          <div style={{
+            fontSize: 96, fontWeight: 900, color: '#fff', lineHeight: 1,
+            fontVariantNumeric: 'tabular-nums',
+            textShadow: `0 0 40px #f59e0b88`,
+          }}>
             {countdown}
           </div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>El sorteo comienza en...</div>
-          <button
-            onClick={() => { clearInterval(countdownRef.current); setCountdown(null) }}
-            style={{ marginTop: 8, padding: '10px 24px', borderRadius: 10, border: `1px solid #ffffff33`, background: 'transparent', color: '#ffffff88', fontSize: 13, cursor: 'pointer' }}
-          >
-            Cancelar
-          </button>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#ffffff99' }}>El sorteo comienza en...</div>
+          <div style={{ fontSize: 12, color: '#ffffff44', marginTop: 8 }}>Todos los participantes verán este contador</div>
+          {isAdmin && (
+            <button
+              onClick={async () => {
+                clearInterval(countdownRef.current)
+                setCountdown(null)
+                await supabase.from('conversations').update({ sorteo_starts_at: null }).eq('id', tournamentId)
+              }}
+              style={{ marginTop: 4, padding: '8px 20px', borderRadius: 10, border: `1px solid #ffffff22`, background: 'transparent', color: '#ffffff44', fontSize: 12, cursor: 'pointer' }}
+            >
+              Cancelar sorteo
+            </button>
+          )}
         </div>
       )}
 
