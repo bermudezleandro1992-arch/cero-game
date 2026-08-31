@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import MatchResultFlow from './MatchResultFlow'
@@ -498,22 +499,47 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
 
   if (!rounds.length) return null
 
+  function isBot(p) {
+    if (!p) return false
+    const u = (p.username || '').toLowerCase()
+    const d = (p.display_name || '').toLowerCase()
+    return u.startsWith('bot_') || u.startsWith('bot ') || d.startsWith('bot ') || d === 'bot'
+  }
+
+  async function handleByeAdvance(match) {
+    // Advance the real player (non-bot) by walkover
+    const p1IsBot = isBot(match.player1)
+    const winnerId = p1IsBot ? match.player2_id : match.player1_id
+    if (!winnerId) return
+    await supabase.rpc('admin_approve_match_with_winner', {
+      p_match_id: match.id,
+      p_winner_id: winnerId,
+      p_score1: p1IsBot ? 0 : 1,
+      p_score2: p1IsBot ? 1 : 0,
+    }).catch(() => {
+      // fallback: direct update via admin_approve_match after setting winner
+      supabase.from('tournament_matches').update({
+        winner_id: winnerId, score1: p1IsBot ? 0 : 1, score2: p1IsBot ? 1 : 0,
+        status: 'finalizado', loser_confirmed: true,
+      }).eq('id', match.id).then(() => advanceBracket({ ...match, winner_id: winnerId }))
+    })
+    await advanceBracket({ ...match, winner_id: winnerId })
+    await load()
+  }
+
   return (
     <>
-      {reportMatch && (
+      {reportMatch && createPortal(
         <MatchResultFlow
           match={reportMatch}
           profile={profile}
           isAdmin={isAdmin}
           onClose={() => setReportMatch(null)}
           onUpdate={async () => {
-            // Fetch updated match to check winner
             const { data: mx } = await supabase
               .from('tournament_matches').select('*').eq('id', reportMatch.id).single()
-            // Auto-avanzar ganador a la siguiente ronda
             if (mx?.winner_id) await advanceBracket(mx)
             await load()
-            // Bot: publicar resultado en el chat del torneo
             if (profile?.id && mx && (mx.status === 'finalizado' || mx.status === 'aprobado') && mx.winner_id) {
               const p1n = reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1'
               const p2n = reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2'
@@ -530,11 +556,12 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
               if (msgErr) console.error('Bot message insert error:', msgErr)
             }
           }}
-        />
+        />,
+        document.body
       )}
 
       {/* Modal resetear partido específico */}
-      {resetModal && (
+      {resetModal && createPortal(
         <div onClick={() => { setResetModal(null); setResetReason('') }} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: C.panel, borderRadius: 20, padding: 24, maxWidth: 340, width: '100%', border: `1px solid ${C.border}` }}>
             <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 15, color: '#f59e0b' }}>⚠️ Resetear partido</p>
@@ -564,7 +591,8 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0, height: '100%' }}>
@@ -581,10 +609,26 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
             </p>
           </div>
           {isAdmin && (
-            <SelectMatchToReset
-              matches={matches}
-              onSelect={m => setResetModal(m)}
-            />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Bye automático para matches con bot pendientes */}
+              {matches.filter(m => m.status === 'pendiente' && ((isBot(m.player1) && m.player2_id) || (isBot(m.player2) && m.player1_id))).map(m => {
+                const realPlayer = isBot(m.player1) ? m.player2 : m.player1
+                const realName = realPlayer?.display_name || realPlayer?.username || 'Jugador'
+                return (
+                  <button key={m.id} onClick={() => handleByeAdvance(m)} style={{
+                    padding: '7px 12px', borderRadius: 10,
+                    border: '1px solid #22c55e44', background: '#22c55e14',
+                    color: '#22c55e', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                  }}>
+                    🤖 Bye → {realName}
+                  </button>
+                )
+              })}
+              <SelectMatchToReset
+                matches={matches}
+                onSelect={m => setResetModal(m)}
+              />
+            </div>
           )}
         </div>
 
