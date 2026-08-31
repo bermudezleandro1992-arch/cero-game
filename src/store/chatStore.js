@@ -96,12 +96,9 @@ export const useChatStore = create((set, get) => ({
     const convIds = convIds0
     const lastReadMap = Object.fromEntries(memberships.map(m => [m.conversation_id, m.last_read_at]))
 
-    const [membersRes, lastMsgsRes] = await Promise.all([
-      supabase
-        .from('conversation_members')
-        .select('conversation_id, user_id')
-        .in('conversation_id', convIds)
-        .neq('user_id', userId),
+    const [membersRpc, lastMsgsRes] = await Promise.all([
+      // SECURITY DEFINER RPC bypasses RLS — sees all members including DM partners
+      supabase.rpc('get_conversation_members', { p_conversation_ids: convIds }),
       supabase
         .from('messages')
         .select('conversation_id, content, created_at, type, sender_id')
@@ -109,21 +106,27 @@ export const useChatStore = create((set, get) => ({
         .order('created_at', { ascending: false }),
     ])
 
+    // Fallback to direct query if RPC not deployed yet
+    const allMemberRows = membersRpc.data
+      ?? (await supabase.from('conversation_members').select('conversation_id, user_id').in('conversation_id', convIds)).data
+      ?? []
+
     const lastMsgMap = {}
     lastMsgsRes.data?.forEach(m => {
       if (!lastMsgMap[m.conversation_id]) lastMsgMap[m.conversation_id] = m
     })
 
-    // Fetch other users' profiles in one query (avoids FK join RLS issues)
-    const otherUserIds = [...new Set((membersRes.data || []).map(m => m.user_id))]
-    const { data: userRows } = otherUserIds.length
-      ? await supabase.from('users').select('id, display_name, username, avatar_url').in('id', otherUserIds)
+    // Fetch all users' profiles in one query
+    const allUserIds = [...new Set(allMemberRows.map(m => m.user_id).filter(id => id !== userId))]
+    const { data: userRows } = allUserIds.length
+      ? await supabase.from('users').select('id, display_name, username, avatar_url').in('id', allUserIds)
       : { data: [] }
     const userMap = Object.fromEntries((userRows || []).map(u => [u.id, u]))
 
-    // Group members by conversation
+    // Group members by conversation (exclude self)
     const groupMembersMap = {}
-    membersRes.data?.forEach(m => {
+    allMemberRows.forEach(m => {
+      if (m.user_id === userId) return
       if (!groupMembersMap[m.conversation_id]) groupMembersMap[m.conversation_id] = []
       const profile = userMap[m.user_id] || { id: m.user_id }
       groupMembersMap[m.conversation_id].push(profile)
