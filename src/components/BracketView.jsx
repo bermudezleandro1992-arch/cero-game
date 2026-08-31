@@ -425,32 +425,13 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
     await load()
   }
 
-  // Avanzar ganador al siguiente partido en el bracket
+  // Avanzar ganador al siguiente partido en el bracket (via RPC para bypass RLS)
   async function advanceBracket(finishedMatch) {
     if (!finishedMatch?.winner_id) return
-    // Buscar todos los partidos del torneo
-    const { data: allMatches } = await supabase
-      .from('tournament_matches')
-      .select('id, round_number, match_number, player1_id, player2_id, winner_id, status, phase')
-      .eq('tournament_id', tournamentId)
-      .or('phase.neq.groups,phase.is.null')
-      .order('round_number').order('match_number')
-    if (!allMatches) return
-
-    const rn = finishedMatch.round_number
-    const mn = finishedMatch.match_number
-    const nextRound = rn + 1
-    // match_number en la ronda siguiente: ceil(mn / 2)
-    const nextMatchNum = Math.ceil(mn / 2)
-    // slot: odd match_number → player1, even → player2
-    const slot = mn % 2 === 1 ? 'player1_id' : 'player2_id'
-
-    const nextMatch = allMatches.find(m => m.round_number === nextRound && m.match_number === nextMatchNum)
-    if (!nextMatch) return
-    // Solo actualizar si el slot está vacío
-    if (nextMatch[slot]) return
-
-    await supabase.from('tournament_matches').update({ [slot]: finishedMatch.winner_id }).eq('id', nextMatch.id)
+    const { error } = await supabase.rpc('advance_bracket_winner', {
+      p_match_id: finishedMatch.id,
+    })
+    if (error) console.error('advanceBracket RPC error:', error)
   }
 
   async function handleResetMatch(match, reason) {
@@ -537,14 +518,16 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
               const p1n = reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1'
               const p2n = reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2'
               const winner = mx.winner_id === mx.player1_id ? p1n : p2n
+              const photoUrl = mx.photo_url || mx.result_photo_url || null
               const msgData = {
                 conversation_id: tournamentId,
                 sender_id: profile.id,
                 content: `🏆 *Resultado confirmado*\n\n${p1n} ${mx.score1} — ${mx.score2} ${p2n}\n\n✅ Avanza: *${winner}*`,
-                type: mx.result_photo_url ? 'image' : 'text',
+                type: photoUrl ? 'image' : 'text',
               }
-              if (mx.result_photo_url) msgData.media_url = mx.result_photo_url
-              await supabase.from('messages').insert(msgData)
+              if (photoUrl) msgData.media_url = photoUrl
+              const { error: msgErr } = await supabase.from('messages').insert(msgData)
+              if (msgErr) console.error('Bot message insert error:', msgErr)
             }
           }}
         />
