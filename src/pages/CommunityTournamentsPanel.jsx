@@ -13,7 +13,7 @@ const STATUS_CFG = {
   cancelado:   { label: 'Cancelado',   color: '#ef4444', bg: '#ef444418' },
 }
 
-async function postTournamentAviso(communityId, authorId, title, body) {
+async function postTournamentAviso(communityId, authorId, title, body, tournamentId = null) {
   if (!communityId || !authorId) return
   await supabase.from('announcements').insert({
     conversation_id: communityId,
@@ -22,6 +22,7 @@ async function postTournamentAviso(communityId, authorId, title, body) {
     body: body || null,
     category: 'torneo',
     is_active: true,
+    tournament_id: tournamentId || null,
   })
 }
 
@@ -210,7 +211,12 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
         communityId,
         profile.id,
         `${typeIcon} ${typeLabel} "${name.trim()}" — ¡Inscripciones ABIERTAS!`,
+<<<<<<< HEAD
+        maxPl ? `Cupos disponibles: ${maxPl}. ¡Anotate ya!` : '¡Anotate ya!',
+        conv.id
+=======
         maxPl ? `Cupos disponibles: ${maxPl}. ¡Anotate ya!` : '¡Anotate ya!'
+>>>>>>> origin/main
       )
       onCreated()
     } catch (e) {

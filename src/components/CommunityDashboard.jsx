@@ -237,9 +237,43 @@ function ChannelsTab({ community, profile, isAdmin }) {
   )
 }
 
+// ── Aviso expandido modal ──────────────────────────────────────────────────────
+function AvisoModal({ aviso, onClose, onOpenTournament, torneos }) {
+  const t = aviso.tournament_id ? torneos?.find(x => x.id === aviso.tournament_id) : null
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C.panel, borderRadius: 18, padding: 24, maxWidth: 420, width: '100%', border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            {aviso.category && <span style={{ fontSize: 10, fontWeight: 800, color: C.green, textTransform: 'uppercase', letterSpacing: 1 }}>{aviso.category}</span>}
+            <div style={{ color: C.text, fontWeight: 800, fontSize: 16, marginTop: 4, lineHeight: 1.3 }}>{aviso.title}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.textDim, fontSize: 20, cursor: 'pointer', padding: '0 0 0 12px', flexShrink: 0 }}>✕</button>
+        </div>
+        {aviso.body && <p style={{ margin: 0, color: C.textDim, fontSize: 14, lineHeight: 1.6 }}>{aviso.body}</p>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: C.textDim }}>
+          {aviso.author?.display_name && <span>Por {aviso.author.display_name}</span>}
+          <span>·</span>
+          <span>{timeAgo(aviso.created_at)}</span>
+        </div>
+        {t && (
+          <button onClick={() => { onClose(); onOpenTournament(t) }} style={{
+            padding: '12px 16px', borderRadius: 12, border: `1px solid ${C.green}`,
+            background: `${C.green}15`, color: C.green, fontWeight: 700, fontSize: 13,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            {t.group_type === 'liga' ? '⚽' : '🏆'} Ver {t.group_type === 'liga' ? 'Liga' : 'Torneo'}: {t.name} →
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Inicio tab ────────────────────────────────────────────────────────────────
 function InicioTab({ community, profile, torneos, announcements, memberCount, onOpenTournament, onChangeTab }) {
   const isAdmin = community.created_by === profile?.id
+  const [expandedAviso, setExpandedAviso] = useState(null)
 
   return (
     <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -343,22 +377,40 @@ function InicioTab({ community, profile, torneos, announcements, memberCount, on
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {announcements.slice(0, 3).map(a => (
-              <div key={a.id} style={{
-                background: C.panel, borderRadius: 12, padding: '12px 14px',
-                border: `1px solid ${C.border}`,
-              }}>
+              <div key={a.id}
+                onClick={() => setExpandedAviso(a)}
+                style={{
+                  background: C.panel, borderRadius: 12, padding: '12px 14px',
+                  border: `1px solid ${C.border}`, cursor: 'pointer',
+                  transition: 'background .12s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                onMouseLeave={e => e.currentTarget.style.background = C.panel}
+              >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ color: C.text, fontWeight: 700, fontSize: 13, marginBottom: 3 }}>{a.title}</div>
                     {a.body && <p style={{ margin: 0, color: C.textDim, fontSize: 12, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{a.body}</p>}
                   </div>
-                  <span style={{ fontSize: 11, color: C.textDim, flexShrink: 0 }}>{timeAgo(a.created_at)}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: C.textDim }}>{timeAgo(a.created_at)}</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {expandedAviso && (
+        <AvisoModal
+          aviso={expandedAviso}
+          torneos={torneos}
+          onClose={() => setExpandedAviso(null)}
+          onOpenTournament={onOpenTournament}
+        />
+      )}
     </div>
   )
 }
