@@ -174,43 +174,23 @@ function StandingsTable({ rows, userMap, highlightTop, highlightBottom, label })
 }
 
 // ── Bracket view ───────────────────────────────────────────────────────────────
-function BracketMatchCard({ match, userMap, onMatchClick, totalRounds }) {
-  const p1 = match.player1_id ? (userMap[match.player1_id]?.name || 'Jugador') : 'BYE'
-  const p2 = match.player2_id ? (userMap[match.player2_id]?.name || 'Jugador') : 'BYE'
-  const done = match.status === 'finalizado' || match.status === 'aprobado'
-  const inDispute = match.status === 'disputa'
-  const w1 = done && match.winner_id === match.player1_id
-  const w2 = done && match.winner_id === match.player2_id
-  const isFinal = match.round_number === totalRounds
-  return (
-    <button onClick={() => onMatchClick && onMatchClick(match)} style={{
-      display: 'block', width: 148, background: C.panel,
-      border: `1.5px solid ${inDispute ? '#ef4444' : done ? C.green + '66' : C.border}`,
-      borderRadius: 10, padding: 0, cursor: onMatchClick ? 'pointer' : 'default',
-      textAlign: 'left', boxShadow: isFinal ? `0 0 12px ${C.green}33` : 'none',
-    }}>
-      {[{ name: p1, score: match.score1, win: w1, id: match.player1_id },
-        { name: p2, score: match.score2, win: w2, id: match.player2_id }].map((pl, idx) => (
-        <div key={idx} style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '7px 10px',
-          borderBottom: idx === 0 ? `1px solid ${C.border}44` : 'none',
-          background: pl.win ? `${C.green}18` : 'transparent',
-          borderRadius: idx === 0 ? '9px 9px 0 0' : '0 0 9px 9px',
-        }}>
-          <span style={{ fontSize: 11.5, fontWeight: pl.win ? 700 : 400, color: pl.win ? C.green : (!pl.id ? C.textDim : C.text), maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {pl.name}
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 800, color: pl.win ? C.green : C.textDim, minWidth: 16, textAlign: 'right' }}>
-            {done ? (pl.score ?? '—') : ''}
-          </span>
-        </div>
-      ))}
-    </button>
-  )
+// ── Bracket visual (árbol horizontal izq→der con conectores) ──────────────────
+const CARD_W = 152
+const CARD_H = 66   // altura total de la tarjeta (2 filas de 33px)
+const ROW_H  = 33   // altura de cada fila dentro de la tarjeta
+const COL_GAP = 44  // espacio horizontal entre columnas (para los conectores SVG)
+const HEADER_H = 28 // altura del encabezado de ronda
+
+// Calcula el centro-Y de cada partido dentro de su "slot" en la columna
+function slotCenterY(matchIdx, totalRoundsCount, colIdx, totalMatchesInFirstRound) {
+  const firstCount = totalMatchesInFirstRound
+  const matchesInCol = Math.ceil(firstCount / Math.pow(2, colIdx))
+  const totalH = firstCount * CARD_H + (firstCount - 1) * 16 // 16px gap entre cards en R1
+  const slotH = totalH / matchesInCol
+  return HEADER_H + matchIdx * slotH + slotH / 2
 }
 
-function BracketView({ matches, userMap, onMatchClick, isOrganizer }) {
+function BracketView({ matches, userMap, onMatchClick }) {
   const rounds = [...new Set(matches.map(m => m.round_number))].sort((a,b) => a-b)
   const totalRounds = rounds.length > 0 ? Math.max(...rounds) : 1
   const roundLabel = rn => rn === totalRounds ? '🏆 Final' : rn === totalRounds-1 ? 'Semifinal' : rn === totalRounds-2 ? 'Cuartos' : `Ronda ${rn}`
@@ -221,33 +201,131 @@ function BracketView({ matches, userMap, onMatchClick, isOrganizer }) {
     </div>
   )
 
-  // Horizontal bracket: columns left → right, matches vertically spaced
-  const CARD_H = 64   // approx height of a match card
-  const CARD_W = 148
-  const COL_GAP = 40  // horizontal space between rounds
+  const firstRoundCount = matches.filter(m => m.round_number === rounds[0]).length
+  // Altura total del área de juego (sin header)
+  const totalH = firstRoundCount * CARD_H + Math.max(0, firstRoundCount - 1) * 16
+  const canvasH = HEADER_H + totalH + 16
+
+  // Calcula posición top de cada tarjeta dentro de su columna
+  function cardTop(colIdx, matchIdx) {
+    const matchesInCol = Math.ceil(firstRoundCount / Math.pow(2, colIdx))
+    const slotH = totalH / matchesInCol
+    return HEADER_H + matchIdx * slotH + (slotH - CARD_H) / 2
+  }
+
+  const totalW = rounds.length * CARD_W + (rounds.length - 1) * COL_GAP + 8
 
   return (
-    <div style={{ overflowX: 'auto', padding: '14px 8px 20px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: COL_GAP, minWidth: rounds.length * (CARD_W + COL_GAP) }}>
-        {rounds.map((rn, colIdx) => {
-          const roundMatches = matches.filter(m => m.round_number === rn).sort((a,b) => a.match_number - b.match_number)
-          const totalInRound = roundMatches.length
-          // Each slot height = total height / matches in this round
-          const prevCount = colIdx === 0 ? totalInRound : matches.filter(m => m.round_number === rounds[0]).length
-          const slotH = CARD_H * Math.pow(2, colIdx) + (colIdx > 0 ? (Math.pow(2, colIdx) - 1) * 10 : 0)
+    <div style={{ overflowX: 'auto', padding: '14px 4px 20px' }}>
+      <div style={{ position: 'relative', width: totalW, height: canvasH, minWidth: totalW }}>
+
+        {/* Conectores SVG entre columnas */}
+        {rounds.slice(0, -1).map((rn, colIdx) => {
+          const nextRn = rounds[colIdx + 1]
+          const leftMatches  = matches.filter(m => m.round_number === rn).sort((a,b)=>a.match_number-b.match_number)
+          const rightMatches = matches.filter(m => m.round_number === nextRn).sort((a,b)=>a.match_number-b.match_number)
+          const x1 = colIdx * (CARD_W + COL_GAP) + CARD_W        // borde derecho de la tarjeta izquierda
+          const x2 = (colIdx + 1) * (CARD_W + COL_GAP)           // borde izquierdo de la tarjeta derecha
+          const mx = (x1 + x2) / 2
+
+          const paths = rightMatches.map((_, rIdx) => {
+            const topCardIdx = rIdx * 2
+            const botCardIdx = rIdx * 2 + 1
+            const topCard = leftMatches[topCardIdx]
+            const botCard = leftMatches[botCardIdx]
+            if (!topCard) return null
+            const yTop = cardTop(colIdx, topCardIdx) + CARD_H / 2
+            const yBot = botCard ? cardTop(colIdx, botCardIdx) + CARD_H / 2 : yTop
+            const yMid = cardTop(colIdx + 1, rIdx) + CARD_H / 2
+            return { yTop, yBot, yMid }
+          }).filter(Boolean)
 
           return (
-            <div key={rn} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-              {/* Round header */}
-              <div style={{ textAlign: 'center', marginBottom: 10, fontSize: 9.5, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1.2px', width: CARD_W }}>
+            <svg key={rn} style={{ position: 'absolute', left: 0, top: 0, width: totalW, height: canvasH, overflow: 'visible', pointerEvents: 'none' }}>
+              {paths.map((p, i) => (
+                <g key={i}>
+                  {/* Línea horizontal desde tarjeta superior */}
+                  <line x1={x1} y1={p.yTop} x2={mx} y2={p.yTop} stroke={C.border} strokeWidth="1.5" />
+                  {/* Línea horizontal desde tarjeta inferior */}
+                  {p.yBot !== p.yTop && <line x1={x1} y1={p.yBot} x2={mx} y2={p.yBot} stroke={C.border} strokeWidth="1.5" />}
+                  {/* Línea vertical que une ambas */}
+                  <line x1={mx} y1={p.yTop} x2={mx} y2={p.yBot} stroke={C.border} strokeWidth="1.5" />
+                  {/* Línea horizontal hacia la siguiente tarjeta */}
+                  <line x1={mx} y1={p.yMid} x2={x2} y2={p.yMid} stroke={C.border} strokeWidth="1.5" />
+                </g>
+              ))}
+            </svg>
+          )
+        })}
+
+        {/* Tarjetas de partidos */}
+        {rounds.map((rn, colIdx) => {
+          const roundMatches = matches.filter(m => m.round_number === rn).sort((a,b)=>a.match_number-b.match_number)
+          const isFinalCol = rn === totalRounds
+          const x = colIdx * (CARD_W + COL_GAP)
+
+          return (
+            <div key={rn}>
+              {/* Header de la columna */}
+              <div style={{
+                position: 'absolute', left: x, top: 0, width: CARD_W, height: HEADER_H,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 9, fontWeight: 800, color: isFinalCol ? C.green : C.textDim,
+                textTransform: 'uppercase', letterSpacing: '1.4px',
+              }}>
                 {roundLabel(rn)}
               </div>
-              {/* Match cards with vertical spacing that doubles each round */}
-              {roundMatches.map((match, mIdx) => (
-                <div key={match.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: mIdx < roundMatches.length - 1 ? slotH - CARD_H : 0 }}>
-                  <BracketMatchCard match={match} userMap={userMap} onMatchClick={onMatchClick} totalRounds={totalRounds} />
-                </div>
-              ))}
+
+              {/* Tarjetas */}
+              {roundMatches.map((match, mIdx) => {
+                const top = cardTop(colIdx, mIdx)
+                const p1  = match.player1_id ? (userMap[match.player1_id]?.name || 'Jugador') : 'BYE'
+                const p2  = match.player2_id ? (userMap[match.player2_id]?.name || 'Jugador') : 'BYE'
+                const done = match.status === 'finalizado' || match.status === 'aprobado'
+                const inDispute = match.status === 'disputa'
+                const w1 = done && match.winner_id === match.player1_id
+                const w2 = done && match.winner_id === match.player2_id
+
+                return (
+                  <button key={match.id} onClick={() => onMatchClick && onMatchClick(match)} style={{
+                    position: 'absolute', left: x, top,
+                    width: CARD_W, height: CARD_H,
+                    display: 'flex', flexDirection: 'column',
+                    background: C.panel,
+                    border: `1.5px solid ${inDispute ? '#ef4444' : isFinalCol ? C.green + '55' : done ? C.green + '44' : C.border}`,
+                    borderRadius: 10, padding: 0, cursor: 'pointer', textAlign: 'left',
+                    boxShadow: isFinalCol ? `0 0 14px ${C.green}22` : 'none',
+                    overflow: 'hidden',
+                  }}>
+                    {/* Fila jugador 1 */}
+                    <div style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '0 10px', borderBottom: `1px solid ${C.border}44`,
+                      background: w1 ? `${C.green}18` : 'transparent',
+                    }}>
+                      <span style={{ fontSize: 11, fontWeight: w1 ? 700 : 400, color: w1 ? C.green : (match.player1_id ? C.text : C.textDim), maxWidth: 108, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p1}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: w1 ? C.green : C.textDim }}>
+                        {done ? (match.score1 ?? '—') : ''}
+                      </span>
+                    </div>
+                    {/* Fila jugador 2 */}
+                    <div style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '0 10px',
+                      background: w2 ? `${C.green}18` : 'transparent',
+                    }}>
+                      <span style={{ fontSize: 11, fontWeight: w2 ? 700 : 400, color: w2 ? C.green : (match.player2_id ? C.text : C.textDim), maxWidth: 108, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p2}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: w2 ? C.green : C.textDim }}>
+                        {done ? (match.score2 ?? '—') : ''}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           )
         })}
