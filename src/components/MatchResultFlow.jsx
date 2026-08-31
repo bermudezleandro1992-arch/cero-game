@@ -250,7 +250,7 @@ function AwaitingConfirmation({ match, profile, isAdmin, onDone }) {
       .eq('match_id', match.id)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
       .then(({ data }) => setDispute(data))
   }, [match.id])
 
