@@ -236,6 +236,7 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
   const [upgradeReason, setUpgradeReason] = useState(null)
   const [joinAsPlayer,  setJoinAsPlayer]  = useState(false)
   const [autoStartOnFull, setAutoStartOnFull] = useState(false)
+  const [autoStartDelay,  setAutoStartDelay]  = useState(60)
   // Liga extras
   const [ligaJornadas,    setLigaJornadas]    = useState('')
   const [ligaAscensos,    setLigaAscensos]    = useState(false)
@@ -291,6 +292,7 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
           created_by: profile.id,
           game: game || null,
           auto_start_on_full: autoStartOnFull,
+          auto_start_delay_seconds: autoStartOnFull ? (parseInt(autoStartDelay) || 0) : 0,
           ...(communityId ? { community_id: communityId } : {}),
           ...(type === 'liga' && ligaTemporada ? { description: `Temporada: ${ligaTemporada}` } : {}),
         })
@@ -546,6 +548,22 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
               <div style={{ color: C.textDim, fontSize: 11 }}>Cuando se llenen todos los cupos, el torneo arranca solo. Si está desactivado, el organizador inicia el sorteo manualmente.</div>
             </div>
           </div>
+
+          {autoStartOnFull && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: C.panel, borderRadius: 10, border: `1px solid #f59e0b44` }}>
+              <span style={{ fontSize: 18 }}>⏱️</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: C.text, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Espera antes de iniciar (segundos)</div>
+                <div style={{ color: C.textDim, fontSize: 11 }}>Tiempo de cuenta regresiva antes del sorteo. 0 = inmediato.</div>
+              </div>
+              <input
+                type="number" min="0" max="300" value={autoStartDelay}
+                onChange={e => setAutoStartDelay(e.target.value)}
+                onClick={e => e.stopPropagation()}
+                style={{ width: 64, padding: '6px 8px', borderRadius: 8, border: `1px solid #f59e0b88`, background: C.panel2, color: C.text, fontSize: 14, fontWeight: 700, textAlign: 'center' }}
+              />
+            </div>
+          )}
 
           {err && <div style={{ color: '#ef4444', fontSize: 12, fontWeight: 600 }}>{err}</div>}
 

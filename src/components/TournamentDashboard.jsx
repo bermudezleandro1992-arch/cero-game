@@ -2,7 +2,7 @@
  * TournamentDashboard — diferencia TORNEO (grupos + bracket) de LIGA (todos vs todos, apertura/clausura).
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import GroupStage      from './GroupStage'
@@ -68,7 +68,7 @@ async function fetchDashboard(tournamentId) {
     .from('conversations')
     .select(`
       id, name, tournament_status, format, game, max_participants,
-      tournament_format, tournament_mode, auto_start_on_full,
+      tournament_format, tournament_mode, auto_start_on_full, auto_start_delay_seconds,
       liga_tipo, liga_fase, temporada, division, group_type,
       registration_deadline, start_date, description, banner_url
     `)
@@ -509,12 +509,14 @@ const cleanUUID = id => {
 
 export default function TournamentDashboard({ tournamentId: rawTournamentId, profile, isAdmin, onBack, showBotButton }) {
   const tournamentId = cleanUUID(rawTournamentId)
-  const [data, setData]           = useState(null)
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState(null)
-  const [activeTab, setActiveTab] = useState('overview')
-  const [isMember, setIsMember]   = useState(false)
-  const [joining, setJoining]     = useState(false)
+  const [data, setData]             = useState(null)
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState(null)
+  const [activeTab, setActiveTab]   = useState('overview')
+  const [isMember, setIsMember]     = useState(false)
+  const [joining, setJoining]       = useState(false)
+  const [countdown, setCountdown]   = useState(null) // null | number
+  const countdownRef                = useRef(null)
 
   useEffect(() => {
     if (!tournamentId) return
@@ -535,6 +537,29 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       .then(({ count }) => setIsMember((count ?? 0) > 0))
   }, [tournamentId, profile?.id])
 
+  function triggerAutoStart(tournamentData) {
+    const delay = tournamentData.auto_start_delay_seconds ?? 0
+    if (delay <= 0) {
+      supabase.rpc('start_tournament', { p_tournament_id: tournamentId }).then(({ error: e }) => {
+        if (!e) setData(d => d ? { ...d, status: 'en_curso' } : d)
+      })
+      return
+    }
+    setCountdown(delay)
+    let remaining = delay
+    countdownRef.current = setInterval(() => {
+      remaining -= 1
+      setCountdown(remaining)
+      if (remaining <= 0) {
+        clearInterval(countdownRef.current)
+        setCountdown(null)
+        supabase.rpc('start_tournament', { p_tournament_id: tournamentId }).then(({ error: e }) => {
+          if (!e) setData(d => d ? { ...d, status: 'en_curso' } : d)
+        })
+      }
+    }, 1000)
+  }
+
   async function handleJoin() {
     if (!profile?.id || joining) return
     setJoining(true)
@@ -548,8 +573,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
 
     // Auto-start si se completaron los cupos
     if (data?.auto_start_on_full && data?.max_participants && newCount >= data.max_participants && data.status === 'inscripcion') {
-      const { error: startErr } = await supabase.rpc('start_tournament', { p_tournament_id: tournamentId })
-      if (!startErr) setData(d => d ? { ...d, status: 'en_curso' } : d)
+      triggerAutoStart(data)
     }
   }
 
@@ -569,16 +593,8 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
 
     // Auto-start sorteo si está configurado
     if (data.auto_start_on_full && data.status === 'inscripcion') {
-      const { error: startErr } = await supabase.rpc('start_tournament', { p_tournament_id: tournamentId })
-      if (startErr) {
-        alert(`✅ ${slots} bots agregados. Error al iniciar sorteo automático: ${startErr.message}`)
-      } else {
-        setData(d => d ? { ...d, status: 'en_curso' } : d)
-        alert(`✅ ${slots} bots agregados y sorteo iniciado automáticamente. ¡El torneo está en curso!`)
-      }
-      return
+      triggerAutoStart(data)
     }
-    alert(`✅ ${slots} bots agregados correctamente`)
   }
 
   if (loading) return (
@@ -622,7 +638,28 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
   const tabs = isLiga ? LIGA_TABS : TORNEO_TABS
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, position: 'relative' }}>
+
+      {/* Countdown overlay */}
+      {countdown !== null && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 50,
+          background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(6px)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20,
+        }}>
+          <div style={{ fontSize: 80, lineHeight: 1 }}>🎱</div>
+          <div style={{ fontSize: 90, fontWeight: 900, color: '#f59e0b', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+            {countdown}
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>El sorteo comienza en...</div>
+          <button
+            onClick={() => { clearInterval(countdownRef.current); setCountdown(null) }}
+            style={{ marginTop: 8, padding: '10px 24px', borderRadius: 10, border: `1px solid #ffffff33`, background: 'transparent', color: '#ffffff88', fontSize: 13, cursor: 'pointer' }}
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{
