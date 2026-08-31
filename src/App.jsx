@@ -533,10 +533,20 @@ export default function App() {
   useEffect(() => {
     checkOrgRole()
     if (!profile?.id) return
-    const ch = supabase.channel(`group_roles:${profile.id}`)
+    // Watch group_roles: organizer/mod panel appears instantly when CEO grants role
+    const chRoles = supabase.channel(`group_roles:${profile.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_roles', filter: `user_id=eq.${profile.id}` }, checkOrgRole)
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    // Watch users table: platform role (superadmin/admin/ceo) updated without reload
+    const chUser = supabase.channel(`user_role:${profile.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${profile.id}` }, (payload) => {
+        if (payload.new) {
+          const { setProfile } = useAuthStore.getState()
+          setProfile({ ...useAuthStore.getState().profile, ...payload.new })
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(chRoles); supabase.removeChannel(chUser) }
   }, [profile?.id, checkOrgRole])
 
   // Fix keyboard overlap — shrink root height when keyboard opens (iOS + Android)

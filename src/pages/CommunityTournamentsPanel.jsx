@@ -26,6 +26,33 @@ async function postTournamentAviso(communityId, authorId, title, body, tournamen
   })
 }
 
+// Manda un mensaje de texto al chat del torneo/liga (group chat)
+async function postGroupMessage(tournamentConvId, authorId, text) {
+  if (!tournamentConvId || !authorId || !text) return
+  await supabase.from('messages').insert({
+    conversation_id: tournamentConvId,
+    sender_id: authorId,
+    content: text,
+    type: 'text',
+  })
+}
+
+// Genera el texto del fixture para el chat
+function buildFixtureMessage(matches, userMap, label) {
+  const lines = [`📋 *${label}* — Fixture generado:\n`]
+  const jornadas = [...new Set(matches.map(m => m.jornada_number))].sort((a,b) => a-b)
+  for (const j of jornadas) {
+    lines.push(`\n⚽ Jornada ${j}:`)
+    for (const m of matches.filter(x => x.jornada_number === j)) {
+      const p1 = m.player1_id ? (userMap[m.player1_id] || 'Jugador') : 'BYE'
+      const p2 = m.player2_id ? (userMap[m.player2_id] || 'Jugador') : 'BYE'
+      lines.push(`  ${p1} vs ${p2}`)
+    }
+  }
+  lines.push('\n¡Buena suerte a todos! 🏆')
+  return lines.join('\n')
+}
+
 const TYPE_CFG = {
   tournament: { label: 'Torneo', icon: '🏆', color: '#f59e0b' },
   liga:       { label: 'Liga',   icon: '🥇', color: '#3b82f6' },
@@ -616,6 +643,84 @@ function TournamentCard({ item, onManage, onJoin, onChat, myId, isStaff }) {
   )
 }
 
+// ── Agregar jugador a liga (organizador) ──────────────────────────────────────
+function AddPlayerToLiga({ tournamentId, communityId, currentParticipants, onAdded }) {
+  const [open, setOpen] = useState(false)
+  const [communityMembers, setCommunityMembers] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(null)
+
+  async function loadCommunityMembers() {
+    setLoading(true)
+    const currentIds = new Set(currentParticipants.map(p => p.user_id))
+    const { data } = await supabase
+      .from('conversation_members')
+      .select('user_id, users:user_id(id, display_name, username, avatar_url)')
+      .eq('conversation_id', communityId)
+    const filtered = (data || []).filter(m => !currentIds.has(m.user_id))
+    setCommunityMembers(filtered)
+    setLoading(false)
+  }
+
+  async function addPlayer(userId) {
+    setAdding(userId)
+    const { error } = await supabase.from('conversation_members').insert({
+      conversation_id: tournamentId,
+      user_id: userId,
+      role: 'member',
+    })
+    if (!error) { await onAdded(); setOpen(false) }
+    else if (error.code === '23505') { await onAdded(); setOpen(false) } // ya existe
+    setAdding(null)
+  }
+
+  return (
+    <>
+      <button onClick={() => { setOpen(true); loadCommunityMembers() }} style={{
+        width: '100%', padding: '10px', borderRadius: 12, border: `1px dashed ${C.green}`,
+        background: `${C.green}10`, color: C.green, fontWeight: 700, fontSize: 13, cursor: 'pointer', marginBottom: 14,
+      }}>
+        ➕ Agregar jugador de la comunidad
+      </button>
+
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.7)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: C.panel, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${C.border}` }}>
+            <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, fontSize: 20 }}>←</button>
+            <p style={{ margin: 0, fontWeight: 800, color: C.text, fontSize: 15 }}>Agregar jugador a la liga</p>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16, background: C.bg }}>
+            {loading ? (
+              <p style={{ textAlign: 'center', color: C.textDim }}>Cargando miembros...</p>
+            ) : communityMembers.length === 0 ? (
+              <p style={{ textAlign: 'center', color: C.textDim }}>Todos los miembros de la comunidad ya están inscriptos.</p>
+            ) : communityMembers.map(m => {
+              const u = m.users
+              const name = u?.display_name || u?.username || 'Jugador'
+              return (
+                <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: `1px solid ${C.border}22` }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: C.panel, overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: C.green }}>
+                    {u?.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : name[0]}
+                  </div>
+                  <span style={{ flex: 1, color: C.text, fontWeight: 600 }}>{name}</span>
+                  <button onClick={() => addPlayer(m.user_id)} disabled={adding === m.user_id} style={{
+                    padding: '7px 14px', borderRadius: 10, border: 'none',
+                    background: adding === m.user_id ? C.panel2 : C.green,
+                    color: adding === m.user_id ? C.textDim : C.bg,
+                    fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                  }}>
+                    {adding === m.user_id ? '…' : '➕ Agregar'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 // ── Tournament Detail ─────────────────────────────────────────────────────────
 function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
   const [item, setItem] = useState(initItem)
@@ -943,7 +1048,20 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
         {/* ── JUGADORES ── */}
         {activeTab === 'jugadores' && (
           <div>
-            {status === 'inscripcion' && !joined && !canManage && (
+            {/* Botón inscribirse — liga en inscripcion */}
+            {isLiga && status === 'inscripcion' && !joined && !canManage && (
+              <button onClick={handleJoin} style={{
+                width: '100%', padding: 12, borderRadius: 12, border: 'none',
+                background: C.green, color: C.bg, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginBottom: 14,
+              }}>
+                ⚽ Inscribirme a la Liga
+              </button>
+            )}
+            {/* Organizador: agregar jugadores de la comunidad */}
+            {canManage && isLiga && (
+              <AddPlayerToLiga tournamentId={item.id} communityId={item.community_id} currentParticipants={participants} onAdded={loadParticipants} />
+            )}
+            {status === 'inscripcion' && !joined && !canManage && !isLiga && (
               <button onClick={handleJoin} style={{
                 width: '100%', padding: 12, borderRadius: 12, border: 'none',
                 background: C.green, color: C.bg, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginBottom: 14,
@@ -1187,6 +1305,9 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
                 await supabase.from('conversations').update({ tournament_status: 'en_curso', liga_fase: 'apertura' }).eq('id', item.id)
                 setItem(prev => ({ ...prev, tournament_status: 'en_curso', liga_fase: 'apertura' }))
                 await postTournamentAviso(item.community_id, myId, `⚡ Liga "${item.name}" — ¡APERTURA iniciada!`, `${pts.length} jugadores. ${rows.length} partidos. ¡Buena suerte!`, item.id)
+                // Mensaje en el chat del torneo con el fixture completo
+                const nameMap = Object.fromEntries(pts.map(p => [p.user_id, userMap[p.user_id]?.display_name || userMap[p.user_id]?.username || 'Jugador']))
+                await postGroupMessage(item.id, myId, buildFixtureMessage(rows, nameMap, `Apertura — ${item.name}`))
 
               } else if (action === 'generar_clausura') {
                 // Clausura: todos vs todos ida y vuelta (round=3)
@@ -1206,6 +1327,9 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
                 await supabase.from('conversations').update({ liga_fase: 'clausura' }).eq('id', item.id)
                 setItem(prev => ({ ...prev, liga_fase: 'clausura' }))
                 await postTournamentAviso(item.community_id, myId, `🍂 Liga "${item.name}" — ¡CLAUSURA iniciada!`, `${pts.length} jugadores. Ida y vuelta. ¡Que empiece!`, item.id)
+                // Mensaje en el chat del torneo con el fixture de clausura (solo ida, vuelta se informa igual)
+                const nameMap2 = Object.fromEntries(pts.map(p => [p.user_id, userMap[p.user_id]?.display_name || userMap[p.user_id]?.username || 'Jugador']))
+                await postGroupMessage(item.id, myId, buildFixtureMessage(rows.filter(r => r.jornada_number <= pts.length*(pts.length-1)/2), nameMap2, `Clausura — ${item.name}`))
 
               } else if (action === 'iniciar_clausura') {
                 // Called when advancing from apertura_playoffs (no fixture yet)

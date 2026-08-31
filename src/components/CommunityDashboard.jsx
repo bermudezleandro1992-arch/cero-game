@@ -1011,14 +1011,22 @@ export default function CommunityDashboard({ community, onBack }) {
 
   useEffect(() => {
     if (!profile?.id || !community?.id) return
-    if (myRole) return
-    supabase
-      .from('conversation_members')
-      .select('role')
-      .eq('conversation_id', community.id)
-      .eq('user_id', profile.id)
-      .single()
+    // Initial load
+    supabase.from('conversation_members').select('role')
+      .eq('conversation_id', community.id).eq('user_id', profile.id).single()
       .then(({ data }) => { if (data?.role) setMyRole(data.role) })
+    // Realtime: si el CEO cambia el rol, el panel aparece al instante
+    const ch = supabase.channel(`cm_role:${community.id}:${profile.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'conversation_members',
+        filter: `conversation_id=eq.${community.id}`,
+      }, (payload) => {
+        if (payload.new?.user_id === profile.id && payload.new?.role) {
+          setMyRole(payload.new.role)
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
   }, [profile?.id, community?.id])
 
   const isAdmin = community.created_by === profile?.id
