@@ -527,13 +527,26 @@ function DBLigaView({ tournamentId, isOrganizer, ligaData, onLigaAction }) {
     setSubmitting(matchId)
     const { data, error } = await supabase.rpc('submit_match_result', { p_match_id: matchId, p_score1: s1, p_score2: s2, p_photo_url: null })
     if (error || data?.ok === false) { alert(data?.error || error?.message || 'Error al cargar resultado'); setSubmitting(null); return }
-    // For bracket tiebreakers, persist the forced winner immediately
     if (forcedWinnerId) {
       await supabase.from('tournament_matches').update({ winner_id: forcedWinnerId }).eq('id', matchId)
     }
     setScoreModal(null)
     await load()
     setSubmitting(null)
+    // Auto-confirm tras 2 minutos de ventana de disputa
+    setTimeout(async () => {
+      const { data: mx } = await supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId).order('round').order('round_number').order('match_number')
+      const fresh = (mx || []).find(m => m.id === matchId)
+      if (fresh && (fresh.status === 'resultado_cargado' || fresh.status === 'en_juego')) {
+        await supabase.rpc('approve_match_result', { p_match_id: matchId })
+        const { data: mx2 } = await supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId).order('round').order('round_number').order('match_number')
+        const fresh2 = (mx2 || []).find(m => m.id === matchId)
+        if (fresh2 && (fresh2.round === 2 || fresh2.round === 4)) {
+          await maybeAdvanceBracket(fresh2.round, fresh2.round_number, mx2 || [])
+        }
+        setAllMatches(mx2 || [])
+      }
+    }, 2 * 60 * 1000)
   }
 
   async function approveMatch(matchId) {
