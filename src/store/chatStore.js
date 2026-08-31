@@ -233,7 +233,7 @@ export const useChatStore = create((set, get) => ({
           if (!chIds.length) continue
           let total = 0
           for (const chId of chIds) {
-            const lastRead = lastReadMap[c.id]
+            const lastRead = lastReadMap[chId] || lastReadMap[c.id]
             const q = supabase.from('messages').select('*', { count: 'exact', head: true })
               .eq('conversation_id', chId).neq('sender_id', userId)
             if (lastRead) q.gt('created_at', lastRead)
