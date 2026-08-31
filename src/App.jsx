@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import { useAuthStore } from './store/authStore'
 import { useCallStore } from './store/callStore'
@@ -524,12 +524,20 @@ export default function App() {
   })
   usePresence(user?.id)
   const [hasOrgRole, setHasOrgRole] = useState(false)
-  useEffect(() => {
+  const checkOrgRole = useCallback(() => {
     if (!profile?.id) return
     supabase.from('group_roles').select('id', { count: 'exact', head: true })
       .eq('user_id', profile.id).in('role', ['organizador','admin','owner'])
       .then(({ count }) => setHasOrgRole((count ?? 0) > 0))
   }, [profile?.id])
+  useEffect(() => {
+    checkOrgRole()
+    if (!profile?.id) return
+    const ch = supabase.channel(`group_roles:${profile.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_roles', filter: `user_id=eq.${profile.id}` }, checkOrgRole)
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [profile?.id, checkOrgRole])
 
   // Fix keyboard overlap — shrink root height when keyboard opens (iOS + Android)
   useEffect(() => {
