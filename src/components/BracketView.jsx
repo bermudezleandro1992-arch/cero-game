@@ -553,7 +553,7 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0, height: '100%' }}>
 
         {/* Header */}
         <div style={{
@@ -607,6 +607,7 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
             WebkitOverflowScrolling: 'touch',
             cursor: 'grab',
             flex: 1,
+            minHeight: Math.min(totalH + 40, 420),
           }}
           onMouseDown={e => {
             const el = scrollRef.current
