@@ -1274,7 +1274,8 @@ export default function App() {
           position: absolute;
           top: 0; left: 0; right: 0; bottom: 0;
           transition: transform .28s cubic-bezier(.4,0,.2,1);
-          overflow: hidden;
+          overflow-x: hidden;
+          overflow-y: auto;
           background: var(--c-bg);
           display: flex;
           flex-direction: column;
