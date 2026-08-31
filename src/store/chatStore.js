@@ -99,7 +99,7 @@ export const useChatStore = create((set, get) => ({
     const [membersRes, lastMsgsRes] = await Promise.all([
       supabase
         .from('conversation_members')
-        .select('conversation_id, user_id, member:users!conversation_members_user_id_fkey(id, display_name, username, avatar_url)')
+        .select('conversation_id, user_id')
         .in('conversation_id', convIds)
         .neq('user_id', userId),
       supabase
@@ -114,11 +114,19 @@ export const useChatStore = create((set, get) => ({
       if (!lastMsgMap[m.conversation_id]) lastMsgMap[m.conversation_id] = m
     })
 
+    // Fetch other users' profiles in one query (avoids FK join RLS issues)
+    const otherUserIds = [...new Set((membersRes.data || []).map(m => m.user_id))]
+    const { data: userRows } = otherUserIds.length
+      ? await supabase.from('users').select('id, display_name, username, avatar_url').in('id', otherUserIds)
+      : { data: [] }
+    const userMap = Object.fromEntries((userRows || []).map(u => [u.id, u]))
+
     // Group members by conversation
     const groupMembersMap = {}
     membersRes.data?.forEach(m => {
       if (!groupMembersMap[m.conversation_id]) groupMembersMap[m.conversation_id] = []
-      groupMembersMap[m.conversation_id].push(m.member)
+      const profile = userMap[m.user_id] || { id: m.user_id }
+      groupMembersMap[m.conversation_id].push(profile)
     })
 
     // Count unread per conversation — single RPC instead of one query per conversation
