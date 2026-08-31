@@ -160,7 +160,7 @@ function gameIcon(id) {
 }
 
 // ── Create form ───────────────────────────────────────────────────────────────
-function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
+function CreateForm({ communityId, communityTags, communityFeatures, onCreated, onCancel }) {
   const { profile } = useAuthStore()
   const planLimits = getPlanLimits(profile)
   const isFree = planLimits.max <= 8
@@ -192,7 +192,9 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
   const structures = getStructures(mode, type, gameInfo?.tag)
   // Reset structure if current not valid for new type/mode
   const validStruct = structures.find(s => s.id === structure) ? structure : structures[0].id
-  const ligaTipos = FC_LIGA_TIPOS
+  // Clubes habilitado si la feature está activa en la comunidad
+  const clubesEnabled = !!communityFeatures?.clubes_fc
+  const ligaTipos = FC_LIGA_TIPOS.map(t => t.id === 'clubes' ? { ...t, disabled: !clubesEnabled } : t)
 
   async function handleCreate() {
     if (!name.trim()) { setErr('Ponele un nombre.'); return }
@@ -1573,6 +1575,7 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
   const [userPerms, setUserPerms] = useState(null)
 
   const communityTags = community?.tags || []
+  const communityFeatures = community?.features || {}
 
   useEffect(() => {
     if (!community?.id || !profile?.id) return
@@ -1717,6 +1720,7 @@ export default function CommunityTournamentsPanel({ community, onClose, canManag
             <CreateForm
               communityId={community.id}
               communityTags={communityTags}
+              communityFeatures={communityFeatures}
               onCreated={() => { setShowCreate(false); load() }}
               onCancel={() => setShowCreate(false)}
             />

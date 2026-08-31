@@ -618,14 +618,12 @@ function MiembrosTab({ communityId, ownerId, isAdmin, myId }) {
   ]
 
   async function changeRole(userId, newRole) {
-    await supabase
-      .from('group_roles')
-      .upsert({ user_id: userId, group_id: communityId, role: newRole }, { onConflict: 'user_id,group_id' })
-    await supabase
-      .from('conversation_members')
-      .update({ role: newRole })
-      .eq('conversation_id', communityId)
-      .eq('user_id', userId)
+    const { error } = await supabase.rpc('set_community_member_role', {
+      p_conversation_id: communityId,
+      p_user_id: userId,
+      p_role: newRole,
+    })
+    if (error) { alert('Error al cambiar rol: ' + error.message); return }
     setActionMember(null)
     loadMembers()
   }
@@ -823,10 +821,12 @@ function CeoPanel({ community, profile, onAvisoPublished }) {
   }
 
   async function changeRole(userId, newRole) {
-    await supabase.from('conversation_members')
-      .update({ role: newRole })
-      .eq('conversation_id', community.id)
-      .eq('user_id', userId)
+    const { error } = await supabase.rpc('set_community_member_role', {
+      p_conversation_id: community.id,
+      p_user_id: userId,
+      p_role: newRole,
+    })
+    if (error) { alert('Error al cambiar rol: ' + error.message); return }
     setMembers(prev => prev.map(m => m.user_id === userId ? { ...m, role: newRole } : m))
   }
 
@@ -1032,8 +1032,12 @@ export default function CommunityDashboard({ community, onBack }) {
   const isAdmin = community.created_by === profile?.id
     || myRole === 'owner' || myRole === 'admin'
     || profile?.role === 'superadmin' || profile?.role === 'admin'
-  const TABS = isAdmin
-    ? [...BASE_TABS, { id: 'ceo', label: 'CEO', emoji: '⚙️' }]
+  const isOrganizador = isAdmin || myRole === 'organizador'
+  const isModerador   = isAdmin || myRole === 'moderador' || myRole === 'organizador'
+  // Panel "Gestión" visible si tiene algún rol especial
+  const hasGestionPanel = isAdmin || isOrganizador || isModerador
+  const TABS = hasGestionPanel
+    ? [...BASE_TABS, { id: 'ceo', label: isAdmin ? 'CEO' : 'Gestión', emoji: '⚙️' }]
     : BASE_TABS
   const [tab, setTab] = useState('inicio')
   const [torneos, setTorneos] = useState([])
@@ -1175,8 +1179,15 @@ export default function CommunityDashboard({ community, onBack }) {
         {tab === 'chat' && (
           <ChannelsTab community={community} profile={profile} isAdmin={isAdmin} />
         )}
-        {tab === 'ceo' && isAdmin && (
-          <CeoPanel community={community} profile={profile} onAvisoPublished={loadData} />
+        {tab === 'ceo' && hasGestionPanel && (
+          <GestionPanel
+            community={community}
+            profile={profile}
+            isAdmin={isAdmin}
+            isOrganizador={isOrganizador}
+            isModerador={isModerador}
+            onAvisoPublished={loadData}
+          />
         )}
       </div>
 

@@ -939,8 +939,8 @@ export default function App() {
           </nav>
         ) : (
         <nav className="slfa-side-nav" style={{ overflowY: 'auto' }}>
-          {/* Admin Panel — arriba para que siempre sea visible */}
-          {['superadmin','admin'].includes(profile?.role) && (
+          {/* Admin Panel — visible para superadmin/admin o email del dueño */}
+          {(['superadmin','admin'].includes(profile?.role) || profile?.email === 'bermudezleandro1992@gmail.com') && (
             <button onClick={() => { setShowProfile(false); setTab('admin'); setActiveConversation(null) }} style={{
               width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', gap: 4, border: 'none',
@@ -1028,8 +1028,8 @@ export default function App() {
             </button>
           )}
 
-          {/* Admin Panel — solo superadmin/admin */}
-          {['superadmin','admin'].includes(profile?.role) && (
+          {/* Admin Panel — visible para superadmin/admin o email del dueño */}
+          {(['superadmin','admin'].includes(profile?.role) || profile?.email === 'bermudezleandro1992@gmail.com') && (
             <button onClick={() => { setShowProfile(false); setTab('admin'); setActiveConversation(null) }} style={{
               width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', gap: 4, border: 'none',

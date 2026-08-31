@@ -77,6 +77,10 @@ export default function AdminPage({ onBack }) {
   const [editPlan, setEditPlan] = useState('free')
   const [editRole, setEditRole] = useState(null)
   const [msg, setMsg] = useState(null)
+  const [featSearch, setFeatSearch] = useState('')
+  const [featResults, setFeatResults] = useState([])
+  const [featSelected, setFeatSelected] = useState(null)
+  const [featSaving, setFeatSaving] = useState(false)
 
   useEffect(() => { loadPayments(); loadTickets(); loadDisputes(); loadVerifications() }, [])
 
@@ -208,6 +212,36 @@ export default function AdminPage({ onBack }) {
     setOfficialResults(data || [])
   }
 
+  const PLATFORM_FEATURES = [
+    { id: 'monedas',   label: 'Monedas',      emoji: '🪙', desc: 'Sistema de monedas internas de la comunidad. Los organizadores pueden asignar y canjear monedas entre miembros.' },
+    { id: 'clubes_fc', label: 'Clubes FC',    emoji: '⚽', desc: 'Liga de Clubes para FC 26/27. Habilita la creación de equipos, planteles, y fixture completo de clubes.' },
+    { id: 'stats_pro', label: 'Stats Pro',    emoji: '📊', desc: 'Estadísticas avanzadas por jugador: rating, goles, asistencias, tarjetas. Requiere carga manual o bot.' },
+    { id: 'marketplace', label: 'Marketplace', emoji: '🛒', desc: 'Tienda interna para canjear monedas por ítems virtuales o premios físicos definidos por el organizador.' },
+  ]
+
+  async function searchCommunitiesForFeatures(q) {
+    if (!q.trim()) { setFeatResults([]); return }
+    const { data } = await supabase
+      .from('conversations')
+      .select('id, name, avatar_url, features, users:created_by(username)')
+      .eq('group_type', 'community')
+      .ilike('name', `%${q}%`)
+      .limit(15)
+    setFeatResults(data || [])
+  }
+
+  async function toggleFeature(communityId, featureId, currentFeatures) {
+    setFeatSaving(true)
+    const next = { ...(currentFeatures || {}), [featureId]: !currentFeatures?.[featureId] }
+    const { error } = await supabase.from('conversations').update({ features: next }).eq('id', communityId)
+    if (error) { setMsg({ type: 'err', text: error.message }); setFeatSaving(false); return }
+    // Actualizar local
+    setFeatResults(r => r.map(c => c.id === communityId ? { ...c, features: next } : c))
+    if (featSelected?.id === communityId) setFeatSelected(s => ({ ...s, features: next }))
+    setMsg({ type: 'ok', text: `${next[featureId] ? '✅ Activado' : '⏸ Desactivado'}: ${featureId}` })
+    setFeatSaving(false)
+  }
+
   async function toggleOfficial(communityId, currentValue) {
     const { error } = await supabase
       .from('conversations')
@@ -269,6 +303,9 @@ export default function AdminPage({ onBack }) {
         )}
         {profile?.role === 'superadmin' && (
           <Tab label="Oficiales" active={tab === 'oficiales'} count={0} onClick={() => { setTab('oficiales'); loadOfficialCommunities() }} />
+        )}
+        {profile?.role === 'superadmin' && (
+          <Tab label="Features" active={tab === 'features'} count={0} onClick={() => setTab('features')} />
         )}
       </div>
 
@@ -1069,6 +1106,117 @@ export default function AdminPage({ onBack }) {
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB FEATURES ── */}
+        {tab === 'features' && profile?.role === 'superadmin' && (
+          <div>
+            {/* Descripción */}
+            <div style={{ background: '#6366f110', border: '1px solid #6366f133', borderRadius: 12, padding: '12px 14px', marginBottom: 16 }}>
+              <p style={{ margin: 0, fontSize: 12, color: '#a5b4fc', lineHeight: 1.6 }}>
+                <strong>Features por comunidad</strong> — activá o desactivá funciones experimentales para comunidades específicas. Los usuarios verán "Próximamente" si la feature está desactivada.
+              </p>
+            </div>
+
+            {/* Features disponibles (overview) */}
+            <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1.2px' }}>Features disponibles</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+              {PLATFORM_FEATURES.map(f => (
+                <div key={f.id} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{f.emoji}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: C.text }}>{f.label}</p>
+                    <p style={{ margin: '3px 0 0', fontSize: 11, color: C.textDim, lineHeight: 1.5 }}>{f.desc}</p>
+                  </div>
+                  <div style={{ flexShrink: 0, fontSize: 9, fontWeight: 800, color: '#f59e0b', background: '#f59e0b18', padding: '3px 8px', borderRadius: 20, whiteSpace: 'nowrap', marginTop: 2 }}>
+                    BETA
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Buscar comunidad */}
+            <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 800, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1.2px' }}>Activar por comunidad</p>
+            <input
+              value={featSearch}
+              onChange={e => { setFeatSearch(e.target.value); searchCommunitiesForFeatures(e.target.value) }}
+              placeholder="Buscar comunidad por nombre..."
+              style={{ width: '100%', boxSizing: 'border-box', background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '11px 14px', color: C.text, fontSize: 13, outline: 'none', marginBottom: 12 }}
+            />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {featResults.map(comm => {
+                const isExp = featSelected?.id === comm.id
+                const feats = comm.features || {}
+                return (
+                  <div key={comm.id} style={{ background: C.panel, border: `1.5px solid ${isExp ? '#6366f155' : C.border}`, borderRadius: 14, overflow: 'hidden' }}>
+                    {/* Header */}
+                    <div onClick={() => setFeatSelected(isExp ? null : comm)} style={{ padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0, background: C.panel2, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                        {comm.avatar_url ? <img src={comm.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '🌐'}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: C.text }}>{comm.name}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: C.textDim }}>
+                          CEO: @{comm.users?.username || '—'} · {Object.values(feats).filter(Boolean).length} feature{Object.values(feats).filter(Boolean).length !== 1 ? 's' : ''} activa{Object.values(feats).filter(Boolean).length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        {PLATFORM_FEATURES.map(f => feats[f.id] && (
+                          <span key={f.id} title={f.label} style={{ fontSize: 14 }}>{f.emoji}</span>
+                        ))}
+                      </div>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2" style={{ transform: isExp ? 'rotate(90deg)' : 'none', transition: '.2s', flexShrink: 0 }}>
+                        <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+
+                    {/* Toggles */}
+                    {isExp && (
+                      <div style={{ borderTop: `1px solid ${C.border}`, padding: '14px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {PLATFORM_FEATURES.map(f => {
+                            const enabled = !!feats[f.id]
+                            return (
+                              <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${enabled ? C.green + '44' : C.border}` }}>
+                                <span style={{ fontSize: 20, flexShrink: 0 }}>{f.emoji}</span>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: enabled ? C.green : C.text }}>{f.label}</p>
+                                  <p style={{ margin: '2px 0 0', fontSize: 10, color: C.textDim }}>{f.desc.slice(0, 60)}…</p>
+                                </div>
+                                {/* Toggle switch */}
+                                <button
+                                  onClick={() => !featSaving && toggleFeature(comm.id, f.id, feats)}
+                                  style={{
+                                    width: 44, height: 24, borderRadius: 12, border: 'none', cursor: featSaving ? 'wait' : 'pointer',
+                                    background: enabled ? C.green : C.border,
+                                    position: 'relative', flexShrink: 0, transition: 'background .2s',
+                                  }}
+                                >
+                                  <div style={{
+                                    position: 'absolute', top: 3, left: enabled ? 22 : 3,
+                                    width: 18, height: 18, borderRadius: '50%', background: 'white',
+                                    transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)',
+                                  }} />
+                                </button>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: enabled ? C.green : C.textDim, minWidth: 30, flexShrink: 0 }}>
+                                  {enabled ? 'ON' : 'OFF'}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {featSearch.length > 1 && featResults.length === 0 && (
+                <p style={{ textAlign: 'center', color: C.textDim, fontSize: 13, padding: '20px 0' }}>Sin resultados</p>
+              )}
             </div>
           </div>
         )}
