@@ -211,12 +211,8 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
         communityId,
         profile.id,
         `${typeIcon} ${typeLabel} "${name.trim()}" — ¡Inscripciones ABIERTAS!`,
-<<<<<<< HEAD
         maxPl ? `Cupos disponibles: ${maxPl}. ¡Anotate ya!` : '¡Anotate ya!',
         conv.id
-=======
-        maxPl ? `Cupos disponibles: ${maxPl}. ¡Anotate ya!` : '¡Anotate ya!'
->>>>>>> origin/main
       )
       onCreated()
     } catch (e) {
@@ -1166,29 +1162,70 @@ function TournamentDetail({ item: initItem, onBack, myId, isStaff }) {
             isOrganizer={canManage}
             ligaData={item}
             onLigaAction={async (action, payload) => {
+              const pts = participants
+
               if (action === 'set_fase') {
                 await supabase.from('conversations').update({ liga_fase: payload }).eq('id', item.id)
                 setItem(prev => ({ ...prev, liga_fase: payload }))
+
               } else if (action === 'finalizar') {
-                await supabase.from('conversations').update({ tournament_status: 'finalizado' }).eq('id', item.id)
-                setItem(prev => ({ ...prev, tournament_status: 'finalizado' }))
-                await postTournamentAviso(item.community_id, myId, `🏁 Liga "${item.name}" — ¡FINALIZADA!`, '¡Gracias a todos los participantes!')
-              } else if (action === 'generar_fixture') {
-                const pts = participants
-                const jornadas = []
+                await supabase.from('conversations').update({ tournament_status: 'finalizado', liga_fase: 'final_tabla' }).eq('id', item.id)
+                setItem(prev => ({ ...prev, tournament_status: 'finalizado', liga_fase: 'final_tabla' }))
+                await postTournamentAviso(item.community_id, myId, `🏁 Liga "${item.name}" — ¡TEMPORADA FINALIZADA!`, '¡Gracias a todos los participantes! Hasta la próxima temporada.')
+
+              } else if (action === 'generar_apertura') {
+                // Apertura: todos vs todos, 1 partido por pareja (round=1)
+                const rows = []
                 let jornadaNum = 1
                 for (let i = 0; i < pts.length; i++) {
                   for (let j = i + 1; j < pts.length; j++) {
-                    jornadas.push({ player1_id: pts[i].user_id, player2_id: pts[j].user_id, jornada_number: jornadaNum, match_number: 1 })
-                    jornadas.push({ player1_id: pts[j].user_id, player2_id: pts[i].user_id, jornada_number: jornadaNum + Math.ceil(pts.length / 2), match_number: 1 })
+                    rows.push({ tournament_id: item.id, round: 1, jornada_number: jornadaNum, match_number: 1, player1_id: pts[i].user_id, player2_id: pts[j].user_id, status: 'pendiente' })
                     jornadaNum++
                   }
                 }
-                const rows = jornadas.map(j => ({ tournament_id: item.id, round: 1, status: 'pendiente', ...j }))
                 if (rows.length > 0) await supabase.from('tournament_matches').insert(rows)
-                await supabase.from('conversations').update({ tournament_status: 'en_curso' }).eq('id', item.id)
-                setItem(prev => ({ ...prev, tournament_status: 'en_curso' }))
-                await postTournamentAviso(item.community_id, myId, `⚽ Liga "${item.name}" — ¡Fixture generado!`, `${participants.length} jugadores. ¡Que empiece la competencia!`)
+                await supabase.from('conversations').update({ tournament_status: 'en_curso', liga_fase: 'apertura' }).eq('id', item.id)
+                setItem(prev => ({ ...prev, tournament_status: 'en_curso', liga_fase: 'apertura' }))
+                await postTournamentAviso(item.community_id, myId, `⚡ Liga "${item.name}" — ¡APERTURA iniciada!`, `${pts.length} jugadores. ${rows.length} partidos. ¡Buena suerte!`, item.id)
+
+              } else if (action === 'generar_clausura') {
+                // Clausura: todos vs todos ida y vuelta (round=3)
+                const total = pts.length * (pts.length - 1) / 2
+                const rows = []
+                let jornadaNum = 1
+                for (let i = 0; i < pts.length; i++) {
+                  for (let j = i + 1; j < pts.length; j++) {
+                    // Ida
+                    rows.push({ tournament_id: item.id, round: 3, jornada_number: jornadaNum, match_number: 1, player1_id: pts[i].user_id, player2_id: pts[j].user_id, status: 'pendiente' })
+                    // Vuelta (roles invertidos)
+                    rows.push({ tournament_id: item.id, round: 3, jornada_number: jornadaNum + total, match_number: 1, player1_id: pts[j].user_id, player2_id: pts[i].user_id, status: 'pendiente' })
+                    jornadaNum++
+                  }
+                }
+                if (rows.length > 0) await supabase.from('tournament_matches').insert(rows)
+                await supabase.from('conversations').update({ liga_fase: 'clausura' }).eq('id', item.id)
+                setItem(prev => ({ ...prev, liga_fase: 'clausura' }))
+                await postTournamentAviso(item.community_id, myId, `🍂 Liga "${item.name}" — ¡CLAUSURA iniciada!`, `${pts.length} jugadores. Ida y vuelta. ¡Que empiece!`, item.id)
+
+              } else if (action === 'iniciar_clausura') {
+                // Called when advancing from apertura_playoffs (no fixture yet)
+                await supabase.from('conversations').update({ liga_fase: 'clausura' }).eq('id', item.id)
+                setItem(prev => ({ ...prev, liga_fase: 'clausura' }))
+
+              } else if (action === 'generar_fixture') {
+                // Legacy: same as generar_apertura
+                const rows = []
+                let jornadaNum = 1
+                for (let i = 0; i < pts.length; i++) {
+                  for (let j = i + 1; j < pts.length; j++) {
+                    rows.push({ tournament_id: item.id, round: 1, jornada_number: jornadaNum, match_number: 1, player1_id: pts[i].user_id, player2_id: pts[j].user_id, status: 'pendiente' })
+                    jornadaNum++
+                  }
+                }
+                if (rows.length > 0) await supabase.from('tournament_matches').insert(rows)
+                await supabase.from('conversations').update({ tournament_status: 'en_curso', liga_fase: 'apertura' }).eq('id', item.id)
+                setItem(prev => ({ ...prev, tournament_status: 'en_curso', liga_fase: 'apertura' }))
+                await postTournamentAviso(item.community_id, myId, `⚽ Liga "${item.name}" — ¡Fixture generado!`, `${pts.length} jugadores. ¡Que empiece la competencia!`, item.id)
               }
             }}
           />
