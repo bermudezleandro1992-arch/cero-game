@@ -211,8 +211,12 @@ function CreateForm({ communityId, communityTags, onCreated, onCancel }) {
         communityId,
         profile.id,
         `${typeIcon} ${typeLabel} "${name.trim()}" — ¡Inscripciones ABIERTAS!`,
+<<<<<<< HEAD
         maxPl ? `Cupos disponibles: ${maxPl}. ¡Anotate ya!` : '¡Anotate ya!',
         conv.id
+=======
+        maxPl ? `Cupos disponibles: ${maxPl}. ¡Anotate ya!` : '¡Anotate ya!'
+>>>>>>> origin/main
       )
       onCreated()
     } catch (e) {
