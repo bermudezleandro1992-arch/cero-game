@@ -459,36 +459,52 @@ export const useChatStore = create((set, get) => ({
   },
 
   findOrCreateConversation: async (myId, otherUserId) => {
-    // Get only DM (non-group) conversations I'm in
-    const { data: myConvs } = await supabase
+    // Get all DM (non-group) conversations I'm in
+    const { data: myConvRows } = await supabase
       .from('conversation_members')
-      .select('conversation_id, conversations!inner(is_group)')
+      .select('conversation_id')
       .eq('user_id', myId)
-      .eq('conversations.is_group', false)
 
-    if (myConvs?.length) {
-      const myIds = myConvs.map(c => c.conversation_id)
-      const { data: shared } = await supabase
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', otherUserId)
-        .in('conversation_id', myIds)
-
-      if (shared?.length) return cleanUUID(shared[0].conversation_id)
+    if (myConvRows?.length) {
+      const myIds = myConvRows.map(c => c.conversation_id)
+      // Find shared conversations that are DMs (is_group = false or null)
+      const { data: convMetas } = await supabase
+        .from('conversations')
+        .select('id, is_group')
+        .in('id', myIds)
+        .or('is_group.eq.false,is_group.is.null')
+      const dmIds = (convMetas || []).map(c => c.id)
+      if (dmIds.length) {
+        const { data: shared } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .eq('user_id', otherUserId)
+          .in('conversation_id', dmIds)
+        // Verify it's a 2-person conversation (not a group)
+        if (shared?.length) {
+          for (const s of shared) {
+            const { count } = await supabase
+              .from('conversation_members')
+              .select('*', { count: 'exact', head: true })
+              .eq('conversation_id', s.conversation_id)
+            if (count === 2) return cleanUUID(s.conversation_id)
+          }
+        }
+      }
     }
 
-    // Create new DM conversation as 'pending' until recipient accepts
+    // Create new DM conversation — sender is created_by so filter works correctly
     let conv = null
     const { data: d1, error: e1 } = await supabase
       .from('conversations')
-      .insert({ is_group: false, dm_status: 'pending' })
+      .insert({ is_group: false, created_by: myId, dm_status: 'pending' })
       .select()
       .single()
 
     if (e1) {
       const { data: d2 } = await supabase
         .from('conversations')
-        .insert({ is_group: false })
+        .insert({ is_group: false, created_by: myId })
         .select()
         .single()
       conv = d2
