@@ -955,15 +955,12 @@ export default function CommunityDashboard({ community, onBack }) {
     ])
 
     const tRows = tRes.data || []
-    // Get participant counts
+    // Get participant counts via SECURITY DEFINER RPC (bypasses RLS)
     if (tRows.length) {
-      const ids = tRows.map(t => t.id)
-      const { data: mRows } = await supabase
-        .from('conversation_members')
-        .select('conversation_id')
-        .in('conversation_id', ids)
-      const cmap = {}
-      ;(mRows || []).forEach(r => { cmap[r.conversation_id] = (cmap[r.conversation_id] || 0) + 1 })
+      const counts = await Promise.all(
+        tRows.map(t => supabase.rpc('get_tournament_participant_count', { p_tournament_id: t.id }).then(r => ({ id: t.id, count: r.data ?? 0 })))
+      )
+      const cmap = Object.fromEntries(counts.map(c => [c.id, c.count]))
       setTorneos(tRows.map(t => ({ ...t, participant_count: cmap[t.id] || 0 })))
     } else {
       setTorneos([])
@@ -980,7 +977,7 @@ export default function CommunityDashboard({ community, onBack }) {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: C.panel, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <button onClick={() => setViewingTournament(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: 4 }}>
+          <button onClick={() => { setViewingTournament(null); loadData() }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text2, padding: 4 }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
