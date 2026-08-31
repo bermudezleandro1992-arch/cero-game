@@ -41,8 +41,6 @@ $$;
 
 -- Clean any malformed support_group_id value in app_config
 UPDATE public.app_config
-SET value = (
-  regexp_matches(value, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', 'i')
-)[1]
+SET value = (regexp_match(value, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', 'i'))[1]
 WHERE key = 'support_group_id'
   AND value ~ '[^0-9a-f\-]';
