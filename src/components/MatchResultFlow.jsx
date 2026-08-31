@@ -264,11 +264,20 @@ function AwaitingConfirmation({ match, profile, isAdmin, onDone }) {
 
   async function handleConfirm() {
     setLoading(true)
-    const { data, error } = await supabase.rpc('confirm_match_result', {
-      p_match_id: match.id,
-      p_confirm:  true,
-    })
-    if (!error && data?.ok) onDone()
+    if (isAdmin) {
+      // Admin confirma directamente sin pasar por el RPC del perdedor
+      const { error } = await supabase.from('tournament_matches').update({
+        status: 'finalizado',
+        loser_confirmed: true,
+      }).eq('id', match.id)
+      if (!error) onDone()
+    } else {
+      const { data, error } = await supabase.rpc('confirm_match_result', {
+        p_match_id: match.id,
+        p_confirm:  true,
+      })
+      if (!error && data?.ok) onDone()
+    }
     setLoading(false)
   }
 
