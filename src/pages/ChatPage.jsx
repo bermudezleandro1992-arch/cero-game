@@ -455,7 +455,7 @@ function ConfirmDialog({ open, title, message, onConfirm, onCancel, confirmLabel
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatPage({ onBack }) {
   const { profile } = useAuthStore()
-  const { activeConversation, messages, conversations, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage, topics, activeTopicId, fetchTopics, createTopic, setActiveTopic, fetchConversations } = useChatStore()
+  const { activeConversation, messages, conversations, loadingMessages, fetchMessages, sendMessage, subscribeToMessages, markAsRead, uploadImage, deleteMessage, reactToMessage, fetchReactions, editMessage, forwardMessage, topics, activeTopicId, fetchTopics, createTopic, setActiveTopic, fetchConversations, acceptDmRequest, declineDmRequest } = useChatStore()
   const [text, setText] = useState('')
   const convId = (activeConversation?.id || '').replace(/^"+|"+$/g, '').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] || activeConversation?.id
   const [sending, setSending] = useState(false)
@@ -615,6 +615,10 @@ export default function ChatPage({ onBack }) {
   const isGroup = activeConversation?.isGroup
   const otherUser = activeConversation?.user
   const groupName = activeConversation?.name
+  // DM request: pending chat where I'm the recipient (not the creator)
+  const isDmPending = !isGroup
+    && activeConversation?.dm_status === 'pending'
+    && activeConversation?.created_by !== profile?.id
 
   const { isOnline, lastSeen, isTyping, otherLastRead } = useContactStatus(
     isGroup ? null : otherUser?.id, activeConversation?.id, profile?.id
@@ -2458,8 +2462,36 @@ export default function ChatPage({ onBack }) {
           </div>
         )}
 
+        {/* ── DM REQUEST BANNER ── */}
+        {isDmPending && (
+          <div style={{
+            background: C.panel, borderTop: `1px solid ${C.border}`, padding: '14px 16px',
+            flexShrink: 0, paddingBottom: 'calc(14px + env(safe-area-inset-bottom))',
+          }}>
+            <p style={{ margin: '0 0 10px', fontSize: 13, color: C.text2, textAlign: 'center' }}>
+              <strong>{otherUser?.display_name}</strong> quiere enviarte un mensaje.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={async () => {
+                await acceptDmRequest?.(convId)
+                fetchConversations(profile.id)
+              }} style={{
+                padding: '10px 24px', borderRadius: 10, background: C.green,
+                color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14,
+              }}>Aceptar</button>
+              <button onClick={async () => {
+                await declineDmRequest?.(convId)
+                fetchConversations(profile.id)
+              }} style={{
+                padding: '10px 24px', borderRadius: 10, background: C.panel2,
+                color: C.textDim, border: `1px solid ${C.border}`, cursor: 'pointer', fontWeight: 700, fontSize: 14,
+              }}>Rechazar</button>
+            </div>
+          </div>
+        )}
+
         {/* ── INPUT BAR ── */}
-        {!invStatus && !isAnnouncementTopic && !activeChannelLocked && !recLocked && (
+        {!isDmPending && !invStatus && !isAnnouncementTopic && !activeChannelLocked && !recLocked && (
           <form onSubmit={handleSend} style={{
             display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 12px 10px',
             background: C.panel, borderTop: `1px solid ${C.border}`, flexShrink: 0,

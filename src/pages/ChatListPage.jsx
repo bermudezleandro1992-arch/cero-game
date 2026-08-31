@@ -160,7 +160,7 @@ function ConfirmDialog({ open, title, message, onConfirm, onCancel, confirmLabel
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChatListPage({ onProfileClick, initialFilter }) {
   const { profile, signOut } = useAuthStore()
-  const { conversations, fetchConversations, fetchMessages, findOrCreateConversation, setActiveConversation, activeConversation } = useChatStore()
+  const { conversations, fetchConversations, fetchMessages, findOrCreateConversation, setActiveConversation, activeConversation, acceptDmRequest, declineDmRequest } = useChatStore()
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -351,7 +351,13 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
 
   if (showNewGroup) return <NewGroupPage initialType={newGroupType} onBack={() => setShowNewGroup(false)} onCreated={handleGroupCreated} />
 
+  // Pending DM requests addressed to ME (conversations I didn't create)
+  const pendingRequests = conversations.filter(c =>
+    !c.isGroup && c.dm_status === 'pending' && c.created_by !== profile?.id
+  )
+  // Accepted or my own pending (sender sees it as normal)
   const filtered = (search ? [] : conversations.filter(c => {
+    if (!c.isGroup && c.dm_status === 'pending' && c.created_by !== profile?.id) return false // shown in requests section
     if (filter === 'noleidos')    return (c.unread || 0) > 0
     if (filter === 'chats')       return !c.isGroup && !c.isCommunity
     if (filter === 'contactos')   return !c.isGroup && !c.isCommunity
@@ -589,6 +595,51 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
             }}>💬</div>
             <p style={{ margin: 0, fontSize: 14, color: C.text2, fontWeight: 600 }}>Sin conversaciones</p>
             <p style={{ margin: 0, fontSize: 12 }}>Buscá un usuario o tocá + para crear un grupo</p>
+          </div>
+        )}
+
+        {/* Pending DM requests */}
+        {!search && pendingRequests.length > 0 && (
+          <div style={{ borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ padding: '10px 16px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.green, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                Solicitudes de chat
+              </span>
+              <span style={{ background: C.green, color: '#fff', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 6px' }}>
+                {pendingRequests.length}
+              </span>
+            </div>
+            {pendingRequests.map(conv => (
+              <div key={conv.id} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '10px 16px', borderBottom: `1px solid ${C.border}20`,
+              }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
+                  background: avatarColor(conv.user?.id),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 18, fontWeight: 700, color: '#fff',
+                }}>
+                  {conv.user?.avatar_url
+                    ? <img src={conv.user.avatar_url} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
+                    : (conv.user?.display_name?.[0] || '?').toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: C.text }}>{conv.user?.display_name}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: C.textDim }}>@{conv.user?.username} quiere chatear contigo</p>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={async () => { await acceptDmRequest?.(conv.id); fetchConversations(profile.id) }}
+                    style={{ padding: '5px 12px', borderRadius: 8, background: C.green, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                    Aceptar
+                  </button>
+                  <button onClick={async () => { await declineDmRequest?.(conv.id); fetchConversations(profile.id) }}
+                    style={{ padding: '5px 10px', borderRadius: 8, background: C.panel2, color: C.textDim, border: `1px solid ${C.border}`, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                    Rechazar
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

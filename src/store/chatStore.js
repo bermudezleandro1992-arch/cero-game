@@ -89,7 +89,7 @@ export const useChatStore = create((set, get) => ({
     let convMeta = {}
     const { data: metaRows } = await supabase
       .from('conversations')
-      .select('id, name, is_group, created_by, avatar_url, group_type, description, is_public, is_locked, who_can_send, who_can_add, who_can_edit_info, slow_mode_seconds, auto_delete_hours, allow_export, allow_auto_save, announcement_only, require_approval, invite_link, pinned_message, torneos_enabled, ligas_enabled, clanes_enabled, tags, member_count, game_rules, plan')
+      .select('id, name, is_group, created_by, avatar_url, group_type, description, is_public, is_locked, who_can_send, who_can_add, who_can_edit_info, slow_mode_seconds, auto_delete_hours, allow_export, allow_auto_save, announcement_only, require_approval, invite_link, pinned_message, torneos_enabled, ligas_enabled, clanes_enabled, tags, member_count, game_rules, plan, dm_status')
       .in('id', convIds0)
     metaRows?.forEach(r => { convMeta[r.id] = r })
 
@@ -165,6 +165,7 @@ export const useChatStore = create((set, get) => ({
           lastMessage: lastMsgMap[convId],
           lastReadAt: lastReadMap[convId],
           unread: unreadMap[convId] || 0,
+          dm_status: meta?.dm_status ?? 'accepted',
         }
       })
       .filter(c => {
@@ -450,11 +451,12 @@ export const useChatStore = create((set, get) => ({
   },
 
   findOrCreateConversation: async (myId, otherUserId) => {
-    // Get all conversations both users share
+    // Get only DM (non-group) conversations I'm in
     const { data: myConvs } = await supabase
       .from('conversation_members')
-      .select('conversation_id')
+      .select('conversation_id, conversations!inner(is_group)')
       .eq('user_id', myId)
+      .eq('conversations.is_group', false)
 
     if (myConvs?.length) {
       const myIds = myConvs.map(c => c.conversation_id)
@@ -467,19 +469,18 @@ export const useChatStore = create((set, get) => ({
       if (shared?.length) return cleanUUID(shared[0].conversation_id)
     }
 
-    // Create new conversation — try with is_group first, fall back without it
+    // Create new DM conversation as 'pending' until recipient accepts
     let conv = null
     const { data: d1, error: e1 } = await supabase
       .from('conversations')
-      .insert({ is_group: false })
+      .insert({ is_group: false, dm_status: 'pending' })
       .select()
       .single()
 
     if (e1) {
-      // Column might not exist yet, insert without it
       const { data: d2 } = await supabase
         .from('conversations')
-        .insert({})
+        .insert({ is_group: false })
         .select()
         .single()
       conv = d2
@@ -495,6 +496,23 @@ export const useChatStore = create((set, get) => ({
     ])
 
     return cleanUUID(conv.id)
+  },
+
+  acceptDmRequest: async (conversationId) => {
+    await supabase.rpc('accept_dm_request', { p_conversation_id: conversationId })
+    set(state => ({
+      conversations: state.conversations.map(c =>
+        c.id === conversationId ? { ...c, dm_status: 'accepted' } : c
+      ),
+    }))
+  },
+
+  declineDmRequest: async (conversationId) => {
+    await supabase.rpc('decline_dm_request', { p_conversation_id: conversationId })
+    set(state => ({
+      conversations: state.conversations.filter(c => c.id !== conversationId),
+      activeConversation: null,
+    }))
   },
 
   deleteMessage: async (messageId, conversationId, senderRole) => {
