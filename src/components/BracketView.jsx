@@ -120,35 +120,32 @@ function computeLayout(matches) {
     roundMap[m.round_number].push(m)
   })
   const roundNums  = Object.keys(roundMap).map(Number).sort((a, b) => a - b)
-  const maxRound   = Math.max(...roundNums)
   const firstCount = roundMap[roundNums[0]]?.length ?? 1
 
-  // Altura de celda por ronda: se duplica en cada ronda siguiente
-  // Ronda 1: cellH = CARD_H + ROW_GAP
-  // Ronda N: cellH = cellH_r1 * 2^(N-1)
-  const baseCellH = CARD_H + ROW_GAP * 2
+  // Slot height — altura de cada "slot" de R1. Cada ronda posterior ocupa 2^ri slots.
+  const slotH = CARD_H + ROW_GAP * 2
 
-  // Posición de cada tarjeta
   const rounds = roundNums.map((rn, ri) => {
-    const ms    = roundMap[rn]
-    const cellH = baseCellH * Math.pow(2, rn - roundNums[0])
-    const x     = PADDING + ri * (CARD_W + COL_GAP)
+    const ms   = roundMap[rn]
+    const span = Math.pow(2, ri)          // slots de R1 que abarca cada partido de esta ronda
+    const x    = PADDING + ri * (CARD_W + COL_GAP)
 
     const cards = ms.map((m, mi) => {
-      const y = PADDING + mi * cellH + (cellH - CARD_H) / 2
-      return { match: m, x, y, cellH }
+      // Centrar la tarjeta en el medio del bloque de slots que le corresponde
+      const centerY = PADDING + span * (mi + 0.5) * slotH
+      const y = centerY - CARD_H / 2
+      return { match: m, x, y, cellH: span * slotH }
     })
 
-    // Nombre de la fase
-    const phaseKey = ms[0]?.phase ?? 'bracket'
-    const label = PHASE_LABELS[phaseKey] ?? `Ronda ${rn}`
+    const phaseKey   = ms[0]?.phase ?? 'bracket'
+    const label      = PHASE_LABELS[phaseKey] ?? `Ronda ${rn}`
     const phaseLabel = phaseKey === 'bracket' ? `Ronda ${rn}` : label
 
     return { roundNum: rn, cards, x, phaseLabel }
   })
 
   const totalW = PADDING + roundNums.length * (CARD_W + COL_GAP) - COL_GAP + PADDING
-  const totalH = PADDING + firstCount * baseCellH + PADDING
+  const totalH = PADDING * 2 + firstCount * slotH
 
   return { rounds, totalW, totalH }
 }
