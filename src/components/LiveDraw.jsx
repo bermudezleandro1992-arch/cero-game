@@ -30,6 +30,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../hooks/useSubscription'
 import { C } from '../theme'
+import { postTournamentBotAnnouncement } from './CommunityDashboardWA'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const GROUP_COLORS = [
@@ -305,6 +306,8 @@ export default function LiveDraw({
   participantCount = 0,
   maxParticipants  = 0,
   autoStart        = true,
+  communityId      = null,
+  tournamentData   = null,
 }) {
   const { isPro } = useSubscription(profile?.id)
   const canUseDraw = isPro || isAdmin
@@ -478,6 +481,14 @@ export default function LiveDraw({
         setActiveBall(null)
         setActiveGroupId(null)
         setPhase('done')
+        // Armar grupos con sus miembros para el anuncio
+        const groupsWithMembers = groupList.map(g => ({
+          ...g,
+          members: evList
+            .filter(e => e.event_type === 'ball_drawn' && e.payload?.group_id === g.id)
+            .map(e => ({ user_id: e.payload.user_id, profile: pm[e.payload.user_id] })),
+        }))
+        postDrawBotAnnouncement(groupsWithMembers, pm)
         onDrawComplete?.()
         return
       } else {
@@ -492,6 +503,44 @@ export default function LiveDraw({
 
   // Limpiar timers al desmontar
   useEffect(() => () => clearTimeout(timerRef.current), [])
+
+  // Postear anuncio bot en la comunidad cuando el sorteo termina
+  async function postDrawBotAnnouncement(groupsResult, profileMapResult) {
+    if (!communityId || !profile?.id || !tournamentData) return
+    try {
+      // Construir lista de participantes reales (no bots)
+      const allPlayers = Object.values(profileMapResult || {}).filter(Boolean)
+
+      // Card bot principal del torneo
+      await postTournamentBotAnnouncement({
+        supabase,
+        communityId,
+        authorId: profile.id,
+        tournament: tournamentData,
+        participants: allPlayers,
+      })
+
+      // Card por cada grupo — anuncio de fase de grupos
+      for (const g of groupsResult) {
+        const members = g.members || []
+        if (members.length === 0) continue
+        const color = g.color ?? GROUP_COLORS[g.position % GROUP_COLORS.length]
+        const lines = members.map((m, i) => `${i + 1}. ${m.profile?.display_name || m.profile?.username || '?'}`)
+        const body = `📊 FASE DE GRUPOS — Grupo ${g.name}\n\n${lines.join('\n')}\n\n🏆 Top ${g.classifies || 2} clasifican al bracket`
+        await supabase.from('announcements').insert({
+          conversation_id: communityId,
+          author_id: profile.id,
+          title: `📋 Grupo ${g.name} — ${tournamentData.name}`,
+          body,
+          category: 'torneo',
+          is_active: true,
+          tournament_id: tournamentId,
+        })
+      }
+    } catch (e) {
+      console.error('Error posting draw bot announcement:', e)
+    }
+  }
 
   const spinning     = phase === 'spinning' || phase === 'starting'
   const accentColor  = C.green

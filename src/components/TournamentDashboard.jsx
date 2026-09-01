@@ -5,6 +5,10 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
+import { postTournamentBotAnnouncement } from './CommunityDashboardWA'
+
+const PLAYER_EMOJIS_TD = ['⚽','🔥','🐐','💙','⚡','🎯','🏅','👑','🦁','🐺','🌟','💪','🔱','🏹','🎮','🕹️']
+function pEmoji(i) { return PLAYER_EMOJIS_TD[i % PLAYER_EMOJIS_TD.length] }
 import GroupStage      from './GroupStage'
 import BracketView     from './BracketView'
 import FixtureTab      from './FixtureTab'
@@ -520,7 +524,7 @@ const cleanUUID = id => {
   return m ? m[0] : s.replace(/[^0-9a-f-]/gi, '').slice(0, 36)
 }
 
-export default function TournamentDashboard({ tournamentId: rawTournamentId, profile, isAdmin, onBack, showBotButton }) {
+export default function TournamentDashboard({ tournamentId: rawTournamentId, profile, isAdmin, onBack, showBotButton, communityId: communityIdProp }) {
   const tournamentId = cleanUUID(rawTournamentId)
   const [data, setData]             = useState(null)
   const [loading, setLoading]       = useState(true)
@@ -595,7 +599,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       .then(({ count }) => setIsMember((count ?? 0) > 0))
   }, [tournamentId, profile?.id])
 
-  async function postAviso(title, body) {
+  async function postAviso(title, body, extraFields = {}) {
     const communityId = data?.community_id
     if (!communityId || !profile?.id) return
     await supabase.from('announcements').insert({
@@ -603,9 +607,32 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       author_id: profile.id,
       title,
       body: body || null,
-      category: 'torneo',
+      category: data?.group_type === 'liga' ? 'liga' : 'torneo',
       is_active: true,
+      tournament_id: tournamentId,
+      ...extraFields,
     })
+  }
+
+  async function postBotCard(tournament, participants = []) {
+    const communityId = tournament?.community_id || data?.community_id
+    if (!communityId || !profile?.id) return
+    await postTournamentBotAnnouncement({
+      supabase,
+      communityId,
+      authorId: profile.id,
+      tournament: tournament || data,
+      participants,
+    })
+  }
+
+  async function fetchParticipants() {
+    const { data: rows } = await supabase
+      .from('tournament_participants')
+      .select('user_id, users!inner(id, display_name, username, is_bot)')
+      .eq('tournament_id', tournamentId)
+      .limit(16)
+    return (rows || []).map(r => r.users).filter(u => u && !u.is_bot)
   }
 
   async function triggerAutoStart(tournamentData) {
@@ -639,6 +666,10 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
     const newCount = (data?.participant_count ?? 0) + 1
     setData(d => d ? { ...d, participant_count: newCount } : d)
     setJoining(false)
+
+    // Postear card bot con participantes actualizados
+    const participants = await fetchParticipants()
+    await postBotCard(data, participants)
 
     // Auto-start si se completaron los cupos
     if (data?.max_participants && newCount >= data.max_participants && data.status === 'inscripcion') {
