@@ -823,7 +823,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
         )}
 
         {activeTab === 'bracket' && !isLiga && (
-          <BracketView tournamentId={tournamentId} profile={profile} isAdmin={isAdmin} />
+          <BracketView tournamentId={tournamentId} communityId={data?.community_id} tournamentName={data?.name} profile={profile} isAdmin={isAdmin} />
         )}
 
         {activeTab === 'fixture' && !isLiga && (
