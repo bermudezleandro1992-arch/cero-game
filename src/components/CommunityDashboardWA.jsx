@@ -407,49 +407,11 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
         <div ref={bottomRef} />
       </div>
 
-      {/* Footer */}
+      {/* Footer — solo informativo */}
       <div style={{ borderTop: `1px solid ${C.border}`, background: C.panel }}>
-        <div style={{ padding: '8px 14px', fontSize: 12, color: C.textDim, textAlign: 'center', background: C.panel2 }}>
-          {isAdmin
-            ? <span>📢 Solo <strong style={{ color: C.green }}>admins</strong> pueden enviar avisos</span>
-            : <span>📢 Solo quienes administran la comunidad pueden enviar avisos</span>
-          }
+        <div style={{ padding: '10px 14px', fontSize: 12, color: C.textDim, textAlign: 'center', background: C.panel2 }}>
+          <span>📢 Solo quienes administran la comunidad pueden enviar avisos</span>
         </div>
-        {isAdmin && (
-          showForm ? (
-            <form onSubmit={sendAviso} style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input
-                value={msgTitle}
-                onChange={e => setMsgTitle(e.target.value)}
-                placeholder="Título del aviso..."
-                style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }}
-                autoFocus
-              />
-              <textarea
-                value={newMsg}
-                onChange={e => setNewMsg(e.target.value)}
-                placeholder="Contenido (opcional)"
-                rows={2}
-                style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit' }}
-              />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button" onClick={() => setShowForm(false)} style={{ flex: 1, padding: '9px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'none', color: C.textDim, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
-                <button type="submit" disabled={sending || !msgTitle.trim()} style={{ flex: 2, padding: '9px', borderRadius: 10, border: 'none', background: '#25D366', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: sending ? 0.7 : 1 }}>
-                  {sending ? 'Enviando...' : '📢 Publicar'}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div style={{ padding: '10px 14px' }}>
-              <button onClick={() => setShowForm(true)} style={{
-                width: '100%', padding: '10px', borderRadius: 10, border: `1px dashed ${C.border}`,
-                background: 'none', color: C.textDim, fontWeight: 600, fontSize: 13, cursor: 'pointer',
-              }}>
-                + Publicar aviso
-              </button>
-            </div>
-          )
-        )}
       </div>
     </div>
   )

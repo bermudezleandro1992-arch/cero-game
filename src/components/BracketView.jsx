@@ -607,7 +607,7 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
             await load()
             // Publicar resultado en Avisos de la comunidad (una sola vez por partido)
             const FINAL_STATUSES = ['finalizado', 'aprobado', 'confirmado']
-            const cid = resolvedCommunityId
+            const cid = resolvedCommunityId || tournamentId
             if (profile?.id && cid && mx?.winner_id && FINAL_STATUSES.includes(mx.status) && !postedAnnouncements.current.has(mx.id)) {
               postedAnnouncements.current.add(mx.id)
               const p1IsBot = isBotProfile(reportMatch.player1)
