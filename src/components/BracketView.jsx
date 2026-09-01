@@ -54,15 +54,19 @@ function Avatar({ profile, size = 24 }) {
 
 function isBotProfile(profile) {
   if (!profile) return false
+  if (profile.is_bot) return true
   const u = profile.username || ''
   const d = profile.display_name || ''
-  // bot users created by fill_tournament_bots have user_<hex> username
-  return /^user_[0-9a-f]{6,}/.test(u) || d.toLowerCase() === 'usuario' && /^user_/.test(u)
+  return (
+    /^bot_[0-9a-f]/.test(u) ||
+    /^user_[0-9a-f]{6,}/.test(u) ||
+    (d.toLowerCase() === 'usuario' && /^user_/.test(u))
+  )
 }
 
 function name(profile) {
   if (!profile) return '—'
-  if (isBotProfile(profile)) return '🤖 Bot'
+  if (isBotProfile(profile)) return profile.display_name || '🤖 Bot'
   return profile.display_name || profile.username || '—'
 }
 
@@ -90,7 +94,7 @@ async function fetchBracket(tournamentId) {
     matches.flatMap(m => [m.player1_id, m.player2_id]).filter(Boolean)
   )]
   const { data: profiles } = userIds.length
-    ? await supabase.from('users').select('id, display_name, username, avatar_url').in('id', userIds)
+    ? await supabase.from('users').select('id, display_name, username, avatar_url, is_bot').in('id', userIds)
     : { data: [] }
 
   const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
@@ -116,35 +120,32 @@ function computeLayout(matches) {
     roundMap[m.round_number].push(m)
   })
   const roundNums  = Object.keys(roundMap).map(Number).sort((a, b) => a - b)
-  const maxRound   = Math.max(...roundNums)
   const firstCount = roundMap[roundNums[0]]?.length ?? 1
 
-  // Altura de celda por ronda: se duplica en cada ronda siguiente
-  // Ronda 1: cellH = CARD_H + ROW_GAP
-  // Ronda N: cellH = cellH_r1 * 2^(N-1)
-  const baseCellH = CARD_H + ROW_GAP * 2
+  // Slot height — altura de cada "slot" de R1. Cada ronda posterior ocupa 2^ri slots.
+  const slotH = CARD_H + ROW_GAP * 2
 
-  // Posición de cada tarjeta
   const rounds = roundNums.map((rn, ri) => {
-    const ms    = roundMap[rn]
-    const cellH = baseCellH * Math.pow(2, rn - roundNums[0])
-    const x     = PADDING + ri * (CARD_W + COL_GAP)
+    const ms   = roundMap[rn]
+    const span = Math.pow(2, ri)          // slots de R1 que abarca cada partido de esta ronda
+    const x    = PADDING + ri * (CARD_W + COL_GAP)
 
     const cards = ms.map((m, mi) => {
-      const y = PADDING + mi * cellH + (cellH - CARD_H) / 2
-      return { match: m, x, y, cellH }
+      // Centrar la tarjeta en el medio del bloque de slots que le corresponde
+      const centerY = PADDING + span * (mi + 0.5) * slotH
+      const y = centerY - CARD_H / 2
+      return { match: m, x, y, cellH: span * slotH }
     })
 
-    // Nombre de la fase
-    const phaseKey = ms[0]?.phase ?? 'bracket'
-    const label = PHASE_LABELS[phaseKey] ?? `Ronda ${rn}`
+    const phaseKey   = ms[0]?.phase ?? 'bracket'
+    const label      = PHASE_LABELS[phaseKey] ?? `Ronda ${rn}`
     const phaseLabel = phaseKey === 'bracket' ? `Ronda ${rn}` : label
 
     return { roundNum: rn, cards, x, phaseLabel }
   })
 
   const totalW = PADDING + roundNums.length * (CARD_W + COL_GAP) - COL_GAP + PADDING
-  const totalH = PADDING + firstCount * baseCellH + PADDING
+  const totalH = PADDING * 2 + firstCount * slotH
 
   return { rounds, totalW, totalH }
 }
@@ -393,6 +394,10 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
   const [resetModal, setResetModal]   = useState(null) // match to reset
   const [resetReason, setResetReason] = useState('')
   const [resetting, setResetting]     = useState(false)
+  const [resetAllConfirm, setResetAllConfirm] = useState(false)
+  const [resettingAll, setResettingAll]       = useState(false)
+  const [resolvedCommunityId, setResolvedCommunityId] = useState(communityId || null)
+  const postedAnnouncements = useRef(new Set())
   const scrollRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -408,6 +413,13 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
   }, [tournamentId])
 
   useEffect(() => { load() }, [load])
+
+  // Resolver communityId desde el torneo si no viene como prop
+  useEffect(() => {
+    if (communityId) { setResolvedCommunityId(communityId); return }
+    supabase.from('conversations').select('community_id').eq('id', tournamentId).single()
+      .then(({ data }) => { if (data?.community_id) setResolvedCommunityId(data.community_id) })
+  }, [tournamentId, communityId])
 
   // Realtime
   useEffect(() => {
@@ -433,6 +445,32 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
       setError(error?.message ?? data?.error ?? 'Error al generar el bracket')
       return
     }
+    await load()
+  }
+
+  async function handleByeAll() {
+    const botMatches = matches.filter(m =>
+      m.status === 'pendiente' &&
+      ((isBot(m.player1) && m.player2_id) || (isBot(m.player2) && m.player1_id))
+    )
+    for (const m of botMatches) {
+      const p1IsBot = isBot(m.player1)
+      const winnerId = p1IsBot ? m.player2_id : m.player1_id
+      if (!winnerId) continue
+      await supabase.rpc('bye_match', {
+        p_match_id: m.id, p_winner_id: winnerId,
+        p_score1: p1IsBot ? 0 : 1, p_score2: p1IsBot ? 1 : 0,
+      })
+    }
+    await load()
+  }
+
+  async function handleResetAll() {
+    setResettingAll(true)
+    const { error } = await supabase.rpc('reset_tournament_matches', { p_tournament_id: tournamentId })
+    setResettingAll(false)
+    setResetAllConfirm(false)
+    if (error) { alert('Error al resetear: ' + error.message); return }
     await load()
   }
 
@@ -538,19 +576,23 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
               .from('tournament_matches').select('*').eq('id', reportMatch.id).single()
             if (mx?.winner_id) await advanceBracket(mx)
             await load()
-            // Publicar resultado en Avisos de la comunidad
-            if (profile?.id && communityId && mx && (mx.status === 'finalizado' || mx.status === 'aprobado') && mx.winner_id) {
+            // Publicar resultado en Avisos de la comunidad (una sola vez por partido)
+            const FINAL_STATUSES = ['finalizado', 'aprobado', 'confirmado']
+            const cid = resolvedCommunityId
+            if (profile?.id && cid && mx?.winner_id && FINAL_STATUSES.includes(mx.status) && !postedAnnouncements.current.has(mx.id)) {
+              postedAnnouncements.current.add(mx.id)
               const p1n = isBotProfile(reportMatch.player1) ? '🤖 Bot' : (reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1')
               const p2n = isBotProfile(reportMatch.player2) ? '🤖 Bot' : (reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2')
               const winner = mx.winner_id === mx.player1_id ? p1n : p2n
-              await supabase.from('announcements').insert({
-                conversation_id: communityId,
+              const { error: annErr } = await supabase.from('announcements').insert({
+                conversation_id: cid,
                 author_id: profile.id,
                 title: `⚽ Resultado — ${tournamentName || 'Torneo'}`,
                 body: `${p1n} ${mx.score1} - ${mx.score2} ${p2n}\n🏆 Ganador: ${winner}\n📍 Ronda ${mx.round_number}`,
                 category: 'torneo',
                 is_active: true,
               })
+              if (annErr) console.error('Error posting announcement:', annErr)
             }
           }}
         />,
@@ -592,6 +634,24 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
         document.body
       )}
 
+      {resetAllConfirm && createPortal(
+        <div onClick={() => setResetAllConfirm(false)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.panel, borderRadius: 20, padding: 24, maxWidth: 320, width: '100%', border: `1px solid ${C.border}` }}>
+            <p style={{ margin: '0 0 8px', fontWeight: 800, fontSize: 15, color: '#ef4444' }}>🔄 Resetear TODOS los resultados</p>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: C.textDim, lineHeight: 1.5 }}>
+              Esto borra todos los resultados, ganadores y scores del torneo. Los partidos de ronda 2+ quedan sin jugadores. ¿Confirmar?
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setResetAllConfirm(false)} style={{ flex: 1, padding: 10, borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={handleResetAll} disabled={resettingAll} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: '#ef4444', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+                {resettingAll ? '…' : 'Resetear todo'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0, height: '100%' }}>
 
         {/* Header */}
@@ -608,23 +668,26 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
           {isAdmin && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               {/* Bye automático para matches con bot pendientes */}
-              {matches.filter(m => m.status === 'pendiente' && ((isBot(m.player1) && m.player2_id) || (isBot(m.player2) && m.player1_id))).map(m => {
-                const realPlayer = isBot(m.player1) ? m.player2 : m.player1
-                const realName = realPlayer?.display_name || realPlayer?.username || 'Jugador'
-                return (
-                  <button key={m.id} onClick={() => handleByeAdvance(m)} style={{
-                    padding: '7px 12px', borderRadius: 10,
-                    border: '1px solid #22c55e44', background: '#22c55e14',
-                    color: '#22c55e', fontWeight: 700, fontSize: 11, cursor: 'pointer',
-                  }}>
-                    🤖 Bye → {realName}
-                  </button>
-                )
-              })}
+              {matches.some(m => m.status === 'pendiente' && ((isBot(m.player1) && m.player2_id) || (isBot(m.player2) && m.player1_id))) && (
+                <button onClick={handleByeAll} style={{
+                  padding: '7px 12px', borderRadius: 10,
+                  border: '1px solid #22c55e44', background: '#22c55e14',
+                  color: '#22c55e', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                }}>
+                  🤖 Bye todos los bots
+                </button>
+              )}
               <SelectMatchToReset
                 matches={matches}
                 onSelect={m => setResetModal(m)}
               />
+              <button onClick={() => setResetAllConfirm(true)} style={{
+                padding: '7px 12px', borderRadius: 10,
+                border: '1px solid #ef444444', background: '#ef444410',
+                color: '#ef4444', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+              }}>
+                🔄 Resetear todo
+              </button>
             </div>
           )}
         </div>

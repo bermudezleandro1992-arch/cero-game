@@ -1103,6 +1103,18 @@ export default function CommunityDashboard({ community, onBack }) {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Realtime: refrescar avisos cuando se inserta un nuevo announcement
+  useEffect(() => {
+    if (!community?.id) return
+    const ch = supabase.channel(`community-ann-${community.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'announcements',
+        filter: `conversation_id=eq.${community.id}`,
+      }, () => loadData())
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [community?.id, loadData])
+
   if (viewingTournament) {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg }}>
