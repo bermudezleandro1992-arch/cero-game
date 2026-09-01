@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { Capacitor } from '@capacitor/core'
 
-const APK_URL = 'https://drive.google.com/file/d/1WvjWDxj3Dl-bkr7_YkQeJhRCEe5o2xN7/view?usp=drive_link'
+const APK_URL = 'https://drive.google.com/file/d/1x1FopFjcfoFF81OGYqoYQ7FAI2xqxdIt/view?usp=sharing'
 const GREEN = '#00d278'
 
 const TERMINOS = `
