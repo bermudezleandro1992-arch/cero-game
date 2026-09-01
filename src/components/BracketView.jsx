@@ -607,9 +607,15 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
             await load()
             // Publicar resultado en Avisos de la comunidad (una sola vez por partido)
             const FINAL_STATUSES = ['finalizado', 'aprobado', 'confirmado']
-            const cid = resolvedCommunityId || tournamentId
-            if (profile?.id && cid && mx?.winner_id && FINAL_STATUSES.includes(mx.status) && !postedAnnouncements.current.has(mx.id)) {
+            if (profile?.id && mx?.winner_id && FINAL_STATUSES.includes(mx.status) && !postedAnnouncements.current.has(mx.id)) {
               postedAnnouncements.current.add(mx.id)
+              // Resolver community_id fresco para evitar problemas de timing/RLS
+              let commId = resolvedCommunityId
+              if (!commId) {
+                const { data: cv } = await supabase.from('conversations').select('community_id').eq('id', tournamentId).single()
+                commId = cv?.community_id || null
+              }
+              if (!commId) { console.warn('No community_id found for tournament', tournamentId); return }
               const p1IsBot = isBotProfile(reportMatch.player1)
               const p2IsBot = isBotProfile(reportMatch.player2)
               const p1n = p1IsBot ? (reportMatch.player1?.display_name || '🤖 Bot') : (reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1')
@@ -618,7 +624,7 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
               const roundLabel = mx.round_number === 1 ? 'Ronda 1 — Fase de grupos' : `Ronda ${mx.round_number}`
               const body = `⚽ RESULTADO — ${tournamentName || 'Torneo'}\n\n${p1n} ${mx.score1} - ${mx.score2} ${p2n}\n\n🏆 Ganador: ${winner}\n📍 ${roundLabel}`
               const { error: annErr } = await supabase.from('announcements').insert({
-                conversation_id: tournamentId,
+                conversation_id: commId,
                 author_id: profile.id,
                 title: `⚽ ${tournamentName || 'Torneo'} — Resultado R${mx.round_number}`,
                 body,
