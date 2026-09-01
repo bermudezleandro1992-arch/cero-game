@@ -384,7 +384,7 @@ function SelectMatchToReset({ matches, onSelect }) {
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function BracketView({ tournamentId, profile, isAdmin, onReportMatch }) {
+export default function BracketView({ tournamentId, communityId, tournamentName, profile, isAdmin, onReportMatch }) {
   const [matches, setMatches]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -538,20 +538,19 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
               .from('tournament_matches').select('*').eq('id', reportMatch.id).single()
             if (mx?.winner_id) await advanceBracket(mx)
             await load()
-            if (profile?.id && mx && (mx.status === 'finalizado' || mx.status === 'aprobado') && mx.winner_id) {
-              const p1n = reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1'
-              const p2n = reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2'
+            // Publicar resultado en Avisos de la comunidad
+            if (profile?.id && communityId && mx && (mx.status === 'finalizado' || mx.status === 'aprobado') && mx.winner_id) {
+              const p1n = isBotProfile(reportMatch.player1) ? '🤖 Bot' : (reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1')
+              const p2n = isBotProfile(reportMatch.player2) ? '🤖 Bot' : (reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2')
               const winner = mx.winner_id === mx.player1_id ? p1n : p2n
-              const photoUrl = mx.photo_url || mx.result_photo_url || null
-              const msgData = {
-                conversation_id: tournamentId,
-                sender_id: profile.id,
-                content: `🏆 *Resultado confirmado*\n\n${p1n} ${mx.score1} — ${mx.score2} ${p2n}\n\n✅ Avanza: *${winner}*`,
-                type: photoUrl ? 'image' : 'text',
-              }
-              if (photoUrl) msgData.media_url = photoUrl
-              const { error: msgErr } = await supabase.from('messages').insert(msgData)
-              if (msgErr) console.error('Bot message insert error:', msgErr)
+              await supabase.from('announcements').insert({
+                conversation_id: communityId,
+                author_id: profile.id,
+                title: `⚽ Resultado — ${tournamentName || 'Torneo'}`,
+                body: `${p1n} ${mx.score1} - ${mx.score2} ${p2n}\n🏆 Ganador: ${winner}\n📍 Ronda ${mx.round_number}`,
+                category: 'torneo',
+                is_active: true,
+              })
             }
           }}
         />,
