@@ -395,6 +395,8 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
   const [resetting, setResetting]     = useState(false)
   const [resetAllConfirm, setResetAllConfirm] = useState(false)
   const [resettingAll, setResettingAll]       = useState(false)
+  const [resolvedCommunityId, setResolvedCommunityId] = useState(communityId || null)
+  const postedAnnouncements = useRef(new Set())
   const scrollRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -410,6 +412,13 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
   }, [tournamentId])
 
   useEffect(() => { load() }, [load])
+
+  // Resolver communityId desde el torneo si no viene como prop
+  useEffect(() => {
+    if (communityId) { setResolvedCommunityId(communityId); return }
+    supabase.from('conversations').select('community_id').eq('id', tournamentId).single()
+      .then(({ data }) => { if (data?.community_id) setResolvedCommunityId(data.community_id) })
+  }, [tournamentId, communityId])
 
   // Realtime
   useEffect(() => {
@@ -549,19 +558,23 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
               .from('tournament_matches').select('*').eq('id', reportMatch.id).single()
             if (mx?.winner_id) await advanceBracket(mx)
             await load()
-            // Publicar resultado en Avisos de la comunidad
-            if (profile?.id && communityId && mx && (mx.status === 'finalizado' || mx.status === 'aprobado') && mx.winner_id) {
+            // Publicar resultado en Avisos de la comunidad (una sola vez por partido)
+            const FINAL_STATUSES = ['finalizado', 'aprobado', 'confirmado']
+            const cid = resolvedCommunityId
+            if (profile?.id && cid && mx?.winner_id && FINAL_STATUSES.includes(mx.status) && !postedAnnouncements.current.has(mx.id)) {
+              postedAnnouncements.current.add(mx.id)
               const p1n = isBotProfile(reportMatch.player1) ? '🤖 Bot' : (reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1')
               const p2n = isBotProfile(reportMatch.player2) ? '🤖 Bot' : (reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2')
               const winner = mx.winner_id === mx.player1_id ? p1n : p2n
-              await supabase.from('announcements').insert({
-                conversation_id: communityId,
+              const { error: annErr } = await supabase.from('announcements').insert({
+                conversation_id: cid,
                 author_id: profile.id,
                 title: `⚽ Resultado — ${tournamentName || 'Torneo'}`,
                 body: `${p1n} ${mx.score1} - ${mx.score2} ${p2n}\n🏆 Ganador: ${winner}\n📍 Ronda ${mx.round_number}`,
                 category: 'torneo',
                 is_active: true,
               })
+              if (annErr) console.error('Error posting announcement:', annErr)
             }
           }}
         />,

@@ -723,9 +723,11 @@ export default function MatchResultFlow({ match: initialMatch, profile, isAdmin,
 
   // Título según estado
   const TITLE = {
-    pendiente:  'Reportar resultado',
-    en_juego:   'Confirmación pendiente',
-    finalizado: 'Resultado',
+    pendiente:   'Reportar resultado',
+    en_juego:    'Confirmación pendiente',
+    finalizado:  'Resultado',
+    aprobado:    'Resultado aprobado',
+    confirmado:  'Resultado confirmado',
   }
 
   return (
@@ -776,6 +778,9 @@ export default function MatchResultFlow({ match: initialMatch, profile, isAdmin,
             />
           )}
           {match.status === 'finalizado' && (
+            <FinishedResult match={match} />
+          )}
+          {(match.status === 'aprobado' || match.status === 'confirmado') && (
             <FinishedResult match={match} />
           )}
 
