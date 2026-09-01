@@ -607,19 +607,24 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
             await load()
             // Publicar resultado en Avisos de la comunidad (una sola vez por partido)
             const FINAL_STATUSES = ['finalizado', 'aprobado', 'confirmado']
-            const cid = resolvedCommunityId
+            const cid = resolvedCommunityId || tournamentId
             if (profile?.id && cid && mx?.winner_id && FINAL_STATUSES.includes(mx.status) && !postedAnnouncements.current.has(mx.id)) {
               postedAnnouncements.current.add(mx.id)
-              const p1n = isBotProfile(reportMatch.player1) ? '🤖 Bot' : (reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1')
-              const p2n = isBotProfile(reportMatch.player2) ? '🤖 Bot' : (reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2')
+              const p1IsBot = isBotProfile(reportMatch.player1)
+              const p2IsBot = isBotProfile(reportMatch.player2)
+              const p1n = p1IsBot ? (reportMatch.player1?.display_name || '🤖 Bot') : (reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1')
+              const p2n = p2IsBot ? (reportMatch.player2?.display_name || '🤖 Bot') : (reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2')
               const winner = mx.winner_id === mx.player1_id ? p1n : p2n
+              const roundLabel = mx.round_number === 1 ? 'Ronda 1 — Fase de grupos' : `Ronda ${mx.round_number}`
+              const body = `⚽ RESULTADO — ${tournamentName || 'Torneo'}\n\n${p1n} ${mx.score1} - ${mx.score2} ${p2n}\n\n🏆 Ganador: ${winner}\n📍 ${roundLabel}`
               const { error: annErr } = await supabase.from('announcements').insert({
                 conversation_id: cid,
                 author_id: profile.id,
-                title: `⚽ Resultado — ${tournamentName || 'Torneo'}`,
-                body: `${p1n} ${mx.score1} - ${mx.score2} ${p2n}\n🏆 Ganador: ${winner}\n📍 Ronda ${mx.round_number}`,
+                title: `⚽ ${tournamentName || 'Torneo'} — Resultado R${mx.round_number}`,
+                body,
                 category: 'torneo',
                 is_active: true,
+                metadata: { is_bot: true, bot_type: 'resultado', round: mx.round_number },
               })
               if (annErr) console.error('Error posting announcement:', annErr)
             }
