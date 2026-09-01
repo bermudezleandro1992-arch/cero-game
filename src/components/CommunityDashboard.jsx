@@ -1066,7 +1066,7 @@ export default function CommunityDashboard({ community, onBack }) {
     if (!community?.id) return
 
     // Parallel loads
-    const [tRes, aRes, mRes] = await Promise.all([
+    const [tRes, mRes] = await Promise.all([
       supabase
         .from('conversations')
         .select('id, name, group_type, tournament_status, max_participants, game, created_by, created_at')
@@ -1074,17 +1074,19 @@ export default function CommunityDashboard({ community, onBack }) {
         .in('group_type', ['tournament', 'liga'])
         .order('created_at', { ascending: false }),
       supabase
-        .from('announcements')
-        .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url)')
-        .eq('conversation_id', community.id)
-        .order('is_pinned', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(20),
-      supabase
         .rpc('get_conversation_members', { p_conversation_ids: [community.id] }),
     ])
 
     const tRows = tRes.data || []
+    const subIds = tRows.map(t => t.id)
+    const allIds = [community.id, ...subIds]
+    const aRes = await supabase
+      .from('announcements')
+      .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url)')
+      .in('conversation_id', allIds)
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(50)
     // Get participant counts via SECURITY DEFINER RPC (bypasses RLS)
     if (tRows.length) {
       const counts = await Promise.all(
@@ -1109,7 +1111,6 @@ export default function CommunityDashboard({ community, onBack }) {
     const ch = supabase.channel(`community-ann-${community.id}`)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'announcements',
-        filter: `conversation_id=eq.${community.id}`,
       }, () => loadData())
       .subscribe()
     return () => supabase.removeChannel(ch)
