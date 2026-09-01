@@ -512,23 +512,16 @@ export default function BracketView({ tournamentId, profile, isAdmin, onReportMa
   function isBot(p) { return isBotProfile(p) }
 
   async function handleByeAdvance(match) {
-    // Advance the real player (non-bot) by walkover
     const p1IsBot = isBot(match.player1)
     const winnerId = p1IsBot ? match.player2_id : match.player1_id
     if (!winnerId) return
-    await supabase.rpc('admin_approve_match_with_winner', {
+    const { error } = await supabase.rpc('bye_match', {
       p_match_id: match.id,
       p_winner_id: winnerId,
       p_score1: p1IsBot ? 0 : 1,
       p_score2: p1IsBot ? 1 : 0,
-    }).catch(() => {
-      // fallback: direct update via admin_approve_match after setting winner
-      supabase.from('tournament_matches').update({
-        winner_id: winnerId, score1: p1IsBot ? 0 : 1, score2: p1IsBot ? 1 : 0,
-        status: 'finalizado', loser_confirmed: true,
-      }).eq('id', match.id).then(() => advanceBracket({ ...match, winner_id: winnerId }))
     })
-    await advanceBracket({ ...match, winner_id: winnerId })
+    if (error) console.error('Bye error:', error)
     await load()
   }
 
