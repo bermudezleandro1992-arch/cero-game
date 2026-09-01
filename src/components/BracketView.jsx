@@ -56,13 +56,17 @@ function isBotProfile(profile) {
   if (!profile) return false
   const u = profile.username || ''
   const d = profile.display_name || ''
-  // bot users created by fill_tournament_bots have user_<hex> username
-  return /^user_[0-9a-f]{6,}/.test(u) || d.toLowerCase() === 'usuario' && /^user_/.test(u)
+  return (
+    /^user_[0-9a-f]{6,}/.test(u) ||
+    (d.toLowerCase() === 'usuario' && /^user_/.test(u)) ||
+    /\bbot\b/i.test(d) ||          // display_name contiene "Bot" (ej: "Milan Bot")
+    /\bbot\b/i.test(u)             // username contiene "bot"
+  )
 }
 
 function name(profile) {
   if (!profile) return '—'
-  if (isBotProfile(profile)) return '🤖 Bot'
+  if (isBotProfile(profile)) return profile.display_name || '🤖 Bot'
   return profile.display_name || profile.username || '—'
 }
 
@@ -447,6 +451,23 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
     await load()
   }
 
+  async function handleByeAll() {
+    const botMatches = matches.filter(m =>
+      m.status === 'pendiente' &&
+      ((isBot(m.player1) && m.player2_id) || (isBot(m.player2) && m.player1_id))
+    )
+    for (const m of botMatches) {
+      const p1IsBot = isBot(m.player1)
+      const winnerId = p1IsBot ? m.player2_id : m.player1_id
+      if (!winnerId) continue
+      await supabase.rpc('bye_match', {
+        p_match_id: m.id, p_winner_id: winnerId,
+        p_score1: p1IsBot ? 0 : 1, p_score2: p1IsBot ? 1 : 0,
+      })
+    }
+    await load()
+  }
+
   async function handleResetAll() {
     setResettingAll(true)
     const { error } = await supabase.rpc('reset_tournament_matches', { p_tournament_id: tournamentId })
@@ -650,19 +671,15 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
           {isAdmin && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               {/* Bye automático para matches con bot pendientes */}
-              {matches.filter(m => m.status === 'pendiente' && ((isBot(m.player1) && m.player2_id) || (isBot(m.player2) && m.player1_id))).map(m => {
-                const realPlayer = isBot(m.player1) ? m.player2 : m.player1
-                const realName = realPlayer?.display_name || realPlayer?.username || 'Jugador'
-                return (
-                  <button key={m.id} onClick={() => handleByeAdvance(m)} style={{
-                    padding: '7px 12px', borderRadius: 10,
-                    border: '1px solid #22c55e44', background: '#22c55e14',
-                    color: '#22c55e', fontWeight: 700, fontSize: 11, cursor: 'pointer',
-                  }}>
-                    🤖 Bye → {realName}
-                  </button>
-                )
-              })}
+              {matches.some(m => m.status === 'pendiente' && ((isBot(m.player1) && m.player2_id) || (isBot(m.player2) && m.player1_id))) && (
+                <button onClick={handleByeAll} style={{
+                  padding: '7px 12px', borderRadius: 10,
+                  border: '1px solid #22c55e44', background: '#22c55e14',
+                  color: '#22c55e', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                }}>
+                  🤖 Bye todos los bots
+                </button>
+              )}
               <SelectMatchToReset
                 matches={matches}
                 onSelect={m => setResetModal(m)}
