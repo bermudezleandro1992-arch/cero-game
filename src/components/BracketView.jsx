@@ -119,19 +119,29 @@ function computeLayout(matches) {
     if (!roundMap[m.round_number]) roundMap[m.round_number] = []
     roundMap[m.round_number].push(m)
   })
-  const roundNums  = Object.keys(roundMap).map(Number).sort((a, b) => a - b)
-  const firstCount = roundMap[roundNums[0]]?.length ?? 1
+  const allRoundNums = Object.keys(roundMap).map(Number).sort((a, b) => a - b)
 
-  // Slot height — altura de cada "slot" de R1. Cada ronda posterior ocupa 2^ri slots.
+  // Detectar partido de 3°/4° lugar: últimas dos rondas tienen 1 partido cada una
+  let thirdPlaceRoundNum = null
+  const roundNums = [...allRoundNums]
+  if (roundNums.length >= 2) {
+    const lastRn = roundNums[roundNums.length - 1]
+    const prevRn = roundNums[roundNums.length - 2]
+    if (roundMap[lastRn].length === 1 && roundMap[prevRn].length === 1) {
+      thirdPlaceRoundNum = lastRn
+      roundNums.pop()
+    }
+  }
+
+  const firstCount = roundMap[roundNums[0]]?.length ?? 1
   const slotH = CARD_H + ROW_GAP * 2
 
   const rounds = roundNums.map((rn, ri) => {
     const ms   = roundMap[rn]
-    const span = Math.pow(2, ri)          // slots de R1 que abarca cada partido de esta ronda
+    const span = Math.pow(2, ri)
     const x    = PADDING + ri * (CARD_W + COL_GAP)
 
     const cards = ms.map((m, mi) => {
-      // Centrar la tarjeta en el medio del bloque de slots que le corresponde
       const centerY = PADDING + span * (mi + 0.5) * slotH
       const y = centerY - CARD_H / 2
       return { match: m, x, y, cellH: span * slotH }
@@ -144,8 +154,26 @@ function computeLayout(matches) {
     return { roundNum: rn, cards, x, phaseLabel }
   })
 
+  // Agregar partido 3°/4° lugar en la misma columna que la Final, debajo de ella
+  if (thirdPlaceRoundNum !== null) {
+    const finalRound = rounds[rounds.length - 1]
+    const finalCard  = finalRound?.cards[0]
+    const thirdMs    = roundMap[thirdPlaceRoundNum]
+    const thirdX     = finalCard ? finalCard.x : PADDING + (roundNums.length - 1) * (CARD_W + COL_GAP)
+    const thirdY     = finalCard ? finalCard.y + CARD_H + 48 : PADDING
+    rounds.push({
+      roundNum: thirdPlaceRoundNum,
+      cards: [{ match: thirdMs[0], x: thirdX, y: thirdY, cellH: CARD_H }],
+      x: thirdX,
+      phaseLabel: '🥉 3er Lugar',
+      isThirdPlace: true,
+    })
+  }
+
   const totalW = PADDING + roundNums.length * (CARD_W + COL_GAP) - COL_GAP + PADDING
-  const totalH = PADDING * 2 + firstCount * slotH
+  const thirdCard = thirdPlaceRoundNum ? rounds[rounds.length - 1]?.cards[0] : null
+  const mainH  = PADDING * 2 + firstCount * slotH
+  const totalH = thirdCard ? Math.max(mainH, thirdCard.y + CARD_H + PADDING) : mainH
 
   return { rounds, totalW, totalH }
 }
@@ -272,10 +300,11 @@ function MatchCard({ match, x, y, onClick }) {
 // ── Líneas de conexión SVG ────────────────────────────────────────────────────
 function BracketLines({ rounds }) {
   const lines = []
+  const mainRounds = rounds.filter(r => !r.isThirdPlace)
 
-  for (let ri = 0; ri < rounds.length - 1; ri++) {
-    const currentRound = rounds[ri]
-    const nextRound    = rounds[ri + 1]
+  for (let ri = 0; ri < mainRounds.length - 1; ri++) {
+    const currentRound = mainRounds[ri]
+    const nextRound    = mainRounds[ri + 1]
 
     // Agrupar de a pares en la ronda actual
     for (let ci = 0; ci < currentRound.cards.length; ci += 2) {
@@ -698,7 +727,7 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
           scrollbarWidth: 'none',
         }}>
           <div style={{ display: 'flex', paddingLeft: PADDING, minWidth: totalW }}>
-            {rounds.map(r => (
+            {rounds.filter(r => !r.isThirdPlace).map(r => (
               <div key={r.roundNum} style={{
                 width: CARD_W, marginRight: COL_GAP, flexShrink: 0,
                 textAlign: 'center',
@@ -749,12 +778,22 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
             {/* Tarjetas de partido */}
             {rounds.flatMap(r =>
               r.cards.map(({ match, x, y }) => (
-                <MatchCard
-                  key={match.id}
-                  match={match}
-                  x={x} y={y}
-                  onClick={handleCardClick}
-                />
+                <g key={match.id}>
+                  {r.isThirdPlace && (
+                    <text
+                      x={x + CARD_W / 2} y={y - 8}
+                      textAnchor="middle" fontSize={10} fontWeight={700}
+                      fill={C.textDim} letterSpacing="0.5"
+                    >
+                      🥉 3er / 4to Lugar
+                    </text>
+                  )}
+                  <MatchCard
+                    match={match}
+                    x={x} y={y}
+                    onClick={handleCardClick}
+                  />
+                </g>
               ))
             )}
           </svg>
