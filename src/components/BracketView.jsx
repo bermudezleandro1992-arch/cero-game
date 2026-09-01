@@ -393,6 +393,8 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
   const [resetModal, setResetModal]   = useState(null) // match to reset
   const [resetReason, setResetReason] = useState('')
   const [resetting, setResetting]     = useState(false)
+  const [resetAllConfirm, setResetAllConfirm] = useState(false)
+  const [resettingAll, setResettingAll]       = useState(false)
   const scrollRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -433,6 +435,15 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
       setError(error?.message ?? data?.error ?? 'Error al generar el bracket')
       return
     }
+    await load()
+  }
+
+  async function handleResetAll() {
+    setResettingAll(true)
+    const { error } = await supabase.rpc('reset_tournament_matches', { p_tournament_id: tournamentId })
+    setResettingAll(false)
+    setResetAllConfirm(false)
+    if (error) { alert('Error al resetear: ' + error.message); return }
     await load()
   }
 
@@ -592,6 +603,24 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
         document.body
       )}
 
+      {resetAllConfirm && createPortal(
+        <div onClick={() => setResetAllConfirm(false)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.panel, borderRadius: 20, padding: 24, maxWidth: 320, width: '100%', border: `1px solid ${C.border}` }}>
+            <p style={{ margin: '0 0 8px', fontWeight: 800, fontSize: 15, color: '#ef4444' }}>🔄 Resetear TODOS los resultados</p>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: C.textDim, lineHeight: 1.5 }}>
+              Esto borra todos los resultados, ganadores y scores del torneo. Los partidos de ronda 2+ quedan sin jugadores. ¿Confirmar?
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setResetAllConfirm(false)} style={{ flex: 1, padding: 10, borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={handleResetAll} disabled={resettingAll} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: '#ef4444', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+                {resettingAll ? '…' : 'Resetear todo'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0, height: '100%' }}>
 
         {/* Header */}
@@ -625,6 +654,13 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
                 matches={matches}
                 onSelect={m => setResetModal(m)}
               />
+              <button onClick={() => setResetAllConfirm(true)} style={{
+                padding: '7px 12px', borderRadius: 10,
+                border: '1px solid #ef444444', background: '#ef444410',
+                color: '#ef4444', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+              }}>
+                🔄 Resetear todo
+              </button>
             </div>
           )}
         </div>
