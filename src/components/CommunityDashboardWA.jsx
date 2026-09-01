@@ -223,6 +223,53 @@ function StandingsBotCard({ aviso, onViewTournament }) {
   )
 }
 
+// ── ResultadoBotCard ──────────────────────────────────────────────────────────
+function ResultadoBotCard({ aviso, onViewTournament }) {
+  const lines = (aviso.body || '').split('\n').filter(Boolean)
+  const isLiga = aviso.category === 'liga'
+  const accent = isLiga ? '#38bdf8' : '#f59e0b'
+  const scoreLine = lines.find(l => /\d\s*-\s*\d/.test(l)) || ''
+  const winnerLine = lines.find(l => l.startsWith('🏆')) || ''
+  const roundLine = lines.find(l => l.startsWith('📍')) || ''
+  const headerLine = lines[0] || aviso.title || ''
+
+  return (
+    <div style={{
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderLeft: `4px solid ${accent}`,
+      borderRadius: '0 12px 12px 0',
+      overflow: 'hidden',
+      marginBottom: 2,
+    }}>
+      <div style={{ padding: '10px 14px 8px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: '0.5px', marginBottom: 4, textTransform: 'uppercase' }}>
+          {isLiga ? '🥇 RESULTADO — LIGA' : '🏆 RESULTADO — TORNEO'}
+        </div>
+        {scoreLine && (
+          <div style={{ fontSize: 18, fontWeight: 900, color: C.text, textAlign: 'center', padding: '8px 0', letterSpacing: '1px' }}>
+            {scoreLine.trim()}
+          </div>
+        )}
+        {winnerLine && (
+          <div style={{ fontSize: 12, color: '#f59e0b', fontWeight: 700, textAlign: 'center', marginBottom: 4 }}>{winnerLine}</div>
+        )}
+        {roundLine && (
+          <div style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>{roundLine}</div>
+        )}
+      </div>
+      <div style={{ borderTop: `1px solid ${C.border}` }}>
+        <button onClick={() => onViewTournament?.(aviso)} style={{
+          width: '100%', padding: '9px 8px', background: 'none', border: 'none',
+          cursor: 'pointer', color: accent, fontWeight: 700, fontSize: 12,
+        }}>
+          📊 VER BRACKET
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── AvisosChat — pestaña estilo WhatsApp Avisos ───────────────────────────────
 function AvisosChat({ community, announcements, loading, isAdmin, profile, torneos, onOpenTournament, onReload }) {
   const { setActiveConversation } = useChatStore()
@@ -230,6 +277,7 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
   const [sending, setSending] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [msgTitle, setMsgTitle] = useState('')
+  const [lightboxImg, setLightboxImg] = useState(null)
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -255,6 +303,7 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
   function detectCardType(a) {
     if (a.category === 'fixture' || a.type === 'bot_fixture') return 'fixture'
     if (a.category === 'standings') return 'standings'
+    if (a.metadata?.bot_type === 'resultado') return 'resultado'
     if (a.tournament_id || a.category === 'torneo' || a.category === 'liga') return 'tournament'
     return 'text'
   }
@@ -289,19 +338,26 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
               <div key={a.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {/* Author header */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {a.author?.avatar_url
-                    ? <img src={a.author.avatar_url} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} alt="" />
-                    : <div style={{ width: 28, height: 28, borderRadius: '50%', background: avatarColor(a.author_id), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff' }}>
-                        {author.slice(0, 2).toUpperCase()}
-                      </div>
+                  {isBot
+                    ? <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1a1a2e', border: '1.5px solid #25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>🤖</div>
+                    : (a.author?.avatar_url
+                        ? <img src={a.author.avatar_url} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} alt="" />
+                        : <div style={{ width: 28, height: 28, borderRadius: '50%', background: avatarColor(a.author_id), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff' }}>
+                            {author.slice(0, 2).toUpperCase()}
+                          </div>
+                      )
                   }
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>
-                    {isBot ? '🤖 Bot' : author}
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: isBot ? '#25D366' : C.text }}>
+                      {isBot ? '🤖 Bot Anuncio' : author}
+                    </span>
+                    {isBot && <span style={{ fontSize: 10, color: C.textDim, letterSpacing: '0.3px' }}>Anuncio automático</span>}
+                  </div>
                   <span style={{ fontSize: 11, color: C.textDim, marginLeft: 'auto' }}>{timeAgo(a.created_at)}</span>
                 </div>
 
                 {/* Card body */}
+                {type === 'resultado' && <ResultadoBotCard aviso={a} onViewTournament={() => openTournamentFromAviso(a)} />}
                 {type === 'tournament' && (
                   <TournamentBotCard
                     aviso={a}
@@ -325,7 +381,19 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
                   }}>
                     <div style={{ fontWeight: 700, fontSize: 14, color: C.text, marginBottom: a.body ? 4 : 0 }}>{a.title}</div>
                     {a.body && <p style={{ margin: 0, color: C.text2, fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{a.body}</p>}
-                    {a.image_url && <img src={a.image_url} alt="" style={{ width: '100%', borderRadius: 8, marginTop: 8, objectFit: 'cover', maxHeight: 220 }} />}
+                    {a.image_url && (
+                      <>
+                        <img
+                          src={a.image_url} alt="" onClick={() => setLightboxImg(a.image_url)}
+                          style={{ width: '100%', borderRadius: 8, marginTop: 8, objectFit: 'cover', maxHeight: 220, cursor: 'pointer' }}
+                        />
+                        {lightboxImg && (
+                          <div onClick={() => setLightboxImg(null)} style={{ position: 'fixed', inset: 0, background: '#000c', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+                            <img src={lightboxImg} alt="" style={{ maxWidth: '100%', maxHeight: '90vh', borderRadius: 12, objectFit: 'contain' }} />
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
                 {/* Separator */}
@@ -553,32 +621,36 @@ export default function CommunityDashboardWA({ community, onBack }) {
 
   const loadData = useCallback(async () => {
     if (!community?.id) return
-    const [tRes, aRes, mRes] = await Promise.all([
+    const [tRes, mRes] = await Promise.all([
       supabase.from('conversations')
         .select('id, name, group_type, tournament_status, max_participants, game, created_by, created_at')
         .eq('community_id', community.id)
         .in('group_type', ['tournament', 'liga'])
         .order('created_at', { ascending: false }),
-      supabase.from('announcements')
-        .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url, is_bot)')
-        .eq('conversation_id', community.id)
-        .order('created_at', { ascending: true })
-        .limit(50),
       supabase.rpc('get_conversation_members', { p_conversation_ids: [community.id] }),
     ])
+    // Incluir avisos de la comunidad Y de sus torneos/ligas
+    const subIds = (tRes.data || []).map(t => t.id)
+    const allIds = [community.id, ...subIds]
+    const { data: annData } = await supabase
+      .from('announcements')
+      .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url, is_bot)')
+      .in('conversation_id', allIds)
+      .order('created_at', { ascending: true })
+      .limit(100)
     setTorneos(tRes.data || [])
-    setAnnouncements(aRes.data || [])
+    setAnnouncements(annData || [])
     setMemberCount((mRes.data || []).length)
     setAnnLoading(false)
   }, [community?.id])
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Realtime: nuevo aviso
+  // Realtime: nuevo aviso (sin filtro para capturar también avisos de torneos)
   useEffect(() => {
     if (!community?.id) return
     const ch = supabase.channel(`wa-ann-${community.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'announcements', filter: `conversation_id=eq.${community.id}` }, () => loadData())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'announcements' }, () => loadData())
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [community?.id, loadData])
