@@ -562,7 +562,6 @@ export default function CommunityDashboardWA({ community, onBack }) {
       supabase.from('announcements')
         .select('*, author:users!announcements_author_id_fkey(id, display_name, username, avatar_url, is_bot)')
         .eq('conversation_id', community.id)
-        .eq('is_active', true)
         .order('created_at', { ascending: true })
         .limit(50),
       supabase.rpc('get_conversation_members', { p_conversation_ids: [community.id] }),
