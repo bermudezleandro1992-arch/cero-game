@@ -54,13 +54,13 @@ function Avatar({ profile, size = 24 }) {
 
 function isBotProfile(profile) {
   if (!profile) return false
+  if (profile.is_bot) return true
   const u = profile.username || ''
   const d = profile.display_name || ''
   return (
+    /^bot_[0-9a-f]/.test(u) ||
     /^user_[0-9a-f]{6,}/.test(u) ||
-    (d.toLowerCase() === 'usuario' && /^user_/.test(u)) ||
-    /\bbot\b/i.test(d) ||          // display_name contiene "Bot" (ej: "Milan Bot")
-    /\bbot\b/i.test(u)             // username contiene "bot"
+    (d.toLowerCase() === 'usuario' && /^user_/.test(u))
   )
 }
 
@@ -94,7 +94,7 @@ async function fetchBracket(tournamentId) {
     matches.flatMap(m => [m.player1_id, m.player2_id]).filter(Boolean)
   )]
   const { data: profiles } = userIds.length
-    ? await supabase.from('users').select('id, display_name, username, avatar_url').in('id', userIds)
+    ? await supabase.from('users').select('id, display_name, username, avatar_url, is_bot').in('id', userIds)
     : { data: [] }
 
   const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
