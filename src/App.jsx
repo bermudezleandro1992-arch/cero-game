@@ -30,6 +30,7 @@ import CEOPanel from './components/CEOPanel'
 import OrganizadorPanel from './components/OrganizadorPanel'
 import UpdateBanner from './components/UpdateBanner'
 import CommunityDashboard from './components/CommunityDashboard'
+import CommunityDashboardWA from './components/CommunityDashboardWA'
 import { usePresence } from './hooks/usePresence'
 import { initPushNotifications, initWebPush, listenNotificationClicks } from './lib/pushNotifications'
 import { acquireWakeLock, releaseWakeLock } from './lib/appStartup'
@@ -1091,7 +1092,10 @@ export default function App() {
         <div className={`slfa-right${showChat ? ' slfa-right--visible' : ''}`}>
           {activeConversation
             ? activeConversation.isCommunity && activeConversation.group_type === 'community'
-              ? <CommunityDashboard key={activeConversation.id} community={activeConversation} onBack={goBack} />
+              ? (getSkin() === 'nexo'
+                  ? <CommunityDashboard key={activeConversation.id} community={activeConversation} onBack={goBack} />
+                  : <CommunityDashboardWA key={activeConversation.id} community={activeConversation} onBack={goBack} />
+                )
               : <ChatPage onBack={goBack} />
             : <EmptyState />}
         </div>
