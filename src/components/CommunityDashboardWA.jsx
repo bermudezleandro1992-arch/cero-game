@@ -303,7 +303,7 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
   function detectCardType(a) {
     if (a.category === 'fixture' || a.type === 'bot_fixture') return 'fixture'
     if (a.category === 'standings') return 'standings'
-    if (a.metadata?.bot_type === 'resultado') return 'resultado'
+    if (a.category === 'torneo' && /RESULTADO/i.test(a.title || '')) return 'resultado'
     if (a.tournament_id || a.category === 'torneo' || a.category === 'liga') return 'tournament'
     return 'text'
   }

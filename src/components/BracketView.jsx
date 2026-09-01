@@ -618,15 +618,14 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
               const roundLabel = mx.round_number === 1 ? 'Ronda 1 — Fase de grupos' : `Ronda ${mx.round_number}`
               const body = `⚽ RESULTADO — ${tournamentName || 'Torneo'}\n\n${p1n} ${mx.score1} - ${mx.score2} ${p2n}\n\n🏆 Ganador: ${winner}\n📍 ${roundLabel}`
               const { error: annErr } = await supabase.from('announcements').insert({
-                conversation_id: cid,
+                conversation_id: tournamentId,
                 author_id: profile.id,
                 title: `⚽ ${tournamentName || 'Torneo'} — Resultado R${mx.round_number}`,
                 body,
                 category: 'torneo',
                 is_active: true,
-                metadata: { is_bot: true, bot_type: 'resultado', round: mx.round_number },
               })
-              if (annErr) console.error('Error posting announcement:', annErr)
+              if (annErr) console.error('Error posting resultado announcement:', annErr)
             }
           }}
         />,
