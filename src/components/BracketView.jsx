@@ -609,12 +609,9 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
             const FINAL_STATUSES = ['finalizado', 'aprobado', 'confirmado']
             if (profile?.id && mx?.winner_id && FINAL_STATUSES.includes(mx.status) && !postedAnnouncements.current.has(mx.id)) {
               postedAnnouncements.current.add(mx.id)
-              // Resolver community_id fresco para evitar problemas de timing/RLS
-              let commId = resolvedCommunityId
-              if (!commId) {
-                const { data: cv } = await supabase.from('conversations').select('community_id').eq('id', tournamentId).single()
-                commId = cv?.community_id || null
-              }
+              // Siempre resolver community_id fresco desde la DB (evita stale closure)
+              const { data: cv } = await supabase.from('conversations').select('community_id').eq('id', tournamentId).single()
+              const commId = cv?.community_id || null
               if (!commId) { console.warn('No community_id found for tournament', tournamentId); return }
               const p1IsBot = isBotProfile(reportMatch.player1)
               const p2IsBot = isBotProfile(reportMatch.player2)
