@@ -413,6 +413,25 @@ function SelectMatchToReset({ matches, onSelect }) {
   )
 }
 
+// Devuelve el nombre de la ronda según posición desde el final
+function getRoundLabel(roundNumber, totalRounds, isBye = false) {
+  const fromEnd = totalRounds - roundNumber
+  let label
+  if (fromEnd === 0)      label = '🥇 Final'
+  else if (fromEnd === 1) label = '🥈 Semifinal'
+  else if (fromEnd === 2) label = '⚔️ Cuartos de Final'
+  else if (fromEnd === 3) label = '🎯 Octavos de Final'
+  else                    label = `Ronda ${roundNumber}`
+  return isBye ? `${label} · Bye automático` : label
+}
+
+function buildResultBody({ tournamentName, p1n, p2n, score1, score2, winnerName, roundLabel }) {
+  const tn = tournamentName || 'Torneo'
+  const s1 = score1 ?? 0
+  const s2 = score2 ?? 0
+  return `🏆 ${tn}\n\n⚔️  ${p1n}  ${s1} — ${s2}  ${p2n}\n\n🥇 Ganador: ${winnerName}\n📍 ${roundLabel}`
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function BracketView({ tournamentId, communityId, tournamentName, profile, isAdmin, onReportMatch }) {
   const [matches, setMatches]   = useState([])
@@ -498,19 +517,20 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
         p_match_id: m.id, p_winner_id: winnerId,
         p_score1: score1, p_score2: score2,
       })
-      // Post announcement to community Avisos (tournament_id lets DB trigger fix conversation_id if needed)
+      // Post announcement to community Avisos
       if (profile?.id && !postedAnnouncements.current.has(m.id)) {
         postedAnnouncements.current.add(m.id)
+        const totalRounds = Math.max(...matches.map(x => x.round_number))
         const p1n = m.player1?.display_name || m.player1?.username || 'Jugador 1'
         const p2n = m.player2?.display_name || m.player2?.username || 'Jugador 2'
         const winnerName = winnerId === m.player1_id ? p1n : p2n
-        const roundLabel = m.round_number === 1 ? 'Ronda 1' : `Ronda ${m.round_number}`
-        const body = `⚽ RESULTADO — ${tournamentName || 'Torneo'}\n\n${p1n} ${score1} - ${score2} ${p2n}\n\n🏆 Ganador: ${winnerName}\n📍 ${roundLabel} (Bye automático)`
+        const roundLabel = getRoundLabel(m.round_number, totalRounds, true)
+        const body = buildResultBody({ tournamentName, p1n, p2n, score1, score2, winnerName, roundLabel })
         const { error: annErr } = await supabase.from('announcements').insert({
           conversation_id: commId || undefined,
           tournament_id: tournamentId,
           author_id: profile.id,
-          title: `⚽ ${tournamentName || 'Torneo'} — Resultado R${m.round_number}`,
+          title: `🏆 ${tournamentName || 'Torneo'} — ${getRoundLabel(m.round_number, totalRounds)}`,
           body,
           category: 'torneo',
           is_active: true,
@@ -645,13 +665,14 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
               const p1n = p1IsBot ? (reportMatch.player1?.display_name || '🤖 Bot') : (reportMatch.player1?.display_name || reportMatch.player1?.username || 'Jugador 1')
               const p2n = p2IsBot ? (reportMatch.player2?.display_name || '🤖 Bot') : (reportMatch.player2?.display_name || reportMatch.player2?.username || 'Jugador 2')
               const winner = mx.winner_id === mx.player1_id ? p1n : p2n
-              const roundLabel = mx.round_number === 1 ? 'Ronda 1 — Fase de grupos' : `Ronda ${mx.round_number}`
-              const body = `⚽ RESULTADO — ${tournamentName || 'Torneo'}\n\n${p1n} ${mx.score1} - ${mx.score2} ${p2n}\n\n🏆 Ganador: ${winner}\n📍 ${roundLabel}`
+              const totalRounds = Math.max(...matches.map(x => x.round_number))
+              const roundLabel = getRoundLabel(mx.round_number, totalRounds)
+              const body = buildResultBody({ tournamentName, p1n, p2n, score1: mx.score1, score2: mx.score2, winnerName: winner, roundLabel })
               const { error: annErr } = await supabase.from('announcements').insert({
                 conversation_id: commId || undefined,
                 tournament_id: tournamentId,
                 author_id: profile.id,
-                title: `⚽ ${tournamentName || 'Torneo'} — Resultado R${mx.round_number}`,
+                title: `🏆 ${tournamentName || 'Torneo'} — ${roundLabel}`,
                 body,
                 category: 'torneo',
                 is_active: true,
