@@ -160,7 +160,7 @@ function computeLayout(matches) {
     const finalCard  = finalRound?.cards[0]
     const thirdMs    = roundMap[thirdPlaceRoundNum]
     const thirdX     = finalCard ? finalCard.x : PADDING + (roundNums.length - 1) * (CARD_W + COL_GAP)
-    const thirdY     = finalCard ? finalCard.y + CARD_H + 48 : PADDING
+    const thirdY     = PADDING
     rounds.push({
       roundNum: thirdPlaceRoundNum,
       cards: [{ match: thirdMs[0], x: thirdX, y: thirdY, cellH: CARD_H }],
