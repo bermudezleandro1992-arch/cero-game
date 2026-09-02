@@ -416,7 +416,7 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
 }
 
 // ── LIGA: OverviewTab ─────────────────────────────────────────────────────────
-function LigaOverview({ data }) {
+function LigaOverview({ data, isMember, onJoin, joining }) {
   const phaseIdx = ligaPhaseIdx(data.status, data.liga_fase)
   const fillPct = data.max_participants
     ? Math.round((data.participant_count / data.max_participants) * 100)
@@ -510,6 +510,23 @@ function LigaOverview({ data }) {
         <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
           <p style={{ margin: '0 0 6px', fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 600 }}>Descripción / Reglamento</p>
           <p style={{ margin: 0, fontSize: 13, color: C.text2, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{data.description}</p>
+        </div>
+      )}
+
+      {/* Inscripción */}
+      {data.status === 'inscripcion' && !isMember && onJoin && (
+        <button onClick={onJoin} disabled={joining} style={{
+          width: '100%', padding: '14px 0', borderRadius: 14,
+          border: 'none', background: `linear-gradient(135deg, ${C.green}, ${C.greenDk})`,
+          color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+          opacity: joining ? 0.6 : 1,
+        }}>
+          {joining ? '⏳ Inscribiendo…' : '✅ Inscribirme a la liga'}
+        </button>
+      )}
+      {data.status === 'inscripcion' && isMember && (
+        <div style={{ textAlign: 'center', padding: '12px 0', fontSize: 13, color: C.green, fontWeight: 700 }}>
+          ✅ Ya estás inscrito/a en esta liga
         </div>
       )}
     </div>
@@ -836,7 +853,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
 
         {activeTab === 'overview' && (
           isLiga
-            ? <LigaOverview data={data} />
+            ? <LigaOverview data={data} isMember={isMember} onJoin={joining ? null : handleJoin} joining={joining} />
             : <TorneoOverview
                 data={data}
                 tournamentId={tournamentId}

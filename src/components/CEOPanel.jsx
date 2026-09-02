@@ -1203,7 +1203,7 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
       setLoading(true)
       const { data } = await supabase
         .from('conversations')
-        .select('name, description, avatar_url, is_public, plan, rules')
+        .select('name, description, avatar_url, is_public, plan, rules, show_members')
         .eq('id', communityId)
         .single()
       setCfg(data || {})
@@ -1250,6 +1250,7 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
         name: cfg.name,
         description: cfg.description,
         is_public: cfg.is_public,
+        show_members: cfg.show_members ?? true,
         rules: cfg.rules || null,
       })
       .eq('id', communityId)
@@ -1335,6 +1336,21 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
               cursor: 'pointer', fontSize: 13, fontWeight: 700,
               background: cfg.is_public === opt.v ? `${C.green}22` : C.panel,
               color: cfg.is_public === opt.v ? C.green : C.textDim,
+            }}>
+              <div>{opt.label}</div>
+              <div style={{ fontSize: 10, fontWeight: 400, marginTop: 2 }}>{opt.desc}</div>
+            </button>
+          ))}
+        </div>
+      </CfgField>
+      <CfgField label="Lista de miembros" desc="Elegí si los miembros pueden ver la lista de integrantes de la comunidad">
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[{ v: true, label: '👥 Visible', desc: 'Cualquier miembro puede ver la lista' }, { v: false, label: '🔒 Solo CEO', desc: 'Solo admins ven los miembros' }].map(opt => (
+            <button key={String(opt.v)} onClick={() => setCfg(c => ({ ...c, show_members: opt.v }))} style={{
+              flex: 1, padding: '10px 8px', borderRadius: 8, border: `1px solid ${(cfg.show_members ?? true) === opt.v ? C.green : C.border}`,
+              cursor: 'pointer', fontSize: 13, fontWeight: 700,
+              background: (cfg.show_members ?? true) === opt.v ? `${C.green}22` : C.panel,
+              color: (cfg.show_members ?? true) === opt.v ? C.green : C.textDim,
             }}>
               <div>{opt.label}</div>
               <div style={{ fontSize: 10, fontWeight: 400, marginTop: 2 }}>{opt.desc}</div>

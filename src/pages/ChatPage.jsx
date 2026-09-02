@@ -691,24 +691,31 @@ export default function ChatPage({ onBack }) {
   const [loadedMembers, setLoadedMembers] = useState([])
   useEffect(() => {
     if (!convId) { setLoadedMembers([]); return }
-    // Always fetch from DB to ensure we have the full list
-    supabase.rpc('get_conversation_members', { p_conversation_ids: [convId] }).then(({ data }) => {
-      if (!data?.length) {
-        // Fallback: direct select
-        supabase.from('conversation_members').select('user_id').eq('conversation_id', convId).then(({ data: rows }) => {
-          if (!rows?.length) return
-          const ids = rows.map(r => r.user_id)
-          supabase.from('users').select('id, display_name, username, avatar_url').in('id', ids).then(({ data: users }) => {
-            setLoadedMembers(users || [])
-          })
-        })
-        return
+    const userFields = 'id, display_name, username, avatar_url'
+    async function loadMembers() {
+      // Try RPC first
+      const { data: rpcData } = await supabase.rpc('get_conversation_members', { p_conversation_ids: [convId] })
+      if (rpcData?.length) {
+        const ids = rpcData.map(r => r.user_id)
+        const { data: users } = await supabase.from('users').select(userFields).in('id', ids)
+        if (users?.length) { setLoadedMembers(users); return }
       }
-      const ids = data.map(r => r.user_id)
-      supabase.from('users').select('id, display_name, username, avatar_url').in('id', ids).then(({ data: users }) => {
-        setLoadedMembers(users || [])
-      })
-    })
+      // Fallback 1: conversation_members table
+      const { data: rows } = await supabase.from('conversation_members').select('user_id').eq('conversation_id', convId)
+      if (rows?.length) {
+        const ids = rows.map(r => r.user_id)
+        const { data: users } = await supabase.from('users').select(userFields).in('id', ids)
+        if (users?.length) { setLoadedMembers(users); return }
+      }
+      // Fallback 2: tournament_participants (for tournament chats)
+      const { data: parts } = await supabase.from('tournament_participants').select('user_id').eq('tournament_id', convId)
+      if (parts?.length) {
+        const ids = parts.map(r => r.user_id)
+        const { data: users } = await supabase.from('users').select(userFields).in('id', ids)
+        if (users?.length) setLoadedMembers(users)
+      }
+    }
+    loadMembers()
   }, [convId])
 
   const allMembers = [
