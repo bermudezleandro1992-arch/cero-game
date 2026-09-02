@@ -482,14 +482,40 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
       m.status === 'pendiente' &&
       ((isBot(m.player1) && m.player2_id) || (isBot(m.player2) && m.player1_id))
     )
+    // Resolve community_id fresh once for all byes
+    let commId = null
+    if (profile?.id) {
+      const { data: cv } = await supabase.from('conversations').select('community_id').eq('id', tournamentId).single()
+      commId = cv?.community_id || null
+    }
     for (const m of botMatches) {
       const p1IsBot = isBot(m.player1)
       const winnerId = p1IsBot ? m.player2_id : m.player1_id
       if (!winnerId) continue
+      const score1 = p1IsBot ? 0 : 1
+      const score2 = p1IsBot ? 1 : 0
       await supabase.rpc('bye_match', {
         p_match_id: m.id, p_winner_id: winnerId,
-        p_score1: p1IsBot ? 0 : 1, p_score2: p1IsBot ? 1 : 0,
+        p_score1: score1, p_score2: score2,
       })
+      // Post announcement to community Avisos
+      if (profile?.id && commId && !postedAnnouncements.current.has(m.id)) {
+        postedAnnouncements.current.add(m.id)
+        const p1n = m.player1?.display_name || m.player1?.username || 'Jugador 1'
+        const p2n = m.player2?.display_name || m.player2?.username || 'Jugador 2'
+        const winnerName = winnerId === m.player1_id ? p1n : p2n
+        const roundLabel = m.round_number === 1 ? 'Ronda 1' : `Ronda ${m.round_number}`
+        const body = `⚽ RESULTADO — ${tournamentName || 'Torneo'}\n\n${p1n} ${score1} - ${score2} ${p2n}\n\n🏆 Ganador: ${winnerName}\n📍 ${roundLabel} (Bye automático)`
+        const { error: annErr } = await supabase.from('announcements').insert({
+          conversation_id: commId,
+          author_id: profile.id,
+          title: `⚽ ${tournamentName || 'Torneo'} — Resultado R${m.round_number}`,
+          body,
+          category: 'torneo',
+          is_active: true,
+        })
+        if (annErr) console.error('Error posting bye announcement:', annErr)
+      }
     }
     await load()
   }
