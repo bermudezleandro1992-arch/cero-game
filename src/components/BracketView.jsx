@@ -498,8 +498,8 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
         p_match_id: m.id, p_winner_id: winnerId,
         p_score1: score1, p_score2: score2,
       })
-      // Post announcement to community Avisos
-      if (profile?.id && commId && !postedAnnouncements.current.has(m.id)) {
+      // Post announcement to community Avisos (tournament_id lets DB trigger fix conversation_id if needed)
+      if (profile?.id && !postedAnnouncements.current.has(m.id)) {
         postedAnnouncements.current.add(m.id)
         const p1n = m.player1?.display_name || m.player1?.username || 'Jugador 1'
         const p2n = m.player2?.display_name || m.player2?.username || 'Jugador 2'
@@ -507,7 +507,8 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
         const roundLabel = m.round_number === 1 ? 'Ronda 1' : `Ronda ${m.round_number}`
         const body = `⚽ RESULTADO — ${tournamentName || 'Torneo'}\n\n${p1n} ${score1} - ${score2} ${p2n}\n\n🏆 Ganador: ${winnerName}\n📍 ${roundLabel} (Bye automático)`
         const { error: annErr } = await supabase.from('announcements').insert({
-          conversation_id: commId,
+          conversation_id: commId || undefined,
+          tournament_id: tournamentId,
           author_id: profile.id,
           title: `⚽ ${tournamentName || 'Torneo'} — Resultado R${m.round_number}`,
           body,
@@ -647,7 +648,8 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
               const roundLabel = mx.round_number === 1 ? 'Ronda 1 — Fase de grupos' : `Ronda ${mx.round_number}`
               const body = `⚽ RESULTADO — ${tournamentName || 'Torneo'}\n\n${p1n} ${mx.score1} - ${mx.score2} ${p2n}\n\n🏆 Ganador: ${winner}\n📍 ${roundLabel}`
               const { error: annErr } = await supabase.from('announcements').insert({
-                conversation_id: commId,
+                conversation_id: commId || undefined,
+                tournament_id: tournamentId,
                 author_id: profile.id,
                 title: `⚽ ${tournamentName || 'Torneo'} — Resultado R${mx.round_number}`,
                 body,
