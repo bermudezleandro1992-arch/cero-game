@@ -576,6 +576,7 @@ export default function ChatPage({ onBack }) {
   const [newTopicName, setNewTopicName] = useState('')
   const [newTopicEmoji, setNewTopicEmoji] = useState('💬')
   const [showChatMenu, setShowChatMenu] = useState(false)
+  const [chatCtxMenu, setChatCtxMenu] = useState(null)  // { x, y } for right-click context menu
   const [showPrivacyModal, setShowPrivacyModal] = useState(false)
   const [autoDeleteHours, setAutoDeleteHours] = useState(null)
   const [showAutoDeletePicker, setShowAutoDeletePicker] = useState(false)
@@ -611,6 +612,13 @@ export default function ChatPage({ onBack }) {
     const t = setTimeout(() => document.addEventListener('click', h, { once: true }), 0)
     return () => { clearTimeout(t); document.removeEventListener('click', h) }
   }, [showChatMenu])
+
+  useEffect(() => {
+    if (!chatCtxMenu) return
+    const h = () => setChatCtxMenu(null)
+    const t = setTimeout(() => document.addEventListener('click', h, { once: true }), 0)
+    return () => { clearTimeout(t); document.removeEventListener('click', h) }
+  }, [chatCtxMenu])
 
   // Listen for context-menu shortcuts dispatched from ChatListPage
   useEffect(() => {
@@ -1270,6 +1278,98 @@ export default function ChatPage({ onBack }) {
         </div>
       )}
 
+      {/* ── Chat right-click context menu (WhatsApp-style) ── */}
+      {chatCtxMenu && (
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'fixed', zIndex: 300,
+            left: Math.min(chatCtxMenu.x, window.innerWidth - 230),
+            top: Math.min(chatCtxMenu.y, window.innerHeight - 360),
+            background: C.panel, border: `1px solid ${C.border}`,
+            borderRadius: 14, overflow: 'hidden',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.55)',
+            minWidth: 220,
+          }}
+        >
+          {[
+            {
+              icon: isGroup ? '👥' : 'ℹ️',
+              label: isGroup ? (activeConversation?.isCommunity ? 'Info de la comunidad' : 'Info del grupo') : 'Ver perfil',
+              onClick: () => { setChatCtxMenu(null); isGroup ? setShowGroupInfo(true) : setShowContact(true) },
+            },
+            {
+              icon: '🔍',
+              label: 'Buscar en el chat',
+              onClick: () => { setChatCtxMenu(null); setSearchMode(true); setSearchQuery(''); setTimeout(() => searchInputRef.current?.focus(), 100) },
+            },
+            {
+              icon: '☑️',
+              label: 'Seleccionar mensajes',
+              onClick: () => { setChatCtxMenu(null); setSelectMode(true); setSelectedMsgs(new Set()) },
+            },
+            {
+              icon: '🔕',
+              label: 'Silenciar notificaciones',
+              onClick: () => {
+                setChatCtxMenu(null)
+                const opts = [{ label:'1 hora', ms:3600_000 },{ label:'8 horas', ms:28800_000 },{ label:'24 horas', ms:86400_000 },{ label:'Siempre', ms:9999999_000 }]
+                const choice = prompt('Silenciar por:\n' + opts.map((o,i)=>`${i+1}. ${o.label}`).join('\n') + '\n\nEscribí el número:')
+                const idx = parseInt(choice) - 1
+                if (idx >= 0 && idx < opts.length) {
+                  try { localStorage.setItem(`mute_${activeConversation?.id}`, String(Date.now() + opts[idx].ms)) } catch {}
+                }
+              },
+            },
+          ].map(item => (
+            <div
+              key={item.label}
+              onClick={item.onClick}
+              style={{
+                padding: '11px 16px', cursor: 'pointer', fontSize: 13.5,
+                color: C.text, display: 'flex', alignItems: 'center', gap: 11,
+                borderBottom: `1px solid ${C.border}18`, userSelect: 'none',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{ fontSize: 15, width: 20, textAlign: 'center' }}>{item.icon}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+            </div>
+          ))}
+          <div style={{ borderTop: `1px solid ${C.border}33` }} />
+          <div
+            onClick={() => { setChatCtxMenu(null); handleClearHistory() }}
+            style={{ padding: '11px 16px', cursor: 'pointer', fontSize: 13.5, color: C.text, display: 'flex', alignItems: 'center', gap: 11, borderBottom: `1px solid ${C.border}18`, userSelect: 'none' }}
+            onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <span style={{ fontSize: 15, width: 20, textAlign: 'center' }}>🧹</span>
+            <span>Vaciar chat</span>
+          </div>
+          {isGroup && (
+            <div
+              onClick={() => { setChatCtxMenu(null); handleDeleteChat() }}
+              style={{ padding: '11px 16px', cursor: 'pointer', fontSize: 13.5, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 11, borderBottom: `1px solid ${C.border}18`, userSelect: 'none' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#ef444414'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{ fontSize: 15, width: 20, textAlign: 'center' }}>🚪</span>
+              <span>{activeConversation?.isCommunity ? 'Salir de la comunidad' : 'Salir del grupo'}</span>
+            </div>
+          )}
+          <div
+            onClick={() => { setChatCtxMenu(null); handleDeleteChat() }}
+            style={{ padding: '11px 16px', cursor: 'pointer', fontSize: 13.5, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 11, userSelect: 'none' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#ef444414'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <span style={{ fontSize: 15, width: 20, textAlign: 'center' }}>🗑️</span>
+            <span>Eliminar chat</span>
+          </div>
+        </div>
+      )}
+
       {/* ── Forward message modal ── */}
       {forwardMsg && (
         <div onClick={() => setForwardMsg(null)} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
@@ -1358,7 +1458,8 @@ export default function ChatPage({ onBack }) {
 
       <div
         style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: chatBg?.gradient ? 'transparent' : C.bg2, backgroundImage: chatBg?.gradient || 'none', overflow: 'hidden', position: 'relative' }}
-        onClick={() => { setLongPressMsg(null); setShowEmoji(false); setDeleteMenuMsg(null); setShowAttachMenu(false); setShowBgPicker(false) }}
+        onClick={() => { setLongPressMsg(null); setShowEmoji(false); setDeleteMenuMsg(null); setShowAttachMenu(false); setShowBgPicker(false); setChatCtxMenu(null) }}
+        onContextMenu={e => { e.preventDefault(); setChatCtxMenu({ x: e.clientX, y: e.clientY }) }}
       >
 
         {/* ── COMMUNITY TOURNAMENTS PANEL (overlay) ── */}
@@ -1936,7 +2037,7 @@ export default function ChatPage({ onBack }) {
                     }}
                     onMouseEnter={() => !selectMode && setHoveredMsg(msg.id)}
                     onMouseLeave={() => { setHoveredMsg(null) }}
-                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); if (!selectMode) setLongPressMsg(msg) }}
+                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setChatCtxMenu(null); if (!selectMode) setLongPressMsg(msg) }}
                     onMouseDown={() => { if (!selectMode) longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 500) }}
                     onMouseUp={() => clearTimeout(longPressTimer.current)}
                     onTouchStart={() => { if (!selectMode) longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 500) }}
