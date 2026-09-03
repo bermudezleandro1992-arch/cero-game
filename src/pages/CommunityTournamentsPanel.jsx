@@ -185,6 +185,10 @@ function CreateForm({ communityId, communityTags, communityFeatures, onCreated, 
   const [temporada,     setTemporada]     = useState(1)
   const [division,      setDivision]      = useState('A')
   const [clasificaCopa, setClasificaCopa] = useState(8)
+  // Reglas del partido
+  const [matchDuration, setMatchDuration] = useState(10)
+  const [hasOvertime,   setHasOvertime]   = useState(true)
+  const [hasPenalties,  setHasPenalties]  = useState(true)
   const [busy,          setBusy]          = useState(false)
   const [err,           setErr]           = useState('')
 
@@ -234,6 +238,9 @@ function CreateForm({ communityId, communityTags, communityFeatures, onCreated, 
         registration_close: closeDate || null,
         rules: rules.trim() || null,
         inscription_fee: fee.trim() || null,
+        match_duration_min: matchDuration,
+        has_overtime: hasOvertime,
+        has_penalties: hasPenalties,
         ...(type === 'liga' ? {
           liga_tipo: ligaTipo,
           temporada: temporada,

@@ -481,12 +481,14 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
         </div>
       )}
 
-      {/* Grupos section */}
+      {/* Torneos y Ligas section */}
       {(allTorneos.length > 0 || otros.length > 0) && (
         <div>
-          <div style={{ padding: '14px 16px 6px', color: C.textDim, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-            Grupos
-          </div>
+          {allTorneos.length > 0 && (
+            <div style={{ padding: '14px 16px 6px', color: C.textDim, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+              Torneos y Ligas
+            </div>
+          )}
           {/* Torneos */}
           {allTorneos.map(t => {
             const s = STATUS_CFG[t.tournament_status] || STATUS_CFG.inscripcion
@@ -510,7 +512,12 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
               </button>
             )
           })}
-          {/* Otros canales */}
+          {/* Otros canales (General, Privado, etc.) */}
+          {otros.length > 0 && (
+            <div style={{ padding: '14px 16px 6px', color: C.textDim, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+              Canales
+            </div>
+          )}
           {otros.map(ch => (
             <button key={ch.id} onClick={() => openChannel(ch)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 12,
@@ -554,11 +561,7 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
           <div style={{ height: 1, background: C.border, margin: '8px 0 16px' }} />
           <div style={{ color: C.textDim, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>Administración</div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={onAddMember} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-              <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👤+</div>
-              <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Añadir miembro</span>
-            </button>
-            <button onClick={onAddGroup} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            <button onClick={onAddGroup} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
               <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👥+</div>
               <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Añadir grupos</span>
             </button>
@@ -667,11 +670,13 @@ export default function CommunityDashboardWA({ community, onBack }) {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Realtime: nuevo aviso (sin filtro para capturar también avisos de torneos)
+  // Realtime: nuevo aviso + cambios de estado en torneos/ligas
   useEffect(() => {
     if (!community?.id) return
     const ch = supabase.channel(`wa-ann-${community.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'announcements' }, () => loadData())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations',
+          filter: `community_id=eq.${community.id}` }, () => loadData())
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [community?.id, loadData])
@@ -692,11 +697,7 @@ export default function CommunityDashboardWA({ community, onBack }) {
           <TournamentDashboard
             tournamentId={viewingTournament.id}
             profile={profile}
-            isAdmin={
-              community.created_by === profile?.id ||
-              myRole === 'owner' || myRole === 'admin' ||
-              viewingTournament.created_by === profile?.id
-            }
+            isAdmin={isAdmin || viewingTournament.created_by === profile?.id}
             onBack={() => { setViewingTournament(null); loadData() }}
             communityId={community.id}
           />
