@@ -612,6 +612,25 @@ export default function ChatPage({ onBack }) {
     return () => { clearTimeout(t); document.removeEventListener('click', h) }
   }, [showChatMenu])
 
+  // Listen for context-menu shortcuts dispatched from ChatListPage
+  useEffect(() => {
+    const onSearch = (e) => {
+      if (e.detail?.convId === activeConversation?.id) {
+        setSearchMode(true); setSearchQuery('')
+        setTimeout(() => searchInputRef.current?.focus(), 100)
+      }
+    }
+    const onSelect = (e) => {
+      if (e.detail?.convId === activeConversation?.id) setSelectMode(true)
+    }
+    window.addEventListener('nexo:open-search', onSearch)
+    window.addEventListener('nexo:select-messages', onSelect)
+    return () => {
+      window.removeEventListener('nexo:open-search', onSearch)
+      window.removeEventListener('nexo:select-messages', onSelect)
+    }
+  }, [activeConversation?.id])
+
   const isGroup = activeConversation?.isGroup
   const otherUser = activeConversation?.user
   const groupName = activeConversation?.name
