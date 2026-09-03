@@ -50,7 +50,7 @@ function torneoPhaseIdx(status, matches) {
   if (status === 'finalizado' || status === 'cancelado') return 3
   if (status === 'en_curso') {
     // Si solo queda 1 partido (la final), avanzar el stepper a "Final"
-    if (matches && matches.total > 0 && matches.pendientes === 1 && matches.enJuego === 0) return 3
+    if (matches && matches.total > 0 && matches.pendientes <= 1 && matches.enJuego === 0) return 3
     return 2
   }
   return 0

@@ -425,7 +425,7 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
 }
 
 // ── ComunidadTab — estructura y grupos ───────────────────────────────────────
-function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpenTournament, onChangeToAvisos, onAddMember }) {
+function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpenTournament, onChangeToAvisos, onAddMember, onAddGroup }) {
   const { setActiveConversation } = useChatStore()
   const [channels, setChannels] = useState([])
 
@@ -558,10 +558,10 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
               <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👤+</div>
               <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Añadir miembro</span>
             </button>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <button onClick={onAddGroup} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
               <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👥+</div>
               <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Añadir grupos</span>
-            </div>
+            </button>
           </div>
         </div>
       )}
@@ -580,6 +580,10 @@ export default function CommunityDashboardWA({ community, onBack }) {
   const [annLoading, setAnnLoading] = useState(true)
   const [viewingTournament, setViewingTournament] = useState(null)
   const [showAddMember, setShowAddMember] = useState(false)
+  const [showAddGroup, setShowAddGroup] = useState(false)
+  const [groupSearch, setGroupSearch] = useState('')
+  const [groupResults, setGroupResults] = useState([])
+  const [addingGroupId, setAddingGroupId] = useState(null)
   const [memberSearch, setMemberSearch] = useState('')
   const [memberResults, setMemberResults] = useState([])
   const [addingMemberId, setAddingMemberId] = useState(null)
@@ -604,10 +608,33 @@ export default function CommunityDashboardWA({ community, onBack }) {
     setMemberResults(data || [])
   }
 
+  async function searchGroups(q) {
+    if (!q.trim()) { setGroupResults([]); return }
+    const { data } = await supabase.from('conversations')
+      .select('id, name, group_type, banner_url')
+      .eq('type', 'group')
+      .neq('id', community.id)
+      .ilike('name', `%${q}%`)
+      .limit(10)
+    setGroupResults(data || [])
+  }
+
+  async function addGroupToComm(groupId) {
+    setAddingGroupId(groupId)
+    const { error } = await supabase.from('conversations')
+      .update({ community_id: community.id })
+      .eq('id', groupId)
+    if (error) { alert(`Error al agregar grupo: ${error.message}`) }
+    else { loadData(); setGroupResults(r => r.filter(g => g.id !== groupId)) }
+    setAddingGroupId(null)
+  }
+
   async function addMemberToComm(userId) {
     setAddingMemberId(userId)
-    const { error } = await supabase.from('conversation_members')
-      .upsert({ conversation_id: community.id, user_id: userId }, { onConflict: 'conversation_id,user_id', ignoreDuplicates: true })
+    const { error } = await supabase.rpc('add_community_member', {
+      p_conversation_id: community.id,
+      p_user_id: userId,
+    })
     if (error) { alert(`Error al agregar: ${error.message}`) }
     else { loadData(); setMemberResults(r => r.filter(u => u.id !== userId)) }
     setAddingMemberId(null)
@@ -736,6 +763,7 @@ export default function CommunityDashboardWA({ community, onBack }) {
             onOpenTournament={setViewingTournament}
             onChangeToAvisos={() => setTab('avisos')}
             onAddMember={() => { setShowAddMember(true); setMemberSearch(''); setMemberResults([]) }}
+            onAddGroup={() => { setShowAddGroup(true); setGroupSearch(''); setGroupResults([]) }}
           />
         )}
         {tab === 'avisos' && (
@@ -790,6 +818,49 @@ export default function CommunityDashboardWA({ community, onBack }) {
               ))}
               {memberSearch && !memberResults.length && (
                 <p style={{ margin: 0, textAlign: 'center', color: C.textDim, fontSize: 13, padding: 16 }}>No se encontraron usuarios</p>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: Añadir grupos */}
+      {showAddGroup && createPortal(
+        <div onClick={() => setShowAddGroup(false)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.panel, borderRadius: '20px 20px 0 0', padding: '20px 16px 32px', width: '100%', maxWidth: 480, maxHeight: '75vh', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.text }}>👥 Añadir grupo a la comunidad</p>
+              <button onClick={() => setShowAddGroup(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 20 }}>✕</button>
+            </div>
+            <input
+              autoFocus
+              value={groupSearch}
+              onChange={e => { setGroupSearch(e.target.value); searchGroups(e.target.value) }}
+              placeholder="Buscar grupo por nombre…"
+              style={{ padding: '10px 14px', borderRadius: 12, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontSize: 14, outline: 'none' }}
+            />
+            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {groupResults.map(g => (
+                <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, background: C.panel2 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: avatarColor(g.id), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                    {g.banner_url ? <img src={g.banner_url} alt="" style={{ width: '100%', height: '100%', borderRadius: 10, objectFit: 'cover' }} /> : (g.name?.[0] || '?').toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: C.text, fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</div>
+                    <div style={{ color: C.textDim, fontSize: 12 }}>{g.group_type || 'Grupo'}</div>
+                  </div>
+                  <button
+                    onClick={() => addGroupToComm(g.id)}
+                    disabled={addingGroupId === g.id}
+                    style={{ padding: '6px 14px', borderRadius: 20, border: 'none', background: '#25D366', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: addingGroupId === g.id ? 0.5 : 1 }}
+                  >
+                    {addingGroupId === g.id ? '…' : 'Añadir'}
+                  </button>
+                </div>
+              ))}
+              {groupSearch && !groupResults.length && (
+                <p style={{ margin: 0, textAlign: 'center', color: C.textDim, fontSize: 13, padding: 16 }}>No se encontraron grupos</p>
               )}
             </div>
           </div>
