@@ -35,7 +35,6 @@ function annLimit(role) {
   return ANN_LIMITS[role] ?? (role ? 999 : 1)
 }
 const CATEGORIES = [
-  { id: 'all',     label: 'Todo',      emoji: '📢' },
   { id: 'torneo',  label: 'Torneos',   emoji: '🏆' },
   { id: 'liga',    label: 'Ligas',     emoji: '⚽' },
   { id: 'evento',  label: 'Eventos',   emoji: '🎮' },
@@ -68,20 +67,21 @@ function Avatar({ name, url, size = 34 }) {
 function NewAnnouncementForm({ onClose, onCreate }) {
   const { profile } = useAuthStore()
   const { uploadImage } = useChatStore()
-  const [title, setTitle]       = useState('')
-  const [body, setBody]         = useState('')
-  const [game, setGame]         = useState('')
-  const [category, setCategory] = useState('general')
-  const [linkUrl, setLinkUrl]   = useState('')
+  const [title, setTitle]         = useState('')
+  const [body, setBody]           = useState('')
+  const [game, setGame]           = useState('')
+  const [category, setCategory]   = useState('torneo')
+  const [linkUrl, setLinkUrl]     = useState('')
   const [linkLabel, setLinkLabel] = useState('')
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
-  const [isPinned, setIsPinned] = useState(false)
-  const [saving, setSaving]     = useState(false)
+  const [isPinned, setIsPinned]   = useState(false)
+  const [saving, setSaving]       = useState(false)
   const [myCommunities, setMyCommunities] = useState([])
   const [selectedCommunity, setSelectedCommunity] = useState('')
   const [myTournaments, setMyTournaments] = useState([])
   const [selectedTournament, setSelectedTournament] = useState('')
+  const [showExtra, setShowExtra] = useState(false)
   const fileRef = useRef()
 
   useEffect(() => {
@@ -96,7 +96,6 @@ function NewAnnouncementForm({ onClose, onCreate }) {
         setMyCommunities(convs)
         if (convs.length === 1) setSelectedCommunity(convs[0].id)
       })
-    // Load user's tournaments for linking
     supabase
       .from('conversations')
       .select('id, name, group_type, tournament_status, community_id')
@@ -122,7 +121,6 @@ function NewAnnouncementForm({ onClose, onCreate }) {
     if (!title.trim()) return
     setSaving(true)
     try {
-      // Verificar límite de anuncios por plan
       const role = profile?.role || profile?.plan || 'member'
       const limit = annLimit(role)
       if (limit < 999) {
@@ -134,21 +132,16 @@ function NewAnnouncementForm({ onClose, onCreate }) {
           .gte('created_at', since)
         if ((count || 0) >= limit) {
           const planName = role === 'free' || role === 'member' ? 'Gratis' : role.toUpperCase()
-          alert(
-            limit === 1
-              ? `Los usuarios Gratuitos solo pueden tener 1 anuncio activo.\nEliminá el anterior para publicar uno nuevo.\n\n⭐ Actualizá a VIP para publicar hasta 5 anuncios por mes.`
-              : `Llegaste al límite de ${limit} anuncios por mes para el plan ${planName}.\n\nUpgrade a PRO Elite para publicar sin límites.`
+          alert(limit === 1
+            ? `Los usuarios Gratuitos solo pueden tener 1 anuncio activo.\nEliminá el anterior para publicar uno nuevo.\n\n⭐ Actualizá a VIP para publicar hasta 5 anuncios por mes.`
+            : `Llegaste al límite de ${limit} anuncios por mes para el plan ${planName}.\n\nUpgrade a PRO Elite para publicar sin límites.`
           )
           setSaving(false)
           return
         }
       }
-
       let image_url = null
-      if (imageFile) {
-        image_url = await uploadImage(imageFile, profile.id)
-      }
-      // Enforce max 3 pinned per community
+      if (imageFile) image_url = await uploadImage(imageFile, profile.id)
       let pinned = isPinned
       if (pinned && selectedCommunity) {
         const { count } = await supabase
@@ -156,10 +149,7 @@ function NewAnnouncementForm({ onClose, onCreate }) {
           .select('id', { count: 'exact', head: true })
           .eq('conversation_id', selectedCommunity)
           .eq('is_pinned', true)
-        if ((count || 0) >= 3) {
-          alert('Solo se permiten 3 anuncios fijados por comunidad. Desancla uno antes de fijar este.')
-          pinned = false
-        }
+        if ((count || 0) >= 3) { alert('Solo se permiten 3 anuncios fijados por comunidad.'); pinned = false }
       }
       const { data, error } = await supabase.from('announcements').insert({
         author_id: profile.id,
@@ -182,120 +172,160 @@ function NewAnnouncementForm({ onClose, onCreate }) {
     setSaving(false)
   }
 
-  const inputStyle = {
+  const inp = {
     width: '100%', background: C.panel2, border: `1px solid ${C.border}`,
     borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14,
     outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
     transition: 'border-color .15s',
   }
+  const cfgCat = CATEGORY_CFG[category] || CATEGORY_CFG.general
+  const canSubmit = !saving && title.trim() && selectedCommunity
 
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 200,
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)',
       display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        width: '100%', maxWidth: 520, maxHeight: '92vh',
-        background: C.panel, borderRadius: '20px 20px 0 0',
+        width: '100%', maxWidth: 540, maxHeight: '96vh',
+        background: C.panel, borderRadius: '24px 24px 0 0',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        animation: 'slideUp .25s ease',
+        animation: 'slideUp .3s cubic-bezier(.32,1.1,.64,1)',
       }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <span style={{ color: C.text, fontWeight: 800, fontSize: 16 }}>📢 Nuevo Anuncio</span>
+
+        {/* ── Flyer preview hero (ocupa todo el ancho) ── */}
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickImage} />
+        {imagePreview ? (
+          <div style={{ position: 'relative', flexShrink: 0, lineHeight: 0, cursor: 'pointer' }}
+               onClick={() => fileRef.current?.click()}>
+            <img src={imagePreview} alt="flyer"
+              style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }} />
+            {/* gradient overlay */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)',
+            }} />
+            {/* title preview on image */}
+            {title && (
+              <div style={{
+                position: 'absolute', bottom: 14, left: 14, right: 60,
+                color: '#fff', fontWeight: 900, fontSize: 17, lineHeight: 1.25,
+                textShadow: '0 2px 12px rgba(0,0,0,0.9)',
+              }}>{title}</div>
+            )}
+            {/* category chip */}
+            <div style={{
+              position: 'absolute', top: 12, left: 12,
+              background: cfgCat.color, color: '#fff',
+              fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20,
+              letterSpacing: '.7px',
+            }}>{(CATEGORIES.find(c => c.id === category)?.emoji || '') + ' ' + (CATEGORIES.find(c => c.id === category)?.label || '').toUpperCase()}</div>
+            {/* change / remove buttons */}
+            <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
+              <div style={{
+                background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)',
+                borderRadius: 20, padding: '4px 10px', fontSize: 11, color: '#fff', fontWeight: 600,
+              }}>Cambiar</div>
+              <button type="button" onClick={ev => { ev.stopPropagation(); setImageFile(null); setImagePreview(null) }} style={{
+                background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)',
+                border: 'none', borderRadius: '50%', width: 26, height: 26,
+                color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>✕</button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" onClick={() => fileRef.current?.click()} style={{
+            flexShrink: 0, width: '100%', padding: '32px 0', border: 'none',
+            background: `linear-gradient(135deg, ${C.panel2} 0%, ${C.panel} 100%)`,
+            borderBottom: `1px solid ${C.border}`,
+            cursor: 'pointer', color: C.textDim,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ fontSize: 40, filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))' }}>🖼️</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Subir flyer / imagen</span>
+            <span style={{ fontSize: 12, color: C.textDim }}>Toca para elegir · PNG, JPG, WebP</span>
+          </button>
+        )}
+
+        {/* ── Header bar ── */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '14px 20px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+        }}>
+          <span style={{ color: C.text, fontWeight: 800, fontSize: 15 }}>📢 Nuevo anuncio</span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 20, lineHeight: 1, padding: 4 }}>✕</button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* ── Scrollable form body ── */}
+        <form onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* Image/Flyer */}
+          {/* Comunidad */}
+          {myCommunities.length === 0 ? (
+            <div style={{ padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${C.border}`, color: C.textDim, fontSize: 13 }}>
+              Necesitás administrar una comunidad para publicar anuncios.
+            </div>
+          ) : myCommunities.length === 1 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: `${C.green}12`, borderRadius: 10, border: `1px solid ${C.green}33` }}>
+              <span style={{ fontSize: 14 }}>🌐</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>{myCommunities[0].name}</span>
+              <span style={{ fontSize: 11, color: C.textDim, marginLeft: 'auto' }}>Comunidad seleccionada</span>
+            </div>
+          ) : (
+            <select value={selectedCommunity} onChange={e => setSelectedCommunity(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+              <option value="">🌐 Seleccionar comunidad…</option>
+              {myCommunities.map(c => (
+                <option key={c.id} value={c.id}>{c.group_type === 'community' ? '🌐' : '👥'} {c.name}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Categoría — chips visuales */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 8 }}>Flyer / Imagen</label>
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickImage} />
-            {imagePreview ? (
-              <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
-                <img src={imagePreview} alt="preview" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }} />
-                <button type="button" onClick={() => { setImageFile(null); setImagePreview(null) }} style={{
-                  position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)',
-                  border: 'none', borderRadius: '50%', width: 28, height: 28,
-                  color: '#fff', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>✕</button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => fileRef.current?.click()} style={{
-                width: '100%', padding: '28px 0', borderRadius: 12, border: `2px dashed ${C.border}`,
-                background: C.panel2, cursor: 'pointer', color: C.textDim, fontSize: 13,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-              }}>
-                <span style={{ fontSize: 28 }}>🖼️</span>
-                <span>Tocá para subir un flyer</span>
-              </button>
-            )}
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 8, letterSpacing: '.5px' }}>CATEGORÍA</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {CATEGORIES.map(cat => {
+                const catCfg = CATEGORY_CFG[cat.id] || CATEGORY_CFG.general
+                const active = category === cat.id
+                return (
+                  <button key={cat.id} type="button" onClick={() => setCategory(cat.id)} style={{
+                    padding: '7px 14px', borderRadius: 20, border: `1.5px solid ${active ? catCfg.color : C.border}`,
+                    background: active ? catCfg.bg : 'transparent',
+                    color: active ? catCfg.color : C.textDim,
+                    fontSize: 13, fontWeight: active ? 800 : 500, cursor: 'pointer',
+                    transition: 'all .15s',
+                  }}>
+                    {cat.emoji} {cat.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
-          {/* Comunidad origen — requerido */}
+          {/* Título */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Comunidad *</label>
-            {myCommunities.length === 0 ? (
-              <div style={{ padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${C.border}`, color: C.textDim, fontSize: 13 }}>
-                Necesitás administrar una comunidad para publicar anuncios.
-              </div>
-            ) : (
-              <select value={selectedCommunity} onChange={e => setSelectedCommunity(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                <option value="">— Seleccionar comunidad —</option>
-                {myCommunities.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.group_type === 'community' ? '🌐' : '👥'} {c.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Title */}
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Título *</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 6, letterSpacing: '.5px' }}>TÍTULO *</label>
             <input
               value={title} onChange={e => setTitle(e.target.value)}
               placeholder="Ej: Torneo de eFootball — Clasificatorio Agosto"
-              required style={inputStyle}
+              required style={{ ...inp, fontSize: 15, fontWeight: 700 }}
             />
           </div>
 
-          {/* Body */}
+          {/* Descripción */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Descripción</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 6, letterSpacing: '.5px' }}>DESCRIPCIÓN</label>
             <textarea
               value={body} onChange={e => setBody(e.target.value)}
-              placeholder="Detalles del torneo, fechas, premios..."
-              rows={4} style={{ ...inputStyle, resize: 'vertical' }}
+              placeholder="Detalles, fechas, premios, requisitos…"
+              rows={3} style={{ ...inp, resize: 'vertical' }}
             />
           </div>
 
-          {/* Category + Game row */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Categoría</label>
-              <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                {CATEGORIES.filter(c => c.id !== 'all').map(c => (
-                  <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Juego</label>
-              <select value={game} onChange={e => setGame(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                <option value="">Sin especificar</option>
-                {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Link torneo */}
+          {/* Vincular torneo/liga — aparece si la categoría aplica */}
           {(category === 'torneo' || category === 'liga') && myTournaments.length > 0 && (
             <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Vincular torneo/liga (opcional)</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 6, letterSpacing: '.5px' }}>VINCULAR TORNEO / LIGA</label>
               <select value={selectedTournament} onChange={e => {
                 const tid = e.target.value
                 setSelectedTournament(tid)
@@ -303,64 +333,100 @@ function NewAnnouncementForm({ onClose, onCreate }) {
                   const t = myTournaments.find(x => x.id === tid)
                   if (t?.community_id) setSelectedCommunity(t.community_id)
                 }
-              }} style={{ ...inputStyle, cursor: 'pointer' }}>
+              }} style={{ ...inp, cursor: 'pointer' }}>
                 <option value="">Sin vincular</option>
                 {myTournaments.map(t => (
                   <option key={t.id} value={t.id}>{t.group_type === 'liga' ? '⚽' : '🏆'} {t.name}</option>
                 ))}
               </select>
-              {selectedTournament && <p style={{ margin: '4px 0 0', fontSize: 11, color: C.green }}>✓ Se mostrará botón "Ver torneo →" en el anuncio</p>}
+              {selectedTournament && (
+                <p style={{ margin: '5px 0 0', fontSize: 11, color: C.green }}>
+                  ✓ Se mostrará botón para abrir el torneo desde el anuncio
+                </p>
+              )}
             </div>
           )}
 
-          {/* Link */}
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Link externo (opcional)</label>
-            <input value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://forms.google.com/..." style={inputStyle} />
-            {linkUrl && (
-              <input value={linkLabel} onChange={e => setLinkLabel(e.target.value)} placeholder='Etiqueta del botón ("Inscribirse", "Ver bracket")' style={{ ...inputStyle, marginTop: 6 }} />
-            )}
-          </div>
+          {/* Extras colapsables */}
+          <button type="button" onClick={() => setShowExtra(x => !x)} style={{
+            background: 'none', border: `1px dashed ${C.border}`, borderRadius: 10,
+            padding: '8px 14px', cursor: 'pointer', color: C.textDim,
+            fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <span style={{ fontSize: 14 }}>{showExtra ? '▲' : '▼'}</span>
+            {showExtra ? 'Ocultar opciones extra' : 'Más opciones (juego, link, fijar)'}
+          </button>
 
-          {/* Pin toggle */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${isPinned ? C.green : C.border}`, transition: 'border-color .15s' }}>
-            <input type="checkbox" checked={isPinned} onChange={e => setIsPinned(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.green, cursor: 'pointer' }} />
-            <div>
-              <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>📌 Fijar anuncio</div>
-              <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>Aparece primero en la comunidad (máx. 3 fijados)</div>
-            </div>
-          </label>
+          {showExtra && (
+            <>
+              {/* Juego */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 6, letterSpacing: '.5px' }}>JUEGO</label>
+                <select value={game} onChange={e => setGame(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                  <option value="">Sin especificar</option>
+                  {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+
+              {/* Link externo */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 6, letterSpacing: '.5px' }}>LINK EXTERNO</label>
+                <input value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://…" style={inp} />
+                {linkUrl && (
+                  <input value={linkLabel} onChange={e => setLinkLabel(e.target.value)}
+                    placeholder='Texto del botón ("Inscribirse", "Ver bracket"…)'
+                    style={{ ...inp, marginTop: 6 }} />
+                )}
+              </div>
+
+              {/* Fijar */}
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                padding: '10px 12px', background: C.panel2, borderRadius: 10,
+                border: `1px solid ${isPinned ? C.green : C.border}`, transition: 'border-color .15s',
+              }}>
+                <input type="checkbox" checked={isPinned} onChange={e => setIsPinned(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: C.green, cursor: 'pointer' }} />
+                <div>
+                  <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>📌 Fijar anuncio</div>
+                  <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>Aparece primero (máx. 3 fijados)</div>
+                </div>
+              </label>
+            </>
+          )}
 
           {/* Cuota del plan */}
           {(() => {
             const role = profile?.role || profile?.plan || 'member'
             const limit = annLimit(role)
+            if (limit >= 999) return null
             const isFree = limit === 1
-            const isUnlimited = limit >= 999
-            if (isUnlimited) return null
             return (
               <div style={{ padding: '8px 12px', background: isFree ? '#f59e0b14' : `${C.green}10`, borderRadius: 10, border: `1px solid ${isFree ? '#f59e0b33' : C.green + '33'}`, fontSize: 12, color: isFree ? '#f59e0b' : C.green }}>
                 {isFree
-                  ? '⚠️ Plan Gratuito: 1 anuncio activo. Eliminá el anterior para publicar uno nuevo. Actualizá a VIP para hasta 5/mes.'
-                  : `✓ Plan ${role.toUpperCase()}: hasta ${limit} anuncios por mes.`
-                }
+                  ? '⚠️ Plan Gratuito: 1 anuncio activo. Actualizá a VIP para hasta 5/mes.'
+                  : `✓ Plan ${role.toUpperCase()}: hasta ${limit} anuncios por mes.`}
               </div>
             )
           })()}
 
           {/* Submit */}
-          <button type="submit" disabled={saving || !title.trim() || !selectedCommunity} style={{
-            padding: '13px', borderRadius: 12, border: 'none', cursor: saving || !title.trim() || !selectedCommunity ? 'default' : 'pointer',
-            background: saving || !title.trim() || !selectedCommunity ? C.panel2 : C.green,
-            color: saving || !title.trim() || !selectedCommunity ? C.textDim : C.bg,
-            fontSize: 14, fontWeight: 800, transition: 'all .15s',
-            boxShadow: !saving && title.trim() ? `0 4px 20px ${C.green}44` : 'none',
+          <button type="submit" disabled={!canSubmit} style={{
+            padding: '14px', borderRadius: 14, border: 'none',
+            cursor: canSubmit ? 'pointer' : 'default',
+            background: canSubmit ? C.green : C.panel2,
+            color: canSubmit ? '#000' : C.textDim,
+            fontSize: 15, fontWeight: 900, transition: 'all .15s',
+            boxShadow: canSubmit ? `0 4px 24px ${C.green}55` : 'none',
+            letterSpacing: '.3px',
           }}>
-            {saving ? 'Publicando...' : '📢 Publicar anuncio'}
+            {saving ? '⏳ Publicando…' : imagePreview ? '🚀 Publicar flyer' : '📢 Publicar anuncio'}
           </button>
         </form>
       </div>
-      <style>{`@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style>
+      <style>{`
+        @keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
+      `}</style>
     </div>
   )
 }
@@ -371,15 +437,172 @@ function AnnouncementCard({ ann, myId, onLike, onDelete, onViewTournament }) {
   const liked = ann.liked_by_me
   const likeCount = ann.like_count || 0
   const isAuthor = ann.author_id === myId
-  const hasTournament = ann.tournament_id || (ann.category === 'torneo' && ann.community?.id)
+  const hasFlyer = !!ann.image_url
 
+  if (hasFlyer) {
+    // ── FLYER card: imagen hero con overlay, diseño visual premium ──
+    return (
+      <div style={{
+        borderRadius: 18, overflow: 'hidden',
+        boxShadow: ann.is_pinned
+          ? `0 0 0 2px ${cfg.color}88, 0 8px 40px rgba(0,0,0,0.5)`
+          : '0 4px 28px rgba(0,0,0,0.35)',
+        position: 'relative',
+        background: '#000',
+      }}>
+        {/* Hero image */}
+        <div style={{ position: 'relative', lineHeight: 0 }}>
+          <img
+            src={ann.image_url} alt={ann.title}
+            style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight: 420 }}
+          />
+
+          {/* Dark gradient overlay bottom */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,0.55) 65%, rgba(0,0,0,0.92) 100%)',
+          }} />
+
+          {/* Top chips */}
+          <div style={{ position: 'absolute', top: 12, left: 12, right: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {ann.is_pinned && (
+                <span style={{ background: C.green, color: '#000', fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, letterSpacing: '.5px' }}>
+                  📌 FIJADO
+                </span>
+              )}
+              <span style={{
+                background: cfg.color, color: '#fff',
+                fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20,
+                letterSpacing: '.8px', boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
+              }}>
+                {cfg.label.toUpperCase()}
+              </span>
+            </div>
+            {ann.game && (
+              <span style={{
+                background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)',
+                color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+              }}>
+                🎮 {ann.game}
+              </span>
+            )}
+          </div>
+
+          {/* Bottom overlay: title + author + actions */}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '16px 16px 14px' }}>
+            {/* Community badge */}
+            {ann.community && (
+              <div style={{ marginBottom: 6 }}>
+                <span style={{
+                  fontSize: 11, color: 'rgba(255,255,255,0.75)', fontWeight: 600,
+                  background: 'rgba(255,255,255,0.12)', padding: '2px 9px', borderRadius: 10, backdropFilter: 'blur(4px)',
+                }}>
+                  {ann.community.group_type === 'community' ? '🌐' : '👥'} {ann.community.name}
+                </span>
+              </div>
+            )}
+
+            <h3 style={{
+              margin: '0 0 10px', color: '#fff', fontWeight: 900,
+              fontSize: 18, lineHeight: 1.25,
+              textShadow: '0 2px 12px rgba(0,0,0,0.8)',
+            }}>
+              {ann.title}
+            </h3>
+
+            {/* CTA buttons */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              {ann.tournament_id && (
+                <button
+                  onClick={() => onViewTournament && onViewTournament(ann.tournament_id)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '9px 18px', borderRadius: 10,
+                    background: C.green, color: '#000', border: 'none', cursor: 'pointer',
+                    fontSize: 13, fontWeight: 800,
+                    boxShadow: `0 2px 16px ${C.green}77`,
+                  }}
+                >
+                  {ann.tournament?.tournament_status === 'inscripcion'
+                    ? (ann.category === 'liga' ? '⚽ Inscribirse →' : '🏆 Inscribirse →')
+                    : (ann.category === 'liga' ? '⚽ Ver liga →' : '🏆 Ver torneo →')}
+                </button>
+              )}
+              {ann.link_url && (
+                <a
+                  href={ann.link_url} target="_blank" rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '8px 16px', borderRadius: 10,
+                    background: ann.tournament_id ? 'rgba(255,255,255,0.15)' : C.green,
+                    color: '#fff',
+                    fontSize: 13, fontWeight: 700, textDecoration: 'none',
+                    border: 'none', backdropFilter: 'blur(8px)',
+                  }}
+                >
+                  🔗 {ann.link_label || 'Ver más'}
+                </a>
+              )}
+            </div>
+
+            {/* Footer row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Avatar name={ann.author?.display_name} url={ann.author?.avatar_url} size={26} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
+                  {ann.author?.display_name || 'Anónimo'}
+                </span>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginLeft: 6 }}>{timeAgo(ann.created_at)}</span>
+              </div>
+
+              <button
+                onClick={() => onLike(ann)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  background: liked ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.12)',
+                  border: 'none', borderRadius: 20, padding: '5px 11px', cursor: 'pointer',
+                  color: liked ? '#f87171' : 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: 600,
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                <span>{liked ? '❤️' : '🤍'}</span>
+                {likeCount > 0 && <span style={{ fontSize: 12 }}>{likeCount}</span>}
+              </button>
+
+              {isAuthor && (
+                <button
+                  onClick={() => onDelete(ann.id)}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)', border: 'none',
+                    borderRadius: 20, padding: '5px 10px', cursor: 'pointer',
+                    color: 'rgba(255,255,255,0.55)', fontSize: 12, backdropFilter: 'blur(8px)',
+                  }}
+                >
+                  🗑
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Body text below image (only if has text) */}
+        {ann.body && (
+          <div style={{ background: C.panel, padding: '12px 16px 14px', borderTop: `1px solid ${C.border}` }}>
+            <p style={{ margin: 0, color: C.text2, fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{ann.body}</p>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Standard card (no image) ──
   return (
     <div style={{
       background: C.panel, borderRadius: 16, overflow: 'hidden',
-      border: `1px solid ${C.border}`,
-      boxShadow: ann.is_pinned ? `0 0 0 2px ${C.green}44, 0 4px 24px rgba(0,0,0,0.2)` : '0 2px 12px rgba(0,0,0,0.12)',
+      border: `1px solid ${ann.is_pinned ? cfg.color + '44' : C.border}`,
+      boxShadow: ann.is_pinned ? `0 0 0 1px ${cfg.color}33, 0 4px 24px rgba(0,0,0,0.2)` : '0 2px 12px rgba(0,0,0,0.12)',
     }}>
-      {/* Pinned badge */}
       {ann.is_pinned && (
         <div style={{ background: `${C.green}18`, padding: '6px 14px', borderBottom: `1px solid ${C.green}22`, display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 12 }}>📌</span>
@@ -387,54 +610,25 @@ function AnnouncementCard({ ann, myId, onLike, onDelete, onViewTournament }) {
         </div>
       )}
 
-      {/* Flyer image */}
-      {ann.image_url && (
-        <div style={{ position: 'relative' }}>
-          <img
-            src={ann.image_url} alt={ann.title}
-            style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }}
-          />
-          {/* Category chip over image */}
-          <div style={{
-            position: 'absolute', top: 10, left: 10,
-            background: cfg.color, color: '#fff',
-            fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-          }}>
-            {cfg.label.toUpperCase()}
-          </div>
-          {ann.game && (
-            <div style={{
-              position: 'absolute', top: 10, right: 10,
-              background: 'rgba(0,0,0,0.6)', color: '#fff', backdropFilter: 'blur(4px)',
-              fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-            }}>
-              🎮 {ann.game}
-            </div>
+      <div style={{ padding: '14px 16px 12px' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: cfg.bg, color: cfg.color }}>
+            {cfg.label}
+          </span>
+          {ann.game && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: C.panel2, color: C.textDim }}>🎮 {ann.game}</span>}
+          {ann.community && (
+            <span style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600, background: '#8b5cf614', padding: '2px 9px', borderRadius: 20 }}>
+              {ann.community.group_type === 'community' ? '🌐' : '👥'} {ann.community.name}
+            </span>
           )}
         </div>
-      )}
 
-      <div style={{ padding: '14px 16px 12px' }}>
-        {/* Category chip (no image case) */}
-        {!ann.image_url && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: cfg.bg, color: cfg.color }}>
-              {cfg.label}
-            </span>
-            {ann.game && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: C.panel2, color: C.textDim }}>🎮 {ann.game}</span>}
-          </div>
-        )}
-
-        {/* Title */}
         <h3 style={{ margin: '0 0 8px', color: C.text, fontWeight: 800, fontSize: 16, lineHeight: 1.3 }}>{ann.title}</h3>
 
-        {/* Body */}
         {ann.body && (
           <p style={{ margin: '0 0 12px', color: C.text2, fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{ann.body}</p>
         )}
 
-        {/* Action buttons */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: ann.link_url || ann.tournament_id ? 12 : 0 }}>
           {ann.tournament_id && (
             <button
@@ -470,22 +664,13 @@ function AnnouncementCard({ ann, myId, onLike, onDelete, onViewTournament }) {
           )}
         </div>
 
-        {/* Footer: author + community + time + actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
           <Avatar name={ann.author?.display_name} url={ann.author?.avatar_url} size={28} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: C.text2 }}>{ann.author?.display_name || 'Anónimo'}</span>
-              {ann.community && (
-                <span style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600, background: '#8b5cf614', padding: '1px 7px', borderRadius: 10 }}>
-                  {ann.community.group_type === 'community' ? '🌐' : '👥'} {ann.community.name}
-                </span>
-              )}
-            </div>
-            <span style={{ fontSize: 11, color: C.textDim }}>{timeAgo(ann.created_at)}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.text2 }}>{ann.author?.display_name || 'Anónimo'}</span>
+            <span style={{ display: 'block', fontSize: 11, color: C.textDim }}>{timeAgo(ann.created_at)}</span>
           </div>
 
-          {/* Like */}
           <button
             onClick={() => onLike(ann)}
             style={{
@@ -501,7 +686,6 @@ function AnnouncementCard({ ann, myId, onLike, onDelete, onViewTournament }) {
             {likeCount > 0 && <span style={{ fontSize: 12 }}>{likeCount}</span>}
           </button>
 
-          {/* Delete (author only) */}
           {isAuthor && (
             <button
               onClick={() => onDelete(ann.id)}
@@ -525,7 +709,7 @@ export default function AnnouncementsPage() {
   const { profile } = useAuthStore()
   const [items, setItems]       = useState([])
   const [loading, setLoading]   = useState(true)
-  const [category, setCategory] = useState('all')
+  const [category, setCategory] = useState('torneo')
   const [showForm, setShowForm] = useState(false)
   const [likedSet, setLikedSet] = useState(new Set())
   const [likeCounts, setLikeCounts] = useState({})
@@ -543,7 +727,7 @@ export default function AnnouncementsPage() {
       .order('created_at', { ascending: false })
       .limit(50)
 
-    if (category !== 'all') q = q.eq('category', category)
+    q = q.eq('category', category)
 
     const { data } = await q
     const list = data || []
@@ -712,9 +896,7 @@ export default function AnnouncementsPage() {
             <div style={{ fontSize: 52 }}>📢</div>
             <p style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>Sin anuncios aún</p>
             <p style={{ margin: 0, color: C.textDim, fontSize: 13, maxWidth: 260, lineHeight: 1.5 }}>
-              {category === 'all'
-                ? 'Sé el primero en publicar un torneo, liga o evento de la comunidad.'
-                : `No hay anuncios de tipo "${CATEGORIES.find(c => c.id === category)?.label}" todavía.`}
+              {`No hay anuncios de "${CATEGORIES.find(c => c.id === category)?.label}" todavía. ¡Sé el primero!`}
             </p>
             {canPublish && (
               <button onClick={() => setShowForm(true)} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: C.green, color: C.bg, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: `0 2px 12px ${C.green}33` }}>

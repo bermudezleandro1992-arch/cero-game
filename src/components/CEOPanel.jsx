@@ -740,11 +740,18 @@ function RolesTab({ communityId, profile, toast }) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('conversation_members')
-      .select('user_id, role, joined_at, users(id, display_name, avatar_url, username)')
-      .eq('conversation_id', communityId)
-    setMembers(data || [])
+    // Use SECURITY DEFINER RPC to bypass RLS and read all members + roles
+    const { data: memberRows } = await supabase
+      .rpc('get_conversation_members', { p_conversation_ids: [communityId] })
+    const rows = memberRows || []
+    if (rows.length) {
+      const ids = rows.map(r => r.user_id)
+      const { data: userRows } = await supabase.from('users').select('id, display_name, avatar_url, username').in('id', ids)
+      const userMap = Object.fromEntries((userRows || []).map(u => [u.id, u]))
+      setMembers(rows.map(r => ({ user_id: r.user_id, role: r.role || 'member', joined_at: r.joined_at, users: userMap[r.user_id] || null })).filter(m => m.users))
+    } else {
+      setMembers([])
+    }
     setLoading(false)
   }, [communityId])
 
@@ -752,11 +759,11 @@ function RolesTab({ communityId, profile, toast }) {
 
   async function changeRole(userId, newRole) {
     setAssigning(userId)
-    const { error } = await supabase
-      .from('conversation_members')
-      .update({ role: newRole })
-      .eq('conversation_id', communityId)
-      .eq('user_id', userId)
+    const { error } = await supabase.rpc('set_community_member_role', {
+      p_conversation_id: communityId,
+      p_user_id: userId,
+      p_role: newRole,
+    })
     setAssigning(null)
     if (error) toast('Error: ' + error.message, 'error')
     else { toast('Rol actualizado ✓'); load() }
@@ -867,17 +874,20 @@ function MiembrosTab({ communityId, profile, toast }) {
 
   const load = useCallback(async () => {
     setLoading(true)
+    // get_conversation_members is SECURITY DEFINER — bypasses RLS and includes role + joined_at
     const { data: memberRows } = await supabase
       .rpc('get_conversation_members', { p_conversation_ids: [communityId] })
     const rows = memberRows || []
-    const { data: roleRows } = await supabase
-      .from('conversation_members').select('user_id, role').eq('conversation_id', communityId)
-    const roleMap = Object.fromEntries((roleRows || []).map(r => [r.user_id, r.role]))
     if (rows.length) {
       const ids = rows.map(r => r.user_id)
       const { data: userRows } = await supabase.from('users').select('id, display_name, username, avatar_url').in('id', ids)
       const userMap = Object.fromEntries((userRows || []).map(u => [u.id, u]))
-      setMembers(rows.map(r => ({ user_id: r.user_id, role: roleMap[r.user_id] || 'member', users: userMap[r.user_id] || null })).filter(m => m.users))
+      setMembers(rows.map(r => ({
+        user_id: r.user_id,
+        role: r.role || 'member',
+        joined_at: r.joined_at,
+        users: userMap[r.user_id] || null,
+      })).filter(m => m.users))
     } else {
       setMembers([])
     }
@@ -888,11 +898,11 @@ function MiembrosTab({ communityId, profile, toast }) {
 
   async function changeRole(userId, newRole) {
     setUpdating(userId)
-    const { error } = await supabase
-      .from('conversation_members')
-      .update({ role: newRole })
-      .eq('conversation_id', communityId)
-      .eq('user_id', userId)
+    const { error } = await supabase.rpc('set_community_member_role', {
+      p_conversation_id: communityId,
+      p_user_id: userId,
+      p_role: newRole,
+    })
     setUpdating(null)
     if (error) toast('Error al cambiar rol: ' + error.message, 'error')
     else { toast('Rol actualizado ✓', 'ok'); load() }
@@ -1001,7 +1011,7 @@ function MiembrosTab({ communityId, profile, toast }) {
                     {p?.display_name || 'Sin nombre'} {isMe && <span style={{ color: C.textDim, fontWeight: 400, fontSize: 11 }}>(Yo)</span>}
                   </div>
                   <div style={{ color: C.textDim, fontSize: 11 }}>
-                    Desde {new Date(m.joined_at).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {m.joined_at ? `Desde ${new Date(m.joined_at).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}` : 'Miembro'}
                   </div>
                 </div>
                 {!isMe && (
@@ -1197,6 +1207,7 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [deletingCommunity, setDeletingCommunity] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [clearingChat, setClearingChat] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -1365,6 +1376,36 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
       }}>
         {saving ? 'Guardando...' : 'Guardar cambios'}
       </button>
+
+      {/* ── Limpiar chat ── */}
+      <div style={{ marginTop: 20, borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+        <div style={{ color: C.text, fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🧹 Limpiar chat general</div>
+        <div style={{ color: C.textDim, fontSize: 12, lineHeight: 1.6, marginBottom: 12 }}>
+          Oculta todos los mensajes actuales del canal General para todos los miembros. No elimina los mensajes, los archiva.
+        </div>
+        <button
+          disabled={clearingChat}
+          onClick={async () => {
+            if (!window.confirm('¿Limpiar el chat general para todos los miembros?')) return
+            setClearingChat(true)
+            const now = new Date().toISOString()
+            await supabase.from('conversation_members')
+              .update({ cleared_at: now })
+              .eq('conversation_id', communityId)
+            setClearingChat(false)
+            toast('Chat limpiado ✓', 'ok')
+          }}
+          style={{
+            width: '100%', padding: '11px 16px',
+            background: clearingChat ? C.border : '#f59e0b22',
+            color: clearingChat ? C.textDim : '#f59e0b',
+            border: `1px solid #f59e0b44`, borderRadius: 10,
+            fontWeight: 700, fontSize: 14, cursor: clearingChat ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {clearingChat ? 'Limpiando...' : '🧹 Limpiar chat para todos'}
+        </button>
+      </div>
 
       {/* ── Zona de peligro ── */}
       <div style={{ marginTop: 24, borderTop: `1px solid #ef444430`, paddingTop: 20 }}>

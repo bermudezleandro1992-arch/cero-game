@@ -105,11 +105,13 @@ export async function postFixtureBotMessage({ supabase, tournamentChatId, author
 }
 
 // ── TournamentBotCard ─────────────────────────────────────────────────────────
-function TournamentBotCard({ aviso, onJoin, onViewTournament, accent }) {
+function TournamentBotCard({ aviso, onJoin, onViewTournament, accent, tournamentStatus }) {
   const lines = (aviso.body || '').split('\n')
   // Parse participants de las líneas (líneas que empiezan con emoji jugador)
   const participantLines = lines.filter(l => PLAYER_EMOJIS.some(e => l.startsWith(e)))
   const infoLines = lines.filter(l => !PLAYER_EMOJIS.some(e => l.startsWith(e)) && l.trim() && !l.startsWith('👥'))
+  const isLiga = aviso.category === 'liga'
+  const canJoin = !tournamentStatus || tournamentStatus === 'inscripcion'
 
   return (
     <div style={{
@@ -137,12 +139,16 @@ function TournamentBotCard({ aviso, onJoin, onViewTournament, accent }) {
         )}
       </div>
       <div style={{ display: 'flex', gap: 0, borderTop: `1px solid ${C.border}` }}>
-        <button onClick={() => onJoin?.(aviso)} style={{
+        <button onClick={() => canJoin ? onJoin?.(aviso) : onViewTournament?.(aviso)} style={{
           flex: 1, padding: '10px 8px', background: 'none', border: 'none',
           borderRight: `1px solid ${C.border}`, cursor: 'pointer',
-          color: '#22c55e', fontWeight: 700, fontSize: 12,
+          color: canJoin ? '#22c55e' : C.textDim, fontWeight: 700, fontSize: 12,
         }}>
-          🏆 UNIRME AL TORNEO
+          {canJoin
+            ? (isLiga ? '⚽ UNIRME A LA LIGA' : '🏆 UNIRME AL TORNEO')
+            : (tournamentStatus === 'finalizado'
+                ? (isLiga ? '🏅 Liga finalizada' : '🏅 Torneo finalizado')
+                : (isLiga ? '⚽ Liga en curso' : '⚡ Torneo en curso'))}
         </button>
         <button onClick={() => onViewTournament?.(aviso)} style={{
           flex: 1, padding: '10px 8px', background: 'none', border: 'none',
@@ -364,6 +370,7 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
                     onJoin={() => openTournamentFromAviso(a)}
                     onViewTournament={() => openTournamentFromAviso(a)}
                     accent={a.category === 'liga' ? '#38bdf8' : '#22c55e'}
+                    tournamentStatus={torneos?.find(x => x.id === a.tournament_id)?.tournament_status}
                   />
                 )}
                 {type === 'fixture' && (

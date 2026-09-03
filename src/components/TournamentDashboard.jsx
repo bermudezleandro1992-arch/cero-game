@@ -45,10 +45,14 @@ const LIGA_PHASES = [
   { id: 'finalizado',  label: 'Final',       icon: '🏆' },
 ]
 
-function torneoPhaseIdx(status) {
+function torneoPhaseIdx(status, matches) {
   if (!status || status === 'inscripcion') return 0
-  if (status === 'en_curso') return 2
   if (status === 'finalizado' || status === 'cancelado') return 3
+  if (status === 'en_curso') {
+    // Si solo queda 1 partido (la final), avanzar el stepper a "Final"
+    if (matches && matches.total > 0 && matches.pendientes === 1 && matches.enJuego === 0) return 3
+    return 2
+  }
   return 0
 }
 
@@ -275,7 +279,7 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
   const fillPct = data.max_participants
     ? Math.round((data.participant_count / data.max_participants) * 100)
     : null
-  const phaseIdx = torneoPhaseIdx(data.status)
+  const phaseIdx = torneoPhaseIdx(data.status, data.matches)
   const canJoin = data.status === 'inscripcion' && profile && !isMember && (!data.max_participants || data.participant_count < data.max_participants)
 
   return (
@@ -871,7 +875,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
         )}
 
         {activeTab === 'bracket' && !isLiga && (
-          <BracketView tournamentId={tournamentId} communityId={data?.community_id} tournamentName={data?.name} profile={profile} isAdmin={isAdmin} />
+          <BracketView tournamentId={tournamentId} communityId={data?.community_id} tournamentName={data?.name} profile={profile} isAdmin={isAdmin} onFinished={onBack} />
         )}
 
         {activeTab === 'fixture' && !isLiga && (

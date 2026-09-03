@@ -433,7 +433,7 @@ function buildResultBody({ tournamentName, p1n, p2n, score1, score2, winnerName,
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function BracketView({ tournamentId, communityId, tournamentName, profile, isAdmin, onReportMatch }) {
+export default function BracketView({ tournamentId, communityId, tournamentName, profile, isAdmin, onReportMatch, onFinished }) {
   const [matches, setMatches]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -711,6 +711,12 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
                   category: 'torneo',
                   is_active: true,
                 })
+                // Auto-finalizar torneo
+                await supabase.from('conversations')
+                  .update({ tournament_status: 'finalizado' })
+                  .eq('id', tournamentId)
+                // Redirigir al historial de torneos de la comunidad
+                setTimeout(() => onFinished?.(), 3500)
               }
             }
           }}
