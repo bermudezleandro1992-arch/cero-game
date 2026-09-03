@@ -67,20 +67,21 @@ function Avatar({ name, url, size = 34 }) {
 function NewAnnouncementForm({ onClose, onCreate }) {
   const { profile } = useAuthStore()
   const { uploadImage } = useChatStore()
-  const [title, setTitle]       = useState('')
-  const [body, setBody]         = useState('')
-  const [game, setGame]         = useState('')
-  const [category, setCategory] = useState('general')
-  const [linkUrl, setLinkUrl]   = useState('')
+  const [title, setTitle]         = useState('')
+  const [body, setBody]           = useState('')
+  const [game, setGame]           = useState('')
+  const [category, setCategory]   = useState('torneo')
+  const [linkUrl, setLinkUrl]     = useState('')
   const [linkLabel, setLinkLabel] = useState('')
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
-  const [isPinned, setIsPinned] = useState(false)
-  const [saving, setSaving]     = useState(false)
+  const [isPinned, setIsPinned]   = useState(false)
+  const [saving, setSaving]       = useState(false)
   const [myCommunities, setMyCommunities] = useState([])
   const [selectedCommunity, setSelectedCommunity] = useState('')
   const [myTournaments, setMyTournaments] = useState([])
   const [selectedTournament, setSelectedTournament] = useState('')
+  const [showExtra, setShowExtra] = useState(false)
   const fileRef = useRef()
 
   useEffect(() => {
@@ -95,7 +96,6 @@ function NewAnnouncementForm({ onClose, onCreate }) {
         setMyCommunities(convs)
         if (convs.length === 1) setSelectedCommunity(convs[0].id)
       })
-    // Load user's tournaments for linking
     supabase
       .from('conversations')
       .select('id, name, group_type, tournament_status, community_id')
@@ -121,7 +121,6 @@ function NewAnnouncementForm({ onClose, onCreate }) {
     if (!title.trim()) return
     setSaving(true)
     try {
-      // Verificar límite de anuncios por plan
       const role = profile?.role || profile?.plan || 'member'
       const limit = annLimit(role)
       if (limit < 999) {
@@ -133,21 +132,16 @@ function NewAnnouncementForm({ onClose, onCreate }) {
           .gte('created_at', since)
         if ((count || 0) >= limit) {
           const planName = role === 'free' || role === 'member' ? 'Gratis' : role.toUpperCase()
-          alert(
-            limit === 1
-              ? `Los usuarios Gratuitos solo pueden tener 1 anuncio activo.\nEliminá el anterior para publicar uno nuevo.\n\n⭐ Actualizá a VIP para publicar hasta 5 anuncios por mes.`
-              : `Llegaste al límite de ${limit} anuncios por mes para el plan ${planName}.\n\nUpgrade a PRO Elite para publicar sin límites.`
+          alert(limit === 1
+            ? `Los usuarios Gratuitos solo pueden tener 1 anuncio activo.\nEliminá el anterior para publicar uno nuevo.\n\n⭐ Actualizá a VIP para publicar hasta 5 anuncios por mes.`
+            : `Llegaste al límite de ${limit} anuncios por mes para el plan ${planName}.\n\nUpgrade a PRO Elite para publicar sin límites.`
           )
           setSaving(false)
           return
         }
       }
-
       let image_url = null
-      if (imageFile) {
-        image_url = await uploadImage(imageFile, profile.id)
-      }
-      // Enforce max 3 pinned per community
+      if (imageFile) image_url = await uploadImage(imageFile, profile.id)
       let pinned = isPinned
       if (pinned && selectedCommunity) {
         const { count } = await supabase
@@ -155,10 +149,7 @@ function NewAnnouncementForm({ onClose, onCreate }) {
           .select('id', { count: 'exact', head: true })
           .eq('conversation_id', selectedCommunity)
           .eq('is_pinned', true)
-        if ((count || 0) >= 3) {
-          alert('Solo se permiten 3 anuncios fijados por comunidad. Desancla uno antes de fijar este.')
-          pinned = false
-        }
+        if ((count || 0) >= 3) { alert('Solo se permiten 3 anuncios fijados por comunidad.'); pinned = false }
       }
       const { data, error } = await supabase.from('announcements').insert({
         author_id: profile.id,
@@ -181,120 +172,160 @@ function NewAnnouncementForm({ onClose, onCreate }) {
     setSaving(false)
   }
 
-  const inputStyle = {
+  const inp = {
     width: '100%', background: C.panel2, border: `1px solid ${C.border}`,
     borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14,
     outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
     transition: 'border-color .15s',
   }
+  const cfgCat = CATEGORY_CFG[category] || CATEGORY_CFG.general
+  const canSubmit = !saving && title.trim() && selectedCommunity
 
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 200,
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)',
       display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        width: '100%', maxWidth: 520, maxHeight: '92vh',
-        background: C.panel, borderRadius: '20px 20px 0 0',
+        width: '100%', maxWidth: 540, maxHeight: '96vh',
+        background: C.panel, borderRadius: '24px 24px 0 0',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        animation: 'slideUp .25s ease',
+        animation: 'slideUp .3s cubic-bezier(.32,1.1,.64,1)',
       }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <span style={{ color: C.text, fontWeight: 800, fontSize: 16 }}>📢 Nuevo Anuncio</span>
+
+        {/* ── Flyer preview hero (ocupa todo el ancho) ── */}
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickImage} />
+        {imagePreview ? (
+          <div style={{ position: 'relative', flexShrink: 0, lineHeight: 0, cursor: 'pointer' }}
+               onClick={() => fileRef.current?.click()}>
+            <img src={imagePreview} alt="flyer"
+              style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }} />
+            {/* gradient overlay */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)',
+            }} />
+            {/* title preview on image */}
+            {title && (
+              <div style={{
+                position: 'absolute', bottom: 14, left: 14, right: 60,
+                color: '#fff', fontWeight: 900, fontSize: 17, lineHeight: 1.25,
+                textShadow: '0 2px 12px rgba(0,0,0,0.9)',
+              }}>{title}</div>
+            )}
+            {/* category chip */}
+            <div style={{
+              position: 'absolute', top: 12, left: 12,
+              background: cfgCat.color, color: '#fff',
+              fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20,
+              letterSpacing: '.7px',
+            }}>{(CATEGORIES.find(c => c.id === category)?.emoji || '') + ' ' + (CATEGORIES.find(c => c.id === category)?.label || '').toUpperCase()}</div>
+            {/* change / remove buttons */}
+            <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
+              <div style={{
+                background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)',
+                borderRadius: 20, padding: '4px 10px', fontSize: 11, color: '#fff', fontWeight: 600,
+              }}>Cambiar</div>
+              <button type="button" onClick={ev => { ev.stopPropagation(); setImageFile(null); setImagePreview(null) }} style={{
+                background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)',
+                border: 'none', borderRadius: '50%', width: 26, height: 26,
+                color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>✕</button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" onClick={() => fileRef.current?.click()} style={{
+            flexShrink: 0, width: '100%', padding: '32px 0', border: 'none',
+            background: `linear-gradient(135deg, ${C.panel2} 0%, ${C.panel} 100%)`,
+            borderBottom: `1px solid ${C.border}`,
+            cursor: 'pointer', color: C.textDim,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ fontSize: 40, filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))' }}>🖼️</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Subir flyer / imagen</span>
+            <span style={{ fontSize: 12, color: C.textDim }}>Toca para elegir · PNG, JPG, WebP</span>
+          </button>
+        )}
+
+        {/* ── Header bar ── */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '14px 20px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+        }}>
+          <span style={{ color: C.text, fontWeight: 800, fontSize: 15 }}>📢 Nuevo anuncio</span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 20, lineHeight: 1, padding: 4 }}>✕</button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* ── Scrollable form body ── */}
+        <form onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* Image/Flyer */}
+          {/* Comunidad */}
+          {myCommunities.length === 0 ? (
+            <div style={{ padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${C.border}`, color: C.textDim, fontSize: 13 }}>
+              Necesitás administrar una comunidad para publicar anuncios.
+            </div>
+          ) : myCommunities.length === 1 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: `${C.green}12`, borderRadius: 10, border: `1px solid ${C.green}33` }}>
+              <span style={{ fontSize: 14 }}>🌐</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>{myCommunities[0].name}</span>
+              <span style={{ fontSize: 11, color: C.textDim, marginLeft: 'auto' }}>Comunidad seleccionada</span>
+            </div>
+          ) : (
+            <select value={selectedCommunity} onChange={e => setSelectedCommunity(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+              <option value="">🌐 Seleccionar comunidad…</option>
+              {myCommunities.map(c => (
+                <option key={c.id} value={c.id}>{c.group_type === 'community' ? '🌐' : '👥'} {c.name}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Categoría — chips visuales */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 8 }}>Flyer / Imagen</label>
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickImage} />
-            {imagePreview ? (
-              <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
-                <img src={imagePreview} alt="preview" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }} />
-                <button type="button" onClick={() => { setImageFile(null); setImagePreview(null) }} style={{
-                  position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)',
-                  border: 'none', borderRadius: '50%', width: 28, height: 28,
-                  color: '#fff', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>✕</button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => fileRef.current?.click()} style={{
-                width: '100%', padding: '28px 0', borderRadius: 12, border: `2px dashed ${C.border}`,
-                background: C.panel2, cursor: 'pointer', color: C.textDim, fontSize: 13,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-              }}>
-                <span style={{ fontSize: 28 }}>🖼️</span>
-                <span>Tocá para subir un flyer</span>
-              </button>
-            )}
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 8, letterSpacing: '.5px' }}>CATEGORÍA</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {CATEGORIES.map(cat => {
+                const catCfg = CATEGORY_CFG[cat.id] || CATEGORY_CFG.general
+                const active = category === cat.id
+                return (
+                  <button key={cat.id} type="button" onClick={() => setCategory(cat.id)} style={{
+                    padding: '7px 14px', borderRadius: 20, border: `1.5px solid ${active ? catCfg.color : C.border}`,
+                    background: active ? catCfg.bg : 'transparent',
+                    color: active ? catCfg.color : C.textDim,
+                    fontSize: 13, fontWeight: active ? 800 : 500, cursor: 'pointer',
+                    transition: 'all .15s',
+                  }}>
+                    {cat.emoji} {cat.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
-          {/* Comunidad origen — requerido */}
+          {/* Título */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Comunidad *</label>
-            {myCommunities.length === 0 ? (
-              <div style={{ padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${C.border}`, color: C.textDim, fontSize: 13 }}>
-                Necesitás administrar una comunidad para publicar anuncios.
-              </div>
-            ) : (
-              <select value={selectedCommunity} onChange={e => setSelectedCommunity(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                <option value="">— Seleccionar comunidad —</option>
-                {myCommunities.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.group_type === 'community' ? '🌐' : '👥'} {c.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Title */}
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Título *</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 6, letterSpacing: '.5px' }}>TÍTULO *</label>
             <input
               value={title} onChange={e => setTitle(e.target.value)}
               placeholder="Ej: Torneo de eFootball — Clasificatorio Agosto"
-              required style={inputStyle}
+              required style={{ ...inp, fontSize: 15, fontWeight: 700 }}
             />
           </div>
 
-          {/* Body */}
+          {/* Descripción */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Descripción</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 6, letterSpacing: '.5px' }}>DESCRIPCIÓN</label>
             <textarea
               value={body} onChange={e => setBody(e.target.value)}
-              placeholder="Detalles del torneo, fechas, premios..."
-              rows={4} style={{ ...inputStyle, resize: 'vertical' }}
+              placeholder="Detalles, fechas, premios, requisitos…"
+              rows={3} style={{ ...inp, resize: 'vertical' }}
             />
           </div>
 
-          {/* Category + Game row */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Categoría</label>
-              <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                {CATEGORIES.filter(c => c.id !== 'all').map(c => (
-                  <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Juego</label>
-              <select value={game} onChange={e => setGame(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                <option value="">Sin especificar</option>
-                {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Link torneo */}
+          {/* Vincular torneo/liga — aparece si la categoría aplica */}
           {(category === 'torneo' || category === 'liga') && myTournaments.length > 0 && (
             <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Vincular torneo/liga (opcional)</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 6, letterSpacing: '.5px' }}>VINCULAR TORNEO / LIGA</label>
               <select value={selectedTournament} onChange={e => {
                 const tid = e.target.value
                 setSelectedTournament(tid)
@@ -302,64 +333,100 @@ function NewAnnouncementForm({ onClose, onCreate }) {
                   const t = myTournaments.find(x => x.id === tid)
                   if (t?.community_id) setSelectedCommunity(t.community_id)
                 }
-              }} style={{ ...inputStyle, cursor: 'pointer' }}>
+              }} style={{ ...inp, cursor: 'pointer' }}>
                 <option value="">Sin vincular</option>
                 {myTournaments.map(t => (
                   <option key={t.id} value={t.id}>{t.group_type === 'liga' ? '⚽' : '🏆'} {t.name}</option>
                 ))}
               </select>
-              {selectedTournament && <p style={{ margin: '4px 0 0', fontSize: 11, color: C.green }}>✓ Se mostrará botón "Ver torneo →" en el anuncio</p>}
+              {selectedTournament && (
+                <p style={{ margin: '5px 0 0', fontSize: 11, color: C.green }}>
+                  ✓ Se mostrará botón para abrir el torneo desde el anuncio
+                </p>
+              )}
             </div>
           )}
 
-          {/* Link */}
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 6 }}>Link externo (opcional)</label>
-            <input value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://forms.google.com/..." style={inputStyle} />
-            {linkUrl && (
-              <input value={linkLabel} onChange={e => setLinkLabel(e.target.value)} placeholder='Etiqueta del botón ("Inscribirse", "Ver bracket")' style={{ ...inputStyle, marginTop: 6 }} />
-            )}
-          </div>
+          {/* Extras colapsables */}
+          <button type="button" onClick={() => setShowExtra(x => !x)} style={{
+            background: 'none', border: `1px dashed ${C.border}`, borderRadius: 10,
+            padding: '8px 14px', cursor: 'pointer', color: C.textDim,
+            fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <span style={{ fontSize: 14 }}>{showExtra ? '▲' : '▼'}</span>
+            {showExtra ? 'Ocultar opciones extra' : 'Más opciones (juego, link, fijar)'}
+          </button>
 
-          {/* Pin toggle */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', background: C.panel2, borderRadius: 10, border: `1px solid ${isPinned ? C.green : C.border}`, transition: 'border-color .15s' }}>
-            <input type="checkbox" checked={isPinned} onChange={e => setIsPinned(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.green, cursor: 'pointer' }} />
-            <div>
-              <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>📌 Fijar anuncio</div>
-              <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>Aparece primero en la comunidad (máx. 3 fijados)</div>
-            </div>
-          </label>
+          {showExtra && (
+            <>
+              {/* Juego */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 6, letterSpacing: '.5px' }}>JUEGO</label>
+                <select value={game} onChange={e => setGame(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                  <option value="">Sin especificar</option>
+                  {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+
+              {/* Link externo */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: C.textDim, display: 'block', marginBottom: 6, letterSpacing: '.5px' }}>LINK EXTERNO</label>
+                <input value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://…" style={inp} />
+                {linkUrl && (
+                  <input value={linkLabel} onChange={e => setLinkLabel(e.target.value)}
+                    placeholder='Texto del botón ("Inscribirse", "Ver bracket"…)'
+                    style={{ ...inp, marginTop: 6 }} />
+                )}
+              </div>
+
+              {/* Fijar */}
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                padding: '10px 12px', background: C.panel2, borderRadius: 10,
+                border: `1px solid ${isPinned ? C.green : C.border}`, transition: 'border-color .15s',
+              }}>
+                <input type="checkbox" checked={isPinned} onChange={e => setIsPinned(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: C.green, cursor: 'pointer' }} />
+                <div>
+                  <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>📌 Fijar anuncio</div>
+                  <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>Aparece primero (máx. 3 fijados)</div>
+                </div>
+              </label>
+            </>
+          )}
 
           {/* Cuota del plan */}
           {(() => {
             const role = profile?.role || profile?.plan || 'member'
             const limit = annLimit(role)
+            if (limit >= 999) return null
             const isFree = limit === 1
-            const isUnlimited = limit >= 999
-            if (isUnlimited) return null
             return (
               <div style={{ padding: '8px 12px', background: isFree ? '#f59e0b14' : `${C.green}10`, borderRadius: 10, border: `1px solid ${isFree ? '#f59e0b33' : C.green + '33'}`, fontSize: 12, color: isFree ? '#f59e0b' : C.green }}>
                 {isFree
-                  ? '⚠️ Plan Gratuito: 1 anuncio activo. Eliminá el anterior para publicar uno nuevo. Actualizá a VIP para hasta 5/mes.'
-                  : `✓ Plan ${role.toUpperCase()}: hasta ${limit} anuncios por mes.`
-                }
+                  ? '⚠️ Plan Gratuito: 1 anuncio activo. Actualizá a VIP para hasta 5/mes.'
+                  : `✓ Plan ${role.toUpperCase()}: hasta ${limit} anuncios por mes.`}
               </div>
             )
           })()}
 
           {/* Submit */}
-          <button type="submit" disabled={saving || !title.trim() || !selectedCommunity} style={{
-            padding: '13px', borderRadius: 12, border: 'none', cursor: saving || !title.trim() || !selectedCommunity ? 'default' : 'pointer',
-            background: saving || !title.trim() || !selectedCommunity ? C.panel2 : C.green,
-            color: saving || !title.trim() || !selectedCommunity ? C.textDim : C.bg,
-            fontSize: 14, fontWeight: 800, transition: 'all .15s',
-            boxShadow: !saving && title.trim() ? `0 4px 20px ${C.green}44` : 'none',
+          <button type="submit" disabled={!canSubmit} style={{
+            padding: '14px', borderRadius: 14, border: 'none',
+            cursor: canSubmit ? 'pointer' : 'default',
+            background: canSubmit ? C.green : C.panel2,
+            color: canSubmit ? '#000' : C.textDim,
+            fontSize: 15, fontWeight: 900, transition: 'all .15s',
+            boxShadow: canSubmit ? `0 4px 24px ${C.green}55` : 'none',
+            letterSpacing: '.3px',
           }}>
-            {saving ? 'Publicando...' : '📢 Publicar anuncio'}
+            {saving ? '⏳ Publicando…' : imagePreview ? '🚀 Publicar flyer' : '📢 Publicar anuncio'}
           </button>
         </form>
       </div>
-      <style>{`@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style>
+      <style>{`
+        @keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
+      `}</style>
     </div>
   )
 }
