@@ -425,7 +425,7 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
 }
 
 // ── ComunidadTab — estructura y grupos ───────────────────────────────────────
-function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpenTournament, onChangeToAvisos, onAddMember, onAddGroup, onAddChannel, channelRefreshKey }) {
+function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpenTournament, onChangeToAvisos, onAddMember, onAddGroup, onAddChannel, channelRefreshKey, onEditCommunity }) {
   const { setActiveConversation } = useChatStore()
   const [channels, setChannels] = useState([])
 
@@ -447,8 +447,7 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
     })
   }
 
-  const avisos = channels.find(c => c.is_public || c.name === 'Avisos')
-  const otros = channels.filter(c => c.id !== avisos?.id && c.name !== 'Avisos')
+  const otros = channels.filter(c => c.name !== 'Avisos')
   const torneoRows = torneos.filter(t => ['inscripcion','en_curso','draw'].includes(t.tournament_status)).slice(0, 5)
   const allTorneos = torneos.filter(t => ['inscripcion','en_curso','draw','finalizado'].includes(t.tournament_status))
 
@@ -458,26 +457,6 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
       {community.description && (
         <div style={{ padding: '14px 16px 0' }}>
           <p style={{ margin: 0, color: C.text2, fontSize: 13, lineHeight: 1.7 }}>{community.description}</p>
-        </div>
-      )}
-
-      {/* Avisos channel row */}
-      {avisos && (
-        <div style={{ padding: '10px 16px 0' }}>
-          <button onClick={onChangeToAvisos} style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-            background: 'none', border: 'none', cursor: 'pointer', padding: '12px 0',
-            borderBottom: `1px solid ${C.border}22`, textAlign: 'left',
-          }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: '#22c55e22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0, border: `1px solid #22c55e33` }}>
-              📢
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>Avisos</div>
-              <div style={{ color: C.textDim, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Solo admins pueden publicar</div>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </button>
         </div>
       )}
 
@@ -561,13 +540,13 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
           <div style={{ height: 1, background: C.border, margin: '8px 0 16px' }} />
           <div style={{ color: C.textDim, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>Administración</div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={onAddGroup} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-              <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👥+</div>
-              <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Añadir grupos</span>
-            </button>
             <button onClick={onAddChannel} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
               <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>#️⃣</div>
               <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Añadir canal</span>
+            </button>
+            <button onClick={onEditCommunity} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>⚙️</div>
+              <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Gestión</span>
             </button>
           </div>
         </div>
@@ -600,6 +579,12 @@ export default function CommunityDashboardWA({ community, onBack }) {
   const [memberSearch, setMemberSearch] = useState('')
   const [memberResults, setMemberResults] = useState([])
   const [addingMemberId, setAddingMemberId] = useState(null)
+  const [showEditComm, setShowEditComm] = useState(false)
+  const [editGame, setEditGame] = useState(community.game || '')
+  const [editWebsite, setEditWebsite] = useState(community.website_url || '')
+  const [editDesc, setEditDesc] = useState(community.description || '')
+  const [savingComm, setSavingComm] = useState(false)
+  const [commData, setCommData] = useState(community)
 
   const isAdmin = community.created_by === profile?.id
     || myRole === 'owner' || myRole === 'admin'
@@ -678,6 +663,19 @@ export default function CommunityDashboardWA({ community, onBack }) {
     setAddingMemberId(null)
   }
 
+  async function saveCommSettings() {
+    setSavingComm(true)
+    const { data: updated, error } = await supabase.from('conversations')
+      .update({ game: editGame.trim() || null, website_url: editWebsite.trim() || null, description: editDesc.trim() || null })
+      .eq('id', community.id)
+      .select('id, name, avatar_url, game, website_url, description, created_by')
+      .single()
+    if (error) { alert(`Error: ${error.message}`); setSavingComm(false); return }
+    if (updated) setCommData(updated)
+    setSavingComm(false)
+    setShowEditComm(false)
+  }
+
   const loadData = useCallback(async () => {
     if (!community?.id) return
     const [tRes, mRes] = await Promise.all([
@@ -754,9 +752,9 @@ export default function CommunityDashboardWA({ community, onBack }) {
             </button>
           )}
           {/* Avatar small in header */}
-          <Avatar name={community.name} url={community.avatar_url} size={36} radius="50%" />
+          <Avatar name={commData.name} url={commData.avatar_url} size={36} radius="50%" />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: C.text, fontWeight: 800, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{community.name}</div>
+            <div style={{ color: C.text, fontWeight: 800, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{commData.name}</div>
             <div style={{ color: C.textDim, fontSize: 11 }}>Comunidad · {memberCount} miembro{memberCount !== 1 ? 's' : ''}</div>
           </div>
           {/* 3 dots menu placeholder */}
@@ -765,9 +763,19 @@ export default function CommunityDashboardWA({ community, onBack }) {
 
         {/* Big avatar + name (WhatsApp community header) */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: 12, gap: 6 }}>
-          <Avatar name={community.name} url={community.avatar_url} size={72} radius={16} />
-          <div style={{ color: C.text, fontWeight: 900, fontSize: 20, textAlign: 'center', padding: '0 16px' }}>{community.name}</div>
+          <Avatar name={commData.name} url={commData.avatar_url} size={72} radius={16} />
+          <div style={{ color: C.text, fontWeight: 900, fontSize: 20, textAlign: 'center', padding: '0 16px' }}>{commData.name}</div>
+          {commData.game && (
+            <div style={{ fontSize: 12, color: C.green, fontWeight: 700, background: `${C.green}15`, border: `1px solid ${C.green}33`, borderRadius: 20, padding: '3px 12px' }}>
+              🎮 {commData.game}
+            </div>
+          )}
           <div style={{ color: C.textDim, fontSize: 12 }}>Comunidad · {torneos.length} grupo{torneos.length !== 1 ? 's' : ''}</div>
+          {commData.website_url && (
+            <a href={commData.website_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#3b82f6', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+              🌐 {commData.website_url.replace(/^https?:\/\//, '')}
+            </a>
+          )}
         </div>
 
         {/* Tabs */}
@@ -792,7 +800,7 @@ export default function CommunityDashboardWA({ community, onBack }) {
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {tab === 'comunidad' && (
           <ComunidadTab
-            community={community}
+            community={commData}
             torneos={torneos}
             memberCount={memberCount}
             isAdmin={isAdmin}
@@ -803,6 +811,7 @@ export default function CommunityDashboardWA({ community, onBack }) {
             onAddGroup={() => { setShowAddGroup(true); setGroupSearch(''); setGroupResults([]) }}
             onAddChannel={() => { setShowAddChannel(true); setNewChannelName(''); setNewChannelDesc(''); setNewChannelPrivate(false) }}
             channelRefreshKey={channelRefreshKey}
+            onEditCommunity={() => { setEditGame(commData.game || ''); setEditWebsite(commData.website_url || ''); setEditDesc(commData.description || ''); setShowEditComm(true) }}
           />
         )}
         {tab === 'avisos' && (
@@ -954,6 +963,51 @@ export default function CommunityDashboardWA({ community, onBack }) {
               style={{ padding: '13px', borderRadius: 14, border: 'none', background: newChannelName.trim() ? '#25D366' : C.border, color: newChannelName.trim() ? '#fff' : C.textDim, fontWeight: 800, fontSize: 15, cursor: newChannelName.trim() ? 'pointer' : 'default', transition: 'background 0.2s' }}
             >
               {creatingChannel ? 'Creando…' : 'Crear canal'}
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: Gestión de comunidad */}
+      {showEditComm && createPortal(
+        <div onClick={() => setShowEditComm(false)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.panel, borderRadius: '20px 20px 0 0', padding: '20px 16px 36px', width: '100%', maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.text }}>⚙️ Gestión de comunidad</p>
+              <button onClick={() => setShowEditComm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 20 }}>✕</button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>Juego / Tema</label>
+              <input value={editGame} onChange={e => setEditGame(e.target.value)} maxLength={40}
+                placeholder="ej: eFootball 2025, FC 26, FIFA…"
+                style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontSize: 14, outline: 'none' }} />
+              <span style={{ fontSize: 11, color: C.textDim }}>Se muestra como chip bajo el nombre de la comunidad</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plataforma web / Link</label>
+              <input value={editWebsite} onChange={e => setEditWebsite(e.target.value)} maxLength={200}
+                placeholder="https://mi-comunidad.com"
+                style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontSize: 14, outline: 'none' }} />
+              <span style={{ fontSize: 11, color: C.textDim }}>Link visible en el header de la comunidad</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 11, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>Descripción</label>
+              <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} maxLength={200} rows={3}
+                placeholder="¿De qué trata esta comunidad?"
+                style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontSize: 14, outline: 'none', resize: 'none' }} />
+            </div>
+
+            <button onClick={saveCommSettings} disabled={savingComm} style={{
+              padding: 13, borderRadius: 14, border: 'none',
+              background: '#25D366', color: '#fff',
+              fontWeight: 800, fontSize: 15, cursor: 'pointer',
+              opacity: savingComm ? 0.6 : 1,
+            }}>
+              {savingComm ? 'Guardando…' : '✅ Guardar cambios'}
             </button>
           </div>
         </div>,
