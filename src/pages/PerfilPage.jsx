@@ -1929,7 +1929,7 @@ function GeneralTab() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport }) {
-  const { profile, fetchProfile } = useAuthStore()
+  const { profile, fetchProfile, user } = useAuthStore()
   const [tab, setTab] = useState(initialTab || 'menu')
   const [showBots, setShowBots] = useState(false)
   const [stats, setStats] = useState(null)
@@ -2399,7 +2399,7 @@ export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport
               </div>
 
               {/* ⚡ Panel SuperAdmin — solo visible para el dueño de la plataforma */}
-              {profile?.email === 'bermudezleandro1992@gmail.com' && profile?.role !== 'superadmin' && (
+              {(profile?.email === 'bermudezleandro1992@gmail.com' || user?.email === 'bermudezleandro1992@gmail.com') && profile?.role !== 'superadmin' && (
                 <div style={{ background: '#00e67610', border: '1px solid #00e67640', borderRadius: 0, marginBottom: 8 }}>
                   <button onClick={async () => {
                     await supabase.from('users').update({ role: 'superadmin' }).eq('id', profile.id)
