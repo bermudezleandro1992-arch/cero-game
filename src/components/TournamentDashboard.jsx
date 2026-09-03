@@ -294,7 +294,7 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
         <StatCard icon="👥" label="Participantes" value={`${data.participant_count}${data.max_participants ? ` / ${data.max_participants}` : ''}`} accent={fillPct >= 90 ? '#f59e0b' : undefined} />
-        <StatCard icon="📋" label="Grupos" value={data.groups?.length || '—'} accent={data.groups?.length ? C.green : undefined} />
+        {(data.groups?.length ?? 0) > 0 && <StatCard icon="📋" label="Grupos" value={data.groups.length} accent={C.green} />}
         {data.open_disputes > 0 && <StatCard icon="⚠️" label="Disputas" value={data.open_disputes} accent="#ef4444" />}
         {data.format && <StatCard icon="🔀" label="Formato" value={data.format} />}
       </div>
@@ -939,7 +939,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
         )}
 
         {activeTab === 'chat' && (
-          <TournamentChat tournamentId={tournamentId} profile={profile} isAdmin={isAdmin} />
+          <TournamentChat tournamentId={tournamentId} profile={profile} isAdmin={isAdmin} tournamentStatus={data?.status} />
         )}
 
       </div>

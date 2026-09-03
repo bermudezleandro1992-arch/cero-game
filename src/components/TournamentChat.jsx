@@ -24,7 +24,7 @@ function Avatar({ p, size = 30 }) {
 
 const stripQ = s => (typeof s === 'string' ? s.replace(/^"+|"+$/g, '') : s)
 
-export default function TournamentChat({ tournamentId: rawTournamentId, profile, isAdmin }) {
+export default function TournamentChat({ tournamentId: rawTournamentId, profile, isAdmin, tournamentStatus }) {
   const tournamentId = stripQ(rawTournamentId)
   const [messages,  setMessages]  = useState([])
   const [text,      setText]      = useState('')
@@ -300,27 +300,34 @@ export default function TournamentChat({ tournamentId: rawTournamentId, profile,
       )}
 
       {/* Input */}
-      <div style={{ borderTop: `1px solid ${C.border}`, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input
-          ref={inputRef}
-          value={text}
-          onChange={handleInputChange}
-          onKeyDown={handleKey}
-          placeholder="Escribí un mensaje… (@nombre para mencionar)"
-          style={{
-            flex: 1, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 24,
-            padding: '10px 16px', color: C.text, fontSize: 14, outline: 'none',
-          }}
-        />
-        <button onClick={handleSend} disabled={!text.trim() || sending} style={{
-          width: 40, height: 40, borderRadius: '50%', border: 'none', cursor: text.trim() ? 'pointer' : 'default',
-          background: text.trim() ? C.green : C.panel2, color: text.trim() ? '#000' : C.textDim,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          transition: 'background .15s',
-        }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
-        </button>
-      </div>
+      {tournamentStatus === 'finalizado' ? (
+        <div style={{ borderTop: `1px solid ${C.border}`, padding: '14px 16px', background: C.panel2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <span style={{ fontSize: 14 }}>🏆</span>
+          <span style={{ color: C.textDim, fontSize: 13, fontWeight: 600 }}>Torneo finalizado · Chat cerrado</span>
+        </div>
+      ) : (
+        <div style={{ borderTop: `1px solid ${C.border}`, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            ref={inputRef}
+            value={text}
+            onChange={handleInputChange}
+            onKeyDown={handleKey}
+            placeholder="Escribí un mensaje… (@nombre para mencionar)"
+            style={{
+              flex: 1, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 24,
+              padding: '10px 16px', color: C.text, fontSize: 14, outline: 'none',
+            }}
+          />
+          <button onClick={handleSend} disabled={!text.trim() || sending} style={{
+            width: 40, height: 40, borderRadius: '50%', border: 'none', cursor: text.trim() ? 'pointer' : 'default',
+            background: text.trim() ? C.green : C.panel2, color: text.trim() ? '#000' : C.textDim,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            transition: 'background .15s',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+          </button>
+        </div>
+      )}
 
       {/* Context menu (admin only) */}
       {ctxMenu && isAdmin && createPortal(
