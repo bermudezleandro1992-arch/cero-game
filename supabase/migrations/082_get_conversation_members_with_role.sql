@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION public.get_conversation_members(p_conversation_ids uu
 RETURNS TABLE(conversation_id uuid, user_id uuid, role text, joined_at timestamptz)
 LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public
 AS $$
-  SELECT conversation_id, user_id, COALESCE(role, 'member') AS role, created_at AS joined_at
+  SELECT conversation_id, user_id, COALESCE(role, 'member') AS role, joined_at
   FROM public.conversation_members
   WHERE conversation_id = ANY(p_conversation_ids);
 $$;
