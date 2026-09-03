@@ -461,6 +461,42 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
           Iniciar sorteo en vivo
         </button>
       )}
+
+      {isAdmin && (
+        <ThirdPlaceToggle tournamentId={tournamentId} value={!!data.has_third_place} onToggle={onDrawComplete} />
+      )}
+    </div>
+  )
+}
+
+function ThirdPlaceToggle({ tournamentId, value, onToggle }) {
+  const [saving, setSaving] = useState(false)
+  async function toggle() {
+    setSaving(true)
+    await supabase.from('conversations').update({ has_third_place: !value }).eq('id', tournamentId)
+    setSaving(false)
+    onToggle?.()
+  }
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px',
+    }}>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>🥉 Partido 3er/4to lugar</div>
+        <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>Habilitar partido por el tercer puesto</div>
+      </div>
+      <button onClick={toggle} disabled={saving} style={{
+        width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+        background: value ? C.green : C.border, transition: 'background 0.2s',
+        position: 'relative', flexShrink: 0,
+      }}>
+        <span style={{
+          position: 'absolute', top: 3, left: value ? 22 : 3,
+          width: 18, height: 18, borderRadius: '50%', background: '#fff',
+          transition: 'left 0.2s', display: 'block',
+        }} />
+      </button>
     </div>
   )
 }
@@ -846,7 +882,6 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
   async function handleRandomTeams() {
     if (!isAdmin || !data) return
     const teamSize = data.team_size || 2
-    // Fetch all current participants
 
     const { data: members } = await supabase
       .from('conversation_members')
@@ -855,21 +890,86 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       .neq('role', 'owner')
     if (!members?.length) { alert('No hay participantes inscriptos.'); return }
 
-    // Shuffle array
+    // Form random teams
     const shuffled = [...members].sort(() => Math.random() - 0.5)
     const teams = []
     for (let i = 0; i < shuffled.length; i += teamSize) {
       teams.push(shuffled.slice(i, i + teamSize))
     }
 
-    // Post result as bot message in tournament chat
+    const teamCount = teams.length
+    // Find next power of 2 >= teamCount
+    let slots = 1
+    while (slots < teamCount) slots *= 2
+    const rounds = Math.log2(slots)
+
+    // Build round-1 matches (team vs team), byes get null opponent
+    const matches = []
+    let matchNum = 1
+    for (let i = 0; i < slots; i += 2) {
+      const t1 = teams[i]
+      const t2 = teams[i + 1] // may be undefined (bye)
+      const name1 = t1 ? t1.map(m => m.users?.display_name || m.users?.username || 'Jugador').join(' + ') : null
+      const name2 = t2 ? t2.map(m => m.users?.display_name || m.users?.username || 'Jugador').join(' + ') : null
+      matches.push({
+        tournament_id: tournamentId,
+        round_number: 1,
+        match_number: matchNum++,
+        player1_id: t1?.[0]?.user_id ?? null,
+        player2_id: t2?.[0]?.user_id ?? null,
+        player1_name: name1,
+        player2_name: name2,
+        status: 'pending',
+      })
+    }
+
+    // Placeholder matches for subsequent rounds
+    for (let r = 2; r <= rounds; r++) {
+      const matchesInRound = slots / Math.pow(2, r)
+      for (let m = 1; m <= matchesInRound; m++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round_number: r,
+          match_number: m,
+          player1_id: null,
+          player2_id: null,
+          player1_name: null,
+          player2_name: null,
+          status: 'pending',
+        })
+      }
+    }
+
+    // 3rd/4th place match in a separate round (rounds + 1, match 1)
+    if (data.has_third_place) {
+      matches.push({
+        tournament_id: tournamentId,
+        round_number: rounds + 1,
+        match_number: 1,
+        player1_id: null,
+        player2_id: null,
+        player1_name: null,
+        player2_name: null,
+        status: 'pending',
+        phase: 'third_place',
+      })
+    }
+
+    // Delete existing bracket matches and insert new ones
+    await supabase.from('tournament_matches').delete().eq('tournament_id', tournamentId)
+    const { error: insErr } = await supabase.from('tournament_matches').insert(matches)
+    if (insErr) { alert('Error creando el bracket: ' + insErr.message); return }
+
+    // Update tournament status to en_curso
+    await supabase.from('conversations').update({ status: 'en_curso' }).eq('id', tournamentId)
+
+    // Post bot message with team assignments
     let msg = `⚔️ SORTEO DE PAREJAS — ${data.name}\n\n`
     teams.forEach((team, i) => {
       const names = team.map(m => m.users?.display_name || m.users?.username || 'Jugador').join(' + ')
       msg += `🏅 Equipo ${i + 1}: ${names}\n`
     })
-
-    msg += `\n👥 ${teams.length} equipos de ${teamSize} jugadores`
+    msg += `\n👥 ${teams.length} equipos · ${rounds} rondas · ${matches.length} partidos`
 
     await supabase.from('messages').insert({
       conversation_id: tournamentId,
@@ -878,7 +978,8 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       type: 'bot_fixture',
     })
 
-    alert(`✅ Sorteo realizado: ${teams.length} equipos formados`)
+    alert(`✅ Bracket creado: ${teams.length} equipos, ${rounds} rondas`)
+    onDrawComplete?.()
   }
 
   if (loading) return (

@@ -86,7 +86,7 @@ async function fetchBracket(tournamentId) {
   // 2. Partidos del bracket (no de grupos)
   const { data: matches } = await supabase
     .from('tournament_matches')
-    .select('id, round_number, match_number, phase, player1_id, player2_id, score1, score2, winner_id, status, photo_url, loser_confirmed')
+    .select('id, round_number, match_number, phase, player1_id, player2_id, player1_name, player2_name, score1, score2, winner_id, status, photo_url, loser_confirmed')
     .eq('tournament_id', tournamentId)
     .or('phase.neq.groups,phase.is.null')
     .order('round_number').order('match_number')
@@ -125,10 +125,17 @@ function computeLayout(matches, { CARD_W, CARD_H, COL_GAP, ROW_GAP }) {
   })
   const allRoundNums = Object.keys(roundMap).map(Number).sort((a, b) => a - b)
 
-  // Detectar partido de 3°/4° lugar: últimas dos rondas tienen 1 partido cada una
+  // Detectar partido de 3°/4° lugar: por phase === 'third_place' o por heurística posicional
   let thirdPlaceRoundNum = null
   const roundNums = [...allRoundNums]
-  if (roundNums.length >= 2) {
+
+  // Prefer explicit phase tag
+  const thirdByPhase = allRoundNums.find(rn => roundMap[rn].some(m => m.phase === 'third_place'))
+  if (thirdByPhase != null) {
+    thirdPlaceRoundNum = thirdByPhase
+    roundNums.splice(roundNums.indexOf(thirdByPhase), 1)
+  } else if (roundNums.length >= 2) {
+    // Fallback heuristic: last two rounds each have exactly 1 match
     const lastRn = roundNums[roundNums.length - 1]
     const prevRn = roundNums[roundNums.length - 2]
     if (roundMap[lastRn].length === 1 && roundMap[prevRn].length === 1) {
@@ -158,13 +165,17 @@ function computeLayout(matches, { CARD_W, CARD_H, COL_GAP, ROW_GAP }) {
     return { roundNum: rn, cards, x, phaseLabel }
   })
 
-  // Agregar partido 3°/4° lugar en la misma columna que la Final, DEBAJO de ella
+  // Agregar partido 3°/4° lugar en columna NUEVA a la derecha de la Final
   if (thirdPlaceRoundNum !== null) {
     const finalRound = rounds[rounds.length - 1]
     const finalCard  = finalRound?.cards[0]
     const thirdMs    = roundMap[thirdPlaceRoundNum]
-    const thirdX     = finalCard ? finalCard.x : PADDING + (roundNums.length - 1) * (CARD_W + COL_GAP)
-    const thirdY     = finalCard ? finalCard.y + CARD_H + 36 : PADDING
+    // Column to the right of the final
+    const thirdX = PADDING + roundNums.length * (CARD_W + COL_GAP)
+    // Vertically centered near the final card
+    const thirdY = finalCard
+      ? finalCard.y + (CARD_H - CARD_H) / 2  // same top as final
+      : PADDING
     rounds.push({
       roundNum: thirdPlaceRoundNum,
       cards: [{ match: thirdMs[0], x: thirdX, y: thirdY, cellH: CARD_H }],
@@ -174,10 +185,10 @@ function computeLayout(matches, { CARD_W, CARD_H, COL_GAP, ROW_GAP }) {
     })
   }
 
-  const totalW = PADDING + roundNums.length * (CARD_W + COL_GAP) - COL_GAP + PADDING
-  const thirdCard = thirdPlaceRoundNum ? rounds[rounds.length - 1]?.cards[0] : null
+  const mainW  = PADDING + roundNums.length * (CARD_W + COL_GAP) - COL_GAP + PADDING
+  const totalW = thirdPlaceRoundNum !== null ? mainW + CARD_W + COL_GAP + PADDING : mainW
   const mainH  = PADDING * 2 + firstCount * slotH
-  const totalH = thirdCard ? Math.max(mainH, thirdCard.y + CARD_H + PADDING) : mainH
+  const totalH = mainH
 
   return { rounds, totalW, totalH }
 }
@@ -193,7 +204,8 @@ function MatchCard({ match, x, y, cardW, cardH, scale = 1, onClick }) {
   const borderColor = isFinal ? `${C.green}66` : `${C.border}`
   const fs = (base) => Math.round(base * scale)
 
-  function PlayerRow({ profile, score, isWinner, isEmpty }) {
+  function PlayerRow({ profile, score, isWinner, isEmpty, teamName }) {
+    const displayName = teamName || name(profile)
     return (
       <div style={{
         display: 'flex', alignItems: 'center', gap: scale < 0.9 ? 4 : 6,
@@ -205,13 +217,13 @@ function MatchCard({ match, x, y, cardW, cardH, scale = 1, onClick }) {
         {isEmpty
           ? <span style={{ fontSize: fs(10), color: C.textDim, fontStyle: 'italic' }}>Por definir</span>
           : <>
-              <Avatar profile={profile} size={fs(20)} />
+              {!teamName && <Avatar profile={profile} size={fs(20)} />}
               <span style={{
                 flex: 1, fontSize: fs(11), fontWeight: isWinner ? 800 : 600,
                 color: isWinner ? C.green : C.text,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                {name(profile)}
+                {displayName}
               </span>
               {score != null && (
                 <span style={{
@@ -270,9 +282,9 @@ function MatchCard({ match, x, y, cardW, cardH, scale = 1, onClick }) {
             </span>
           </div>
 
-          <PlayerRow profile={match.player1} score={match.score1} isWinner={winner1} isEmpty={!match.player1} />
+          <PlayerRow profile={match.player1} score={match.score1} isWinner={winner1} isEmpty={!match.player1 && !match.player1_name} teamName={match.player1_name} />
           <div style={{ height: 1, background: C.border, flexShrink: 0 }} />
-          <PlayerRow profile={match.player2} score={match.score2} isWinner={winner2} isEmpty={!match.player2} />
+          <PlayerRow profile={match.player2} score={match.score2} isWinner={winner2} isEmpty={!match.player2 && !match.player2_name} teamName={match.player2_name} />
         </div>
       </foreignObject>
     </g>
@@ -552,6 +564,45 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
       p_match_id: finishedMatch.id,
     })
     if (error) console.error('advanceBracket RPC error:', error)
+
+    // Propagate team name to next round slot (guerra/coop mode)
+    const p1name = finishedMatch.player1_name
+    const p2name = finishedMatch.player2_name
+    if (!p1name && !p2name) return // individual mode — no propagation needed
+
+    const winnerIsP1 = finishedMatch.winner_id === finishedMatch.player1_id
+    const winnerTeamName = winnerIsP1 ? p1name : p2name
+    const loserTeamName  = winnerIsP1 ? p2name : p1name
+
+    if (winnerTeamName) {
+      const nextRound = finishedMatch.round_number + 1
+      const nextMatchNum = Math.ceil(finishedMatch.match_number / 2)
+      const isOddMatch = finishedMatch.match_number % 2 === 1
+      const updateField = isOddMatch ? 'player1_name' : 'player2_name'
+      await supabase
+        .from('tournament_matches')
+        .update({ [updateField]: winnerTeamName })
+        .eq('tournament_id', tournamentId)
+        .eq('round_number', nextRound)
+        .eq('match_number', nextMatchNum)
+    }
+
+    // Propagate loser to 3rd place match (phase = third_place)
+    if (loserTeamName) {
+      const { data: thirdMatch } = await supabase
+        .from('tournament_matches')
+        .select('id, player1_name, player2_name')
+        .eq('tournament_id', tournamentId)
+        .eq('phase', 'third_place')
+        .single()
+      if (thirdMatch) {
+        const slotField = thirdMatch.player1_name ? 'player2_name' : 'player1_name'
+        await supabase
+          .from('tournament_matches')
+          .update({ [slotField]: loserTeamName })
+          .eq('id', thirdMatch.id)
+      }
+    }
   }
 
   async function handleResetMatch(match, reason) {
@@ -840,14 +891,14 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
             background: C.bg, paddingTop: 8, paddingBottom: 6,
             borderBottom: `1px solid ${C.border}22`,
           }}>
-            {rounds.filter(r => !r.isThirdPlace).map(r => (
+            {rounds.map(r => (
               <div key={r.roundNum} style={{ width: LC.CARD_W, marginRight: LC.COL_GAP, flexShrink: 0, textAlign: 'center' }}>
                 <span style={{
                   display: 'inline-block', padding: '3px 10px', borderRadius: 20,
                   fontSize: 11, fontWeight: 700, letterSpacing: '0.5px',
-                  background: r.phaseLabel?.includes('Final') ? `${C.green}22` : C.panel2,
-                  color: r.phaseLabel?.includes('Final') ? C.green : C.textDim,
-                  border: `1px solid ${r.phaseLabel?.includes('Final') ? `${C.green}44` : C.border}`,
+                  background: r.isThirdPlace ? `#cd7f3222` : r.phaseLabel?.includes('Final') ? `${C.green}22` : C.panel2,
+                  color: r.isThirdPlace ? '#cd7f32' : r.phaseLabel?.includes('Final') ? C.green : C.textDim,
+                  border: `1px solid ${r.isThirdPlace ? '#cd7f3244' : r.phaseLabel?.includes('Final') ? `${C.green}44` : C.border}`,
                 }}>
                   {r.phaseLabel}
                 </span>
