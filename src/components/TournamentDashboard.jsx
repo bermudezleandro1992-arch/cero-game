@@ -274,7 +274,8 @@ function TabBar({ tabs, active, onChange, visible }) {
 }
 
 // ── TORNEO: OverviewTab ───────────────────────────────────────────────────────
-function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin, onFillBots, onStartSorteo, onRandomTeams, userClan, onNeedClan }) {
+function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin, onFillBots, onStartSorteo, onRandomTeams }) {
+
   const fillPct = data.max_participants
     ? Math.round((data.participant_count / data.max_participants) * 100)
     : null
@@ -845,6 +846,8 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
   async function handleRandomTeams() {
     if (!isAdmin || !data) return
     const teamSize = data.team_size || 2
+    // Fetch all current participants
+
     const { data: members } = await supabase
       .from('conversation_members')
       .select('user_id, users(display_name, username)')
@@ -852,17 +855,20 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       .neq('role', 'owner')
     if (!members?.length) { alert('No hay participantes inscriptos.'); return }
 
+    // Shuffle array
     const shuffled = [...members].sort(() => Math.random() - 0.5)
     const teams = []
     for (let i = 0; i < shuffled.length; i += teamSize) {
-      const slice = shuffled.slice(i, i + teamSize)
-      const name = slice.map(m => m.users?.display_name || m.users?.username || 'Jugador').join(' + ')
-      teams.push(name)
+      teams.push(shuffled.slice(i, i + teamSize))
     }
 
-    // Post summary message in chat
-    let msg = `⚔️ SORTEO DE EQUIPOS — ${data.name}\n\n`
-    teams.forEach((name, i) => { msg += `🏅 Equipo ${i + 1}: ${name}\n` })
+    // Post result as bot message in tournament chat
+    let msg = `⚔️ SORTEO DE PAREJAS — ${data.name}\n\n`
+    teams.forEach((team, i) => {
+      const names = team.map(m => m.users?.display_name || m.users?.username || 'Jugador').join(' + ')
+      msg += `🏅 Equipo ${i + 1}: ${names}\n`
+    })
+
     msg += `\n👥 ${teams.length} equipos de ${teamSize} jugadores`
 
     await supabase.from('messages').insert({
@@ -871,28 +877,6 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       content: msg,
       type: 'bot_fixture',
     })
-
-    // Generate bracket with team names
-    if (teams.length >= 2) {
-      const rounds = Math.ceil(Math.log2(teams.length))
-      const bracketEntries = []
-      for (let i = 0; i < teams.length; i += 2) {
-        const p1 = teams[i]
-        const p2 = teams[i + 1] ?? 'BYE'
-        bracketEntries.push({
-          tournament_id: tournamentId,
-          round: 1,
-          position: Math.floor(i / 2) + 1,
-          player1_name: p1,
-          player2_name: p2,
-        })
-      }
-      // Try to insert into tournament_brackets if it exists
-      const { error: bErr } = await supabase.from('tournament_brackets').insert(bracketEntries)
-      if (bErr && !bErr.message.includes('does not exist')) {
-        console.warn('Bracket insert error:', bErr.message)
-      }
-    }
 
     alert(`✅ Sorteo realizado: ${teams.length} equipos formados`)
   }
@@ -1034,8 +1018,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
                 onFillBots={showBotButton ? handleFillBots : null}
                 onStartSorteo={isAdmin && data?.status === 'inscripcion' && data?.participant_count >= data?.max_participants ? handleStartSorteo : null}
                 onRandomTeams={isAdmin && (data?.team_size || 1) > 1 ? handleRandomTeams : null}
-                userClan={userClan}
-                onNeedClan={() => { if (onBack) onBack(); window.location.hash = '#perfil-clan' }}
+
               />
         )}
 
