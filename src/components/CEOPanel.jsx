@@ -1207,6 +1207,7 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [deletingCommunity, setDeletingCommunity] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [clearingChat, setClearingChat] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -1375,6 +1376,36 @@ function ConfiguracionTab({ communityId, communityName, toast, onCommunityDelete
       }}>
         {saving ? 'Guardando...' : 'Guardar cambios'}
       </button>
+
+      {/* ── Limpiar chat ── */}
+      <div style={{ marginTop: 20, borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+        <div style={{ color: C.text, fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🧹 Limpiar chat general</div>
+        <div style={{ color: C.textDim, fontSize: 12, lineHeight: 1.6, marginBottom: 12 }}>
+          Oculta todos los mensajes actuales del canal General para todos los miembros. No elimina los mensajes, los archiva.
+        </div>
+        <button
+          disabled={clearingChat}
+          onClick={async () => {
+            if (!window.confirm('¿Limpiar el chat general para todos los miembros?')) return
+            setClearingChat(true)
+            const now = new Date().toISOString()
+            await supabase.from('conversation_members')
+              .update({ cleared_at: now })
+              .eq('conversation_id', communityId)
+            setClearingChat(false)
+            toast('Chat limpiado ✓', 'ok')
+          }}
+          style={{
+            width: '100%', padding: '11px 16px',
+            background: clearingChat ? C.border : '#f59e0b22',
+            color: clearingChat ? C.textDim : '#f59e0b',
+            border: `1px solid #f59e0b44`, borderRadius: 10,
+            fontWeight: 700, fontSize: 14, cursor: clearingChat ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {clearingChat ? 'Limpiando...' : '🧹 Limpiar chat para todos'}
+        </button>
+      </div>
 
       {/* ── Zona de peligro ── */}
       <div style={{ marginTop: 24, borderTop: `1px solid #ef444430`, paddingTop: 20 }}>
