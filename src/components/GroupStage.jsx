@@ -227,12 +227,12 @@ function MatchCard({ match, currentUserId, isAdmin, onReport, onApprove }) {
       {/* Jugadores + marcador */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {/* Jugador 1 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 0 }}>
           {avatar(match.player1)}
           <span style={{
             fontSize: 11, fontWeight: 600, color: C.text,
             textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap', maxWidth: 80,
+            whiteSpace: 'nowrap', width: '100%',
           }}>
             {match.player1?.display_name || match.player1?.username || '?'}
           </span>
@@ -263,12 +263,12 @@ function MatchCard({ match, currentUserId, isAdmin, onReport, onApprove }) {
         </div>
 
         {/* Jugador 2 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 0 }}>
           {avatar(match.player2)}
           <span style={{
             fontSize: 11, fontWeight: 600, color: C.text,
             textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap', maxWidth: 80,
+            whiteSpace: 'nowrap', width: '100%',
           }}>
             {match.player2?.display_name || match.player2?.username || '?'}
           </span>
