@@ -795,7 +795,7 @@ export default function App() {
   const isStaff = ['superadmin','admin','moderador'].includes(profile?.role)
 
   return (
-    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', fontFamily: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
+    <div onContextMenu={e => e.preventDefault()} style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden', fontFamily: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
       <UpdateBanner />
 
       {incomingCall && (

@@ -1936,6 +1936,7 @@ export default function ChatPage({ onBack }) {
                     }}
                     onMouseEnter={() => !selectMode && setHoveredMsg(msg.id)}
                     onMouseLeave={() => { setHoveredMsg(null) }}
+                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); if (!selectMode) setLongPressMsg(msg) }}
                     onMouseDown={() => { if (!selectMode) longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 500) }}
                     onMouseUp={() => clearTimeout(longPressTimer.current)}
                     onTouchStart={() => { if (!selectMode) longPressTimer.current = setTimeout(() => setLongPressMsg(msg), 500) }}
