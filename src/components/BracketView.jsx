@@ -86,7 +86,7 @@ async function fetchBracket(tournamentId) {
   // 2. Partidos del bracket (no de grupos)
   const { data: matches } = await supabase
     .from('tournament_matches')
-    .select('id, round_number, match_number, phase, player1_id, player2_id, score1, score2, winner_id, status, photo_url, loser_confirmed')
+    .select('id, round_number, match_number, phase, player1_id, player2_id, player1_name, player2_name, score1, score2, winner_id, status, photo_url, loser_confirmed')
     .eq('tournament_id', tournamentId)
     .or('phase.neq.groups,phase.is.null')
     .order('round_number').order('match_number')
@@ -193,7 +193,8 @@ function MatchCard({ match, x, y, cardW, cardH, scale = 1, onClick }) {
   const borderColor = isFinal ? `${C.green}66` : `${C.border}`
   const fs = (base) => Math.round(base * scale)
 
-  function PlayerRow({ profile, score, isWinner, isEmpty }) {
+  function PlayerRow({ profile, score, isWinner, isEmpty, teamName }) {
+    const displayName = teamName || name(profile)
     return (
       <div style={{
         display: 'flex', alignItems: 'center', gap: scale < 0.9 ? 4 : 6,
@@ -205,13 +206,13 @@ function MatchCard({ match, x, y, cardW, cardH, scale = 1, onClick }) {
         {isEmpty
           ? <span style={{ fontSize: fs(10), color: C.textDim, fontStyle: 'italic' }}>Por definir</span>
           : <>
-              <Avatar profile={profile} size={fs(20)} />
+              {!teamName && <Avatar profile={profile} size={fs(20)} />}
               <span style={{
                 flex: 1, fontSize: fs(11), fontWeight: isWinner ? 800 : 600,
                 color: isWinner ? C.green : C.text,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                {name(profile)}
+                {displayName}
               </span>
               {score != null && (
                 <span style={{
@@ -270,9 +271,9 @@ function MatchCard({ match, x, y, cardW, cardH, scale = 1, onClick }) {
             </span>
           </div>
 
-          <PlayerRow profile={match.player1} score={match.score1} isWinner={winner1} isEmpty={!match.player1} />
+          <PlayerRow profile={match.player1} score={match.score1} isWinner={winner1} isEmpty={!match.player1 && !match.player1_name} teamName={match.player1_name} />
           <div style={{ height: 1, background: C.border, flexShrink: 0 }} />
-          <PlayerRow profile={match.player2} score={match.score2} isWinner={winner2} isEmpty={!match.player2} />
+          <PlayerRow profile={match.player2} score={match.score2} isWinner={winner2} isEmpty={!match.player2 && !match.player2_name} teamName={match.player2_name} />
         </div>
       </foreignObject>
     </g>
@@ -552,6 +553,27 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
       p_match_id: finishedMatch.id,
     })
     if (error) console.error('advanceBracket RPC error:', error)
+
+    // Propagate team name to next round slot (guerra/coop mode)
+    const p1name = finishedMatch.player1_name
+    const p2name = finishedMatch.player2_name
+    if (!p1name && !p2name) return // individual mode — no propagation needed
+
+    const winnerIsP1 = finishedMatch.winner_id === finishedMatch.player1_id
+    const winnerTeamName = winnerIsP1 ? p1name : p2name
+    if (!winnerTeamName) return
+
+    const nextRound = finishedMatch.round_number + 1
+    const nextMatchNum = Math.ceil(finishedMatch.match_number / 2)
+    const isOddMatch = finishedMatch.match_number % 2 === 1
+    const updateField = isOddMatch ? 'player1_name' : 'player2_name'
+
+    await supabase
+      .from('tournament_matches')
+      .update({ [updateField]: winnerTeamName })
+      .eq('tournament_id', tournamentId)
+      .eq('round_number', nextRound)
+      .eq('match_number', nextMatchNum)
   }
 
   async function handleResetMatch(match, reason) {
