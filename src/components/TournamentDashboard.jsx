@@ -274,7 +274,7 @@ function TabBar({ tabs, active, onChange, visible }) {
 }
 
 // ── TORNEO: OverviewTab ───────────────────────────────────────────────────────
-function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin, onFillBots, onStartSorteo, onRandomTeams }) {
+function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin, onFillBots, onStartSorteo, onRandomTeams, userClan, onNeedClan }) {
 
   const fillPct = data.max_participants
     ? Math.round((data.participant_count / data.max_participants) * 100)
