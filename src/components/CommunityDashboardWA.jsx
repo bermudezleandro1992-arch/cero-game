@@ -516,7 +516,7 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
         </div>
       )}
 
-      {allTorneos.length === 0 && otros.length === 0 && !avisos && (
+      {allTorneos.length === 0 && otros.length === 0 && (
         <div style={{ textAlign: 'center', padding: '48px 24px', color: C.textDim }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>👥</div>
           <div style={{ fontSize: 13 }}>Los grupos añadidos a la comunidad aparecerán aquí.</div>
