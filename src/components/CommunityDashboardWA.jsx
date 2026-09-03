@@ -425,7 +425,7 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
 }
 
 // ── ComunidadTab — estructura y grupos ───────────────────────────────────────
-function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpenTournament, onChangeToAvisos, onAddMember, onAddGroup }) {
+function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpenTournament, onChangeToAvisos, onAddMember, onAddGroup, onAddChannel }) {
   const { setActiveConversation } = useChatStore()
   const [channels, setChannels] = useState([])
 
@@ -565,6 +565,10 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
               <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👥+</div>
               <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Añadir grupos</span>
             </button>
+            <button onClick={onAddChannel} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>#️⃣</div>
+              <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Añadir canal</span>
+            </button>
           </div>
         </div>
       )}
@@ -586,6 +590,11 @@ export default function CommunityDashboardWA({ community, onBack }) {
   const [showAddGroup, setShowAddGroup] = useState(false)
   const [groupSearch, setGroupSearch] = useState('')
   const [groupResults, setGroupResults] = useState([])
+  const [showAddChannel, setShowAddChannel] = useState(false)
+  const [newChannelName, setNewChannelName] = useState('')
+  const [newChannelDesc, setNewChannelDesc] = useState('')
+  const [newChannelPrivate, setNewChannelPrivate] = useState(false)
+  const [creatingChannel, setCreatingChannel] = useState(false)
   const [addingGroupId, setAddingGroupId] = useState(null)
   const [memberSearch, setMemberSearch] = useState('')
   const [memberResults, setMemberResults] = useState([])
@@ -630,6 +639,30 @@ export default function CommunityDashboardWA({ community, onBack }) {
     if (error) { alert(`Error al agregar grupo: ${error.message}`) }
     else { loadData(); setGroupResults(r => r.filter(g => g.id !== groupId)) }
     setAddingGroupId(null)
+  }
+
+  async function createChannel() {
+    if (!newChannelName.trim()) return
+    setCreatingChannel(true)
+    const { data: conv, error } = await supabase.from('conversations').insert({
+      name: newChannelName.trim(),
+      description: newChannelDesc.trim() || null,
+      type: 'channel',
+      community_id: community.id,
+      created_by: profile?.id,
+      is_private: newChannelPrivate,
+    }).select('id').single()
+    if (error) { alert(`Error: ${error.message}`); setCreatingChannel(false); return }
+    // add creator as member/admin
+    if (conv?.id) {
+      await supabase.from('conversation_members').insert({ conversation_id: conv.id, user_id: profile.id, role: 'admin' })
+    }
+    setCreatingChannel(false)
+    setShowAddChannel(false)
+    setNewChannelName('')
+    setNewChannelDesc('')
+    setNewChannelPrivate(false)
+    loadData()
   }
 
   async function addMemberToComm(userId) {
@@ -698,6 +731,7 @@ export default function CommunityDashboardWA({ community, onBack }) {
             tournamentId={viewingTournament.id}
             profile={profile}
             isAdmin={isAdmin || viewingTournament.created_by === profile?.id}
+            showBotButton={isAdmin || viewingTournament.created_by === profile?.id}
             onBack={() => { setViewingTournament(null); loadData() }}
             communityId={community.id}
           />
@@ -765,6 +799,7 @@ export default function CommunityDashboardWA({ community, onBack }) {
             onChangeToAvisos={() => setTab('avisos')}
             onAddMember={() => { setShowAddMember(true); setMemberSearch(''); setMemberResults([]) }}
             onAddGroup={() => { setShowAddGroup(true); setGroupSearch(''); setGroupResults([]) }}
+            onAddChannel={() => { setShowAddChannel(true); setNewChannelName(''); setNewChannelDesc(''); setNewChannelPrivate(false) }}
           />
         )}
         {tab === 'avisos' && (
@@ -864,6 +899,59 @@ export default function CommunityDashboardWA({ community, onBack }) {
                 <p style={{ margin: 0, textAlign: 'center', color: C.textDim, fontSize: 13, padding: 16 }}>No se encontraron grupos</p>
               )}
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: Añadir canal */}
+      {showAddChannel && createPortal(
+        <div onClick={() => setShowAddChannel(false)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.panel, borderRadius: '20px 20px 0 0', padding: '20px 16px 32px', width: '100%', maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.text }}>#️⃣ Nuevo canal</p>
+              <button onClick={() => setShowAddChannel(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 20 }}>✕</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 }}>Nombre del canal</label>
+              <input
+                autoFocus
+                value={newChannelName}
+                onChange={e => setNewChannelName(e.target.value)}
+                placeholder="ej: general, anuncios, resultados…"
+                maxLength={40}
+                style={{ padding: '10px 14px', borderRadius: 12, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontSize: 14, outline: 'none' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 }}>Descripción (opcional)</label>
+              <input
+                value={newChannelDesc}
+                onChange={e => setNewChannelDesc(e.target.value)}
+                placeholder="Para qué sirve este canal…"
+                maxLength={120}
+                style={{ padding: '10px 14px', borderRadius: 12, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontSize: 14, outline: 'none' }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 12, background: C.panel2, border: `1px solid ${C.border}` }}>
+              <div>
+                <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>🔒 Canal privado</div>
+                <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>Solo admins y organizadores pueden ver este canal</div>
+              </div>
+              <button
+                onClick={() => setNewChannelPrivate(p => !p)}
+                style={{ width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', background: newChannelPrivate ? '#25D366' : C.border, transition: 'background 0.2s', position: 'relative', flexShrink: 0 }}
+              >
+                <span style={{ position: 'absolute', top: 2, left: newChannelPrivate ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', display: 'block' }} />
+              </button>
+            </div>
+            <button
+              onClick={createChannel}
+              disabled={!newChannelName.trim() || creatingChannel}
+              style={{ padding: '13px', borderRadius: 14, border: 'none', background: newChannelName.trim() ? '#25D366' : C.border, color: newChannelName.trim() ? '#fff' : C.textDim, fontWeight: 800, fontSize: 15, cursor: newChannelName.trim() ? 'pointer' : 'default', transition: 'background 0.2s' }}
+            >
+              {creatingChannel ? 'Creando…' : 'Crear canal'}
+            </button>
           </div>
         </div>,
         document.body
