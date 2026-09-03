@@ -807,9 +807,39 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
           )}
         </div>
 
-        {/* Encabezados de ronda */}
-        <div style={{ overflowX: 'auto', flexShrink: 0, scrollbarWidth: 'none' }}>
-          <div style={{ display: 'flex', paddingLeft: PADDING, minWidth: totalW }}>
+        {/* SVG del bracket + encabezados — mismo contenedor para sincronizar scroll horizontal */}
+        <div
+          ref={scrollRef}
+          style={{
+            overflowX: 'auto', overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            flex: 1,
+            minHeight: Math.min(totalH + 48, 520),
+            position: 'relative',
+          }}
+          onMouseDown={e => {
+            if (e.target.closest('button, input, textarea, a')) return
+            const el = scrollRef.current
+            let startX = e.pageX
+            let startSL = el.scrollLeft
+            el.style.cursor = 'grabbing'
+            const onMove = ev => { el.scrollLeft = startSL - (ev.pageX - startX) }
+            const onUp   = () => {
+              el.style.cursor = 'grab'
+              window.removeEventListener('mousemove', onMove)
+              window.removeEventListener('mouseup', onUp)
+            }
+            window.addEventListener('mousemove', onMove)
+            window.addEventListener('mouseup', onUp)
+          }}
+        >
+          {/* Encabezados de ronda — dentro del mismo contenedor, sticky en Y */}
+          <div style={{
+            display: 'flex', paddingLeft: PADDING, minWidth: totalW,
+            position: 'sticky', top: 0, zIndex: 10,
+            background: C.bg, paddingTop: 8, paddingBottom: 6,
+            borderBottom: `1px solid ${C.border}22`,
+          }}>
             {rounds.filter(r => !r.isThirdPlace).map(r => (
               <div key={r.roundNum} style={{ width: LC.CARD_W, marginRight: LC.COL_GAP, flexShrink: 0, textAlign: 'center' }}>
                 <span style={{
@@ -824,28 +854,7 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
               </div>
             ))}
           </div>
-        </div>
 
-        {/* SVG del bracket — scroll horizontal si es necesario */}
-        <div
-          ref={scrollRef}
-          style={{
-            overflowX: 'auto', overflowY: 'auto',
-            WebkitOverflowScrolling: 'touch',
-            cursor: 'grab',
-            flex: 1,
-            minHeight: Math.min(totalH + 40, 480),
-          }}
-          onMouseDown={e => {
-            const el = scrollRef.current
-            let x = e.pageX - el.offsetLeft
-            let sL = el.scrollLeft
-            const onMove = ev => { el.scrollLeft = sL - (ev.pageX - el.offsetLeft - x) }
-            const onUp   = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
-            window.addEventListener('mousemove', onMove)
-            window.addEventListener('mouseup', onUp)
-          }}
-        >
           <svg
             width={totalW}
             height={Math.max(totalH, 200)}

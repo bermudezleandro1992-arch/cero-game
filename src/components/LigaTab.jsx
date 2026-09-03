@@ -87,7 +87,7 @@ function StandingsTable({ standings, ascensos, descensos, profile }) {
     <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
       {/* Leyenda zonas */}
       {(ascensos > 0 || descensos > 0) && (
-        <div style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap', overflowX: 'auto' }}>
           {ascensos > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{ width: 10, height: 10, borderRadius: 2, background: '#22c55e' }} />
@@ -107,8 +107,11 @@ function StandingsTable({ standings, ascensos, descensos, profile }) {
         </div>
       )}
 
+      {/* Tabla — scroll horizontal en mobile */}
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+
       {/* Header */}
-      <div style={{ display: 'grid', gridTemplateColumns: '22px 30px 1fr 32px 26px 26px 26px 32px 32px 32px 38px', background: C.panel2 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '22px 30px minmax(90px,1fr) 32px 26px 26px 26px 32px 32px 32px 38px', background: C.panel2, minWidth: 380 }}>
         <div style={COL}></div>
         <div style={COL}>#</div>
         <div style={{ ...COL, textAlign: 'left', paddingLeft: 8 }}>Jugador</div>
@@ -130,7 +133,7 @@ function StandingsTable({ standings, ascensos, descensos, profile }) {
         const isMe = s.user_id === profile?.id
         return (
           <div key={s.user_id} style={{
-            display: 'grid', gridTemplateColumns: '22px 30px 1fr 32px 26px 26px 26px 32px 32px 32px 38px',
+            display: 'grid', gridTemplateColumns: '22px 30px minmax(90px,1fr) 32px 26px 26px 26px 32px 32px 32px 38px', minWidth: 380,
             borderTop: `1px solid ${C.border}`,
             background: isMe ? `${C.green}08` : zone ? `${zone}06` : 'transparent',
             borderLeft: zone ? `3px solid ${zone}` : isMe ? `3px solid ${C.green}` : '3px solid transparent',
@@ -157,6 +160,8 @@ function StandingsTable({ standings, ascensos, descensos, profile }) {
           </div>
         )
       })}
+
+      </div>{/* /overflowX scroll wrapper */}
     </div>
   )
 }
