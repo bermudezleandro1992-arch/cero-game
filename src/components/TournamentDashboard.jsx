@@ -275,10 +275,12 @@ function TabBar({ tabs, active, onChange, visible }) {
 
 // ── TORNEO: OverviewTab ───────────────────────────────────────────────────────
 function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin, onFillBots, onStartSorteo, onRandomTeams }) {
+
   const fillPct = data.max_participants
     ? Math.round((data.participant_count / data.max_participants) * 100)
     : null
   const phaseIdx = torneoPhaseIdx(data.status, data.matches)
+  const isGuerraMode = (data.team_size || 1) > 1
   const canJoin = data.status === 'inscripcion' && profile && !isMember && (!data.max_participants || data.participant_count < data.max_participants)
 
   return (
@@ -293,7 +295,14 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
-        <StatCard icon="👥" label="Participantes" value={`${data.participant_count}${data.max_participants ? ` / ${data.max_participants}` : ''}`} accent={fillPct >= 90 ? '#f59e0b' : undefined} />
+        {(data.team_size || 1) > 1 ? (
+          <>
+            <StatCard icon="⚔️" label="Equipos" value={`${data.participant_count}${data.max_participants ? ` / ${data.max_participants}` : ''}`} accent={fillPct >= 90 ? '#f59e0b' : undefined} />
+            <StatCard icon="👥" label="Jugadores" value={`${data.participant_count * data.team_size} / ${(data.max_participants || 0) * data.team_size}`} accent={C.green} />
+          </>
+        ) : (
+          <StatCard icon="👥" label="Participantes" value={`${data.participant_count}${data.max_participants ? ` / ${data.max_participants}` : ''}`} accent={fillPct >= 90 ? '#f59e0b' : undefined} />
+        )}
         {(data.groups?.length ?? 0) > 0 && <StatCard icon="📋" label="Grupos" value={data.groups.length} accent={C.green} />}
         {data.open_disputes > 0 && <StatCard icon="⚠️" label="Disputas" value={data.open_disputes} accent="#ef4444" />}
         {data.format && <StatCard icon="🔀" label="Formato" value={data.format} />}
@@ -305,7 +314,7 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 12, color: C.textDim, fontWeight: 600 }}>Llenado del torneo</span>
             <span style={{ fontSize: 12, fontWeight: 800, color: fillPct >= 90 ? '#f59e0b' : C.green }}>
-              {fillPct}% ({data.participant_count}/{data.max_participants})
+              {fillPct}% ({data.participant_count}/{data.max_participants} {(data.team_size || 1) > 1 ? 'equipos' : 'jugadores'})
             </span>
           </div>
           <div style={{ height: 8, background: C.panel, borderRadius: 8, overflow: 'hidden' }}>
@@ -374,7 +383,7 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
       )}
 
       {/* Botón inscribirse */}
-      {canJoin && (
+      {canJoin && !isGuerraMode && (
         <button onClick={onJoin} style={{
           width: '100%', padding: '14px 0', borderRadius: 14, border: 'none',
           background: `linear-gradient(135deg, ${C.greenDk}, ${C.green})`,
@@ -384,9 +393,35 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
           ✅ Inscribirme al torneo
         </button>
       )}
+      {canJoin && isGuerraMode && userClan && (
+        <button onClick={onJoin} style={{
+          width: '100%', padding: '14px 0', borderRadius: 14, border: 'none',
+          background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
+          color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer',
+          boxShadow: '0 4px 16px #ef444444',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <span style={{ fontSize: 18 }}>⚔️</span>
+          Inscribir mi clan [{userClan.tag}]
+        </button>
+      )}
+      {canJoin && isGuerraMode && !userClan && (
+        <div style={{ background: '#ef444411', border: '1.5px solid #ef444433', borderRadius: 14, padding: 16, textAlign: 'center' }}>
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: C.text, fontWeight: 600 }}>
+            ⚔️ Este torneo requiere un clan para inscribirse
+          </p>
+          <button onClick={onNeedClan} style={{
+            padding: '10px 24px', borderRadius: 10, border: 'none',
+            background: '#ef4444', color: '#fff',
+            fontWeight: 700, fontSize: 13, cursor: 'pointer',
+          }}>
+            Crear mi clan →
+          </button>
+        </div>
+      )}
       {!canJoin && isMember && data.status === 'inscripcion' && (
         <div style={{ textAlign: 'center', padding: '12px 0', fontSize: 13, color: C.green, fontWeight: 700 }}>
-          ✅ Ya estás inscrito/a en este torneo
+          ✅ {isGuerraMode && userClan ? `Clan [${userClan.tag}] inscrito` : 'Ya estás inscrito/a en este torneo'}
         </div>
       )}
 
@@ -595,6 +630,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
   const [isMember, setIsMember]     = useState(false)
   const [joining, setJoining]       = useState(false)
   const [countdown, setCountdown]   = useState(null) // null | number
+  const [userClan, setUserClan]     = useState(null) // clan the user leads or belongs to
   const countdownRef                = useRef(null)
 
   const refresh = () => {
@@ -661,6 +697,17 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       .then(({ count }) => setIsMember((count ?? 0) > 0))
   }, [tournamentId, profile?.id])
 
+  useEffect(() => {
+    if (!profile?.id) return
+    supabase.from('clan_members')
+      .select('clan_id, clans(id, name, tag)')
+      .eq('user_id', profile.id)
+      .limit(1)
+      .single()
+      .then(({ data: cm }) => setUserClan(cm?.clans ?? null))
+      .catch(() => {})
+  }, [profile?.id])
+
   async function postAviso(title, body, extraFields = {}) {
     const communityId = data?.community_id
     if (!communityId || !profile?.id) return
@@ -721,6 +768,30 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
   async function handleJoin() {
     if (!profile?.id || joining) return
     setJoining(true)
+    const isGuerraMode = (data?.team_size || 1) > 1
+
+    if (isGuerraMode && userClan) {
+      // Inscribe all clan members into the tournament
+      const { data: clanMems } = await supabase.from('clan_members')
+        .select('user_id')
+        .eq('clan_id', userClan.id)
+      if (!clanMems?.length) { alert('El clan no tiene miembros.'); setJoining(false); return }
+      const rows = clanMems.map(m => ({ conversation_id: tournamentId, user_id: m.user_id }))
+      const { error: e } = await supabase.from('conversation_members').insert(rows)
+      if (e && !e.message.includes('duplicate')) { alert(`Error al inscribir clan: ${e.message}`); setJoining(false); return }
+      setIsMember(true)
+      const newCount = (data?.participant_count ?? 0) + 1
+      setData(d => d ? { ...d, participant_count: newCount } : d)
+      setJoining(false)
+      const participants = await fetchParticipants()
+      await postBotCard(data, participants)
+      if (data?.max_participants && newCount >= data.max_participants && data.status === 'inscripcion') {
+        await postAviso(`🔒 "${data.name}" — ¡Inscripciones CERRADAS!`, `Se completaron todos los cupos (${data.max_participants}/${data.max_participants}).`)
+        if (data.auto_start_on_full) triggerAutoStart(data)
+      }
+      return
+    }
+
     const { error: e } = await supabase.from('conversation_members')
       .insert({ conversation_id: tournamentId, user_id: profile.id })
     if (e) { alert(`Error al inscribirte: ${e.message}`); setJoining(false); return }
@@ -776,6 +847,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
     if (!isAdmin || !data) return
     const teamSize = data.team_size || 2
     // Fetch all current participants
+
     const { data: members } = await supabase
       .from('conversation_members')
       .select('user_id, users(display_name, username)')
@@ -796,6 +868,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       const names = team.map(m => m.users?.display_name || m.users?.username || 'Jugador').join(' + ')
       msg += `🏅 Equipo ${i + 1}: ${names}\n`
     })
+
     msg += `\n👥 ${teams.length} equipos de ${teamSize} jugadores`
 
     await supabase.from('messages').insert({
@@ -804,6 +877,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
       content: msg,
       type: 'bot_fixture',
     })
+
     alert(`✅ Sorteo realizado: ${teams.length} equipos formados`)
   }
 
@@ -944,6 +1018,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
                 onFillBots={showBotButton ? handleFillBots : null}
                 onStartSorteo={isAdmin && data?.status === 'inscripcion' && data?.participant_count >= data?.max_participants ? handleStartSorteo : null}
                 onRandomTeams={isAdmin && (data?.team_size || 1) > 1 ? handleRandomTeams : null}
+
               />
         )}
 
