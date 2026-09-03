@@ -78,7 +78,7 @@ async function fetchDashboard(tournamentId) {
       id, name, tournament_status, format, game, max_participants,
       tournament_format, tournament_mode, auto_start_on_full, auto_start_delay_seconds, sorteo_starts_at,
       liga_tipo, liga_fase, temporada, division, group_type, community_id,
-      registration_deadline, start_date, description, banner_url
+      registration_deadline, start_date, description, banner_url, team_size
     `)
     .eq('id', tournamentId)
     .single()
@@ -274,7 +274,7 @@ function TabBar({ tabs, active, onChange, visible }) {
 }
 
 // ── TORNEO: OverviewTab ───────────────────────────────────────────────────────
-function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin, onFillBots, onStartSorteo }) {
+function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, isMember, onJoin, onFillBots, onStartSorteo, onRandomTeams }) {
   const fillPct = data.max_participants
     ? Math.round((data.participant_count / data.max_participants) * 100)
     : null
@@ -398,6 +398,18 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
           fontWeight: 700, fontSize: 13, cursor: 'pointer',
         }}>
           🤖 Completar con bots ({data.max_participants - data.participant_count} lugares)
+        </button>
+      )}
+
+      {onRandomTeams && isAdmin && data.status === 'inscripcion' && (data.team_size || 1) > 1 && data.participant_count >= 2 && (
+        <button onClick={onRandomTeams} style={{
+          width: '100%', padding: '13px 0', borderRadius: 14, border: 'none',
+          background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
+          color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <span style={{ fontSize: 18 }}>⚔️</span>
+          Sorteo de parejas al azar ({data.team_size}vs{data.team_size})
         </button>
       )}
 
@@ -760,6 +772,41 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
     await triggerAutoStart(data)
   }
 
+  async function handleRandomTeams() {
+    if (!isAdmin || !data) return
+    const teamSize = data.team_size || 2
+    // Fetch all current participants
+    const { data: members } = await supabase
+      .from('conversation_members')
+      .select('user_id, users(display_name, username)')
+      .eq('conversation_id', tournamentId)
+      .neq('role', 'owner')
+    if (!members?.length) { alert('No hay participantes inscriptos.'); return }
+
+    // Shuffle array
+    const shuffled = [...members].sort(() => Math.random() - 0.5)
+    const teams = []
+    for (let i = 0; i < shuffled.length; i += teamSize) {
+      teams.push(shuffled.slice(i, i + teamSize))
+    }
+
+    // Post result as bot message in tournament chat
+    let msg = `⚔️ SORTEO DE PAREJAS — ${data.name}\n\n`
+    teams.forEach((team, i) => {
+      const names = team.map(m => m.users?.display_name || m.users?.username || 'Jugador').join(' + ')
+      msg += `🏅 Equipo ${i + 1}: ${names}\n`
+    })
+    msg += `\n👥 ${teams.length} equipos de ${teamSize} jugadores`
+
+    await supabase.from('messages').insert({
+      conversation_id: tournamentId,
+      sender_id: profile.id,
+      content: msg,
+      type: 'bot_fixture',
+    })
+    alert(`✅ Sorteo realizado: ${teams.length} equipos formados`)
+  }
+
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 16 }}>
       {[80, 120, 200, 160].map((h, i) => (
@@ -896,6 +943,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
                 onJoin={joining ? null : handleJoin}
                 onFillBots={showBotButton ? handleFillBots : null}
                 onStartSorteo={isAdmin && data?.status === 'inscripcion' && data?.participant_count >= data?.max_participants ? handleStartSorteo : null}
+                onRandomTeams={isAdmin && (data?.team_size || 1) > 1 ? handleRandomTeams : null}
               />
         )}
 

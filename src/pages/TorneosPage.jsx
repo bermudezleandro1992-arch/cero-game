@@ -293,6 +293,7 @@ function CreateModal({ onClose, onCreated, defaultCommunityId, onViewPlans = () 
           game: game || null,
           auto_start_on_full: autoStartOnFull,
           auto_start_delay_seconds: autoStartOnFull ? (parseInt(autoStartDelay) || 0) : 0,
+          ...(type === 'guerra' ? { team_size: parseInt(guerraMode.split('vs')[0]) || 2, description: `Guerra de Clanes ${guerraMode}` } : {}),
           ...(communityId ? { community_id: communityId } : {}),
           ...(type === 'liga' && ligaTemporada ? { description: `Temporada: ${ligaTemporada}` } : {}),
         })

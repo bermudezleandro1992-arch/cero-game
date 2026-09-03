@@ -10,6 +10,7 @@ import LegalPage from './LegalPage'
 import IdentityVerification from '../components/IdentityVerification'
 import BotApiPage from './BotApiPage'
 import { setLayoutSkin, getSkin as getSkinLocal } from '../lib/layoutSkin'
+import ClanPanel from '../components/ClanPanel'
 
 function Spinner() {
   return (
@@ -2318,6 +2319,16 @@ export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport
         </div>
       )}
 
+      {/* Clan tab */}
+      {tab === 'clan' && (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {subHeader('Mi Clan')}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px' }}>
+            <ClanPanel profile={profile} />
+          </div>
+        </div>
+      )}
+
       {/* Main menu — WhatsApp settings style */}
       {tab === 'menu' && (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -2377,6 +2388,11 @@ export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport
                 <SettingsRow icon="🪪" label="Identidad" desc="Verificación de identidad" onClick={() => setTab('identidad')} />
                 <div style={{ height: 1, background: C.border, margin: '0 20px 0 64px' }} />
                 <SettingsRow icon="🔗" label="Referidos" desc="Tu código y beneficios" onClick={() => setTab('referidos')} />
+              </div>
+
+              {/* Sección clanes / competitivo */}
+              <div style={{ background: C.panel, borderRadius: 0, marginBottom: 8 }}>
+                <SettingsRow icon="⚔️" label="Mi Clan" desc="Crear o gestionar tu clan para torneos" onClick={() => setTab('clan')} />
               </div>
 
               {/* Sección sistema */}
