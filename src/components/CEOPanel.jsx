@@ -752,11 +752,11 @@ function RolesTab({ communityId, profile, toast }) {
 
   async function changeRole(userId, newRole) {
     setAssigning(userId)
-    const { error } = await supabase
-      .from('conversation_members')
-      .update({ role: newRole })
-      .eq('conversation_id', communityId)
-      .eq('user_id', userId)
+    const { error } = await supabase.rpc('set_community_member_role', {
+      p_conversation_id: communityId,
+      p_user_id: userId,
+      p_role: newRole,
+    })
     setAssigning(null)
     if (error) toast('Error: ' + error.message, 'error')
     else { toast('Rol actualizado ✓'); load() }
@@ -888,11 +888,11 @@ function MiembrosTab({ communityId, profile, toast }) {
 
   async function changeRole(userId, newRole) {
     setUpdating(userId)
-    const { error } = await supabase
-      .from('conversation_members')
-      .update({ role: newRole })
-      .eq('conversation_id', communityId)
-      .eq('user_id', userId)
+    const { error } = await supabase.rpc('set_community_member_role', {
+      p_conversation_id: communityId,
+      p_user_id: userId,
+      p_role: newRole,
+    })
     setUpdating(null)
     if (error) toast('Error al cambiar rol: ' + error.message, 'error')
     else { toast('Rol actualizado ✓', 'ok'); load() }
@@ -1001,7 +1001,7 @@ function MiembrosTab({ communityId, profile, toast }) {
                     {p?.display_name || 'Sin nombre'} {isMe && <span style={{ color: C.textDim, fontWeight: 400, fontSize: 11 }}>(Yo)</span>}
                   </div>
                   <div style={{ color: C.textDim, fontSize: 11 }}>
-                    Desde {new Date(m.joined_at).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {m.joined_at ? `Desde ${new Date(m.joined_at).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}` : 'Miembro'}
                   </div>
                 </div>
                 {!isMe && (
