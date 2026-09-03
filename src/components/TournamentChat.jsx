@@ -1,8 +1,10 @@
 /**
- * TournamentChat — chat grupal en tiempo real para participantes del torneo.
- * Usa Supabase Realtime sobre la tabla `messages` con conversation_id = tournamentId.
+ * TournamentChat — chat grupal para torneos.
+ * - @menciones autocomplete de participantes
+ * - Click derecho → limpiar historial (admin/organizer)
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 
@@ -11,7 +13,7 @@ function fmtTime(ts) {
   return d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
 }
 
-function avatar(p, size = 30) {
+function Avatar({ p, size = 30 }) {
   const style = { width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: `1.5px solid ${C.border}`, flexShrink: 0 }
   return p?.avatar_url
     ? <img src={p.avatar_url} alt="" style={style} />
@@ -22,15 +24,23 @@ function avatar(p, size = 30) {
 
 const stripQ = s => (typeof s === 'string' ? s.replace(/^"+|"+$/g, '') : s)
 
-export default function TournamentChat({ tournamentId: rawTournamentId, profile }) {
+export default function TournamentChat({ tournamentId: rawTournamentId, profile, isAdmin }) {
   const tournamentId = stripQ(rawTournamentId)
   const [messages,  setMessages]  = useState([])
   const [text,      setText]      = useState('')
   const [sending,   setSending]   = useState(false)
   const [profiles,  setProfiles]  = useState({})
   const [isMember,  setIsMember]  = useState(null)
-  const bottomRef = useRef(null)
-  const inputRef  = useRef(null)
+  const [ctxMenu,   setCtxMenu]   = useState(null) // { x, y }
+  const [clearing,  setClearing]  = useState(false)
+
+  // @mention
+  const [mentionQ,    setMentionQ]    = useState('')
+  const [mentionList, setMentionList] = useState([])
+  const [memberList,  setMemberList]  = useState([]) // all participants
+
+  const bottomRef  = useRef(null)
+  const inputRef   = useRef(null)
 
   // Verificar si el usuario es participante
   useEffect(() => {
@@ -44,13 +54,16 @@ export default function TournamentChat({ tournamentId: rawTournamentId, profile 
 
   // Cargar perfiles de participantes
   const loadProfiles = useCallback(async () => {
-    const { data: members } = await supabase.from('conversation_members').select('user_id').eq('conversation_id', tournamentId)
+    const { data: members } = await supabase
+      .from('conversation_members').select('user_id').eq('conversation_id', tournamentId)
     const ids = (members || []).map(m => m.user_id)
     if (!ids.length) return
-    const { data: rows } = await supabase.from('users').select('id, display_name, username, avatar_url').in('id', ids)
+    const { data: rows } = await supabase
+      .from('users').select('id, display_name, username, avatar_url').in('id', ids)
     const map = {}
     ;(rows || []).forEach(p => { map[p.id] = p })
     setProfiles(map)
+    setMemberList(rows || [])
   }, [tournamentId])
 
   // Cargar mensajes
@@ -69,7 +82,7 @@ export default function TournamentChat({ tournamentId: rawTournamentId, profile 
     loadMessages()
   }, [loadProfiles, loadMessages])
 
-  // Realtime subscription
+  // Realtime
   useEffect(() => {
     const channel = supabase
       .channel(`tournament-chat-${tournamentId}`)
@@ -80,7 +93,6 @@ export default function TournamentChat({ tournamentId: rawTournamentId, profile 
         const msg = payload.new
         if (msg.type === 'system') return
         setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-        // Cargar perfil del nuevo sender si no lo tenemos
         if (!profiles[msg.sender_id]) {
           supabase.from('users').select('id, display_name, username, avatar_url').eq('id', msg.sender_id).single()
             .then(({ data: p }) => { if (p) setProfiles(prev => ({ ...prev, [p.id]: p })) })
@@ -95,13 +107,21 @@ export default function TournamentChat({ tournamentId: rawTournamentId, profile 
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Close ctx menu on click elsewhere
+  useEffect(() => {
+    if (!ctxMenu) return
+    const close = () => setCtxMenu(null)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [ctxMenu])
+
   async function handleSend() {
     const trimmed = text.trim()
     if (!trimmed || sending || !profile?.id) return
     if (isMember === false) { alert('Primero inscribite al torneo para poder chatear.'); return }
     setSending(true)
     setText('')
-    // Optimistic update — show message immediately
+    setMentionList([])
     const tempId = `tmp-${Date.now()}`
     const tempMsg = { id: tempId, conversation_id: tournamentId, sender_id: profile.id, content: trimmed, type: 'text', created_at: new Date().toISOString() }
     setMessages(prev => [...prev, tempMsg])
@@ -115,15 +135,55 @@ export default function TournamentChat({ tournamentId: rawTournamentId, profile 
       setMessages(prev => prev.filter(m => m.id !== tempId))
       setText(trimmed)
     } else if (inserted) {
-      // Replace temp with real message
       setMessages(prev => prev.map(m => m.id === tempId ? inserted : m))
     }
     setSending(false)
     inputRef.current?.focus()
   }
 
+  function handleInputChange(e) {
+    const val = e.target.value
+    setText(val)
+    // Detect @mention
+    const match = val.match(/@(\w*)$/)
+    if (match) {
+      const q = match[1].toLowerCase()
+      setMentionQ(q)
+      const filtered = memberList.filter(m =>
+        (m.display_name || '').toLowerCase().includes(q) ||
+        (m.username || '').toLowerCase().includes(q)
+      ).slice(0, 6)
+      setMentionList(filtered)
+    } else {
+      setMentionQ('')
+      setMentionList([])
+    }
+  }
+
+  function insertMention(member) {
+    const name = member.display_name || member.username || '?'
+    const newText = text.replace(/@\w*$/, `@${name} `)
+    setText(newText)
+    setMentionList([])
+    inputRef.current?.focus()
+  }
+
   function handleKey(e) {
+    if (mentionList.length > 0 && (e.key === 'Escape')) { setMentionList([]); return }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+  }
+
+  async function handleClearHistory() {
+    if (!isAdmin) return
+    if (!window.confirm('¿Limpiar todo el historial del chat? Esta acción no se puede deshacer.')) return
+    setClearing(true)
+    setCtxMenu(null)
+    const { error } = await supabase.from('messages')
+      .delete()
+      .eq('conversation_id', tournamentId)
+    if (error) { alert(`Error: ${error.message}`) }
+    else { setMessages([]) }
+    setClearing(false)
   }
 
   if (isMember === null) return (
@@ -140,7 +200,6 @@ export default function TournamentChat({ tournamentId: rawTournamentId, profile 
     </div>
   )
 
-  // Group consecutive messages by same sender
   const grouped = messages.reduce((acc, msg, i) => {
     const prev = messages[i - 1]
     const sameUser = prev?.sender_id === msg.sender_id
@@ -150,46 +209,60 @@ export default function TournamentChat({ tournamentId: rawTournamentId, profile 
   }, [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}
+      onContextMenu={e => {
+        e.preventDefault()
+        if (isAdmin) setCtxMenu({ x: e.clientX, y: e.clientY })
+      }}
+    >
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
         {grouped.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: C.textDim, textAlign: 'center' }}>
             <div style={{ fontSize: 44 }}>💬</div>
             <div style={{ fontSize: 13 }}>Sé el primero en escribir en el chat del torneo.</div>
+            {isAdmin && <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>Click derecho para gestionar el chat</div>}
           </div>
         ) : grouped.map(msg => {
           const p = profiles[msg.sender_id]
           const isMe = msg.sender_id === profile?.id
+          const isBot = msg.type === 'bot_fixture' || msg.type === 'bot'
           return (
             <div key={msg.id} style={{
               display: 'flex', gap: 8, alignItems: 'flex-end',
               flexDirection: isMe ? 'row-reverse' : 'row',
               marginTop: msg.grouped ? 1 : 8,
             }}>
-              {/* Avatar: solo en primer mensaje del grupo */}
               <div style={{ width: 30, flexShrink: 0 }}>
-                {!msg.grouped && !isMe && avatar(p, 28)}
+                {!msg.grouped && !isMe && (
+                  isBot
+                    ? <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1a1a2e', border: '1.5px solid #25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>🤖</div>
+                    : <Avatar p={p} size={28} />
+                )}
               </div>
-
-              {/* Bubble */}
               <div style={{ maxWidth: '72%', display: 'flex', flexDirection: 'column', gap: 3, alignItems: isMe ? 'flex-end' : 'flex-start' }}>
                 {!msg.grouped && !isMe && (
-                  <span style={{ color: C.textDim, fontSize: 10, fontWeight: 700, marginLeft: 4 }}>
-                    {p?.display_name || p?.username || '?'}
+                  <span style={{ color: isBot ? C.green : C.textDim, fontSize: 10, fontWeight: 700, marginLeft: 4 }}>
+                    {isBot ? '🤖 Bot' : (p?.display_name || p?.username || '?')}
                   </span>
                 )}
                 <div style={{
-                  background: isMe ? C.green : C.panel,
+                  background: isMe ? C.green : isBot ? `${C.green}18` : C.panel,
                   color: isMe ? '#000' : C.text,
-                  borderRadius: isMe
-                    ? (msg.grouped ? '16px 4px 16px 16px' : '16px 4px 16px 16px')
-                    : (msg.grouped ? '4px 16px 16px 16px' : '4px 16px 16px 16px'),
+                  border: isBot ? `1px solid ${C.green}44` : 'none',
+                  borderRadius: isMe ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
                   padding: '8px 12px',
-                  fontSize: 14, lineHeight: 1.5,
+                  fontSize: 13, lineHeight: 1.5,
                   wordBreak: 'break-word',
+                  whiteSpace: 'pre-wrap',
                 }}>
-                  {msg.content}
+                  {/* Highlight @mentions */}
+                  {msg.content.split(/(@\w[\w\s]*)/g).map((part, i) =>
+                    part.startsWith('@')
+                      ? <span key={i} style={{ color: isMe ? '#004d1a' : C.green, fontWeight: 700 }}>{part}</span>
+                      : part
+                  )}
                 </div>
                 {!msg.grouped && (
                   <span style={{ color: C.textDim, fontSize: 10, marginLeft: isMe ? 0 : 4, marginRight: isMe ? 4 : 0 }}>
@@ -203,14 +276,37 @@ export default function TournamentChat({ tournamentId: rawTournamentId, profile 
         <div ref={bottomRef} />
       </div>
 
+      {/* @mention autocomplete */}
+      {mentionList.length > 0 && (
+        <div style={{
+          position: 'absolute', bottom: 70, left: 12, right: 12,
+          background: C.panel, border: `1px solid ${C.border}`, borderRadius: 14,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)', zIndex: 100, overflow: 'hidden',
+        }}>
+          {mentionList.map(m => (
+            <button key={m.id} onClick={() => insertMention(m)} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer',
+              borderBottom: `1px solid ${C.border}`, textAlign: 'left',
+            }}>
+              <Avatar p={m} size={28} />
+              <div>
+                <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{m.display_name || m.username}</div>
+                {m.username && <div style={{ color: C.textDim, fontSize: 11 }}>@{m.username}</div>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Input */}
       <div style={{ borderTop: `1px solid ${C.border}`, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           ref={inputRef}
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={handleInputChange}
           onKeyDown={handleKey}
-          placeholder="Escribí un mensaje..."
+          placeholder="Escribí un mensaje… (@nombre para mencionar)"
           style={{
             flex: 1, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 24,
             padding: '10px 16px', color: C.text, fontSize: 14, outline: 'none',
@@ -225,6 +321,37 @@ export default function TournamentChat({ tournamentId: rawTournamentId, profile 
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
         </button>
       </div>
+
+      {/* Context menu (admin only) */}
+      {ctxMenu && isAdmin && createPortal(
+        <div onClick={() => setCtxMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 9998 }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'fixed', top: Math.min(ctxMenu.y, window.innerHeight - 120), left: Math.min(ctxMenu.x, window.innerWidth - 200),
+              background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 9999, minWidth: 190, overflow: 'hidden',
+            }}
+          >
+            <div style={{ padding: '8px 14px 6px', fontSize: 10, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+              Gestión del chat
+            </div>
+            <button
+              onClick={handleClearHistory}
+              disabled={clearing}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                padding: '11px 14px', background: 'none', border: 'none', cursor: 'pointer',
+                color: '#ef4444', fontSize: 13, fontWeight: 700, textAlign: 'left',
+              }}
+            >
+              <span style={{ fontSize: 16 }}>🗑️</span>
+              {clearing ? 'Limpiando…' : 'Limpiar historial'}
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

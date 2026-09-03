@@ -24,12 +24,16 @@ import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import MatchResultFlow from './MatchResultFlow'
 
-// ── Constantes de layout ──────────────────────────────────────────────────────
-const CARD_W     = 200   // ancho de cada tarjeta de partido (px)
-const CARD_H     = 90    // alto de cada tarjeta
-const COL_GAP    = 72    // espacio horizontal entre columnas
-const ROW_GAP    = 16    // espacio mínimo entre tarjetas en la misma columna
-const PADDING    = 24    // padding del contenedor SVG
+// ── Constantes de layout (base) ──────────────────────────────────────────────
+const PADDING = 24
+
+// Constantes adaptativas según cantidad de rondas
+function getLayoutConstants(numMainRounds) {
+  if (numMainRounds <= 2) return { CARD_W: 200, CARD_H: 90, COL_GAP: 72, ROW_GAP: 16 }
+  if (numMainRounds === 3) return { CARD_W: 180, CARD_H: 84, COL_GAP: 60, ROW_GAP: 14 }
+  if (numMainRounds === 4) return { CARD_W: 156, CARD_H: 76, COL_GAP: 48, ROW_GAP: 10 }
+  return { CARD_W: 136, CARD_H: 68, COL_GAP: 40, ROW_GAP: 8 }
+}
 
 const PHASE_LABELS = {
   bracket: 'Ronda', r16: 'Octavos', qf: 'Cuartos', sf: 'Semis', final: 'Final',
@@ -110,7 +114,7 @@ async function fetchBracket(tournamentId) {
 }
 
 // ── Layout: calcular posiciones de cada tarjeta ───────────────────────────────
-function computeLayout(matches) {
+function computeLayout(matches, { CARD_W, CARD_H, COL_GAP, ROW_GAP }) {
   if (!matches.length) return { rounds: [], totalW: 0, totalH: 0 }
 
   // Agrupar por ronda
@@ -154,13 +158,13 @@ function computeLayout(matches) {
     return { roundNum: rn, cards, x, phaseLabel }
   })
 
-  // Agregar partido 3°/4° lugar en la misma columna que la Final, debajo de ella
+  // Agregar partido 3°/4° lugar en la misma columna que la Final, DEBAJO de ella
   if (thirdPlaceRoundNum !== null) {
     const finalRound = rounds[rounds.length - 1]
     const finalCard  = finalRound?.cards[0]
     const thirdMs    = roundMap[thirdPlaceRoundNum]
     const thirdX     = finalCard ? finalCard.x : PADDING + (roundNums.length - 1) * (CARD_W + COL_GAP)
-    const thirdY     = PADDING
+    const thirdY     = finalCard ? finalCard.y + CARD_H + 36 : PADDING
     rounds.push({
       roundNum: thirdPlaceRoundNum,
       cards: [{ match: thirdMs[0], x: thirdX, y: thirdY, cellH: CARD_H }],
@@ -179,31 +183,31 @@ function computeLayout(matches) {
 }
 
 // ── Tarjeta de partido ────────────────────────────────────────────────────────
-function MatchCard({ match, x, y, onClick }) {
+function MatchCard({ match, x, y, cardW, cardH, scale = 1, onClick }) {
   const isFinal     = match.status === 'finalizado'
   const isPending   = match.status === 'pendiente'
   const hasPlayers  = match.player1 || match.player2
   const winner1     = match.winner_id === match.player1_id
   const winner2     = match.winner_id === match.player2_id
 
-  const borderColor = isFinal ? `${C.green}66` : isPending && !hasPlayers ? C.border : `${C.border}`
+  const borderColor = isFinal ? `${C.green}66` : `${C.border}`
+  const fs = (base) => Math.round(base * scale)
 
-  function PlayerRow({ profile, pid, score, isWinner, isEmpty }) {
+  function PlayerRow({ profile, score, isWinner, isEmpty }) {
     return (
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        padding: '5px 8px', flex: 1,
+        display: 'flex', alignItems: 'center', gap: scale < 0.9 ? 4 : 6,
+        padding: `${scale < 0.9 ? 4 : 5}px 8px`, flex: 1,
         background: isWinner ? `${C.green}14` : 'transparent',
         borderLeft: `2px solid ${isWinner ? C.green : 'transparent'}`,
         borderRadius: isWinner ? '0 4px 4px 0' : 0,
-        transition: 'background .2s',
       }}>
         {isEmpty
-          ? <span style={{ fontSize: 11, color: C.textDim, fontStyle: 'italic' }}>Por definir</span>
+          ? <span style={{ fontSize: fs(10), color: C.textDim, fontStyle: 'italic' }}>Por definir</span>
           : <>
-              <Avatar profile={profile} size={20} />
+              <Avatar profile={profile} size={fs(20)} />
               <span style={{
-                flex: 1, fontSize: 11, fontWeight: isWinner ? 800 : 600,
+                flex: 1, fontSize: fs(11), fontWeight: isWinner ? 800 : 600,
                 color: isWinner ? C.green : C.text,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
@@ -211,16 +215,13 @@ function MatchCard({ match, x, y, onClick }) {
               </span>
               {score != null && (
                 <span style={{
-                  fontSize: 14, fontWeight: 900,
+                  fontSize: fs(13), fontWeight: 900,
                   color: isWinner ? C.green : C.text2,
-                  minWidth: 18, textAlign: 'right',
+                  minWidth: 16, textAlign: 'right',
                   fontVariantNumeric: 'tabular-nums',
                 }}>
                   {score}
                 </span>
-              )}
-              {score == null && isFinal && (
-                <span style={{ fontSize: 12, color: C.textDim }}>—</span>
               )}
             </>
         }
@@ -234,63 +235,44 @@ function MatchCard({ match, x, y, onClick }) {
       onClick={() => hasPlayers && onClick?.(match)}
       style={{ cursor: hasPlayers ? 'pointer' : 'default' }}
     >
-      {/* Sombra / fondo */}
       <rect
-        x={0} y={0} width={CARD_W} height={CARD_H}
-        rx={10} ry={10}
-        fill={isPending && !hasPlayers ? C.panel : C.panel}
+        x={0} y={0} width={cardW} height={cardH}
+        rx={8} ry={8}
+        fill={C.panel}
         stroke={borderColor}
         strokeWidth={1.5}
       />
-      {/* Render inner content via foreignObject */}
-      <foreignObject x={0} y={0} width={CARD_W} height={CARD_H}>
+      <foreignObject x={0} y={0} width={cardW} height={cardH}>
         <div xmlns="http://www.w3.org/1999/xhtml" style={{
-          width: CARD_W, height: CARD_H,
+          width: cardW, height: cardH,
           display: 'flex', flexDirection: 'column',
-          background: 'transparent', borderRadius: 10, overflow: 'hidden',
+          background: 'transparent', borderRadius: 8, overflow: 'hidden',
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         }}
           onClick={() => hasPlayers && onClick?.(match)}
         >
-          {/* Divider superior: badge de estado */}
           <div style={{
-            padding: '3px 8px',
+            padding: `2px 8px`,
             background: isFinal ? `${C.green}22` : C.panel2,
             borderBottom: `1px solid ${C.border}`,
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            flexShrink: 0,
           }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: fs(9), fontWeight: 700, color: C.textDim, letterSpacing: '0.5px' }}>
               {match.round_number && `R${match.round_number}`}
               {match.match_number && ` · P${match.match_number}`}
             </span>
             <span style={{
-              fontSize: 9, fontWeight: 700, letterSpacing: '0.5px',
+              fontSize: fs(9), fontWeight: 700, letterSpacing: '0.5px',
               color: isFinal ? C.green : match.status === 'en_juego' ? '#f59e0b' : C.textDim,
             }}>
-              {isFinal ? '✓ Finalizado' : match.status === 'en_juego' ? '⏳ En juego' : '· Pendiente'}
+              {isFinal ? '✓' : match.status === 'en_juego' ? '⏳' : '·'}
             </span>
           </div>
 
-          {/* Jugador 1 */}
-          <PlayerRow
-            profile={match.player1}
-            pid={match.player1_id}
-            score={match.score1}
-            isWinner={winner1}
-            isEmpty={!match.player1}
-          />
-
-          {/* Separador */}
+          <PlayerRow profile={match.player1} score={match.score1} isWinner={winner1} isEmpty={!match.player1} />
           <div style={{ height: 1, background: C.border, flexShrink: 0 }} />
-
-          {/* Jugador 2 */}
-          <PlayerRow
-            profile={match.player2}
-            pid={match.player2_id}
-            score={match.score2}
-            isWinner={winner2}
-            isEmpty={!match.player2}
-          />
+          <PlayerRow profile={match.player2} score={match.score2} isWinner={winner2} isEmpty={!match.player2} />
         </div>
       </foreignObject>
     </g>
@@ -298,7 +280,7 @@ function MatchCard({ match, x, y, onClick }) {
 }
 
 // ── Líneas de conexión SVG ────────────────────────────────────────────────────
-function BracketLines({ rounds }) {
+function BracketLines({ rounds, CARD_W, CARD_H, COL_GAP }) {
   const lines = []
   const mainRounds = rounds.filter(r => !r.isThirdPlace)
 
@@ -306,7 +288,6 @@ function BracketLines({ rounds }) {
     const currentRound = mainRounds[ri]
     const nextRound    = mainRounds[ri + 1]
 
-    // Agrupar de a pares en la ronda actual
     for (let ci = 0; ci < currentRound.cards.length; ci += 2) {
       const cardA = currentRound.cards[ci]
       const cardB = currentRound.cards[ci + 1]
@@ -316,19 +297,15 @@ function BracketLines({ rounds }) {
       const nextCard = nextRound.cards[nextIdx]
       if (!nextCard) continue
 
-      // Punto de salida de card A (derecha, centro)
       const ax1 = cardA.x + CARD_W
       const ay1 = cardA.y + CARD_H / 2
 
-      // Punto de salida de card B (derecha, centro)
       const bx1 = cardB ? cardB.x + CARD_W : ax1
       const by1 = cardB ? cardB.y + CARD_H / 2 : ay1
 
-      // Punto de entrada del siguiente partido (izquierda, centro)
       const nx  = nextCard.x
       const ny  = nextCard.y + CARD_H / 2
 
-      // Punto de unión horizontal (mitad del gap)
       const midX = ax1 + COL_GAP / 2
 
       const hasWinnerA = cardA.match.winner_id != null
@@ -636,8 +613,21 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
     </div>
   )
 
-  // Calcular layout
-  const { rounds, totalW, totalH } = computeLayout(matches)
+  // Calcular layout con constantes adaptativas
+  const numMainRounds = (() => {
+    const roundNums = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b)
+    if (roundNums.length >= 2) {
+      const roundMap = {}
+      matches.forEach(m => { if (!roundMap[m.round_number]) roundMap[m.round_number] = []; roundMap[m.round_number].push(m) })
+      const last = roundNums[roundNums.length - 1]
+      const prev = roundNums[roundNums.length - 2]
+      if (roundMap[last].length === 1 && roundMap[prev].length === 1) return roundNums.length - 1
+    }
+    return roundNums.length
+  })()
+  const LC = getLayoutConstants(numMainRounds)
+  const cardScale = LC.CARD_H / 90
+  const { rounds, totalW, totalH } = computeLayout(matches, LC)
 
   if (!rounds.length) return null
 
@@ -818,22 +808,16 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
         </div>
 
         {/* Encabezados de ronda */}
-        <div style={{
-          overflowX: 'auto', flexShrink: 0,
-          scrollbarWidth: 'none',
-        }}>
+        <div style={{ overflowX: 'auto', flexShrink: 0, scrollbarWidth: 'none' }}>
           <div style={{ display: 'flex', paddingLeft: PADDING, minWidth: totalW }}>
             {rounds.filter(r => !r.isThirdPlace).map(r => (
-              <div key={r.roundNum} style={{
-                width: CARD_W, marginRight: COL_GAP, flexShrink: 0,
-                textAlign: 'center',
-              }}>
+              <div key={r.roundNum} style={{ width: LC.CARD_W, marginRight: LC.COL_GAP, flexShrink: 0, textAlign: 'center' }}>
                 <span style={{
-                  display: 'inline-block', padding: '3px 12px', borderRadius: 20,
+                  display: 'inline-block', padding: '3px 10px', borderRadius: 20,
                   fontSize: 11, fontWeight: 700, letterSpacing: '0.5px',
-                  background: r.phaseLabel === 'Final' ? `${C.green}22` : C.panel2,
-                  color: r.phaseLabel === 'Final' ? C.green : C.textDim,
-                  border: `1px solid ${r.phaseLabel === 'Final' ? `${C.green}44` : C.border}`,
+                  background: r.phaseLabel?.includes('Final') ? `${C.green}22` : C.panel2,
+                  color: r.phaseLabel?.includes('Final') ? C.green : C.textDim,
+                  border: `1px solid ${r.phaseLabel?.includes('Final') ? `${C.green}44` : C.border}`,
                 }}>
                   {r.phaseLabel}
                 </span>
@@ -842,7 +826,7 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
           </div>
         </div>
 
-        {/* SVG del bracket — scroll horizontal en mobile, escala en desktop */}
+        {/* SVG del bracket — scroll horizontal si es necesario */}
         <div
           ref={scrollRef}
           style={{
@@ -850,7 +834,7 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
             WebkitOverflowScrolling: 'touch',
             cursor: 'grab',
             flex: 1,
-            minHeight: Math.min(totalH + 40, 420),
+            minHeight: Math.min(totalH + 40, 480),
           }}
           onMouseDown={e => {
             const el = scrollRef.current
@@ -868,16 +852,14 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
             viewBox={`0 0 ${totalW} ${Math.max(totalH, 200)}`}
             style={{ display: 'block', userSelect: 'none', minWidth: totalW }}
           >
-            {/* Líneas de conexión (debajo de las tarjetas) */}
-            <BracketLines rounds={rounds} />
+            <BracketLines rounds={rounds} CARD_W={LC.CARD_W} CARD_H={LC.CARD_H} COL_GAP={LC.COL_GAP} />
 
-            {/* Tarjetas de partido */}
             {rounds.flatMap(r =>
               r.cards.map(({ match, x, y }) => (
                 <g key={match.id}>
                   {r.isThirdPlace && (
                     <text
-                      x={x + CARD_W / 2} y={y - 8}
+                      x={x + LC.CARD_W / 2} y={y - 8}
                       textAnchor="middle" fontSize={10} fontWeight={700}
                       fill={C.textDim} letterSpacing="0.5"
                     >
@@ -887,6 +869,7 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
                   <MatchCard
                     match={match}
                     x={x} y={y}
+                    cardW={LC.CARD_W} cardH={LC.CARD_H} scale={cardScale}
                     onClick={handleCardClick}
                   />
                 </g>

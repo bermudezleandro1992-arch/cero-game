@@ -939,7 +939,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
         )}
 
         {activeTab === 'chat' && (
-          <TournamentChat tournamentId={tournamentId} profile={profile} />
+          <TournamentChat tournamentId={tournamentId} profile={profile} isAdmin={isAdmin} />
         )}
 
       </div>
