@@ -625,7 +625,8 @@ export default function CommunityDashboardWA({ community, onBack }) {
     if (!q.trim()) { setGroupResults([]); return }
     const { data } = await supabase.from('conversations')
       .select('id, name, group_type, banner_url')
-      .eq('type', 'group')
+      .eq('is_group', true)
+      .not('group_type', 'in', '(tournament,liga,channel,community)')
       .neq('id', community.id)
       .ilike('name', `%${q}%`)
       .limit(10)
@@ -655,10 +656,8 @@ export default function CommunityDashboardWA({ community, onBack }) {
       is_public: !newChannelPrivate,
     }).select('id').single()
     if (error) { alert(`Error: ${error.message}`); setCreatingChannel(false); return }
-    // add creator as member/admin
-    if (conv?.id) {
-      await supabase.from('conversation_members').insert({ conversation_id: conv.id, user_id: profile.id, role: 'admin' })
-    }
+    // Note: no insertar en conversation_members para canales de comunidad
+    // (evita que aparezcan en la lista de chats personal del creador)
     setCreatingChannel(false)
     setShowAddChannel(false)
     setNewChannelName('')
