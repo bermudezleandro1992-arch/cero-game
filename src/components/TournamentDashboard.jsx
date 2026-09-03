@@ -1018,7 +1018,8 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
                 onFillBots={showBotButton ? handleFillBots : null}
                 onStartSorteo={isAdmin && data?.status === 'inscripcion' && data?.participant_count >= data?.max_participants ? handleStartSorteo : null}
                 onRandomTeams={isAdmin && (data?.team_size || 1) > 1 ? handleRandomTeams : null}
-
+                userClan={userClan}
+                onNeedClan={() => { if (onBack) onBack(); window.location.hash = '#perfil-clan' }}
               />
         )}
 
