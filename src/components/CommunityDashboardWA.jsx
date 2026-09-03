@@ -698,6 +698,7 @@ export default function CommunityDashboardWA({ community, onBack }) {
             tournamentId={viewingTournament.id}
             profile={profile}
             isAdmin={isAdmin || viewingTournament.created_by === profile?.id}
+            showBotButton={isAdmin || viewingTournament.created_by === profile?.id}
             onBack={() => { setViewingTournament(null); loadData() }}
             communityId={community.id}
           />
