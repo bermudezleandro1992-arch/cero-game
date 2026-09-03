@@ -175,6 +175,7 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
   const [confirmDialog, setConfirmDialog] = useState(null)       // {title, message, onConfirm, danger}
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState(new Set())
+  const [mutedConvs, setMutedConvs] = useState(new Set())   // conv IDs currently muted
 
   useEffect(() => { setFilter(initialFilter || 'todos') }, [initialFilter])
   const [showFab, setShowFab] = useState(false)
@@ -203,7 +204,19 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
     if (!profile?.id) return
     fetchConversations(profile.id).then(() => setLoadingConvs(false))
     loadCategories()
+    loadMuted()
   }, [profile?.id])
+
+  async function loadMuted() {
+    if (!profile?.id) return
+    const now = new Date().toISOString()
+    const { data } = await supabase
+      .from('conversation_members')
+      .select('conversation_id')
+      .eq('user_id', profile.id)
+      .gt('muted_until', now)
+    if (data) setMutedConvs(new Set(data.map(r => r.conversation_id)))
+  }
 
   async function loadCategories() {
     if (!profile?.id) return
@@ -347,6 +360,61 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
       )
       setContactCategories(prev => ({ ...prev, [contactId]: category }))
     }
+  }
+
+  async function handleMute(conv) {
+    setContextMenu(null)
+    const isMuted = mutedConvs.has(conv.id)
+    const muted_until = isMuted ? null : new Date(Date.now() + 8 * 3600 * 1000).toISOString()
+    await supabase.from('conversation_members')
+      .update({ muted_until })
+      .eq('conversation_id', conv.id)
+      .eq('user_id', profile.id)
+    setMutedConvs(prev => {
+      const next = new Set(prev)
+      isMuted ? next.delete(conv.id) : next.add(conv.id)
+      return next
+    })
+  }
+
+  async function handleMarkUnread(conv) {
+    setContextMenu(null)
+    // Set last_read_at to a past date so unread counter appears
+    const past = new Date(Date.now() - 1000).toISOString()
+    await supabase.from('conversation_members')
+      .update({ last_read_at: past })
+      .eq('conversation_id', conv.id)
+      .eq('user_id', profile.id)
+    fetchConversations(profile.id)
+  }
+
+  function handleSearchInChat(conv) {
+    setContextMenu(null)
+    setActiveConversation(conv)
+    // Dispatch custom event so ChatPage opens search
+    setTimeout(() => window.dispatchEvent(new CustomEvent('nexo:open-search', { detail: { convId: conv.id } })), 200)
+  }
+
+  function handleSelectMessages(conv) {
+    setContextMenu(null)
+    setActiveConversation(conv)
+    setTimeout(() => window.dispatchEvent(new CustomEvent('nexo:select-messages', { detail: { convId: conv.id } })), 200)
+  }
+
+  function handleLeaveGroup(conv) {
+    setContextMenu(null)
+    setConfirmDialog({
+      title: conv.isCommunity ? 'Salir de la comunidad' : 'Salir del grupo',
+      message: `¿Querés salir de "${conv.name}"? No podrás ver los mensajes nuevos.`,
+      danger: true,
+      confirmLabel: 'Salir',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await supabase.rpc('leave_conversations', { conv_ids: [conv.id] })
+        if (activeConversation?.id === conv.id) setActiveConversation(null)
+        fetchConversations(profile.id)
+      },
+    })
   }
 
   if (showNewGroup) return <NewGroupPage initialType={newGroupType} onBack={() => setShowNewGroup(false)} onCreated={handleGroupCreated} />
@@ -797,13 +865,18 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
                       </span>
                     )}
                   </div>
-                  {lastMsg && (
-                    <span style={{
-                      fontSize: 11, flexShrink: 0, marginLeft: 8,
-                      color: conv.unread > 0 ? C.green : C.textDim,
-                      fontWeight: conv.unread > 0 ? 600 : 400,
-                    }}>{formatTime(lastMsg.created_at)}</span>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: 8 }}>
+                    {mutedConvs.has(conv.id) && (
+                      <span style={{ fontSize: 11, color: C.textDim }}>🔕</span>
+                    )}
+                    {lastMsg && (
+                      <span style={{
+                        fontSize: 11,
+                        color: conv.unread > 0 ? C.green : C.textDim,
+                        fontWeight: conv.unread > 0 ? 600 : 400,
+                      }}>{formatTime(lastMsg.created_at)}</span>
+                    )}
+                  </div>
                 </div>
                 {/* Member count for groups */}
                 {isGroup && !lastMsg && (
@@ -838,80 +911,117 @@ export default function ChatListPage({ onProfileClick, initialFilter }) {
         })}
       </div>
 
-      {/* ── CONTEXT MENU ── */}
+      {/* ── CONTEXT MENU (WhatsApp-style) ── */}
       {contextMenu && (
         <div
           onClick={e => e.stopPropagation()}
           style={{
-            position: 'fixed', zIndex: 100,
-            left: Math.min(contextMenu.x, window.innerWidth - 200),
-            top: Math.min(contextMenu.y, window.innerHeight - 220),
+            position: 'fixed', zIndex: 300,
+            left: Math.min(contextMenu.x, window.innerWidth - 220),
+            top: Math.min(contextMenu.y, window.innerHeight - 380),
             background: C.panel, border: `1px solid ${C.border}`,
-            borderRadius: 12, overflow: 'hidden',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-            minWidth: 190,
+            borderRadius: 14, overflow: 'hidden',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.55)',
+            minWidth: 210,
           }}
         >
-          {/* Categorizar — solo para chats directos */}
-          {!contextMenu.conv.isGroup && (
-            <>
+          {(() => {
+            const conv = contextMenu.conv
+            const isMuted = mutedConvs.has(conv.id)
+            const menuItem = (icon, label, onClick, danger = false) => (
               <div
-                onClick={() => setCatSubMenu(v => !v)}
+                key={label}
+                onClick={onClick}
                 style={{
-                  padding: '10px 14px', cursor: 'pointer', fontSize: 13,
-                  color: C.text, display: 'flex', alignItems: 'center', gap: 8,
-                  borderBottom: `1px solid ${C.border}22`,
-                  background: catSubMenu ? C.panel2 : 'transparent',
+                  padding: '11px 16px', cursor: 'pointer', fontSize: 13.5,
+                  color: danger ? '#ef4444' : C.text,
+                  display: 'flex', alignItems: 'center', gap: 11,
+                  borderBottom: `1px solid ${C.border}18`,
+                  userSelect: 'none',
                 }}
+                onMouseEnter={e => e.currentTarget.style.background = danger ? '#ef444414' : C.panel2}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
-                <span>📂</span>
-                <span style={{ flex: 1 }}>Categorizar como...</span>
-                <span style={{ fontSize: 10, color: C.textDim }}>{catSubMenu ? '▲' : '▼'}</span>
+                <span style={{ fontSize: 15, width: 20, textAlign: 'center' }}>{icon}</span>
+                <span style={{ flex: 1 }}>{label}</span>
               </div>
-              {catSubMenu && (
-                <div style={{ background: C.panel2 }}>
-                  {[['amigo','🤝 Amigo'],['clan','⚔️ Clan'],['conocido','👋 Conocido']].map(([cat, label]) => (
+            )
+            return (
+              <>
+                {/* Info */}
+                {menuItem(conv.isGroup ? '👥' : 'ℹ️',
+                  conv.isGroup ? (conv.isCommunity ? 'Info de la comunidad' : 'Info del grupo') : 'Ver perfil',
+                  () => { setContextMenu(null); setActiveConversation(conv) }
+                )}
+                {/* Buscar */}
+                {menuItem('🔍', 'Buscar en el chat', () => handleSearchInChat(conv))}
+                {/* Seleccionar mensajes */}
+                {menuItem('☑️', 'Seleccionar mensajes', () => handleSelectMessages(conv))}
+                {/* Silenciar / Activar */}
+                {menuItem(isMuted ? '🔔' : '🔕', isMuted ? 'Activar notificaciones' : 'Silenciar (8 h)', () => handleMute(conv))}
+                {/* Marcar como no leído */}
+                {menuItem('💬', 'Marcar como no leído', () => handleMarkUnread(conv))}
+
+                <div style={{ borderTop: `1px solid ${C.border}33` }} />
+
+                {/* Categorizar — solo chats directos */}
+                {!conv.isGroup && (
+                  <>
                     <div
-                      key={cat}
-                      onClick={() => handleCategorize(contextMenu.conv, cat)}
+                      onClick={() => setCatSubMenu(v => !v)}
                       style={{
-                        padding: '8px 28px', cursor: 'pointer', fontSize: 12,
-                        color: contactCategories[contextMenu.conv.user?.id] === cat ? C.green : C.text,
-                        fontWeight: contactCategories[contextMenu.conv.user?.id] === cat ? 700 : 400,
+                        padding: '11px 16px', cursor: 'pointer', fontSize: 13.5,
+                        color: C.text, display: 'flex', alignItems: 'center', gap: 11,
+                        borderBottom: `1px solid ${C.border}18`,
+                        background: catSubMenu ? C.panel2 : 'transparent',
+                        userSelect: 'none',
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = C.panel}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >{label} {contactCategories[contextMenu.conv.user?.id] === cat ? '✓' : ''}</div>
-                  ))}
-                  <div
-                    onClick={() => handleCategorize(contextMenu.conv, null)}
-                    style={{
-                      padding: '8px 28px', cursor: 'pointer', fontSize: 12,
-                      color: C.textDim, borderTop: `1px solid ${C.border}22`,
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = C.panel}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >✕ Sin categoría</div>
-                </div>
-              )}
-            </>
-          )}
-          <div
-            onClick={() => handleClearHistory(contextMenu.conv)}
-            style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: C.text, display: 'flex', gap: 8, alignItems: 'center' }}
-            onMouseEnter={e => e.currentTarget.style.background = C.panel2}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-          >
-            <span>🧹</span> Limpiar historial
-          </div>
-          <div
-            onClick={() => handleDeleteChat(contextMenu.conv)}
-            style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, color: '#ef4444', display: 'flex', gap: 8, alignItems: 'center', borderTop: `1px solid ${C.border}22` }}
-            onMouseEnter={e => e.currentTarget.style.background = '#ef444418'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-          >
-            <span>🗑️</span> Borrar chat
-          </div>
+                      onMouseEnter={e => e.currentTarget.style.background = C.panel2}
+                      onMouseLeave={e => e.currentTarget.style.background = catSubMenu ? C.panel2 : 'transparent'}
+                    >
+                      <span style={{ fontSize: 15, width: 20, textAlign: 'center' }}>📂</span>
+                      <span style={{ flex: 1 }}>Categorizar como...</span>
+                      <span style={{ fontSize: 10, color: C.textDim }}>{catSubMenu ? '▲' : '▼'}</span>
+                    </div>
+                    {catSubMenu && (
+                      <div style={{ background: C.panel2, borderBottom: `1px solid ${C.border}18` }}>
+                        {[['amigo','🤝 Amigo'],['clan','⚔️ Clan'],['conocido','👋 Conocido']].map(([cat, label]) => (
+                          <div
+                            key={cat}
+                            onClick={() => handleCategorize(conv, cat)}
+                            style={{
+                              padding: '8px 30px', cursor: 'pointer', fontSize: 12.5,
+                              color: contactCategories[conv.user?.id] === cat ? C.green : C.text,
+                              fontWeight: contactCategories[conv.user?.id] === cat ? 700 : 400,
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = C.panel}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >{label} {contactCategories[conv.user?.id] === cat ? '✓' : ''}</div>
+                        ))}
+                        <div
+                          onClick={() => handleCategorize(conv, null)}
+                          style={{ padding: '8px 30px', cursor: 'pointer', fontSize: 12.5, color: C.textDim, borderTop: `1px solid ${C.border}22` }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.panel}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >✕ Sin categoría</div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Vaciar / Limpiar historial */}
+                {menuItem('🧹', 'Vaciar historial', () => handleClearHistory(conv))}
+
+                <div style={{ borderTop: `1px solid ${C.border}33` }} />
+
+                {/* Salir del grupo */}
+                {conv.isGroup && menuItem('🚪', conv.isCommunity ? 'Salir de la comunidad' : 'Salir del grupo', () => handleLeaveGroup(conv), true)}
+
+                {/* Eliminar / Borrar */}
+                {menuItem('🗑️', 'Eliminar chat', () => handleDeleteChat(conv), true)}
+              </>
+            )
+          })()}
         </div>
       )}
 
