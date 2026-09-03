@@ -35,7 +35,6 @@ function annLimit(role) {
   return ANN_LIMITS[role] ?? (role ? 999 : 1)
 }
 const CATEGORIES = [
-  { id: 'all',     label: 'Todo',      emoji: '📢' },
   { id: 'torneo',  label: 'Torneos',   emoji: '🏆' },
   { id: 'liga',    label: 'Ligas',     emoji: '⚽' },
   { id: 'evento',  label: 'Eventos',   emoji: '🎮' },
@@ -371,15 +370,172 @@ function AnnouncementCard({ ann, myId, onLike, onDelete, onViewTournament }) {
   const liked = ann.liked_by_me
   const likeCount = ann.like_count || 0
   const isAuthor = ann.author_id === myId
-  const hasTournament = ann.tournament_id || (ann.category === 'torneo' && ann.community?.id)
+  const hasFlyer = !!ann.image_url
 
+  if (hasFlyer) {
+    // ── FLYER card: imagen hero con overlay, diseño visual premium ──
+    return (
+      <div style={{
+        borderRadius: 18, overflow: 'hidden',
+        boxShadow: ann.is_pinned
+          ? `0 0 0 2px ${cfg.color}88, 0 8px 40px rgba(0,0,0,0.5)`
+          : '0 4px 28px rgba(0,0,0,0.35)',
+        position: 'relative',
+        background: '#000',
+      }}>
+        {/* Hero image */}
+        <div style={{ position: 'relative', lineHeight: 0 }}>
+          <img
+            src={ann.image_url} alt={ann.title}
+            style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight: 420 }}
+          />
+
+          {/* Dark gradient overlay bottom */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,0.55) 65%, rgba(0,0,0,0.92) 100%)',
+          }} />
+
+          {/* Top chips */}
+          <div style={{ position: 'absolute', top: 12, left: 12, right: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {ann.is_pinned && (
+                <span style={{ background: C.green, color: '#000', fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, letterSpacing: '.5px' }}>
+                  📌 FIJADO
+                </span>
+              )}
+              <span style={{
+                background: cfg.color, color: '#fff',
+                fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20,
+                letterSpacing: '.8px', boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
+              }}>
+                {cfg.label.toUpperCase()}
+              </span>
+            </div>
+            {ann.game && (
+              <span style={{
+                background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)',
+                color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+              }}>
+                🎮 {ann.game}
+              </span>
+            )}
+          </div>
+
+          {/* Bottom overlay: title + author + actions */}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '16px 16px 14px' }}>
+            {/* Community badge */}
+            {ann.community && (
+              <div style={{ marginBottom: 6 }}>
+                <span style={{
+                  fontSize: 11, color: 'rgba(255,255,255,0.75)', fontWeight: 600,
+                  background: 'rgba(255,255,255,0.12)', padding: '2px 9px', borderRadius: 10, backdropFilter: 'blur(4px)',
+                }}>
+                  {ann.community.group_type === 'community' ? '🌐' : '👥'} {ann.community.name}
+                </span>
+              </div>
+            )}
+
+            <h3 style={{
+              margin: '0 0 10px', color: '#fff', fontWeight: 900,
+              fontSize: 18, lineHeight: 1.25,
+              textShadow: '0 2px 12px rgba(0,0,0,0.8)',
+            }}>
+              {ann.title}
+            </h3>
+
+            {/* CTA buttons */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              {ann.tournament_id && (
+                <button
+                  onClick={() => onViewTournament && onViewTournament(ann.tournament_id)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '9px 18px', borderRadius: 10,
+                    background: C.green, color: '#000', border: 'none', cursor: 'pointer',
+                    fontSize: 13, fontWeight: 800,
+                    boxShadow: `0 2px 16px ${C.green}77`,
+                  }}
+                >
+                  {ann.tournament?.tournament_status === 'inscripcion'
+                    ? (ann.category === 'liga' ? '⚽ Inscribirse →' : '🏆 Inscribirse →')
+                    : (ann.category === 'liga' ? '⚽ Ver liga →' : '🏆 Ver torneo →')}
+                </button>
+              )}
+              {ann.link_url && (
+                <a
+                  href={ann.link_url} target="_blank" rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '8px 16px', borderRadius: 10,
+                    background: ann.tournament_id ? 'rgba(255,255,255,0.15)' : C.green,
+                    color: '#fff',
+                    fontSize: 13, fontWeight: 700, textDecoration: 'none',
+                    border: 'none', backdropFilter: 'blur(8px)',
+                  }}
+                >
+                  🔗 {ann.link_label || 'Ver más'}
+                </a>
+              )}
+            </div>
+
+            {/* Footer row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Avatar name={ann.author?.display_name} url={ann.author?.avatar_url} size={26} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
+                  {ann.author?.display_name || 'Anónimo'}
+                </span>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginLeft: 6 }}>{timeAgo(ann.created_at)}</span>
+              </div>
+
+              <button
+                onClick={() => onLike(ann)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  background: liked ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.12)',
+                  border: 'none', borderRadius: 20, padding: '5px 11px', cursor: 'pointer',
+                  color: liked ? '#f87171' : 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: 600,
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                <span>{liked ? '❤️' : '🤍'}</span>
+                {likeCount > 0 && <span style={{ fontSize: 12 }}>{likeCount}</span>}
+              </button>
+
+              {isAuthor && (
+                <button
+                  onClick={() => onDelete(ann.id)}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)', border: 'none',
+                    borderRadius: 20, padding: '5px 10px', cursor: 'pointer',
+                    color: 'rgba(255,255,255,0.55)', fontSize: 12, backdropFilter: 'blur(8px)',
+                  }}
+                >
+                  🗑
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Body text below image (only if has text) */}
+        {ann.body && (
+          <div style={{ background: C.panel, padding: '12px 16px 14px', borderTop: `1px solid ${C.border}` }}>
+            <p style={{ margin: 0, color: C.text2, fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{ann.body}</p>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Standard card (no image) ──
   return (
     <div style={{
       background: C.panel, borderRadius: 16, overflow: 'hidden',
-      border: `1px solid ${C.border}`,
-      boxShadow: ann.is_pinned ? `0 0 0 2px ${C.green}44, 0 4px 24px rgba(0,0,0,0.2)` : '0 2px 12px rgba(0,0,0,0.12)',
+      border: `1px solid ${ann.is_pinned ? cfg.color + '44' : C.border}`,
+      boxShadow: ann.is_pinned ? `0 0 0 1px ${cfg.color}33, 0 4px 24px rgba(0,0,0,0.2)` : '0 2px 12px rgba(0,0,0,0.12)',
     }}>
-      {/* Pinned badge */}
       {ann.is_pinned && (
         <div style={{ background: `${C.green}18`, padding: '6px 14px', borderBottom: `1px solid ${C.green}22`, display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 12 }}>📌</span>
@@ -387,54 +543,25 @@ function AnnouncementCard({ ann, myId, onLike, onDelete, onViewTournament }) {
         </div>
       )}
 
-      {/* Flyer image */}
-      {ann.image_url && (
-        <div style={{ position: 'relative' }}>
-          <img
-            src={ann.image_url} alt={ann.title}
-            style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }}
-          />
-          {/* Category chip over image */}
-          <div style={{
-            position: 'absolute', top: 10, left: 10,
-            background: cfg.color, color: '#fff',
-            fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-          }}>
-            {cfg.label.toUpperCase()}
-          </div>
-          {ann.game && (
-            <div style={{
-              position: 'absolute', top: 10, right: 10,
-              background: 'rgba(0,0,0,0.6)', color: '#fff', backdropFilter: 'blur(4px)',
-              fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-            }}>
-              🎮 {ann.game}
-            </div>
+      <div style={{ padding: '14px 16px 12px' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: cfg.bg, color: cfg.color }}>
+            {cfg.label}
+          </span>
+          {ann.game && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: C.panel2, color: C.textDim }}>🎮 {ann.game}</span>}
+          {ann.community && (
+            <span style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600, background: '#8b5cf614', padding: '2px 9px', borderRadius: 20 }}>
+              {ann.community.group_type === 'community' ? '🌐' : '👥'} {ann.community.name}
+            </span>
           )}
         </div>
-      )}
 
-      <div style={{ padding: '14px 16px 12px' }}>
-        {/* Category chip (no image case) */}
-        {!ann.image_url && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: cfg.bg, color: cfg.color }}>
-              {cfg.label}
-            </span>
-            {ann.game && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: C.panel2, color: C.textDim }}>🎮 {ann.game}</span>}
-          </div>
-        )}
-
-        {/* Title */}
         <h3 style={{ margin: '0 0 8px', color: C.text, fontWeight: 800, fontSize: 16, lineHeight: 1.3 }}>{ann.title}</h3>
 
-        {/* Body */}
         {ann.body && (
           <p style={{ margin: '0 0 12px', color: C.text2, fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{ann.body}</p>
         )}
 
-        {/* Action buttons */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: ann.link_url || ann.tournament_id ? 12 : 0 }}>
           {ann.tournament_id && (
             <button
@@ -470,22 +597,13 @@ function AnnouncementCard({ ann, myId, onLike, onDelete, onViewTournament }) {
           )}
         </div>
 
-        {/* Footer: author + community + time + actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
           <Avatar name={ann.author?.display_name} url={ann.author?.avatar_url} size={28} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: C.text2 }}>{ann.author?.display_name || 'Anónimo'}</span>
-              {ann.community && (
-                <span style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600, background: '#8b5cf614', padding: '1px 7px', borderRadius: 10 }}>
-                  {ann.community.group_type === 'community' ? '🌐' : '👥'} {ann.community.name}
-                </span>
-              )}
-            </div>
-            <span style={{ fontSize: 11, color: C.textDim }}>{timeAgo(ann.created_at)}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.text2 }}>{ann.author?.display_name || 'Anónimo'}</span>
+            <span style={{ display: 'block', fontSize: 11, color: C.textDim }}>{timeAgo(ann.created_at)}</span>
           </div>
 
-          {/* Like */}
           <button
             onClick={() => onLike(ann)}
             style={{
@@ -501,7 +619,6 @@ function AnnouncementCard({ ann, myId, onLike, onDelete, onViewTournament }) {
             {likeCount > 0 && <span style={{ fontSize: 12 }}>{likeCount}</span>}
           </button>
 
-          {/* Delete (author only) */}
           {isAuthor && (
             <button
               onClick={() => onDelete(ann.id)}
@@ -525,7 +642,7 @@ export default function AnnouncementsPage() {
   const { profile } = useAuthStore()
   const [items, setItems]       = useState([])
   const [loading, setLoading]   = useState(true)
-  const [category, setCategory] = useState('all')
+  const [category, setCategory] = useState('torneo')
   const [showForm, setShowForm] = useState(false)
   const [likedSet, setLikedSet] = useState(new Set())
   const [likeCounts, setLikeCounts] = useState({})
@@ -543,7 +660,7 @@ export default function AnnouncementsPage() {
       .order('created_at', { ascending: false })
       .limit(50)
 
-    if (category !== 'all') q = q.eq('category', category)
+    q = q.eq('category', category)
 
     const { data } = await q
     const list = data || []
@@ -712,9 +829,7 @@ export default function AnnouncementsPage() {
             <div style={{ fontSize: 52 }}>📢</div>
             <p style={{ margin: 0, color: C.text, fontWeight: 700, fontSize: 16 }}>Sin anuncios aún</p>
             <p style={{ margin: 0, color: C.textDim, fontSize: 13, maxWidth: 260, lineHeight: 1.5 }}>
-              {category === 'all'
-                ? 'Sé el primero en publicar un torneo, liga o evento de la comunidad.'
-                : `No hay anuncios de tipo "${CATEGORIES.find(c => c.id === category)?.label}" todavía.`}
+              {`No hay anuncios de "${CATEGORIES.find(c => c.id === category)?.label}" todavía. ¡Sé el primero!`}
             </p>
             {canPublish && (
               <button onClick={() => setShowForm(true)} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: C.green, color: C.bg, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: `0 2px 12px ${C.green}33` }}>
