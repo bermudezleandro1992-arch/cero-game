@@ -461,6 +461,42 @@ function TorneoOverview({ data, tournamentId, profile, isAdmin, onDrawComplete, 
           Iniciar sorteo en vivo
         </button>
       )}
+
+      {isAdmin && (
+        <ThirdPlaceToggle tournamentId={tournamentId} value={!!data.has_third_place} onToggle={onDrawComplete} />
+      )}
+    </div>
+  )
+}
+
+function ThirdPlaceToggle({ tournamentId, value, onToggle }) {
+  const [saving, setSaving] = useState(false)
+  async function toggle() {
+    setSaving(true)
+    await supabase.from('conversations').update({ has_third_place: !value }).eq('id', tournamentId)
+    setSaving(false)
+    onToggle?.()
+  }
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px',
+    }}>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>🥉 Partido 3er/4to lugar</div>
+        <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>Habilitar partido por el tercer puesto</div>
+      </div>
+      <button onClick={toggle} disabled={saving} style={{
+        width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+        background: value ? C.green : C.border, transition: 'background 0.2s',
+        position: 'relative', flexShrink: 0,
+      }}>
+        <span style={{
+          position: 'absolute', top: 3, left: value ? 22 : 3,
+          width: 18, height: 18, borderRadius: '50%', background: '#fff',
+          transition: 'left 0.2s', display: 'block',
+        }} />
+      </button>
     </div>
   )
 }
@@ -902,6 +938,21 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
           status: 'pending',
         })
       }
+    }
+
+    // 3rd/4th place match in a separate round (rounds + 1, match 1)
+    if (data.has_third_place) {
+      matches.push({
+        tournament_id: tournamentId,
+        round_number: rounds + 1,
+        match_number: 1,
+        player1_id: null,
+        player2_id: null,
+        player1_name: null,
+        player2_name: null,
+        status: 'pending',
+        phase: 'third_place',
+      })
     }
 
     // Delete existing bracket matches and insert new ones
