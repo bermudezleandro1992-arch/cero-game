@@ -418,7 +418,7 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
 }
 
 // ── ComunidadTab — estructura y grupos ───────────────────────────────────────
-function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpenTournament, onChangeToAvisos }) {
+function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpenTournament, onChangeToAvisos, onAddMember }) {
   const { setActiveConversation } = useChatStore()
   const [channels, setChannels] = useState([])
 
@@ -544,10 +544,10 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
           <div style={{ height: 1, background: C.border, margin: '8px 0 16px' }} />
           <div style={{ color: C.textDim, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>Administración</div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <button onClick={onAddMember} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
               <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👤+</div>
               <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Añadir miembro</span>
-            </div>
+            </button>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
               <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.panel2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👥+</div>
               <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Añadir grupos</span>
@@ -569,6 +569,10 @@ export default function CommunityDashboardWA({ community, onBack }) {
   const [memberCount, setMemberCount] = useState(0)
   const [annLoading, setAnnLoading] = useState(true)
   const [viewingTournament, setViewingTournament] = useState(null)
+  const [showAddMember, setShowAddMember] = useState(false)
+  const [memberSearch, setMemberSearch] = useState('')
+  const [memberResults, setMemberResults] = useState([])
+  const [addingMemberId, setAddingMemberId] = useState(null)
 
   const isAdmin = community.created_by === profile?.id
     || myRole === 'owner' || myRole === 'admin'
@@ -580,6 +584,24 @@ export default function CommunityDashboardWA({ community, onBack }) {
       .eq('conversation_id', community.id).eq('user_id', profile.id).single()
       .then(({ data }) => { if (data?.role) setMyRole(data.role) })
   }, [profile?.id, community?.id])
+
+  async function searchUsers(q) {
+    if (!q.trim()) { setMemberResults([]); return }
+    const { data } = await supabase.from('users')
+      .select('id, display_name, username, avatar_url')
+      .or(`display_name.ilike.%${q}%,username.ilike.%${q}%`)
+      .limit(10)
+    setMemberResults(data || [])
+  }
+
+  async function addMemberToComm(userId) {
+    setAddingMemberId(userId)
+    const { error } = await supabase.from('conversation_members')
+      .upsert({ conversation_id: community.id, user_id: userId }, { onConflict: 'conversation_id,user_id', ignoreDuplicates: true })
+    if (error) { alert(`Error al agregar: ${error.message}`) }
+    else { loadData(); setMemberResults(r => r.filter(u => u.id !== userId)) }
+    setAddingMemberId(null)
+  }
 
   const loadData = useCallback(async () => {
     if (!community?.id) return
@@ -633,7 +655,11 @@ export default function CommunityDashboardWA({ community, onBack }) {
           <TournamentDashboard
             tournamentId={viewingTournament.id}
             profile={profile}
-            isAdmin={isAdmin || viewingTournament.created_by === profile?.id}
+            isAdmin={
+              community.created_by === profile?.id ||
+              myRole === 'owner' || myRole === 'admin' ||
+              viewingTournament.created_by === profile?.id
+            }
             onBack={() => { setViewingTournament(null); loadData() }}
             communityId={community.id}
           />
@@ -699,6 +725,7 @@ export default function CommunityDashboardWA({ community, onBack }) {
             profile={profile}
             onOpenTournament={setViewingTournament}
             onChangeToAvisos={() => setTab('avisos')}
+            onAddMember={() => { setShowAddMember(true); setMemberSearch(''); setMemberResults([]) }}
           />
         )}
         {tab === 'avisos' && (
@@ -716,6 +743,49 @@ export default function CommunityDashboardWA({ community, onBack }) {
       </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {/* Modal: Añadir miembro */}
+      {showAddMember && createPortal(
+        <div onClick={() => setShowAddMember(false)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.panel, borderRadius: '20px 20px 0 0', padding: '20px 16px 32px', width: '100%', maxWidth: 480, maxHeight: '75vh', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.text }}>👤 Añadir miembro</p>
+              <button onClick={() => setShowAddMember(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 20 }}>✕</button>
+            </div>
+            <input
+              autoFocus
+              value={memberSearch}
+              onChange={e => { setMemberSearch(e.target.value); searchUsers(e.target.value) }}
+              placeholder="Buscar por nombre o usuario…"
+              style={{ padding: '10px 14px', borderRadius: 12, border: `1px solid ${C.border}`, background: C.panel2, color: C.text, fontSize: 14, outline: 'none' }}
+            />
+            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {memberResults.map(u => (
+                <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, background: C.panel2 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: avatarColor(u.id), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                    {u.avatar_url ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : (u.display_name?.[0] || u.username?.[0] || '?').toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: C.text, fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.display_name || u.username}</div>
+                    {u.username && <div style={{ color: C.textDim, fontSize: 12 }}>@{u.username}</div>}
+                  </div>
+                  <button
+                    onClick={() => addMemberToComm(u.id)}
+                    disabled={addingMemberId === u.id}
+                    style={{ padding: '6px 14px', borderRadius: 20, border: 'none', background: '#25D366', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: addingMemberId === u.id ? 0.5 : 1 }}
+                  >
+                    {addingMemberId === u.id ? '…' : 'Añadir'}
+                  </button>
+                </div>
+              ))}
+              {memberSearch && !memberResults.length && (
+                <p style={{ margin: 0, textAlign: 'center', color: C.textDim, fontSize: 13, padding: 16 }}>No se encontraron usuarios</p>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

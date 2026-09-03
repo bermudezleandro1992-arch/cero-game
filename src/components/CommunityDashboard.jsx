@@ -45,6 +45,7 @@ const BASE_TABS = [
   { id: 'inicio',    label: 'Inicio',    emoji: '🏠' },
   { id: 'chat',      label: 'Chat',      emoji: '💬' },
   { id: 'torneos',   label: 'Torneos',   emoji: '🏆' },
+  { id: 'historial', label: 'Historial', emoji: '📜' },
   { id: 'miembros',  label: 'Miembros',  emoji: '👥' },
 ]
 
@@ -488,6 +489,58 @@ const AVISO_CATS = [
   { id: 'noticia', label: '📰 Noticias', match: 'noticia' },
 ]
 
+// ── Historial tab ─────────────────────────────────────────────────────────────
+function HistorialTab({ communityId, onOpenTournament }) {
+  const [history, setHistory] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!communityId) return
+    supabase.from('conversations')
+      .select('id, name, group_type, tournament_status, max_participants, game, created_by, created_at')
+      .eq('community_id', communityId)
+      .in('group_type', ['tournament', 'liga'])
+      .in('tournament_status', ['finalizado', 'cancelado'])
+      .order('created_at', { ascending: false })
+      .then(({ data }) => { setHistory(data || []); setLoading(false) })
+  }, [communityId])
+
+  if (loading) return <div style={{ padding: 32, textAlign: 'center', color: C.textDim }}>Cargando historial…</div>
+  if (!history.length) return (
+    <div style={{ padding: 48, textAlign: 'center' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>📜</div>
+      <p style={{ color: C.textDim, margin: 0 }}>Aún no hay torneos ni ligas finalizados</p>
+    </div>
+  )
+
+  return (
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <p style={{ margin: '0 0 8px', fontSize: 12, color: C.textDim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+        {history.length} competencias finalizadas
+      </p>
+      {history.map(t => (
+        <button
+          key={t.id}
+          onClick={() => onOpenTournament(t)}
+          style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 16, background: C.panel, border: `1px solid ${C.border}`, cursor: 'pointer', textAlign: 'left', width: '100%' }}
+        >
+          <span style={{ fontSize: 28, flexShrink: 0 }}>{t.group_type === 'liga' ? '⚽' : '🏆'}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: C.text, fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</div>
+            <div style={{ color: C.textDim, fontSize: 12, marginTop: 2 }}>
+              {t.group_type === 'liga' ? 'Liga' : 'Torneo'} · {t.max_participants ? `${t.max_participants} participantes` : ''} · {t.tournament_status === 'cancelado' ? '❌ Cancelado' : '✅ Finalizado'}
+            </div>
+            {t.game && <div style={{ color: C.textDim, fontSize: 11, marginTop: 1 }}>{t.game}</div>}
+          </div>
+          <div style={{ color: C.textDim, fontSize: 11, flexShrink: 0 }}>
+            {t.created_at ? new Date(t.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+          </div>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function AnunciosTab({ announcements, loading }) {
   const [cat, setCat] = useState('todo')
   const [lightbox, setLightbox] = useState(null) // url de imagen ampliada
@@ -583,7 +636,7 @@ function AnunciosTab({ announcements, loading }) {
 }
 
 // ── Miembros tab ──────────────────────────────────────────────────────────────
-function MiembrosTab({ communityId, ownerId, isAdmin, myId }) {
+function MiembrosTab({ communityId, ownerId, isAdmin, myId, showMembers }) {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [actionMember, setActionMember] = useState(null)
@@ -612,6 +665,17 @@ function MiembrosTab({ communityId, ownerId, isAdmin, myId }) {
   }, [communityId])
 
   useEffect(() => { loadMembers() }, [loadMembers])
+
+  // Respect show_members setting — non-admins see a locked message
+  if (!isAdmin && showMembers === false) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center' }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+        <p style={{ color: C.text, fontWeight: 700, margin: '0 0 6px' }}>Lista de miembros privada</p>
+        <p style={{ color: C.textDim, margin: 0, fontSize: 13 }}>El CEO de esta comunidad eligió no mostrar la lista de miembros.</p>
+      </div>
+    )
+  }
 
   const ROLE_CFG = {
     ceo:        { label: 'CEO',        color: '#f59e0b' },
@@ -1133,7 +1197,11 @@ export default function CommunityDashboard({ community, onBack }) {
           <TournamentDashboard
             tournamentId={viewingTournament.id}
             profile={profile}
-            isAdmin={isAdmin || viewingTournament.created_by === profile?.id}
+            isAdmin={
+              community.created_by === profile?.id ||
+              myRole === 'owner' || myRole === 'admin' ||
+              viewingTournament.created_by === profile?.id
+            }
             onBack={() => { setViewingTournament(null); loadData() }}
           />
         </div>
@@ -1202,8 +1270,11 @@ export default function CommunityDashboard({ community, onBack }) {
         {tab === 'anuncios' && (
           <AnunciosTab announcements={announcements} loading={annLoading} />
         )}
+        {tab === 'historial' && (
+          <HistorialTab communityId={community.id} onOpenTournament={setViewingTournament} />
+        )}
         {tab === 'miembros' && (
-          <MiembrosTab communityId={community.id} ownerId={community.created_by} isAdmin={isAdmin} myId={profile?.id} />
+          <MiembrosTab communityId={community.id} ownerId={community.created_by} isAdmin={isAdmin} myId={profile?.id} showMembers={community.show_members ?? true} />
         )}
         {tab === 'chat' && (
           <ChannelsTab community={community} profile={profile} isAdmin={isAdmin} />

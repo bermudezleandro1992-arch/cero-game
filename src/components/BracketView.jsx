@@ -445,6 +445,7 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
   const [resetAllConfirm, setResetAllConfirm] = useState(false)
   const [resettingAll, setResettingAll]       = useState(false)
   const [resolvedCommunityId, setResolvedCommunityId] = useState(communityId || null)
+  const [champion, setChampion] = useState(null) // { name, matchId } — shown after Final
   const postedAnnouncements = useRef(new Set())
   const scrollRef = useRef(null)
 
@@ -536,6 +537,23 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
           is_active: true,
         })
         if (annErr) console.error('Error posting bye announcement:', annErr)
+
+        // Champion detection for bye completion of Final
+        if (m.round_number === totalRounds && !postedAnnouncements.current.has(`champ-${m.id}`)) {
+          postedAnnouncements.current.add(`champ-${m.id}`)
+          setChampion({ name: winnerName, matchId: m.id })
+          if (commId) {
+            await supabase.from('announcements').insert({
+              conversation_id: commId,
+              tournament_id: tournamentId,
+              author_id: profile.id,
+              title: `🏆 ¡CAMPEÓN! ${tournamentName || 'Torneo'}`,
+              body: `🎉🏆 ¡FELICITACIONES CAMPEÓN!\n\n👑 ${winnerName}\n\n¡Ganó ${tournamentName || 'el torneo'}! 🥇🎊`,
+              category: 'torneo',
+              is_active: true,
+            })
+          }
+        }
       }
     }
     await load()
@@ -678,6 +696,22 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
                 is_active: true,
               })
               if (annErr) console.error('Error posting resultado announcement:', annErr)
+
+              // Champion detection: if this is the Final match, show animation + post champion aviso
+              if (mx.round_number === totalRounds && !postedAnnouncements.current.has(`champ-${mx.id}`)) {
+                postedAnnouncements.current.add(`champ-${mx.id}`)
+                setChampion({ name: winner, matchId: mx.id })
+                // Post champion announcement to Avisos
+                await supabase.from('announcements').insert({
+                  conversation_id: commId || undefined,
+                  tournament_id: tournamentId,
+                  author_id: profile.id,
+                  title: `🏆 ¡CAMPEÓN! ${tournamentName || 'Torneo'}`,
+                  body: `🎉🏆 ¡FELICITACIONES CAMPEÓN!\n\n👑 ${winner}\n\n¡Ganó ${tournamentName || 'el torneo'}! 🥇🎊`,
+                  category: 'torneo',
+                  is_active: true,
+                })
+              }
             }
           }}
         />,
@@ -879,6 +913,47 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
           </span>
         </div>
       </div>
+
+      {/* Champion overlay — fuegos artificiales + anuncio campeón */}
+      {champion && createPortal(
+        <div
+          onClick={() => setChampion(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', background: 'rgba(0,0,0,0.85)', cursor: 'pointer' }}
+        >
+          <style>{`
+            @keyframes trophy-pop { 0%{transform:scale(0) rotate(-20deg);opacity:0} 60%{transform:scale(1.2) rotate(5deg);opacity:1} 100%{transform:scale(1) rotate(0deg);opacity:1} }
+            @keyframes firework { 0%{transform:translateY(0);opacity:1} 100%{transform:translateY(-80px);opacity:0} }
+            @keyframes confetti-fall { 0%{transform:translateY(-20px) rotate(0deg);opacity:1} 100%{transform:translateY(120px) rotate(360deg);opacity:0} }
+            .fw-particle { position:absolute; width:8px; height:8px; border-radius:50%; animation:firework 0.8s ease-out forwards; }
+            .confetti-p { position:absolute; width:6px; height:10px; border-radius:2px; animation:confetti-fall 1.5s ease-in forwards; }
+          `}</style>
+          {/* Confetti particles */}
+          {Array.from({length:30}).map((_,i)=>{
+            const colors=['#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#ec4899']
+            const left=Math.random()*100
+            const delay=Math.random()*1.2
+            const color=colors[i%colors.length]
+            return <div key={i} className="confetti-p" style={{left:`${left}%`,top:'-10px',background:color,animationDelay:`${delay}s`,animationDuration:`${1.2+Math.random()}s`}} />
+          })}
+          {/* Firework bursts */}
+          {Array.from({length:12}).map((_,i)=>{
+            const colors=['#f59e0b','#10b981','#ef4444','#8b5cf6']
+            const angle=(i/12)*360
+            const dist=60+Math.random()*40
+            const x=Math.cos(angle*Math.PI/180)*dist
+            const y=Math.sin(angle*Math.PI/180)*dist
+            return <div key={i} className="fw-particle" style={{left:'calc(50% - 4px)',top:'calc(30% - 4px)',background:colors[i%colors.length],transform:`translate(${x}px,${y}px)`,animationDelay:`${Math.random()*0.3}s`}} />
+          })}
+          <div style={{ animation: 'trophy-pop 0.6s cubic-bezier(.34,1.56,.64,1) forwards', textAlign: 'center', padding: '32px 40px', background: 'linear-gradient(135deg,#1a1a2e,#16213e)', borderRadius: 28, border: '2px solid #f59e0b44', boxShadow: '0 0 60px #f59e0b44', maxWidth: 340, width: '90%' }}>
+            <div style={{ fontSize: 72, lineHeight: 1, marginBottom: 8 }}>🏆</div>
+            <div style={{ fontSize: 13, color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 6 }}>¡¡Campeón!!</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: '#fff', marginBottom: 4, lineHeight: 1.2 }}>{champion.name}</div>
+            <div style={{ fontSize: 13, color: '#ffffff66', marginBottom: 20 }}>{tournamentName || 'Torneo'}</div>
+            <div style={{ fontSize: 11, color: '#ffffff44' }}>Tocá para cerrar</div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   )
 }
