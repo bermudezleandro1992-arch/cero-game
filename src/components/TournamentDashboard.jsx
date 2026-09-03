@@ -240,7 +240,6 @@ const LIGA_TABS = [
   { id: 'overview',  label: 'Resumen',  icon: '📊' },
   { id: 'apertura',  label: 'Apertura', icon: '⚽' },
   { id: 'clausura',  label: 'Clausura', icon: '🔄' },
-  { id: 'tabla',     label: 'Tabla',    icon: '🏅' },
   { id: 'chat',      label: 'Chat',     icon: '💬' },
 ]
 
@@ -466,25 +465,55 @@ function LigaOverview({ data, isMember, onJoin, joining }) {
       </div>
 
       {/* Cómo funciona esta liga */}
-      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, padding: 18 }}>
-        <p style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
-          Cómo funciona
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px 0', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 16 }}>📖</span>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '1px' }}>
+            Cómo funciona
+          </p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
           {[
-            { icon: '⚽', title: 'Apertura (Ida)', desc: 'Primera vuelta — todos juegan contra todos una vez.' },
-            { icon: '🔄', title: 'Clausura (Vuelta)', desc: 'Segunda vuelta — se invierten los locales. Dos veces cada partido.' },
-            { icon: '⬆️', title: 'Ascensos', desc: 'Los primeros puestos ascienden a una división superior.' },
-            { icon: '⬇️', title: 'Descensos', desc: 'Los últimos descienden a la división inferior.' },
-          ].map(item => (
-            <div key={item.title} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 18, flexShrink: 0 }}>{item.icon}</span>
+            { icon: '⚽', color: '#22c55e', title: 'Apertura — Fase de grupos (IDA)', desc: 'Todos juegan contra todos una vez. Al terminar, los mejores clasifican para el bracket de playoffs.' },
+            { icon: '🏆', color: '#f59e0b', title: 'Brackets Apertura', desc: 'Eliminación directa entre los clasificados. Partido único. El ganador recibe la copa de la Apertura.' },
+            { icon: '🔄', color: '#3b82f6', title: 'Clausura — Fase de grupos (IDA y VUELTA)', desc: 'Segunda mitad de temporada. Todos juegan contra todos dos veces (local y visitante).' },
+            { icon: '🥇', color: '#a78bfa', title: 'Brackets Clausura', desc: 'Eliminación directa entre los clasificados. El campeón de la Clausura obtiene el título de la temporada.' },
+            { icon: '⬆️', color: '#22c55e', title: 'Ascensos', desc: 'Los mejores puestos de la tabla acumulada ascienden a una división superior la próxima temporada.' },
+            { icon: '⬇️', color: '#ef4444', title: 'Descensos', desc: 'Los últimos puestos descienden a una división inferior la próxima temporada.' },
+          ].map((item, i, arr) => (
+            <div key={item.title} style={{
+              display: 'flex', gap: 14, padding: '13px 18px',
+              borderTop: i > 0 ? `1px solid ${C.border}` : 'none',
+              alignItems: 'flex-start',
+            }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                background: `${item.color}18`, border: `1.5px solid ${item.color}44`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17,
+              }}>{item.icon}</div>
               <div>
                 <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: C.text }}>{item.title}</p>
-                <p style={{ margin: 0, fontSize: 12, color: C.textDim, marginTop: 2 }}>{item.desc}</p>
+                <p style={{ margin: 0, fontSize: 12, color: C.textDim, marginTop: 3, lineHeight: 1.5 }}>{item.desc}</p>
               </div>
             </div>
           ))}
+        </div>
+        {/* Reglas de partido */}
+        <div style={{ margin: '0 14px 14px', background: C.panel2, borderRadius: 12, padding: '12px 14px' }}>
+          <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.8px' }}>⚙️ Reglas del partido</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {[
+              { label: '⏱ Duración', value: '10 min por partido' },
+              { label: '⚡ Tiempo extra', value: 'Sí (2 × 5 min)' },
+              { label: '🥅 Penales', value: 'Sí, si hay empate en TG' },
+              { label: '📋 Formato', value: 'Todos vs todos + Bracket' },
+            ].map(r => (
+              <div key={r.label} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px' }}>
+                <div style={{ fontSize: 10, color: C.textDim, fontWeight: 600, marginBottom: 2 }}>{r.label}</div>
+                <div style={{ fontSize: 12, color: C.text, fontWeight: 700 }}>{r.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -760,7 +789,7 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
   // Determine visible tabs
   let visibleTabs
   if (isLiga) {
-    visibleTabs = ['overview', 'apertura', 'clausura', 'tabla', 'chat']
+    visibleTabs = ['overview', 'apertura', 'clausura', 'chat']
   } else {
     visibleTabs = ['overview']
     if (hasGroups) visibleTabs.push('groups')
@@ -895,25 +924,18 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
         )}
 
         {activeTab === 'clausura' && isLiga && (
-          <LigaTab
-            tournamentId={tournamentId}
-            profile={profile}
-            fase="clausura"
-            ascensos={0}
-            descensos={0}
-            showFixture
-          />
-        )}
-
-        {activeTab === 'tabla' && isLiga && (
-          <LigaTab
-            tournamentId={tournamentId}
-            profile={profile}
-            fase="all"
-            ascensos={2}
-            descensos={1}
-            showFixture={false}
-          />
+          data?.liga_fase === 'clausura' || data?.status === 'finalizado'
+            ? <LigaTab tournamentId={tournamentId} profile={profile} fase="clausura" ascensos={0} descensos={0} showFixture />
+            : <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 24px', gap: 16 }}>
+                <div style={{ fontSize: 56 }}>🔒</div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: C.text, textAlign: 'center' }}>Clausura bloqueada</div>
+                <div style={{ fontSize: 13, color: C.textDim, textAlign: 'center', maxWidth: 280, lineHeight: 1.6 }}>
+                  Esta fase se habilitará cuando termine la <strong style={{ color: C.green }}>Apertura</strong> y el organizador inicie la segunda mitad de la temporada.
+                </div>
+                <div style={{ padding: '10px 20px', borderRadius: 20, background: `${C.green}12`, border: `1px solid ${C.green}33`, fontSize: 12, color: C.green, fontWeight: 700 }}>
+                  ⚽ Apertura en curso
+                </div>
+              </div>
         )}
 
         {activeTab === 'chat' && (

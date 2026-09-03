@@ -334,21 +334,23 @@ export default function LigaTab({ tournamentId, profile, fase = 'all', ascensos 
     </div>
   )
 
-  // Si showFixture, mostramos sub-tabs Fixture / Tabla
+  // Si showFixture, mostramos sub-tabs Partidos / Tabla / Brackets
   if (showFixture) {
+    const allDone = filteredMatches.length > 0 && filteredMatches.every(m => m.status === 'finalizado')
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Sub-tabs */}
         <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
           {[
-            { id: 'fixture', label: '📅 Partidos' },
-            { id: 'tabla',   label: '📊 Tabla' },
+            { id: 'fixture',  label: '📅 Partidos' },
+            { id: 'tabla',    label: '📊 Tabla' },
+            { id: 'brackets', label: '🏆 Brackets' },
           ].map(t => (
             <button key={t.id} onClick={() => setInnerTab(t.id)} style={{
               flex: 1, padding: '11px 0',
               background: 'none', border: 'none', cursor: 'pointer',
               color: innerTab === t.id ? C.green : C.textDim,
-              fontWeight: innerTab === t.id ? 700 : 500, fontSize: 13,
+              fontWeight: innerTab === t.id ? 700 : 500, fontSize: 12,
               borderBottom: `2px solid ${innerTab === t.id ? C.green : 'transparent'}`,
               transition: 'color .15s',
             }}>
@@ -363,6 +365,26 @@ export default function LigaTab({ tournamentId, profile, fase = 'all', ascensos 
           )}
           {innerTab === 'tabla' && (
             <StandingsTable standings={standings} ascensos={ascensos} descensos={descensos} profile={profile} />
+          )}
+          {innerTab === 'brackets' && (
+            allDone
+              ? <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>🏆</div>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 6 }}>¡Fase de grupos terminada!</div>
+                  <div style={{ fontSize: 12, color: C.textDim }}>El organizador iniciará el bracket con los clasificados.</div>
+                </div>
+              : <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 6 }}>Esperando finalizar los partidos</div>
+                  <div style={{ fontSize: 12, color: C.textDim }}>
+                    {filteredMatches.length === 0
+                      ? 'Los partidos se generarán cuando el organizador inicie esta fase.'
+                      : `Quedan ${filteredMatches.filter(m => m.status !== 'finalizado').length} partidos por jugar.`}
+                  </div>
+                  <div style={{ marginTop: 16, display: 'inline-block', padding: '8px 18px', borderRadius: 20, background: `${C.green}15`, border: `1px solid ${C.green}33`, fontSize: 12, color: C.green, fontWeight: 700 }}>
+                    El bracket se habilita al terminar todos los partidos
+                  </div>
+                </div>
           )}
         </div>
       </div>
