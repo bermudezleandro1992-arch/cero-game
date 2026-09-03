@@ -425,7 +425,7 @@ function AvisosChat({ community, announcements, loading, isAdmin, profile, torne
 }
 
 // ── ComunidadTab — estructura y grupos ───────────────────────────────────────
-function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpenTournament, onChangeToAvisos, onAddMember, onAddGroup, onAddChannel }) {
+function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpenTournament, onChangeToAvisos, onAddMember, onAddGroup, onAddChannel, channelRefreshKey }) {
   const { setActiveConversation } = useChatStore()
   const [channels, setChannels] = useState([])
 
@@ -436,7 +436,7 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
       .eq('group_type', 'channel')
       .order('created_at', { ascending: true })
       .then(({ data }) => setChannels(data || []))
-  }, [community.id])
+  }, [community.id, channelRefreshKey])
 
   function openChannel(ch) {
     setActiveConversation({
@@ -595,6 +595,7 @@ export default function CommunityDashboardWA({ community, onBack }) {
   const [newChannelDesc, setNewChannelDesc] = useState('')
   const [newChannelPrivate, setNewChannelPrivate] = useState(false)
   const [creatingChannel, setCreatingChannel] = useState(false)
+  const [channelRefreshKey, setChannelRefreshKey] = useState(0)
   const [addingGroupId, setAddingGroupId] = useState(null)
   const [memberSearch, setMemberSearch] = useState('')
   const [memberResults, setMemberResults] = useState([])
@@ -647,10 +648,11 @@ export default function CommunityDashboardWA({ community, onBack }) {
     const { data: conv, error } = await supabase.from('conversations').insert({
       name: newChannelName.trim(),
       description: newChannelDesc.trim() || null,
-      type: 'channel',
+      group_type: 'channel',
+      is_group: true,
       community_id: community.id,
       created_by: profile?.id,
-      is_private: newChannelPrivate,
+      is_public: !newChannelPrivate,
     }).select('id').single()
     if (error) { alert(`Error: ${error.message}`); setCreatingChannel(false); return }
     // add creator as member/admin
@@ -662,6 +664,7 @@ export default function CommunityDashboardWA({ community, onBack }) {
     setNewChannelName('')
     setNewChannelDesc('')
     setNewChannelPrivate(false)
+    setChannelRefreshKey(k => k + 1)
     loadData()
   }
 
@@ -800,6 +803,7 @@ export default function CommunityDashboardWA({ community, onBack }) {
             onAddMember={() => { setShowAddMember(true); setMemberSearch(''); setMemberResults([]) }}
             onAddGroup={() => { setShowAddGroup(true); setGroupSearch(''); setGroupResults([]) }}
             onAddChannel={() => { setShowAddChannel(true); setNewChannelName(''); setNewChannelDesc(''); setNewChannelPrivate(false) }}
+            channelRefreshKey={channelRefreshKey}
           />
         )}
         {tab === 'avisos' && (
