@@ -40,11 +40,11 @@ const PLAYER_EMOJIS = ['⚽','🔥','🐐','💙','⚡','🎯','🏅','👑','�
 function playerEmoji(idx) { return PLAYER_EMOJIS[idx % PLAYER_EMOJIS.length] }
 
 const STATUS_CFG = {
-  inscripcion: { label: 'Inscripciones abiertas', color: '#22c55e', dot: '🟢' },
-  en_curso:    { label: 'En curso',               color: '#f59e0b', dot: '🟡' },
-  finalizado:  { label: 'Finalizado',             color: '#6b7280', dot: '⚫' },
-  draw:        { label: 'Sorteo en curso',         color: '#8b5cf6', dot: '🟣' },
-  cancelado:   { label: 'Cancelado',              color: '#ef4444', dot: '🔴' },
+  inscripcion: { label: 'Inscripciones abiertas', color: '#22c55e', dot: '🟢', dotColor: '#22c55e' },
+  en_curso:    { label: 'En curso',               color: '#f59e0b', dot: '🟡', dotColor: '#f59e0b' },
+  finalizado:  { label: 'Finalizado',             color: '#6b7280', dot: '⚫', dotColor: '#6b7280' },
+  draw:        { label: 'Sorteo en curso',         color: '#8b5cf6', dot: '🟣', dotColor: '#8b5cf6' },
+  cancelado:   { label: 'Cancelado',              color: '#ef4444', dot: '🔴', dotColor: '#ef4444' },
 }
 
 // ── Bot Announcement ──────────────────────────────────────────────────────────
@@ -501,7 +501,10 @@ function ComunidadTab({ community, torneos, memberCount, isAdmin, profile, onOpe
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ color: C.text, fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</div>
-                  <div style={{ color: s.color, fontSize: 12, fontWeight: 600 }}>{s.dot} {s.label}</div>
+                  <div style={{ color: s.color, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: s.dotColor, display: 'inline-block', flexShrink: 0 }} />
+                    {s.label}
+                  </div>
                 </div>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
               </button>
