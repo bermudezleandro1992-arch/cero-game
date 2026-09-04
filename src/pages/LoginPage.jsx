@@ -123,7 +123,7 @@ function LegalModal({ initialTab, onClose }) {
   )
 }
 
-const TICKER_TEXT = 'Plataforma en desarrollo activo  ·  Registrate gratis y sé parte desde el inicio  ·  NexoTribu  ·  '
+const TICKER_TEXT = 'NexoTribu  ·  Tu comunidad gamer  ·  Competí · Conectá · Ganá  ·  '
 
 const FEATURES = [
   { icon: '💬', t: 'Chats que funcionan', d: 'Privados, grupales y de comunidad. Sin límite de miembros.' },
@@ -137,12 +137,34 @@ export default function LoginPage() {
   const [modal, setModal] = useState(null)
   const tickerRef = useRef(null)
   const [wide, setWide] = useState(() => window.innerWidth >= 900)
+  const [pwaPrompt, setPwaPrompt] = useState(null)
+  const [pwaInstalled, setPwaInstalled] = useState(() =>
+    window.matchMedia('(display-mode: standalone)').matches
+  )
 
   useEffect(() => {
     const fn = () => setWide(window.innerWidth >= 900)
     window.addEventListener('resize', fn)
     return () => window.removeEventListener('resize', fn)
   }, [])
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setPwaPrompt(e) }
+    window.addEventListener('beforeinstallprompt', handler)
+    window.addEventListener('appinstalled', () => setPwaInstalled(true))
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  async function installPwa() {
+    if (pwaPrompt) {
+      pwaPrompt.prompt()
+      const { outcome } = await pwaPrompt.userChoice
+      if (outcome === 'accepted') setPwaInstalled(true)
+      setPwaPrompt(null)
+    } else {
+      alert('Para instalar: abrí el menú del navegador (⋮) y elegí "Agregar a pantalla de inicio"')
+    }
+  }
 
   // Allow body scroll on login page (App sets overflow:hidden for the shell)
   useEffect(() => {
@@ -159,7 +181,7 @@ export default function LoginPage() {
     if (!el) return
     let pos = 0, raf
     const animate = () => {
-      pos -= 0.5
+      pos -= 0.25
       if (pos <= -(el.scrollWidth / 2)) pos = 0
       el.style.transform = `translateX(${pos}px)`
       raf = requestAnimationFrame(animate)
@@ -262,7 +284,7 @@ export default function LoginPage() {
           {!wide && (
             <div style={{ width: '100%', overflow: 'hidden', background: `${GREEN}12`, borderTop: `1px solid ${GREEN}25`, borderBottom: `1px solid ${GREEN}25`, padding: '7px 0', marginBottom: 28 }}>
               <div ref={tickerRef} style={{ display: 'flex', whiteSpace: 'nowrap', willChange: 'transform' }}>
-                {[...Array(8)].map((_, i) => <span key={i} style={{ color: GREEN, fontSize: 11, fontWeight: 600, letterSpacing: '.5px' }}>{TICKER_TEXT}</span>)}
+                {[...Array(4)].map((_, i) => <span key={i} style={{ color: GREEN, fontSize: 11, fontWeight: 600, letterSpacing: '.5px' }}>{TICKER_TEXT}</span>)}
               </div>
             </div>
           )}
@@ -282,25 +304,27 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {/* APK */}
-            {!isNative && (
-              <a href={APK_URL} target="_blank" rel="noreferrer" style={{
+            {/* PWA install */}
+            {!isNative && !pwaInstalled && (
+              <button onClick={installPwa} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                 width: '100%', padding: '14px 16px', borderRadius: 13, boxSizing: 'border-box',
-                background: GREEN, color: '#fff', fontSize: 15, fontWeight: 800,
-                textDecoration: 'none', boxShadow: `0 4px 20px ${GREEN}44`, marginBottom: 20,
+                background: GREEN, color: '#fff', fontSize: 15, fontWeight: 800, border: 'none',
+                cursor: 'pointer', boxShadow: `0 4px 20px ${GREEN}44`, marginBottom: 20,
               }}>
-                <span style={{ fontSize: 20 }}>📱</span>
-                Descargar para Android (.apk)
-              </a>
+                <span style={{ fontSize: 20 }}>📲</span>
+                Instalar app gratis
+              </button>
             )}
 
             {/* Divider */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
-              <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 11, whiteSpace: 'nowrap' }}>o entrá desde el navegador</span>
-              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
-            </div>
+            {!isNative && !pwaInstalled && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
+                <span style={{ color: 'rgba(255,255,255,.2)', fontSize: 11, whiteSpace: 'nowrap' }}>o ingresá sin instalar</span>
+                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.1)' }} />
+              </div>
+            )}
 
             {/* Google */}
             <button onClick={loginGoogle} style={{
