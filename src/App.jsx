@@ -442,12 +442,24 @@ function OrganizadorPanelPicker({ onBack }) {
 
   useEffect(() => {
     async function load() {
+      // Try community_members first (communities), fallback to group_roles (chat groups)
+      const { data: members } = await supabase
+        .from('community_members')
+        .select('community_id, role, communities(id, name, description, avatar_url)')
+        .eq('user_id', profile.id)
+        .in('role', ['organizador', 'admin', 'owner'])
+      const fromCommunities = (members || []).map(r => r.communities).filter(Boolean)
+
       const { data: roles } = await supabase
         .from('group_roles')
         .select('group_id, conversations!group_roles_group_id_fkey(id, name, description, avatar_url)')
         .eq('user_id', profile.id)
         .in('role', ['organizador', 'admin', 'owner'])
-      setCommunities((roles || []).map(r => r.conversations).filter(Boolean))
+      const fromGroups = (roles || []).map(r => r.conversations).filter(Boolean)
+
+      const all = [...fromCommunities, ...fromGroups]
+      const unique = all.filter((c, i) => c && all.findIndex(x => x?.id === c.id) === i)
+      setCommunities(unique)
       setLoading(false)
     }
     load()
