@@ -682,6 +682,23 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Handle OAuth deep link callback (app.mimensajero.app://login-callback#...)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    const listener = CapApp.addListener('appUrlOpen', async ({ url }) => {
+      if (!url) return
+      const hash = url.split('#')[1]
+      if (!hash) return
+      const params = new URLSearchParams(hash)
+      const accessToken = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+      if (accessToken && refreshToken) {
+        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+      }
+    })
+    return () => { listener.then(h => h.remove()) }
+  }, [])
+
   // Handle Android hardware back button — must be before any conditional returns
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return
@@ -1057,7 +1074,7 @@ export default function App() {
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'
-            ? <PerfilPage key={perfilInitialTab} onClose={() => { setTab('chats'); setPerfilInitialTab('menu') }} initialTab={perfilInitialTab} onOpenSupport={() => { setTab('soporte-user'); setShowProfile(false) }} />
+            ? <PerfilPage key={perfilInitialTab} onClose={() => { setTab('chats'); setPerfilInitialTab('menu') }} initialTab={perfilInitialTab} onOpenSupport={() => { setTab('soporte-user'); setShowProfile(false) }} onGoPanel={() => { setTab('panel-ceo'); setShowProfile(false) }} />
             : tab === 'llamadas'
             ? <LlamadasPage />
             : tab === 'estados'

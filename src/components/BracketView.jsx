@@ -27,8 +27,14 @@ import MatchResultFlow from './MatchResultFlow'
 // ── Constantes de layout (base) ──────────────────────────────────────────────
 const PADDING = 24
 
-// Constantes adaptativas según cantidad de rondas
-function getLayoutConstants(numMainRounds) {
+// Constantes adaptativas según cantidad de rondas y tamaño de pantalla
+function getLayoutConstants(numMainRounds, isMobile = false) {
+  if (isMobile) {
+    if (numMainRounds <= 2) return { CARD_W: 150, CARD_H: 72, COL_GAP: 40, ROW_GAP: 10 }
+    if (numMainRounds === 3) return { CARD_W: 136, CARD_H: 66, COL_GAP: 32, ROW_GAP: 8 }
+    if (numMainRounds === 4) return { CARD_W: 120, CARD_H: 60, COL_GAP: 28, ROW_GAP: 6 }
+    return { CARD_W: 108, CARD_H: 54, COL_GAP: 24, ROW_GAP: 5 }
+  }
   if (numMainRounds <= 2) return { CARD_W: 200, CARD_H: 90, COL_GAP: 72, ROW_GAP: 16 }
   if (numMainRounds === 3) return { CARD_W: 180, CARD_H: 84, COL_GAP: 60, ROW_GAP: 14 }
   if (numMainRounds === 4) return { CARD_W: 156, CARD_H: 76, COL_GAP: 48, ROW_GAP: 10 }
@@ -435,8 +441,15 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
   const [resettingAll, setResettingAll]       = useState(false)
   const [resolvedCommunityId, setResolvedCommunityId] = useState(communityId || null)
   const [champion, setChampion] = useState(null) // { name, matchId } — shown after Final
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640)
   const postedAnnouncements = useRef(new Set())
   const scrollRef = useRef(null)
+
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 640)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -676,7 +689,7 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
     }
     return roundNums.length
   })()
-  const LC = getLayoutConstants(numMainRounds)
+  const LC = getLayoutConstants(numMainRounds, isMobile)
   const cardScale = LC.CARD_H / 90
   const { rounds, totalW, totalH } = computeLayout(matches, LC)
 
@@ -865,7 +878,7 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
             overflowX: 'auto', overflowY: 'auto',
             WebkitOverflowScrolling: 'touch',
             flex: 1,
-            minHeight: Math.min(totalH + 48, 520),
+            minHeight: isMobile ? Math.min(totalH + 48, 380) : Math.min(totalH + 48, 520),
             position: 'relative',
           }}
           onMouseDown={e => {
