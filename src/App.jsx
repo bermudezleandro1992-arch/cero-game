@@ -1096,11 +1096,11 @@ export default function App() {
             : tab === 'soporte-staff'
             ? <SoporteStaffPage onBack={() => setTab('chats')} />
             : tab === 'admin'
-            ? <AdminGate profile={profile}><AdminPage onBack={() => setTab('chats')} /></AdminGate>
+            ? <AdminGate profile={profile} panelKey="admin" sessionTTL={5 * 60 * 1000}><AdminPage onBack={() => setTab('chats')} /></AdminGate>
             : tab === 'panel-organizador'
-            ? <OrganizadorPanelPicker onBack={() => setTab('chats')} />
+            ? <AdminGate profile={profile} panelKey="organizador" allowedRoles={null} label="Panel Organizador" icon="🎯"><OrganizadorPanelPicker onBack={() => setTab('chats')} /></AdminGate>
             : tab === 'panel-ceo'
-            ? <CEOPanelPicker onBack={() => setTab('chats')} onGoVip={() => setTab('vip')} />
+            ? <AdminGate profile={profile} panelKey="ceo" allowedRoles={null} label="Panel CEO" icon="⭐"><CEOPanelPicker onBack={() => setTab('chats')} onGoVip={() => setTab('vip')} /></AdminGate>
             : <ChatListPage onProfileClick={() => { setShowProfile(false); setTab('perfil') }} />
           }
         </div>
