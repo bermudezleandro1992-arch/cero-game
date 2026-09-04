@@ -171,32 +171,24 @@ function computeLayout(matches, { CARD_W, CARD_H, COL_GAP, ROW_GAP }) {
     return { roundNum: rn, cards, x, phaseLabel }
   })
 
-  // Agregar partido 3°/4° lugar en columna NUEVA a la derecha de la Final
+  // Agregar partido 3°/4° lugar en la misma columna que la Final, debajo de ella
+  let thirdPlaceData = null
   if (thirdPlaceRoundNum !== null) {
     const finalRound = rounds[rounds.length - 1]
     const finalCard  = finalRound?.cards[0]
     const thirdMs    = roundMap[thirdPlaceRoundNum]
-    // Column to the right of the final
-    const thirdX = PADDING + roundNums.length * (CARD_W + COL_GAP)
-    // Vertically centered near the final card
-    const thirdY = finalCard
-      ? finalCard.y + (CARD_H - CARD_H) / 2  // same top as final
-      : PADDING
-    rounds.push({
-      roundNum: thirdPlaceRoundNum,
-      cards: [{ match: thirdMs[0], x: thirdX, y: thirdY, cellH: CARD_H }],
-      x: thirdX,
-      phaseLabel: '🥉 3er Lugar',
-      isThirdPlace: true,
-    })
+    const thirdX = finalCard ? finalCard.x : PADDING + (roundNums.length - 1) * (CARD_W + COL_GAP)
+    const thirdY = finalCard ? finalCard.y + CARD_H + ROW_GAP * 4 + 24 : PADDING
+    thirdPlaceData = { match: thirdMs[0], x: thirdX, y: thirdY }
   }
 
   const mainW  = PADDING + roundNums.length * (CARD_W + COL_GAP) - COL_GAP + PADDING
-  const totalW = thirdPlaceRoundNum !== null ? mainW + CARD_W + COL_GAP + PADDING : mainW
+  const totalW = mainW
   const mainH  = PADDING * 2 + firstCount * slotH
-  const totalH = mainH
+  const extraH = thirdPlaceData ? CARD_H + ROW_GAP * 4 + 48 : 0
+  const totalH = mainH + extraH
 
-  return { rounds, totalW, totalH }
+  return { rounds, totalW, totalH, thirdPlaceData }
 }
 
 // ── Tarjeta de partido ────────────────────────────────────────────────────────
@@ -691,7 +683,7 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
   })()
   const LC = getLayoutConstants(numMainRounds, isMobile)
   const cardScale = LC.CARD_H / 90
-  const { rounds, totalW, totalH } = computeLayout(matches, LC)
+  const { rounds, totalW, totalH, thirdPlaceData } = computeLayout(matches, LC)
 
   if (!rounds.length) return null
 
@@ -930,15 +922,6 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
             {rounds.flatMap(r =>
               r.cards.map(({ match, x, y }) => (
                 <g key={match.id}>
-                  {r.isThirdPlace && (
-                    <text
-                      x={x + LC.CARD_W / 2} y={y - 8}
-                      textAnchor="middle" fontSize={10} fontWeight={700}
-                      fill={C.textDim} letterSpacing="0.5"
-                    >
-                      🥉 3er / 4to Lugar
-                    </text>
-                  )}
                   <MatchCard
                     match={match}
                     x={x} y={y}
@@ -948,6 +931,32 @@ export default function BracketView({ tournamentId, communityId, tournamentName,
                 </g>
               ))
             )}
+
+            {thirdPlaceData && (() => {
+              const { match, x, y } = thirdPlaceData
+              return (
+                <g key={match.id}>
+                  {/* Separador visual */}
+                  <line
+                    x1={x - 12} y1={y - 14} x2={x + LC.CARD_W + 12} y2={y - 14}
+                    stroke="#cd7f3244" strokeWidth={1} strokeDasharray="4 3"
+                  />
+                  <text
+                    x={x + LC.CARD_W / 2} y={y - 4}
+                    textAnchor="middle" fontSize={10} fontWeight={700}
+                    fill="#cd7f32" letterSpacing="0.8"
+                  >
+                    🥉 3° / 4° Lugar
+                  </text>
+                  <MatchCard
+                    match={match}
+                    x={x} y={y}
+                    cardW={LC.CARD_W} cardH={LC.CARD_H} scale={cardScale}
+                    onClick={handleCardClick}
+                  />
+                </g>
+              )
+            })()}
           </svg>
         </div>
 
