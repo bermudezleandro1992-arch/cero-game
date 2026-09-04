@@ -171,7 +171,7 @@ export default function LoginPage() {
   async function loginGoogle() {
     const redirectTo = isNative
       ? 'app.mimensajero.app://login-callback'
-      : window.location.origin
+      : `${window.location.origin}/login`
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
   }
 
