@@ -169,7 +169,10 @@ export default function LoginPage() {
   }, [])
 
   async function loginGoogle() {
-    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
+    const redirectTo = isNative
+      ? 'app.mimensajero.app://login-callback'
+      : window.location.origin
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
   }
 
   if (modal) return <LegalModal initialTab={modal} onClose={() => setModal(null)} />
