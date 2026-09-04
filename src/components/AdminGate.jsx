@@ -15,9 +15,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { C } from '../theme'
 import { supabase } from '../lib/supabase'
 
-const UNLOCK_KEY   = 'admin_unlocked_at'
-const SESSION_TTL  = 30 * 60 * 1000 // 30 min
-const RP_ID        = window.location.hostname // 'mimensajero.vercel.app' or 'localhost'
+const RP_ID        = window.location.hostname
 const RP_NAME      = 'NexoTribu Admin'
 const ADMIN_ROLES  = ['superadmin', 'admin', 'moderador']
 
@@ -58,7 +56,12 @@ function QRCanvas({ svgDataUrl }) {
   return <canvas ref={canvasRef} style={{ display: 'block', margin: '0 auto 12px', borderRadius: 10, background: '#fff' }} />
 }
 
-export default function AdminGate({ profile, children }) {
+// panelKey  — unique key per panel so each has its own session unlock
+// sessionTTL — ms until re-lock (default 30min for admin, shorter for superadmin not needed separately)
+// allowedRoles — roles that may enter; null = skip role check (use isCommunityOwner etc externally)
+// label / icon — display in header
+export default function AdminGate({ profile, children, panelKey = 'admin', sessionTTL = 30 * 60 * 1000, allowedRoles = ADMIN_ROLES, label = 'Panel Admin', icon = '🛡️' }) {
+  const UNLOCK_KEY = `admin_unlocked_at_${panelKey}`
   const [unlocked, setUnlocked]     = useState(false)
   const [step, setStep]             = useState('check') // check|choose|biometric|totp|enroll-bio|enroll-totp
   const [totpCode, setTotpCode]     = useState('')
@@ -75,7 +78,7 @@ export default function AdminGate({ profile, children }) {
   // Check if session already unlocked (within TTL)
   const checkSession = useCallback(() => {
     const at = sessionStorage.getItem(UNLOCK_KEY)
-    if (at && Date.now() - Number(at) < SESSION_TTL) {
+    if (at && Date.now() - Number(at) < sessionTTL) {
       setUnlocked(true); return true
     }
     return false
@@ -242,8 +245,8 @@ export default function AdminGate({ profile, children }) {
 
   if (unlocked) return children
 
-  // Not an admin role at all
-  if (!profile || !ADMIN_ROLES.includes(profile.role)) {
+  // Not an allowed role
+  if (!profile || (allowedRoles && !allowedRoles.includes(profile.role))) {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: C.bg }}>
         <span style={{ fontSize: 56 }}>🔒</span>
@@ -281,8 +284,8 @@ export default function AdminGate({ profile, children }) {
             border: `1.5px solid ${C.green}44`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32,
             boxShadow: `0 0 30px ${C.green}18`,
-          }}>🛡️</div>
-          <h2 style={{ color: C.text, fontSize: 20, fontWeight: 800, margin: '0 0 4px' }}>Panel Admin</h2>
+          }}>{icon}</div>
+          <h2 style={{ color: C.text, fontSize: 20, fontWeight: 800, margin: '0 0 4px' }}>{label}</h2>
           <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>
             {profile.display_name || profile.username} · {profile.role?.toUpperCase()}
           </p>
