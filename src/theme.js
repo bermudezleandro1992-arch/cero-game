@@ -2,5 +2,8 @@
 const getCSSVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(`--c-${name}`).trim()
 
 export const C = new Proxy({}, {
-  get(_, key) { return getCSSVar(key) }
+  get(_, key) {
+    if (typeof key !== 'string') return undefined
+    return getCSSVar(key)
+  }
 })
