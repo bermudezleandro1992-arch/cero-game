@@ -106,7 +106,7 @@ function ReportForm({ match, profile, onDone }) {
         p_photo_url:  photoUrl,
       })
       if (error || !data?.ok) throw new Error(data?.error || error?.message || 'Error')
-      onDone()
+      onDone(true)
     } catch (e) {
       setErr(e.message)
     } finally {
@@ -367,7 +367,7 @@ function AwaitingConfirmation({ match, profile, isAdmin, onDone }) {
         </button>
       )}
 
-      {isWinner && !dispute && (
+      {isWinner && !isAdmin && !dispute && (
         <p style={{ margin: 0, fontSize: 13, color: C.textDim, textAlign: 'center' }}>
           ⏳ Esperando confirmación del rival…
         </p>
@@ -762,7 +762,7 @@ export default function MatchResultFlow({ match: initialMatch, profile, isAdmin,
         {/* Contenido scrollable */}
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 20 }}>
           {match.status === 'pendiente' && canReport && (
-            <ReportForm match={match} profile={profile} onDone={() => onUpdate?.(match.id)} />
+            <ReportForm match={match} profile={profile} onDone={(submitted) => { onUpdate?.(match.id); if (submitted) onClose?.() }} />
           )}
           {match.status === 'pendiente' && !canReport && (
             <p style={{ textAlign: 'center', color: C.textDim, marginTop: 32 }}>
