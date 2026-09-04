@@ -1929,7 +1929,7 @@ function GeneralTab() {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport }) {
+export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport, onGoPanel }) {
   const { profile, fetchProfile, user } = useAuthStore()
   const [tab, setTab] = useState(initialTab || 'menu')
   const [showBots, setShowBots] = useState(false)
@@ -2415,6 +2415,18 @@ export default function PerfilPage({ onClose, onGoVip, initialTab, onOpenSupport
               </div>
 
               {/* ⚡ Panel SuperAdmin — solo visible para el dueño de la plataforma */}
+              {(profile?.email === 'bermudezleandro1992@gmail.com' || user?.email === 'bermudezleandro1992@gmail.com') && profile?.role === 'superadmin' && (
+                <div style={{ background: '#00e67610', border: '1px solid #00e67640', borderRadius: 0, marginBottom: 8 }}>
+                  <button onClick={onGoPanel} style={{ width: '100%', padding: '14px 20px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left' }}>
+                    <span style={{ fontSize: 22, width: 28, textAlign: 'center' }}>⚡</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: '#00e676', fontWeight: 800, fontSize: 14 }}>Panel SuperAdmin</div>
+                      <div style={{ color: '#00e67699', fontSize: 11 }}>Administración total de la plataforma</div>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00e676" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                  </button>
+                </div>
+              )}
               {(profile?.email === 'bermudezleandro1992@gmail.com' || user?.email === 'bermudezleandro1992@gmail.com') && profile?.role !== 'superadmin' && (
                 <div style={{ background: '#00e67610', border: '1px solid #00e67640', borderRadius: 0, marginBottom: 8 }}>
                   <button onClick={async () => {

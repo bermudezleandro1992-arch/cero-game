@@ -1074,7 +1074,7 @@ export default function App() {
             : tab === 'ranking'
             ? <RankingPage />
             : tab === 'perfil'
-            ? <PerfilPage key={perfilInitialTab} onClose={() => { setTab('chats'); setPerfilInitialTab('menu') }} initialTab={perfilInitialTab} onOpenSupport={() => { setTab('soporte-user'); setShowProfile(false) }} />
+            ? <PerfilPage key={perfilInitialTab} onClose={() => { setTab('chats'); setPerfilInitialTab('menu') }} initialTab={perfilInitialTab} onOpenSupport={() => { setTab('soporte-user'); setShowProfile(false) }} onGoPanel={() => { setTab('panel-ceo'); setShowProfile(false) }} />
             : tab === 'llamadas'
             ? <LlamadasPage />
             : tab === 'estados'
