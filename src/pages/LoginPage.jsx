@@ -123,7 +123,7 @@ function LegalModal({ initialTab, onClose }) {
   )
 }
 
-const TICKER_TEXT = 'NexoTribu  ·  Tu comunidad gamer  ·  Competí · Conectá · Ganá  ·  '
+const TICKER_TEXT = 'NexoTribu  ·  Torneos organizados  ·  Mensajería sin límites  ·  Comunidades con roles y canales  ·  Bots y automatización  ·  Plataforma en desarrollo activo  ·  '
 
 const FEATURES = [
   { icon: '💬', t: 'Chats que funcionan', d: 'Privados, grupales y de comunidad. Sin límite de miembros.' },
