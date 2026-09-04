@@ -272,11 +272,16 @@ function MatchCard({ match, x, y, cardW, cardH, scale = 1, onClick }) {
               {match.round_number && `R${match.round_number}`}
               {match.match_number && ` · P${match.match_number}`}
             </span>
-            <span style={{
-              fontSize: fs(9), fontWeight: 700, letterSpacing: '0.5px',
-              color: isFinal ? C.green : match.status === 'en_juego' ? '#f59e0b' : C.textDim,
-            }}>
-              {isFinal ? '✓' : match.status === 'en_juego' ? '⏳' : '·'}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              {match.result_photo_url && (
+                <span style={{ fontSize: fs(8), color: C.green }}>📷</span>
+              )}
+              <span style={{
+                fontSize: fs(9), fontWeight: 700, letterSpacing: '0.5px',
+                color: isFinal ? C.green : match.status === 'en_juego' ? '#f59e0b' : C.textDim,
+              }}>
+                {isFinal ? '✓' : match.status === 'en_juego' ? '⏳' : '·'}
+              </span>
             </span>
           </div>
 
