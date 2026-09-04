@@ -170,7 +170,7 @@ export default function LoginPage() {
 
   async function loginGoogle() {
     const redirectTo = isNative
-      ? 'app.mimensajero.app://login-callback'
+      ? 'https://nexotribu.vercel.app/auth/callback.html'
       : `${window.location.origin}/login`
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
   }
