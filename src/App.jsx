@@ -445,18 +445,16 @@ function OrganizadorPanelPicker({ onBack }) {
     async function load() {
       const { data: roles, error: rolesErr } = await supabase
         .from('group_roles')
-        .select('conversation_id, role')
+        .select('conversation_id, role, conversations(id, name, description, avatar_url, group_type, created_by)')
         .eq('user_id', profile.id)
         .in('role', ['organizador', 'admin', 'owner'])
-      const ids = [...new Set((roles || []).map(r => r.conversation_id).filter(Boolean))]
-      setDebugInfo({ userId: profile.id, roles, rolesErr: rolesErr?.message, ids })
-      if (!ids.length) { setLoading(false); return }
-      const { data: convs, error: convsErr } = await supabase
-        .from('conversations')
-        .select('id, name, description, avatar_url, group_type')
-        .in('id', ids)
-      setDebugInfo(d => ({ ...d, convs, convsErr: convsErr?.message }))
-      setCommunities(convs || [])
+      setDebugInfo({ userId: profile.id, roles, rolesErr: rolesErr?.message })
+      const seen = new Set()
+      const convs = (roles || [])
+        .map(r => Array.isArray(r.conversations) ? r.conversations[0] : r.conversations)
+        .filter(c => c && !seen.has(c.id) && seen.add(c.id))
+      setDebugInfo(d => ({ ...d, convs }))
+      setCommunities(convs)
       setLoading(false)
     }
     load()
