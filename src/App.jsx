@@ -455,7 +455,6 @@ function OrganizadorPanelPicker({ onBack }) {
         .from('conversations')
         .select('id, name, description, avatar_url, group_type')
         .in('id', ids)
-        .eq('group_type', 'community')
       setDebugInfo(d => ({ ...d, convs, convsErr: convsErr?.message }))
       setCommunities(convs || [])
       setLoading(false)
