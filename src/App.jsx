@@ -439,21 +439,24 @@ function OrganizadorPanelPicker({ onBack }) {
   const [communities, setCommunities] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  const [debugInfo, setDebugInfo] = useState(null)
 
   useEffect(() => {
     async function load() {
-      const { data: roles } = await supabase
+      const { data: roles, error: rolesErr } = await supabase
         .from('group_roles')
         .select('conversation_id, role')
         .eq('user_id', profile.id)
         .in('role', ['organizador', 'admin', 'owner'])
       const ids = [...new Set((roles || []).map(r => r.conversation_id).filter(Boolean))]
+      setDebugInfo({ userId: profile.id, roles, rolesErr: rolesErr?.message, ids })
       if (!ids.length) { setLoading(false); return }
-      const { data: convs } = await supabase
+      const { data: convs, error: convsErr } = await supabase
         .from('conversations')
         .select('id, name, description, avatar_url, group_type')
         .in('id', ids)
         .eq('group_type', 'community')
+      setDebugInfo(d => ({ ...d, convs, convsErr: convsErr?.message }))
       setCommunities(convs || [])
       setLoading(false)
     }
@@ -479,9 +482,14 @@ function OrganizadorPanelPicker({ onBack }) {
             <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.green, borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
           </div>
         ) : communities.length === 0 ? (
-          <div style={{ textAlign: 'center', paddingTop: 60, color: C.textDim }}>
+          <div style={{ textAlign: 'center', paddingTop: 40, color: C.textDim }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>🎯</div>
             <div>No tenés comunidades como organizador</div>
+            {debugInfo && (
+              <div style={{ marginTop: 16, textAlign: 'left', fontSize: 11, background: '#111', color: '#0f0', padding: 12, borderRadius: 8, fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                {JSON.stringify(debugInfo, null, 2)}
+              </div>
+            )}
           </div>
         ) : communities.map(c => (
           <button key={c.id} onClick={() => setSelected(c)} style={{
