@@ -783,22 +783,34 @@ export default function TournamentDashboard({ tournamentId: rawTournamentId, pro
   async function triggerAutoStart(tournamentData) {
     const delay = tournamentData.auto_start_delay_seconds ?? 0
     if (delay <= 0) {
-      const { error: e } = await supabase.rpc('start_tournament', { p_tournament_id: tournamentId })
-      if (!e) {
-        await postAviso(
-          `🏆 "${tournamentData.name}" — ¡El torneo COMENZÓ!`,
-          `Sorteo realizado. ${tournamentData.participant_count ?? ''} jugadores en competencia. ¡Buena suerte!`
-        )
-        refresh()
+      const { data: rpcResult, error: e } = await supabase.rpc('start_tournament', { p_tournament_id: tournamentId })
+      if (e) {
+        console.error('start_tournament RPC error:', e)
+        alert(`Error al iniciar torneo: ${e.message}`)
+        return
       }
+      if (rpcResult && !rpcResult.ok) {
+        alert(`Error: ${rpcResult.error || 'No se pudo iniciar el torneo'}`)
+        return
+      }
+      await postAviso(
+        `🏆 "${tournamentData.name}" — ¡El torneo COMENZÓ!`,
+        `Sorteo realizado. ${tournamentData.participant_count ?? ''} jugadores en competencia. ¡Buena suerte!`
+      )
+      refresh()
       return
     }
     // Write sorteo_starts_at to DB so ALL viewers see the same countdown
     const startsAt = new Date(Date.now() + delay * 1000).toISOString()
-    await supabase.from('conversations')
+    const { error: upErr } = await supabase.from('conversations')
       .update({ sorteo_starts_at: startsAt })
       .eq('id', tournamentId)
-    // The realtime subscription will pick up the change and start the countdown on all clients
+    if (upErr) {
+      alert(`Error al iniciar sorteo: ${upErr.message}`)
+      return
+    }
+    // Optimistically show the draw locally while realtime propagates
+    setData(d => d ? { ...d, sorteo_starts_at: startsAt } : d)
   }
 
   async function handleJoin() {
