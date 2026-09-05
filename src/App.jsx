@@ -444,12 +444,17 @@ function OrganizadorPanelPicker({ onBack }) {
     async function load() {
       const { data: roles } = await supabase
         .from('group_roles')
-        .select('conversation_id, role, conversations(id, name, description, avatar_url, group_type)')
+        .select('conversation_id, role')
         .eq('user_id', profile.id)
         .in('role', ['organizador', 'admin', 'owner'])
-      const all = (roles || []).map(r => r.conversations).filter(c => c && c.group_type === 'community')
-      const unique = all.filter((c, i) => all.findIndex(x => x?.id === c.id) === i)
-      setCommunities(unique)
+      const ids = [...new Set((roles || []).map(r => r.conversation_id).filter(Boolean))]
+      if (!ids.length) { setLoading(false); return }
+      const { data: convs } = await supabase
+        .from('conversations')
+        .select('id, name, description, avatar_url, group_type')
+        .in('id', ids)
+        .eq('group_type', 'community')
+      setCommunities(convs || [])
       setLoading(false)
     }
     load()
